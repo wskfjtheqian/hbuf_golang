@@ -1,10 +1,29 @@
 package hbuf
 
-type Server interface {
-	getName() string
+import "context"
 
-	getId() uint32
+type Context struct {
+	context.Context
+}
+
+type ServerInvoke struct {
+	ToData func(buf []byte) (Data, error)
+
+	FormData func(data Data) ([]byte, error)
+
+	Invoke func(cxt *Context, data Data) (Data, error)
+}
+
+type ServerClient interface {
+	GetName() string
+
+	GetId() uint32
 }
 
 type ServerRoute interface {
+	GetName() string
+
+	GetId() uint32
+
+	GetIdInvoke() map[string]*ServerInvoke
 }

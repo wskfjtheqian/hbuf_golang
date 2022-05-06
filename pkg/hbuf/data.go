@@ -1,5 +1,7 @@
 package hbuf
 
 type Data interface {
-	toData() ([]byte, error)
+	ToData() ([]byte, error)
+
+	FormData([]byte) error
 }
