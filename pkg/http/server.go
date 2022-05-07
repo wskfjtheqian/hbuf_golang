@@ -41,11 +41,11 @@ func NewServerJson() *ServerJson {
 	return &ret
 }
 
-func (h *ServerJson) add(router hbuf.ServerRoute) {
+func (h *ServerJson) add(router hbuf.ServerRouter) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for key, value := range router.GetIdInvoke() {
+	for key, value := range router.GetInvoke() {
 		h.router["/"+router.GetName()+"/"+key] = value
 	}
 }

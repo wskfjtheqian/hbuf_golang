@@ -68,6 +68,6 @@ func (p *PeopleRouter) GetId() uint32 {
 	return 1
 }
 
-func (p *PeopleRouter) GetIdInvoke() map[string]*hbuf.ServerInvoke {
+func (p *PeopleRouter) GetInvoke() map[string]*hbuf.ServerInvoke {
 	return p.names
 }

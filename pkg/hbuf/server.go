@@ -20,10 +20,10 @@ type ServerClient interface {
 	GetId() uint32
 }
 
-type ServerRoute interface {
+type ServerRouter interface {
 	GetName() string
 
 	GetId() uint32
 
-	GetIdInvoke() map[string]*ServerInvoke
+	GetInvoke() map[string]*ServerInvoke
 }
