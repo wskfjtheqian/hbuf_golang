@@ -5,8 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="开始接口服务器">
+      <change beforePath="$PROJECT_DIR$/.idea/hbuf_golang.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/hbuf_golang.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.vscode/launch.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/http.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -50,19 +51,7 @@
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
   </component>
-  <component name="RunManager" selected="HTTP Request.rest-api#1">
-    <configuration name="Test_Server in hbuf_golang/pkg/http (1)" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/http" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="hbuf_golang/pkg/http" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_Server\E$" />
-      <method v="2" />
-    </configuration>
+  <component name="RunManager" selected="Go Test.Test_Server in hbuf_golang/pkg/http">
     <configuration name="Test_Server in hbuf_golang/pkg/http" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/http" />
@@ -75,16 +64,16 @@
       <pattern value="^\QTest_Server\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="rest-api#1" type="HttpClient.HttpRequestRunConfigurationType" factoryName="HTTP Request" temporary="true" path="$APPLICATION_CONFIG_DIR$/scratches/rest-api.http" runType="Run single request">
-      <method v="2" />
-    </configuration>
     <configuration name="rest-api_5#1" type="HttpClient.HttpRequestRunConfigurationType" factoryName="HTTP Request" temporary="true" path="$APPLICATION_CONFIG_DIR$/scratches/rest-api_5.http" runType="Run single request">
       <method v="2" />
     </configuration>
+    <list>
+      <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
+      <item itemvalue="HTTP Request.rest-api_5#1" />
+    </list>
     <recent_temporary>
       <list>
-        <item itemvalue="HTTP Request.rest-api#1" />
-        <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
+        <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
         <item itemvalue="HTTP Request.rest-api_5#1" />
       </list>
     </recent_temporary>
@@ -106,6 +95,9 @@
       <workItem from="1651938074602" duration="88000" />
       <workItem from="1652016240336" duration="1337000" />
       <workItem from="1652105551027" duration="3122000" />
+      <workItem from="1652183210999" duration="2299000" />
+      <workItem from="1652195617210" duration="560000" />
+      <workItem from="1652196516544" duration="794000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -130,11 +122,41 @@
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
       <map>
+        <entry key="0de2db5c-5a60-45b2-8873-b848a2e10ed6">
+          <value>
+            <State>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                  <entry key="roots">
+                    <value>
+                      <list>
+                        <option value="$PROJECT_DIR$" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
         <entry key="MAIN">
           <value>
             <State />
           </value>
         </entry>
+      </map>
+    </option>
+    <option name="OPEN_GENERIC_TABS">
+      <map>
+        <entry key="0de2db5c-5a60-45b2-8873-b848a2e10ed6" value="TOOL_WINDOW" />
       </map>
     </option>
     <option name="oldMeFiltersMigrated" value="true" />
@@ -145,6 +167,22 @@
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/http/server.go</url>
+          <line>180</line>
+          <option name="timeStamp" value="8" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+    <watches-manager>
+      <configuration name="GoTestRunConfiguration">
+        <watch expression="nil == next" />
+      </configuration>
+    </watches-manager>
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

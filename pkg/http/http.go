@@ -2,6 +2,7 @@ package http
 
 import (
 	ht "net/http"
+	"reflect"
 )
 
 type HttpError struct {
@@ -25,4 +26,11 @@ func NewHttpErrorByCode(code int) *HttpError {
 		code: code,
 		msg:  ht.StatusText(code),
 	}
+}
+
+func IsNil(i interface{}) bool {
+	defer func() {
+		recover()
+	}()
+	return reflect.ValueOf(i).IsNil()
 }
