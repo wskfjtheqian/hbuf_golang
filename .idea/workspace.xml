@@ -5,15 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="开始接口服务器">
-      <change beforePath="$PROJECT_DIR$/.idea/hbuf_golang.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/hbuf_golang.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/http.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
   </component>
   <component name="GOROOT" url="file://$PROJECT_DIR$/../../sdk/go" />
   <component name="Git.Settings">
@@ -28,6 +32,7 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="DefaultGoTemplateProperty" value="Go File" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
@@ -51,7 +56,19 @@
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_Server in hbuf_golang/pkg/http">
+  <component name="RunManager" selected="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf">
+    <configuration name="Test_Hbuf in hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="hbuf_golang/pkg/hbuf" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_Hbuf\E$" />
+      <method v="2" />
+    </configuration>
     <configuration name="Test_Server in hbuf_golang/pkg/http" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/http" />
@@ -69,10 +86,12 @@
     </configuration>
     <list>
       <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
+      <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
       <item itemvalue="HTTP Request.rest-api_5#1" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
         <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
         <item itemvalue="HTTP Request.rest-api_5#1" />
       </list>
@@ -98,6 +117,8 @@
       <workItem from="1652183210999" duration="2299000" />
       <workItem from="1652195617210" duration="560000" />
       <workItem from="1652196516544" duration="794000" />
+      <workItem from="1652395912565" duration="1899000" />
+      <workItem from="1652494795688" duration="3927000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
