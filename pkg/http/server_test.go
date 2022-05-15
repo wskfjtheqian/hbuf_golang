@@ -1,7 +1,7 @@
 package http
 
 import (
-	"hbuf_golang/pkg/hbuf"
+	"context"
 	h "net/http"
 	"testing"
 )
@@ -9,7 +9,7 @@ import (
 type PeopleImp struct {
 }
 
-func (p PeopleImp) GetName(cxt *hbuf.Context, req *GetNameReq) (*GetNameRes, error) {
+func (p PeopleImp) GetName(cxt context.Context, req *GetNameReq) (*GetNameRes, error) {
 	return &GetNameRes{
 		Name: "何乾",
 	}, nil
@@ -18,7 +18,7 @@ func (p PeopleImp) GetName(cxt *hbuf.Context, req *GetNameReq) (*GetNameRes, err
 func Test_Server(t *testing.T) {
 
 	router := NewServerJson()
-	router.add(NewPeopleRouter(&PeopleImp{}))
+	router.Add(NewPeopleRouter(&PeopleImp{}))
 
 	h.HandleFunc("/", router.ServeHTTP)
 	h.ListenAndServe(":8080", nil)

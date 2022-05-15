@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"hbuf_golang/pkg/hbuf"
 )
@@ -32,7 +33,7 @@ func (g *GetNameRes) FormData(data []byte) error {
 }
 
 type PeopleServer interface {
-	GetName(cxt *hbuf.Context, req *GetNameReq) (*GetNameRes, error)
+	GetName(cxt context.Context, req *GetNameReq) (*GetNameRes, error)
 }
 
 type PeopleRouter struct {
@@ -52,7 +53,7 @@ func NewPeopleRouter(people PeopleServer) *PeopleRouter {
 				FormData: func(data hbuf.Data) ([]byte, error) {
 					return json.Marshal(&data)
 				},
-				Invoke: func(cxt *hbuf.Context, data hbuf.Data) (hbuf.Data, error) {
+				Invoke: func(cxt context.Context, data hbuf.Data) (hbuf.Data, error) {
 					return people.GetName(cxt, data.(*GetNameReq))
 				},
 			},

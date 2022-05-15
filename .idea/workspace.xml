@@ -6,6 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="开始接口服务器">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server_test.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,6 +35,7 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="DatabaseDriversLRU" value="mariadb" />
     <property name="DefaultGoTemplateProperty" value="Go File" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
@@ -56,7 +60,7 @@
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf">
+  <component name="RunManager" selected="Go Test.Test_Server in hbuf_golang/pkg/http (1)">
     <configuration name="Test_Hbuf in hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
@@ -67,6 +71,18 @@
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
       <pattern value="^\QTest_Hbuf\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_Server in hbuf_golang/pkg/http (1)" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/http" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="hbuf_golang/pkg/http" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_Server\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_Server in hbuf_golang/pkg/http" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -88,9 +104,11 @@
       <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
       <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
       <item itemvalue="HTTP Request.rest-api_5#1" />
+      <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
         <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
         <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
         <item itemvalue="HTTP Request.rest-api_5#1" />
@@ -118,7 +136,8 @@
       <workItem from="1652195617210" duration="560000" />
       <workItem from="1652196516544" duration="794000" />
       <workItem from="1652395912565" duration="1899000" />
-      <workItem from="1652494795688" duration="3927000" />
+      <workItem from="1652494795688" duration="3945000" />
+      <workItem from="1652597281610" duration="2474000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -134,7 +153,14 @@
       <option name="project" value="LOCAL" />
       <updated>1651853975942</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="开始接口服务器">
+      <created>1652546218860</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1652546218860</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -190,15 +216,6 @@
     <integration-enabled>true</integration-enabled>
   </component>
   <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/http/server.go</url>
-          <line>180</line>
-          <option name="timeStamp" value="8" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
     <watches-manager>
       <configuration name="GoTestRunConfiguration">
         <watch expression="nil == next" />
