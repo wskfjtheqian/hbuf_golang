@@ -23,3 +23,7 @@ type ServerRouter interface {
 
 	GetInvoke() map[string]*ServerInvoke
 }
+
+type GetServer interface {
+	Get(router ServerClient) interface{}
+}
