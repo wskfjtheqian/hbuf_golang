@@ -2,13 +2,14 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"hbuf_golang/pkg/hbuf"
 	"io/ioutil"
 	ht "net/http"
 	"sync"
 )
 
-type ErrorInterceptor = func(w ht.ResponseWriter, r *ht.Request, e error)
+type ErrorInterceptor = func(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result
 type readInvoke = func(w ht.ResponseWriter, r *ht.Request, buffer []byte, next ReadInterceptor) ([]byte, error)
 type writerInvoke = func(w ht.ResponseWriter, r *ht.Request, buffer []byte, next WriterInterceptor) ([]byte, error)
 type contextInvoke = func(w ht.ResponseWriter, r *ht.Request, ctx context.Context, data hbuf.Data, next ContextInterceptor) (context.Context, error)
@@ -179,61 +180,101 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 
 	value, ok := s.router[r.URL.Path]
 	if !ok {
-		s.errorInc(w, r, NewHttpErrorByCode(ht.StatusNotFound))
+		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusNotFound})
+		if nil != ret {
+			s.writerResult(w, r, ret)
+		}
 		return
 	}
 
 	buffer, err := s.readInc.Invoke()(w, r, []byte{}, s.readInc.Next())
 	if nil != err {
 		println("ReadInterceptor Error: %s", err.Error())
-		s.errorInc(w, r, NewHttpErrorByCode(ht.StatusInternalServerError))
+		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusInternalServerError})
+		if nil != ret {
+			s.writerResult(w, r, ret)
+		}
 		return
 	}
 
 	data, err := value.ToData(buffer)
 	if nil != err {
 		println("ToData Error: %s", err.Error())
-		s.errorInc(w, r, NewHttpErrorByCode(ht.StatusInternalServerError))
+		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusInternalServerError})
+		if nil != ret {
+			s.writerResult(w, r, ret)
+		}
 		return
 	}
 
 	ctx, err := s.contextInc.Invoke()(w, r, context.Background(), data, s.contextInc.Next())
 	if nil != err {
-		s.errorInc(w, r, err)
+		ret := s.errorInc(w, r, err)
+		if nil != ret {
+			s.writerResult(w, r, ret)
+		}
 		return
 	}
 
 	data, err = value.Invoke(ctx, data)
 	if nil != err {
-		s.errorInc(w, r, err)
+		ret := s.errorInc(w, r, err)
+		if nil != ret {
+			s.writerResult(w, r, ret)
+		}
 		return
 	}
 
 	buffer, err = value.FormData(data)
 	if nil != err {
 		println("FormData Error: %s", err.Error())
-		s.errorInc(w, r, NewHttpErrorByCode(ht.StatusInternalServerError))
+		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusInternalServerError})
+		if nil != ret {
+			s.writerResult(w, r, ret)
+		}
 		return
 	}
 
-	_, err = s.writerInc.Invoke()(w, r, buffer, s.writerInc.Next())
+	ret := &hbuf.Result{
+		Data: string(buffer),
+	}
+	s.writerResult(w, r, ret)
+}
+
+func (s *ServerJson) writerResult(w ht.ResponseWriter, r *ht.Request, ret *hbuf.Result) {
+	marshal, err := json.Marshal(ret)
+	if err != nil {
+		w.WriteHeader(ht.StatusInternalServerError)
+		println("Marshal result Error: %s", err.Error())
+		return
+	}
+	_, err = s.writerInc.Invoke()(w, r, marshal, s.writerInc.Next())
 	if nil != err {
+		w.WriteHeader(ht.StatusInternalServerError)
 		println("ResponseWriter Error: %s", err.Error())
 	}
 }
 
-func (s *ServerJson) errorInterceptor(w ht.ResponseWriter, r *ht.Request, e error) {
+func (s *ServerJson) errorInterceptor(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result {
 	switch e.(type) {
-	case *HttpError:
-		w.WriteHeader(e.(*HttpError).code)
-		return
+	case *hbuf.Result:
+		if e.(*hbuf.Result).Code == -ht.StatusNotFound {
+			w.WriteHeader(ht.StatusNotFound)
+			return nil
+		} else if e.(*hbuf.Result).Code == -ht.StatusInternalServerError {
+			w.WriteHeader(ht.StatusInternalServerError)
+			return nil
+		}
+		return e.(*hbuf.Result)
 	}
+	w.WriteHeader(ht.StatusInternalServerError)
+	return nil
 }
 
 func (s *ServerJson) readInterceptor(w ht.ResponseWriter, r *ht.Request, buffer []byte, next ReadInterceptor) ([]byte, error) {
 	buffer, err := ioutil.ReadAll(r.Body)
 	if nil != err {
-		return nil, NewHttpErrorByCode(ht.StatusInternalServerError)
+		return nil, &hbuf.Result{Code: -ht.StatusInternalServerError}
 	}
 	if IsNil(next) {
 		return buffer, nil

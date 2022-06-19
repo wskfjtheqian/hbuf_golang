@@ -2,6 +2,16 @@ package hbuf
 
 import "context"
 
+type Result struct {
+	Code int         `json:"code"`
+	Msg  string      `json:"msg"`
+	Data interface{} `json:"data"`
+}
+
+func (h *Result) Error() string {
+	return h.Msg
+}
+
 type ServerInvoke struct {
 	ToData func(buf []byte) (Data, error)
 

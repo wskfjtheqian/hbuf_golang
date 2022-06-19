@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/http.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -23,6 +26,14 @@
   <component name="GOROOT" url="file://$PROJECT_DIR$/../../sdk/go" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitSEFilterConfiguration">
+    <file-type-list>
+      <filtered-out-file-type name="LOCAL_BRANCH" />
+      <filtered-out-file-type name="REMOTE_BRANCH" />
+      <filtered-out-file-type name="TAG" />
+      <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
+    </file-type-list>
   </component>
   <component name="GoLibraries">
     <option name="indexEntireGoPath" value="false" />
@@ -139,7 +150,9 @@
       <workItem from="1652802575915" duration="670000" />
       <workItem from="1653057469177" duration="1800000" />
       <workItem from="1655027089359" duration="957000" />
-      <workItem from="1655033413429" duration="1194000" />
+      <workItem from="1655033413429" duration="1305000" />
+      <workItem from="1655520198207" duration="1244000" />
+      <workItem from="1655613600666" duration="8139000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -176,7 +189,14 @@
       <option name="project" value="LOCAL" />
       <updated>1652619440804</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="修改BUG">
+      <created>1655041559587</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1655041559587</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
