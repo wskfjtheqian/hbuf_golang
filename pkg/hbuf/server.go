@@ -42,7 +42,7 @@ func SetHeader(ctx context.Context, key string, value interface{}) {
 	if nil == ret {
 		return
 	}
-	ret.(Context).header[key] = value
+	ret.(map[string]interface{})[key] = value
 }
 
 func GetHeader(ctx context.Context, key string) (value interface{}, ok bool) {
@@ -50,7 +50,7 @@ func GetHeader(ctx context.Context, key string) (value interface{}, ok bool) {
 	if nil == ret {
 		return nil, false
 	}
-	value, ok = ret.(Context).header[key]
+	value, ok = ret.(map[string]interface{})[key]
 	return
 }
 
@@ -80,7 +80,7 @@ type GetServer interface {
 	Get(router ServerClient) interface{}
 }
 
-type Filter = func(ctx *Context) (*Context, error)
+type Filter = func(ctx context.Context) (context.Context, error)
 
 type Server struct {
 	router map[string]*ServerInvoke
@@ -111,7 +111,7 @@ func (s *Server) InsertFilter(inc Filter) {
 	s.filter = append([]Filter{inc}, s.filter...)
 }
 
-func (s *Server) Filter(ctx *Context) (*Context, error) {
+func (s *Server) Filter(ctx context.Context) (context.Context, error) {
 	var err error
 	for _, filter := range s.filter {
 		ctx, err = filter(ctx)

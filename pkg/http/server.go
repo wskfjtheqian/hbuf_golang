@@ -22,7 +22,7 @@ func (e *Error) Error() string {
 }
 
 type ServerJson struct {
-	server       hbuf.Server
+	server       *hbuf.Server
 	lock         sync.RWMutex
 	errorFilter  ErrorFilter
 	readFilter   []ReadFilter
@@ -36,7 +36,7 @@ func (s *ServerJson) SetErrorFilter(filter ErrorFilter) {
 	s.errorFilter = filter
 }
 
-func NewServerJson(server hbuf.Server) *ServerJson {
+func NewServerJson(server *hbuf.Server) *ServerJson {
 	ret := &ServerJson{
 		server:       server,
 		readFilter:   []ReadFilter{},
