@@ -9,310 +9,186 @@ import (
 	"sync"
 )
 
-type ErrorInterceptor = func(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result
-type readInvoke = func(w ht.ResponseWriter, r *ht.Request, buffer []byte, next ReadInterceptor) ([]byte, error)
-type writerInvoke = func(w ht.ResponseWriter, r *ht.Request, buffer []byte, next WriterInterceptor) ([]byte, error)
-type contextInvoke = func(w ht.ResponseWriter, r *ht.Request, ctx context.Context, data hbuf.Data, next ContextInterceptor) (context.Context, error)
+type ErrorFilter = func(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result
+type ReadFilter = func(w ht.ResponseWriter, r *ht.Request, buffer []byte) (ht.ResponseWriter, *ht.Request, []byte, error)
+type WriterFilter = func(w ht.ResponseWriter, r *ht.Request, buffer []byte) (ht.ResponseWriter, *ht.Request, []byte, error)
 
-type ContextInterceptor interface {
-	Invoke() contextInvoke
-	Next() ContextInterceptor
+type Error struct {
+	Code int
 }
 
-type contextInterceptorImp struct {
-	invoke contextInvoke
-	next   *contextInterceptorImp
-}
-
-func (c *contextInterceptorImp) Invoke() contextInvoke {
-	return c.invoke
-}
-
-func (c *contextInterceptorImp) Next() ContextInterceptor {
-	return c.next
-}
-
-type WriterInterceptor interface {
-	Invoke() writerInvoke
-	Next() WriterInterceptor
-}
-
-type writerInterceptorImp struct {
-	invoke writerInvoke
-	next   *writerInterceptorImp
-}
-
-func (c *writerInterceptorImp) Invoke() writerInvoke {
-	return c.invoke
-}
-
-func (c *writerInterceptorImp) Next() WriterInterceptor {
-	return c.next
-}
-
-type ReadInterceptor interface {
-	Invoke() readInvoke
-	Next() ReadInterceptor
-}
-
-type readInterceptorImp struct {
-	invoke readInvoke
-	next   *readInterceptorImp
-}
-
-func (c *readInterceptorImp) Invoke() readInvoke {
-	return c.invoke
-}
-
-func (c *readInterceptorImp) Next() ReadInterceptor {
-	return c.next
+func (e *Error) Error() string {
+	return ht.StatusText(e.Code)
 }
 
 type ServerJson struct {
-	router     map[string]*hbuf.ServerInvoke
-	lock       sync.RWMutex
-	errorInc   ErrorInterceptor
-	readInc    *readInterceptorImp
-	writerInc  *writerInterceptorImp
-	contextInc *contextInterceptorImp
+	server       hbuf.Server
+	lock         sync.RWMutex
+	errorFilter  ErrorFilter
+	readFilter   []ReadFilter
+	writerFilter []WriterFilter
 }
 
-func (s *ServerJson) SetErrorInterceptor(inc ErrorInterceptor) {
-	if nil == inc {
+func (s *ServerJson) SetErrorFilter(filter ErrorFilter) {
+	if nil == filter {
 		return
 	}
-
-	s.errorInc = inc
+	s.errorFilter = filter
 }
 
-func NewServerJson() *ServerJson {
-	ret := ServerJson{
-		router: map[string]*hbuf.ServerInvoke{},
+func NewServerJson(server hbuf.Server) *ServerJson {
+	ret := &ServerJson{
+		server:       server,
+		readFilter:   []ReadFilter{},
+		writerFilter: []WriterFilter{},
 	}
-	ret.errorInc = ret.errorInterceptor
-	ret.readInc = &readInterceptorImp{
-		invoke: ret.readInterceptor,
-	}
-	ret.writerInc = &writerInterceptorImp{
-		invoke: ret.writerInterceptor,
-	}
-	ret.contextInc = &contextInterceptorImp{
-		invoke: ret.contextInterceptor,
-	}
-	return &ret
+	return ret
 }
 
-func (s *ServerJson) AddRequestInterceptor(inc readInvoke) {
+func (s *ServerJson) AddReadFilter(inc ReadFilter) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.readInc = &readInterceptorImp{
-		invoke: inc,
-		next:   s.readInc,
-	}
+	s.readFilter = append(s.readFilter, inc)
 }
 
-func (s *ServerJson) InsertRequestInterceptor(inc readInvoke) {
+func (s *ServerJson) InsertReadFilter(inc ReadFilter) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	temp := s.readInc
-	for nil != temp.next {
-		temp = temp.next
-	}
-	temp.next = &readInterceptorImp{
-		invoke: inc,
-	}
+	s.readFilter = append([]ReadFilter{inc}, s.readFilter...)
 }
 
-func (s *ServerJson) AddResponseInterceptor(inc writerInvoke) {
+func (s *ServerJson) AddWriterFilter(inc WriterFilter) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	temp := s.writerInc
-	for nil != temp.next {
-		temp = temp.next
-	}
-	temp.next = &writerInterceptorImp{
-		invoke: inc,
-	}
+	s.writerFilter = append(s.writerFilter, inc)
 }
 
-func (s *ServerJson) InsertResponseInterceptor(inc writerInvoke) {
+func (s *ServerJson) InsertWriterFilter(inc WriterFilter) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.writerInc = &writerInterceptorImp{
-		invoke: inc,
-		next:   s.writerInc,
-	}
-}
-
-func (s *ServerJson) AddContextInterceptor(inc contextInvoke) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	temp := s.contextInc
-	for nil != temp.next {
-		temp = temp.next
-	}
-	temp.next = &contextInterceptorImp{
-		invoke: inc,
-	}
-}
-
-func (s *ServerJson) InsertContextInterceptor(inc contextInvoke) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.contextInc = &contextInterceptorImp{
-		invoke: inc,
-		next:   s.contextInc,
-	}
-}
-
-func (s *ServerJson) Add(router hbuf.ServerRouter) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	for key, value := range router.GetInvoke() {
-		s.router["/"+router.GetName()+"/"+key] = value
-	}
+	s.writerFilter = append([]WriterFilter{inc}, s.writerFilter...)
 }
 
 func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	value, ok := s.router[r.URL.Path]
+	value, ok := s.server.Router()[r.URL.Path]
 	if !ok {
-		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusNotFound})
+		ret := s.onErrorFilter(w, r, &Error{Code: ht.StatusNotFound})
 		if nil != ret {
-			s.writerResult(w, r, ret)
+			return
 		}
-		return
 	}
 
-	buffer, err := s.readInc.Invoke()(w, r, []byte{}, s.readInc.Next())
+	_, _, buffer, err := s.onReadFilter(w, r, []byte{})
 	if nil != err {
-		println("ReadInterceptor Error: %s", err.Error())
-		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusInternalServerError})
+		ret := s.onErrorFilter(w, r, err)
 		if nil != ret {
-			s.writerResult(w, r, ret)
+			return
 		}
 		return
 	}
 
 	data, err := value.ToData(buffer)
 	if nil != err {
-		println("ToData Error: %s", err.Error())
-		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusInternalServerError})
+		ret := s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
 		if nil != ret {
-			s.writerResult(w, r, ret)
+			return
 		}
-		return
 	}
 
-	ctx, err := s.contextInc.Invoke()(w, r, context.Background(), data, s.contextInc.Next())
+	contX := hbuf.NewContext(context.Background())
+	for key, _ := range r.Header {
+		hbuf.SetHeader(contX, key, r.Header.Get(key))
+	}
+
+	ctx, err := s.server.Filter(contX)
 	if nil != err {
-		ret := s.errorInc(w, r, err)
+		ret := s.onErrorFilter(w, r, err)
 		if nil != ret {
-			s.writerResult(w, r, ret)
+			return
 		}
-		return
 	}
 
 	data, err = value.Invoke(ctx, data)
 	if nil != err {
-		ret := s.errorInc(w, r, err)
+		ret := s.onErrorFilter(w, r, err)
 		if nil != ret {
-			s.writerResult(w, r, ret)
+			return
 		}
-		return
 	}
 
 	buffer, err = value.FormData(data)
 	if nil != err {
-		println("FormData Error: %s", err.Error())
-		ret := s.errorInc(w, r, &hbuf.Result{Code: -ht.StatusInternalServerError})
+		ret := s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
 		if nil != ret {
-			s.writerResult(w, r, ret)
+			return
 		}
-		return
 	}
 
 	ret := &hbuf.Result{
 		Data: string(buffer),
 	}
-	s.writerResult(w, r, ret)
+	buffer, err = json.Marshal(ret)
+	_, _, _, _ = s.onWriterResult(w, r, buffer)
 }
 
-func (s *ServerJson) writerResult(w ht.ResponseWriter, r *ht.Request, ret *hbuf.Result) {
-	marshal, err := json.Marshal(ret)
-	if err != nil {
-		w.WriteHeader(ht.StatusInternalServerError)
-		println("Marshal result Error: %s", err.Error())
-		return
-	}
-	_, err = s.writerInc.Invoke()(w, r, marshal, s.writerInc.Next())
+func (s *ServerJson) onReadFilter(w ht.ResponseWriter, r *ht.Request, buffer []byte) (ht.ResponseWriter, *ht.Request, []byte, error) {
+	buffer, err := ioutil.ReadAll(r.Body)
 	if nil != err {
-		w.WriteHeader(ht.StatusInternalServerError)
-		println("ResponseWriter Error: %s", err.Error())
+		return nil, nil, nil, &Error{Code: ht.StatusInternalServerError}
 	}
+
+	for _, filter := range s.readFilter {
+		w, r, buffer, err = filter(w, r, buffer)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	return w, r, buffer, nil
 }
 
-func (s *ServerJson) errorInterceptor(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result {
+func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result {
+	if nil != s.errorFilter {
+		e = s.errorFilter(w, r, e)
+	}
+	if nil == e {
+		return nil
+	}
+	println("Error: %s", e.Error())
 	switch e.(type) {
 	case *hbuf.Result:
-		if e.(*hbuf.Result).Code == -ht.StatusNotFound {
-			w.WriteHeader(ht.StatusNotFound)
-			return nil
-		} else if e.(*hbuf.Result).Code == -ht.StatusInternalServerError {
+		buffer, err := json.Marshal(e.(*hbuf.Result))
+		if err != nil {
 			w.WriteHeader(ht.StatusInternalServerError)
 			return nil
 		}
-		return e.(*hbuf.Result)
+		_, _, _, _ = s.onWriterResult(w, r, buffer)
+	case *Error:
+		switch e.(*Error).Code {
+		case ht.StatusNotFound, ht.StatusInternalServerError:
+			w.WriteHeader(e.(*Error).Code)
+			return nil
+		}
 	}
 	w.WriteHeader(ht.StatusInternalServerError)
 	return nil
 }
 
-func (s *ServerJson) readInterceptor(w ht.ResponseWriter, r *ht.Request, buffer []byte, next ReadInterceptor) ([]byte, error) {
-	buffer, err := ioutil.ReadAll(r.Body)
-	if nil != err {
-		return nil, &hbuf.Result{Code: -ht.StatusInternalServerError}
+func (s *ServerJson) onWriterResult(w ht.ResponseWriter, r *ht.Request, buffer []byte) (ht.ResponseWriter, *ht.Request, []byte, error) {
+	var err error
+	for _, filter := range s.writerFilter {
+		w, r, buffer, err = filter(w, r, buffer)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
-	if IsNil(next) {
-		return buffer, nil
-	}
-	ret, err := next.Invoke()(w, r, buffer, next.Next())
+	_, err = w.Write(buffer)
 	if err != nil {
-		return nil, err
+		w.WriteHeader(ht.StatusInternalServerError)
+		println("ResponseWriter Error: %s", err.Error())
+		return nil, nil, nil, err
 	}
-	if nil == ret {
-		return buffer, nil
-	}
-	return ret, nil
-}
-
-func (s *ServerJson) writerInterceptor(w ht.ResponseWriter, r *ht.Request, buffer []byte, next WriterInterceptor) ([]byte, error) {
-	if IsNil(next) {
-		_, err := w.Write(buffer)
-		return nil, err
-	}
-
-	bytes, err := next.Invoke()(w, r, buffer, next.Next())
-	if err != nil {
-		return nil, err
-	}
-	_, err = w.Write(bytes)
-	return nil, err
-}
-
-func (s *ServerJson) contextInterceptor(w ht.ResponseWriter, r *ht.Request, ctx context.Context, data hbuf.Data, next ContextInterceptor) (context.Context, error) {
-	if IsNil(next) {
-		return ctx, nil
-	}
-	context, err := next.Invoke()(w, r, ctx, data, next.Next())
-	if err != nil {
-		return nil, err
-	}
-	if nil == context {
-		return ctx, nil
-	}
-	return context, nil
+	return nil, nil, nil, nil
 }
