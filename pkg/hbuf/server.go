@@ -19,18 +19,21 @@ func (h *Result) Error() string {
 type Context struct {
 	context.Context
 	header map[string]interface{}
+	tags   map[string]interface{}
+	method string
 }
 
 func NewContext(ctx context.Context) *Context {
 	return &Context{
-		ctx,
-		make(map[string]interface{}, 0),
+		Context: ctx,
+		header:  make(map[string]interface{}, 0),
+		tags:    make(map[string]interface{}, 0),
 	}
 }
 
 func (c *Context) Value(key interface{}) interface{} {
 	if reflect.TypeOf(c) == key {
-		return c.header
+		return c
 	}
 	return c.Context.Value(key)
 }
@@ -42,7 +45,7 @@ func SetHeader(ctx context.Context, key string, value interface{}) {
 	if nil == ret {
 		return
 	}
-	ret.(map[string]interface{})[key] = value
+	ret.(*Context).header[key] = value
 }
 
 func GetHeader(ctx context.Context, key string) (value interface{}, ok bool) {
@@ -50,8 +53,40 @@ func GetHeader(ctx context.Context, key string) (value interface{}, ok bool) {
 	if nil == ret {
 		return nil, false
 	}
-	value, ok = ret.(map[string]interface{})[key]
+	value, ok = ret.(*Context).header[key]
 	return
+}
+
+func SetTag(ctx context.Context, key string, value interface{}) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
+	ret.(*Context).header[key] = value
+}
+
+func GetTag(ctx context.Context, key string) (value interface{}, ok bool) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return nil, false
+	}
+	value, ok = ret.(*Context).header[key]
+	return
+}
+func SetMethod(ctx context.Context, method string) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
+	ret.(*Context).method = method
+}
+
+func GetMethod(ctx context.Context) (method string) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return ""
+	}
+	return ret.(*Context).method
 }
 
 type ServerInvoke struct {
@@ -60,6 +95,8 @@ type ServerInvoke struct {
 	FormData func(data Data) ([]byte, error)
 
 	Invoke func(cxt context.Context, data Data) (Data, error)
+
+	SetInfo func(cxt context.Context)
 }
 
 type ServerClient interface {

@@ -75,56 +75,45 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 
 	value, ok := s.server.Router()[r.URL.Path]
 	if !ok {
-		ret := s.onErrorFilter(w, r, &Error{Code: ht.StatusNotFound})
-		if nil != ret {
-			return
-		}
+		s.onErrorFilter(w, r, &Error{Code: ht.StatusNotFound})
+		return
 	}
 
 	_, _, buffer, err := s.onReadFilter(w, r, []byte{})
 	if nil != err {
-		ret := s.onErrorFilter(w, r, err)
-		if nil != ret {
-			return
-		}
+		s.onErrorFilter(w, r, err)
 		return
 	}
 
 	data, err := value.ToData(buffer)
 	if nil != err {
-		ret := s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
-		if nil != ret {
-			return
-		}
+		s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
+		return
 	}
 
 	contX := hbuf.NewContext(context.Background())
 	for key, _ := range r.Header {
 		hbuf.SetHeader(contX, key, r.Header.Get(key))
 	}
+	value.SetInfo(contX)
+	hbuf.SetMethod(contX, r.URL.Path)
 
 	ctx, err := s.server.Filter(contX)
 	if nil != err {
-		ret := s.onErrorFilter(w, r, err)
-		if nil != ret {
-			return
-		}
+		s.onErrorFilter(w, r, err)
+		return
 	}
 
 	data, err = value.Invoke(ctx, data)
 	if nil != err {
-		ret := s.onErrorFilter(w, r, err)
-		if nil != ret {
-			return
-		}
+		s.onErrorFilter(w, r, err)
+		return
 	}
 
 	buffer, err = value.FormData(data)
 	if nil != err {
-		ret := s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
-		if nil != ret {
-			return
-		}
+		s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
+		return
 	}
 
 	ret := &hbuf.Result{
@@ -149,12 +138,12 @@ func (s *ServerJson) onReadFilter(w ht.ResponseWriter, r *ht.Request, buffer []b
 	return w, r, buffer, nil
 }
 
-func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) *hbuf.Result {
+func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) {
 	if nil != s.errorFilter {
 		e = s.errorFilter(w, r, e)
 	}
 	if nil == e {
-		return nil
+		return
 	}
 	println("Error: %s", e.Error())
 	switch e.(type) {
@@ -162,18 +151,19 @@ func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) 
 		buffer, err := json.Marshal(e.(*hbuf.Result))
 		if err != nil {
 			w.WriteHeader(ht.StatusInternalServerError)
-			return nil
+			return
 		}
 		_, _, _, _ = s.onWriterResult(w, r, buffer)
+		return
 	case *Error:
 		switch e.(*Error).Code {
 		case ht.StatusNotFound, ht.StatusInternalServerError:
 			w.WriteHeader(e.(*Error).Code)
-			return nil
+			return
 		}
 	}
 	w.WriteHeader(ht.StatusInternalServerError)
-	return nil
+	return
 }
 
 func (s *ServerJson) onWriterResult(w ht.ResponseWriter, r *ht.Request, buffer []byte) (ht.ResponseWriter, *ht.Request, []byte, error) {

@@ -54,6 +54,7 @@ func NewPeopleRouter(people PeopleServer) *PeopleRouter {
 					return json.Marshal(&data)
 				},
 				Invoke: func(cxt context.Context, data hbuf.Data) (hbuf.Data, error) {
+					hbuf.SetTag(cxt, "auth", []string{"1", ""})
 					return people.GetName(cxt, data.(*GetNameReq))
 				},
 			},
