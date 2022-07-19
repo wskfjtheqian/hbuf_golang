@@ -92,7 +92,7 @@ func (t *Int64) UnmarshalJSON(data []byte) error {
 }
 
 func (t *Int64) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt(t.Val, 10)), nil
+	return []byte("\"" + strconv.FormatInt(t.Val, 10) + "\""), nil
 }
 
 // Scan implements the Scanner interface.
@@ -136,7 +136,7 @@ func (t *Uint64) UnmarshalJSON(data []byte) error {
 }
 
 func (t *Uint64) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatUint(t.Val, 10)), nil
+	return []byte("\"" + strconv.FormatUint(t.Val, 10) + "\""), nil
 }
 
 // Scan implements the Scanner interface.

@@ -170,7 +170,7 @@
       <workItem from="1655910096556" duration="7449000" />
       <workItem from="1656133751096" duration="2835000" />
       <workItem from="1657337818954" duration="1544000" />
-      <workItem from="1658244920417" duration="1155000" />
+      <workItem from="1658244920417" duration="1308000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -249,7 +249,14 @@
       <option name="project" value="LOCAL" />
       <updated>1658245533511</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="添加Int64">
+      <created>1658246731235</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1658246731235</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
