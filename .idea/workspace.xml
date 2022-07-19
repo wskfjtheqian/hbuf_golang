@@ -6,9 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/http_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/http_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,7 +19,7 @@
       </list>
     </option>
   </component>
-  <component name="GOROOT" url="file://$PROJECT_DIR$/../../sdk/go" />
+  <component name="GOROOT" url="file://$USER_HOME$/sdk/go" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
@@ -53,6 +50,7 @@
     <property name="dart.analysis.tool.window.visible" value="false" />
     <property name="go.formatter.settings.were.checked" value="true" />
     <property name="go.import.settings.migrated" value="true" />
+    <property name="go.sdk.automatically.set" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
@@ -69,6 +67,15 @@
     </key>
   </component>
   <component name="RunManager" selected="Go Test.Test_Server in hbuf_golang/pkg/http (1)">
+    <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <kind value="FILE" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
     <configuration name="Test_Hbuf in hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
@@ -103,6 +110,16 @@
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
       <pattern value="^\QTest_Server\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <kind value="DIRECTORY" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
       <method v="2" />
     </configuration>
     <configuration name="rest-api_5#1" type="HttpClient.HttpRequestRunConfigurationType" factoryName="HTTP Request" temporary="true" path="$APPLICATION_CONFIG_DIR$/scratches/rest-api_5.http" runType="Run single request">
@@ -154,6 +171,7 @@
       <workItem from="1655613600666" duration="8507000" />
       <workItem from="1655910096556" duration="7449000" />
       <workItem from="1656133751096" duration="2835000" />
+      <workItem from="1657337818954" duration="1544000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>

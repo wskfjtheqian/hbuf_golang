@@ -47,3 +47,73 @@ func (t *Time) Scan(value interface{}) error {
 func (t Time) Value() (driver.Value, error) {
 	return t.Time, nil
 }
+
+type Int64 struct {
+	val int64
+}
+
+func (t *Int64) UnmarshalJSON(data []byte) error {
+	parseInt, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return err
+	}
+	t.val = parseInt
+	return nil
+}
+
+func (t *Int64) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.FormatInt(t.val, 10)), nil
+}
+
+// Scan implements the Scanner interface.
+func (t *Int64) Scan(value interface{}) error {
+	nullInt64 := sql.NullInt64{}
+	err := nullInt64.Scan(value)
+	if err != nil {
+		return err
+	}
+	if nullInt64.Valid {
+		t.val = nullInt64.Int64
+	}
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (t Int64) Value() (driver.Value, error) {
+	return t.val, nil
+}
+
+type Uint64 struct {
+	val uint64
+}
+
+func (t *Uint64) UnmarshalJSON(data []byte) error {
+	parseInt, err := strconv.ParseUint(string(data), 10, 64)
+	if err != nil {
+		return err
+	}
+	t.val = parseInt
+	return nil
+}
+
+func (t *Uint64) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.FormatUint(t.val, 10)), nil
+}
+
+// Scan implements the Scanner interface.
+func (t *Uint64) Scan(value interface{}) error {
+	nullUint64 := sql.NullInt64{}
+	err := nullUint64.Scan(value)
+	if err != nil {
+		return err
+	}
+	if nullUint64.Valid {
+		t.val = uint64(nullUint64.Int64)
+	}
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (t Uint64) Value() (driver.Value, error) {
+	return int64(t.val), nil
+}
