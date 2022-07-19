@@ -3,6 +3,7 @@ package hbuf
 import (
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -52,8 +53,37 @@ type Int64 struct {
 	Val int64
 }
 
+func unquoteIfQuoted(value interface{}) (string, error) {
+	var bytes []byte
+
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return "", fmt.Errorf("could not convert value '%+v' to byte array of type '%T'",
+			value, value)
+	}
+
+	// If the amount is quoted, strip the quotes
+	if len(bytes) > 2 && bytes[0] == '"' && bytes[len(bytes)-1] == '"' {
+		bytes = bytes[1 : len(bytes)-1]
+	}
+	return string(bytes), nil
+}
+
 func (t *Int64) UnmarshalJSON(data []byte) error {
-	parseInt, err := strconv.ParseInt(string(data), 10, 64)
+	if string(data) == "null" {
+		return nil
+	}
+
+	str, err := unquoteIfQuoted(data)
+	if err != nil {
+		return fmt.Errorf("error decoding string '%s': %s", data, err)
+	}
+
+	parseInt, err := strconv.ParseInt(str, 10, 64)
 	if err != nil {
 		return err
 	}
@@ -88,7 +118,16 @@ type Uint64 struct {
 }
 
 func (t *Uint64) UnmarshalJSON(data []byte) error {
-	parseInt, err := strconv.ParseUint(string(data), 10, 64)
+	if string(data) == "null" {
+		return nil
+	}
+
+	str, err := unquoteIfQuoted(data)
+	if err != nil {
+		return fmt.Errorf("error decoding string '%s': %s", data, err)
+	}
+
+	parseInt, err := strconv.ParseUint(str, 10, 64)
 	if err != nil {
 		return err
 	}

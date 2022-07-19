@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加Int64" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -172,6 +170,7 @@
       <workItem from="1655910096556" duration="7449000" />
       <workItem from="1656133751096" duration="2835000" />
       <workItem from="1657337818954" duration="1544000" />
+      <workItem from="1658244920417" duration="1155000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -236,7 +235,21 @@
       <option name="project" value="LOCAL" />
       <updated>1655917880057</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="添加Int64">
+      <created>1658245302777</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1658245302777</updated>
+    </task>
+    <task id="LOCAL-00011" summary="添加Int64">
+      <created>1658245533511</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1658245533511</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -287,7 +300,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="开始接口服务器" />
     <MESSAGE value="修改BUG" />
-    <option name="LAST_COMMIT_MESSAGE" value="修改BUG" />
+    <MESSAGE value="添加Int64" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加Int64" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
