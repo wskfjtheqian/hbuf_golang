@@ -27,6 +27,7 @@ type ServerJson struct {
 	errorFilter  ErrorFilter
 	readFilter   []ReadFilter
 	writerFilter []WriterFilter
+	pathPrefix   string
 }
 
 func (s *ServerJson) SetErrorFilter(filter ErrorFilter) {
@@ -36,11 +37,12 @@ func (s *ServerJson) SetErrorFilter(filter ErrorFilter) {
 	s.errorFilter = filter
 }
 
-func NewServerJson(server *hbuf.Server) *ServerJson {
+func NewServerJson(server *hbuf.Server, pathPrefix string) *ServerJson {
 	ret := &ServerJson{
 		server:       server,
 		readFilter:   []ReadFilter{},
 		writerFilter: []WriterFilter{},
+		pathPrefix:   pathPrefix,
 	}
 	return ret
 }
@@ -73,7 +75,7 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	value, ok := s.server.Router()[r.URL.Path]
+	value, ok := s.server.Router()[r.URL.Path[len(s.pathPrefix):]]
 	if !ok {
 		s.onErrorFilter(w, r, &Error{Code: ht.StatusNotFound})
 		return
