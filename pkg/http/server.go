@@ -3,7 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io/ioutil"
 	ht "net/http"
 	"sync"
