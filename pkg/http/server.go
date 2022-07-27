@@ -122,6 +122,7 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	}
 
 	contX := hbuf.NewContext(&serverJsonContext{
+		Context: context.Background(),
 		value: &ServerJsonContextValue{
 			Writer:  w,
 			Request: r,

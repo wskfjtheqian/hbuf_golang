@@ -4,8 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加Int64">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加Json Sever Context">
       <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -177,7 +176,7 @@
       <workItem from="1658328543440" duration="597000" />
       <workItem from="1658409397783" duration="2588000" />
       <workItem from="1658546395612" duration="1961000" />
-      <workItem from="1658940404033" duration="826000" />
+      <workItem from="1658940404033" duration="1143000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -277,7 +276,14 @@
       <option name="project" value="LOCAL" />
       <updated>1658678686844</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="添加Json Sever Context">
+      <created>1658941263929</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1658941263929</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -329,7 +335,8 @@
     <MESSAGE value="开始接口服务器" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="添加Int64" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加Int64" />
+    <MESSAGE value="添加Json Sever Context" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加Json Sever Context" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
