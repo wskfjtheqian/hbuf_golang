@@ -6,6 +6,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io/ioutil"
 	ht "net/http"
+	"reflect"
 	"sync"
 )
 
@@ -19,6 +20,33 @@ type Error struct {
 
 func (e *Error) Error() string {
 	return ht.StatusText(e.Code)
+}
+
+type serverJsonContext struct {
+	context.Context
+	value *ServerJsonContextValue
+}
+
+type ServerJsonContextValue struct {
+	Writer  ht.ResponseWriter
+	Request *ht.Request
+}
+
+var payType = reflect.TypeOf(&serverJsonContext{})
+
+func (d *serverJsonContext) Value(key interface{}) interface{} {
+	if reflect.TypeOf(d) == key {
+		return d.value
+	}
+	return d.Context.Value(key)
+}
+
+func Get(ctx context.Context) *ServerJsonContextValue {
+	ret := ctx.Value(payType)
+	if nil == ret {
+		return nil
+	}
+	return ret.(*ServerJsonContextValue)
 }
 
 type ServerJson struct {
@@ -93,7 +121,12 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		return
 	}
 
-	contX := hbuf.NewContext(context.Background())
+	contX := hbuf.NewContext(&serverJsonContext{
+		value: &ServerJsonContextValue{
+			Writer:  w,
+			Request: r,
+		},
+	})
 	for key, _ := range r.Header {
 		hbuf.SetHeader(contX, key, r.Header.Get(key))
 	}
