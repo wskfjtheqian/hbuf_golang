@@ -181,7 +181,7 @@ func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) 
 	if nil == e {
 		return
 	}
-	println("Error: %s", e.Error())
+	println("Error:", e.Error()+r.URL.String())
 	switch e.(type) {
 	case *hbuf.Result:
 		buffer, err := json.Marshal(e.(*hbuf.Result))

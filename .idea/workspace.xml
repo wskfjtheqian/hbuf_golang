@@ -5,6 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加Json Sever Context">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -176,7 +177,10 @@
       <workItem from="1658328543440" duration="597000" />
       <workItem from="1658409397783" duration="2588000" />
       <workItem from="1658546395612" duration="1961000" />
-      <workItem from="1658940404033" duration="1143000" />
+      <workItem from="1658940404033" duration="1750000" />
+      <workItem from="1659055381583" duration="1227000" />
+      <workItem from="1659109608205" duration="1325000" />
+      <workItem from="1659113450549" duration="1351000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -283,7 +287,14 @@
       <option name="project" value="LOCAL" />
       <updated>1658941263929</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="添加Json Sever Context">
+      <created>1658941553835</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1658941553835</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
