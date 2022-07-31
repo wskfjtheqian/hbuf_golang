@@ -4,7 +4,7 @@ import (
 	"reflect"
 )
 
-func IsNil(i interface{}) bool {
+func IsNil(i any) bool {
 	defer func() {
 		recover()
 	}()

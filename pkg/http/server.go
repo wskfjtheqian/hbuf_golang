@@ -34,7 +34,7 @@ type ServerJsonContextValue struct {
 
 var payType = reflect.TypeOf(&serverJsonContext{})
 
-func (d *serverJsonContext) Value(key interface{}) interface{} {
+func (d *serverJsonContext) Value(key any) any {
 	if reflect.TypeOf(d) == key {
 		return d.value
 	}
@@ -117,7 +117,7 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 
 	data, err := value.ToData(buffer)
 	if nil != err {
-		s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
+		s.onErrorFilter(w, r, err)
 		return
 	}
 
@@ -148,7 +148,7 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 
 	buffer, err = value.FormData(data)
 	if nil != err {
-		s.onErrorFilter(w, r, &Error{Code: ht.StatusInternalServerError})
+		s.onErrorFilter(w, r, err)
 		return
 	}
 
@@ -181,7 +181,7 @@ func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) 
 	if nil == e {
 		return
 	}
-	println("Error:", e.Error()+r.URL.String())
+	println("Error:", e.Error()+"----"+r.URL.String())
 	switch e.(type) {
 	case *hbuf.Result:
 		buffer, err := json.Marshal(e.(*hbuf.Result))

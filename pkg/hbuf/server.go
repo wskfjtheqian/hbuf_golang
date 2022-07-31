@@ -7,9 +7,9 @@ import (
 )
 
 type Result struct {
-	Code int         `json:"code"`
-	Msg  string      `json:"msg"`
-	Data interface{} `json:"data"`
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data any    `json:"data"`
 }
 
 func (h *Result) Error() string {
@@ -18,20 +18,20 @@ func (h *Result) Error() string {
 
 type Context struct {
 	context.Context
-	header map[string]interface{}
-	tags   map[string]interface{}
+	header map[string]any
+	tags   map[string]any
 	method string
 }
 
 func NewContext(ctx context.Context) *Context {
 	return &Context{
 		Context: ctx,
-		header:  make(map[string]interface{}, 0),
-		tags:    make(map[string]interface{}, 0),
+		header:  make(map[string]any, 0),
+		tags:    make(map[string]any, 0),
 	}
 }
 
-func (c *Context) Value(key interface{}) interface{} {
+func (c *Context) Value(key any) any {
 	if reflect.TypeOf(c) == key {
 		return c
 	}
@@ -40,7 +40,7 @@ func (c *Context) Value(key interface{}) interface{} {
 
 var contextType = reflect.TypeOf(&Context{})
 
-func SetHeader(ctx context.Context, key string, value interface{}) {
+func SetHeader(ctx context.Context, key string, value any) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return
@@ -48,7 +48,7 @@ func SetHeader(ctx context.Context, key string, value interface{}) {
 	ret.(*Context).header[key] = value
 }
 
-func GetHeader(ctx context.Context, key string) (value interface{}, ok bool) {
+func GetHeader(ctx context.Context, key string) (value any, ok bool) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return nil, false
@@ -57,7 +57,7 @@ func GetHeader(ctx context.Context, key string) (value interface{}, ok bool) {
 	return
 }
 
-func SetTag(ctx context.Context, key string, value interface{}) {
+func SetTag(ctx context.Context, key string, value any) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return
@@ -65,7 +65,7 @@ func SetTag(ctx context.Context, key string, value interface{}) {
 	ret.(*Context).header[key] = value
 }
 
-func GetTag(ctx context.Context, key string) (value interface{}, ok bool) {
+func GetTag(ctx context.Context, key string) (value any, ok bool) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return nil, false
@@ -114,7 +114,7 @@ type ServerRouter interface {
 }
 
 type GetServer interface {
-	Get(router ServerClient) interface{}
+	Get(router ServerClient) any
 }
 
 type Filter = func(ctx context.Context) (context.Context, error)

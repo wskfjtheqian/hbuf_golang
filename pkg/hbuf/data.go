@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,8 +32,21 @@ func (t *Time) MarshalJSON() ([]byte, error) {
 	return []byte(strconv.FormatInt(t.Time.UnixMilli(), 10)), nil
 }
 
+func (t *Time) UnmarshalText(data []byte) error {
+	parseInt, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return err
+	}
+	t.Time = time.UnixMilli(parseInt)
+	return nil
+}
+
+func (t *Time) MarshalText() ([]byte, error) {
+	return []byte(strconv.FormatInt(t.Time.UnixMilli(), 10)), nil
+}
+
 // Scan implements the Scanner interface.
-func (t *Time) Scan(value interface{}) error {
+func (t *Time) Scan(value any) error {
 	nullTime := sql.NullTime{}
 	err := nullTime.Scan(value)
 	if err != nil {
@@ -53,7 +67,7 @@ type Int64 struct {
 	Val int64
 }
 
-func unquoteIfQuoted(value interface{}) (string, error) {
+func unquoteIfQuoted(value any) (string, error) {
 	var bytes []byte
 
 	switch v := value.(type) {
@@ -95,8 +109,25 @@ func (t *Int64) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + strconv.FormatInt(t.Val, 10) + "\""), nil
 }
 
+func (t *Int64) UnmarshalText(data []byte) error {
+	if nil == data {
+		return nil
+	}
+
+	parseInt, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return err
+	}
+	t.Val = parseInt
+	return nil
+}
+
+func (t *Int64) MarshalText() ([]byte, error) {
+	return []byte(strconv.FormatInt(t.Val, 10)), nil
+}
+
 // Scan implements the Scanner interface.
-func (t *Int64) Scan(value interface{}) error {
+func (t *Int64) Scan(value any) error {
 	nullInt64 := sql.NullInt64{}
 	err := nullInt64.Scan(value)
 	if err != nil {
@@ -139,8 +170,24 @@ func (t *Uint64) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + strconv.FormatUint(t.Val, 10) + "\""), nil
 }
 
+func (t *Uint64) UnmarshalText(data []byte) error {
+	if nil == data {
+		return nil
+	}
+	parseInt, err := strconv.ParseUint(string(data), 10, 64)
+	if err != nil {
+		return err
+	}
+	t.Val = parseInt
+	return nil
+}
+
+func (t *Uint64) MarshalText() ([]byte, error) {
+	return []byte(strconv.FormatUint(t.Val, 10)), nil
+}
+
 // Scan implements the Scanner interface.
-func (t *Uint64) Scan(value interface{}) error {
+func (t *Uint64) Scan(value any) error {
 	nullUint64 := sql.NullInt64{}
 	err := nullUint64.Scan(value)
 	if err != nil {
@@ -155,4 +202,24 @@ func (t *Uint64) Scan(value interface{}) error {
 // Value implements the driver Valuer interface.
 func (t Uint64) Value() (driver.Value, error) {
 	return int64(t.Val), nil
+}
+
+func ToAnyList[T any](l []T) []any {
+	ret := make([]any, len(l))
+	for i, v := range l {
+		ret[i] = v
+	}
+	return ret
+}
+
+func ToQuestions[T any](l []T, question string) string {
+	ret := strings.Builder{}
+	for i, _ := range l {
+		if 0 != i {
+			ret.WriteString(question)
+			ret.WriteString(" ")
+		}
+		ret.WriteString("?")
+	}
+	return ret.String()
 }
