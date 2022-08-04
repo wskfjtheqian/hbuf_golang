@@ -31,6 +31,10 @@ func NewContext(ctx context.Context) *Context {
 	}
 }
 
+func (c *Context) Done() <-chan struct{} {
+	return c.Context.Done()
+}
+
 func (c *Context) Value(key any) any {
 	if reflect.TypeOf(c) == key {
 		return c

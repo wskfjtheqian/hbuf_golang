@@ -25,6 +25,7 @@ func (e *Error) Error() string {
 type serverJsonContext struct {
 	context.Context
 	value *ServerJsonContextValue
+	done  chan struct{}
 }
 
 type ServerJsonContextValue struct {
@@ -40,7 +41,9 @@ func (d *serverJsonContext) Value(key any) any {
 	}
 	return d.Context.Value(key)
 }
-
+func (d *serverJsonContext) Done() <-chan struct{} {
+	return d.done
+}
 func Get(ctx context.Context) *ServerJsonContextValue {
 	ret := ctx.Value(payType)
 	if nil == ret {
@@ -120,14 +123,19 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		s.onErrorFilter(w, r, err)
 		return
 	}
-
-	contX := hbuf.NewContext(&serverJsonContext{
+	ctxJson := &serverJsonContext{
 		Context: context.TODO(),
+		done:    make(chan struct{}),
 		value: &ServerJsonContextValue{
 			Writer:  w,
 			Request: r,
 		},
-	})
+	}
+	defer func(ctx *serverJsonContext) {
+		close(ctx.done)
+	}(ctxJson)
+	contX := hbuf.NewContext(ctxJson)
+
 	for key, _ := range r.Header {
 		hbuf.SetHeader(contX, key, r.Header.Get(key))
 	}
