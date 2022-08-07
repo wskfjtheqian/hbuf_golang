@@ -66,7 +66,7 @@ func SetTag(ctx context.Context, key string, value any) {
 	if nil == ret {
 		return
 	}
-	ret.(*Context).header[key] = value
+	ret.(*Context).tags[key] = value
 }
 
 func GetTag(ctx context.Context, key string) (value any, ok bool) {
@@ -74,7 +74,7 @@ func GetTag(ctx context.Context, key string) (value any, ok bool) {
 	if nil == ret {
 		return nil, false
 	}
-	value, ok = ret.(*Context).header[key]
+	value, ok = ret.(*Context).tags[key]
 	return
 }
 func SetMethod(ctx context.Context, method string) {
