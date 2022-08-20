@@ -2,6 +2,7 @@ package hbuf
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 )
@@ -18,21 +19,24 @@ func (h *Result) Error() string {
 
 type Context struct {
 	context.Context
-	header map[string]any
-	tags   map[string]any
-	method string
+	done    chan struct{}
+	header  map[string]any
+	tags    map[string]any
+	method  string
+	onClone func(ctx context.Context) (context.Context, error)
 }
 
 func NewContext(ctx context.Context) *Context {
 	return &Context{
 		Context: ctx,
+		done:    make(chan struct{}),
 		header:  make(map[string]any, 0),
 		tags:    make(map[string]any, 0),
 	}
 }
 
 func (c *Context) Done() <-chan struct{} {
-	return c.Context.Done()
+	return c.done
 }
 
 func (c *Context) Value(key any) any {
@@ -43,6 +47,52 @@ func (c *Context) Value(key any) any {
 }
 
 var contextType = reflect.TypeOf(&Context{})
+
+func SetContextOnClone(ctx context.Context, onClone func(ctx context.Context) (context.Context, error)) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
+	ret.(*Context).onClone = onClone
+}
+
+func CloneContext(ctx context.Context) (context.Context, error) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return nil, errors.New("Clone context error, not found hbuf context")
+	}
+
+	c := ret.(*Context)
+	header := make(map[string]any, 0)
+	for key, val := range c.header {
+		header[key] = val
+	}
+	tags := make(map[string]any, 0)
+	for key, val := range c.tags {
+		tags[key] = val
+	}
+
+	c = &Context{
+		Context: c.Context,
+		done:    make(chan struct{}),
+		header:  header,
+		tags:    tags,
+		onClone: c.onClone,
+	}
+
+	if nil == c.onClone {
+		return c, nil
+	}
+	return c.onClone(c)
+}
+
+func CloseContext(ctx context.Context) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
+	close(ret.(*Context).done)
+}
 
 func SetHeader(ctx context.Context, key string, value any) {
 	var ret = ctx.Value(contextType)

@@ -63,7 +63,11 @@ func NewApp(con *Config) *App {
 }
 
 func (a *App) onHttpFilter(ctx context.Context) (context.Context, error) {
-	ip, err := ip.GetHttpIP(http.Get(ctx).Request)
+	jc := http.Get(ctx)
+	if nil == jc {
+		return ctx, nil
+	}
+	ip, err := ip.GetHttpIP(jc.Request)
 	if err != nil {
 		return nil, err
 	}

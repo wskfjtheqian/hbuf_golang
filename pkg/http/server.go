@@ -25,7 +25,6 @@ func (e *Error) Error() string {
 type serverJsonContext struct {
 	context.Context
 	value *ServerJsonContextValue
-	done  chan struct{}
 }
 
 type ServerJsonContextValue struct {
@@ -42,7 +41,7 @@ func (d *serverJsonContext) Value(key any) any {
 	return d.Context.Value(key)
 }
 func (d *serverJsonContext) Done() <-chan struct{} {
-	return d.done
+	return d.Context.Done()
 }
 func Get(ctx context.Context) *ServerJsonContextValue {
 	ret := ctx.Value(payType)
@@ -123,18 +122,14 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		s.onErrorFilter(w, r, err)
 		return
 	}
-	ctxJson := &serverJsonContext{
-		Context: context.TODO(),
-		done:    make(chan struct{}),
+	contX := &serverJsonContext{
+		Context: hbuf.NewContext(context.TODO()),
 		value: &ServerJsonContextValue{
 			Writer:  w,
 			Request: r,
 		},
 	}
-	defer func(ctx *serverJsonContext) {
-		close(ctx.done)
-	}(ctxJson)
-	contX := hbuf.NewContext(ctxJson)
+	defer hbuf.CloseContext(contX)
 
 	for key, _ := range r.Header {
 		hbuf.SetHeader(contX, key, r.Header.Get(key))
@@ -147,6 +142,14 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		s.onErrorFilter(w, r, err)
 		return
 	}
+
+	hbuf.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
+		c, err := s.server.Filter(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+	})
 
 	data, err = value.Invoke(ctx, data)
 	if nil != err {

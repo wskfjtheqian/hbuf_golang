@@ -4,32 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="优化">
-      <change afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/base/base_test.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/base/config.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/cache/Readme.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/cache/cache.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/cache/cache_test.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/cache/config.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/db/Readme.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/db/config.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/db/config.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/db/database_test.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/id/snow_flake_id.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/ip/ip.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/ip/ip_api.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/manage/Readme.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/manage/config.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/manage/server_test.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/utils/config.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/utils/encrypt.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加数据库，Redis缓存，服务管理，配置，基本功能等">
+      <change afterPath="$PROJECT_DIR$/pkg/cache/utils.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -227,7 +207,9 @@
       <workItem from="1659632896795" duration="1897000" />
       <workItem from="1659638416079" duration="56000" />
       <workItem from="1659887931306" duration="1329000" />
-      <workItem from="1660448770291" duration="2064000" />
+      <workItem from="1660448770291" duration="2262000" />
+      <workItem from="1660839590525" duration="35000" />
+      <workItem from="1661010468700" duration="4369000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -376,7 +358,21 @@
       <option name="project" value="LOCAL" />
       <updated>1659894495866</updated>
     </task>
-    <option name="localTasksCounter" value="22" />
+    <task id="LOCAL-00022" summary="添加数据库，Redis缓存，服务管理，配置，基本功能等">
+      <created>1660582090634</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1660582090634</updated>
+    </task>
+    <task id="LOCAL-00023" summary="添加数据库，Redis缓存，服务管理，配置，基本功能等">
+      <created>1660582159546</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1660582159546</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -430,7 +426,8 @@
     <MESSAGE value="添加Int64" />
     <MESSAGE value="添加Json Sever Context" />
     <MESSAGE value="优化" />
-    <option name="LAST_COMMIT_MESSAGE" value="优化" />
+    <MESSAGE value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
