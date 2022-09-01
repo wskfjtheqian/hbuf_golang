@@ -20,5 +20,5 @@ func Test_ReadConfig(t *testing.T) {
 	if err != nil {
 		log.Fatalf("dec.Decode() failed with '%s'\n", err)
 	}
-	CheckConfig(&config)
+
 }

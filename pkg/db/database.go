@@ -84,7 +84,7 @@ func NewDB(con *Config) *Database {
 	}
 }
 
-func DbBegin(ctx context.Context) error {
+func Begin(ctx context.Context) error {
 	var ret = ctx.Value(reflect.TypeOf(&dbContext{}))
 	if nil == ret {
 		return nil
@@ -99,7 +99,7 @@ func DbBegin(ctx context.Context) error {
 	return err
 }
 
-func DbCommit(ctx context.Context) error {
+func Commit(ctx context.Context) error {
 	var ret = ctx.Value(reflect.TypeOf(&dbContext{}))
 	if nil == ret || nil == ret.(*contextValue).begin {
 		return nil
@@ -116,7 +116,7 @@ func DbCommit(ctx context.Context) error {
 	return nil
 }
 
-func DbRollback(ctx context.Context) {
+func Rollback(ctx context.Context) {
 	var ret = ctx.Value(reflect.TypeOf(&dbContext{}))
 	if nil == ret {
 		return
