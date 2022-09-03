@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
-	"math/rand"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
-func Set(ctx context.Context, key string, value any) error {
+func Set(ctx context.Context, key string, value any, duration time.Duration) error {
 	marshal, err := json.Marshal(value)
 	if err != nil {
 		return nil
@@ -23,10 +23,11 @@ func Set(ctx context.Context, key string, value any) error {
 	if err != nil {
 		return nil
 	}
-	e := rand.Intn(3000-2000) + 2000
-	err = c.Send("EXPIRE", key, strconv.Itoa(e))
-	if err != nil {
-		return err
+	if 0 < duration {
+		err = c.Send("EXPIRE", key, strconv.Itoa(int(duration/time.Second)))
+		if err != nil {
+			return err
+		}
 	}
 	return c.Flush()
 }
@@ -62,12 +63,12 @@ func Del(ctx context.Context, key string) error {
 	return c.Flush()
 }
 
-func DbSet(ctx context.Context, dbName string, sql *db.Sql, value any) error {
+func DbSet(ctx context.Context, dbName string, sql *db.Sql, value any, duration time.Duration) error {
 	key, err := createDbKey(dbName, sql)
 	if err != nil {
 		return err
 	}
-	return Set(ctx, key, value)
+	return Set(ctx, key, value, duration)
 }
 
 func DbGet[T any](ctx context.Context, dbName string, sql *db.Sql, value *T) (*T, string, error) {
