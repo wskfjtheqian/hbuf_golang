@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="优化Redis缓存功能">
-      <change afterPath="$PROJECT_DIR$/pkg/utils/google_auth.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/utils/other.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加谷歌验证器代码">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -53,7 +51,7 @@
     <property name="go.formatter.settings.were.checked" value="true" />
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/utils" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
@@ -65,11 +63,12 @@
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db">
+  <component name="RunManager" selected="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$" />
@@ -103,6 +102,18 @@
       <pattern value="^\QTestSql_ToText\E$" />
       <method v="2" />
     </configuration>
+    <configuration name="Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/utils" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_GetSecret\E$" />
+      <method v="2" />
+    </configuration>
     <configuration name="Test_Hbuf in hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
@@ -127,18 +138,6 @@
       <pattern value="^\QTest_Server\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_Server in hbuf_golang/pkg/http" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/http" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="hbuf_golang/pkg/http" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_Server\E$" />
-      <method v="2" />
-    </configuration>
     <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$" />
@@ -150,19 +149,19 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
       <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
       <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
       <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
       <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
+      <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
         <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
         <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
         <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
         <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
-        <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http" />
       </list>
     </recent_temporary>
   </component>
@@ -224,7 +223,7 @@
       <workItem from="1662219502410" duration="1633000" />
       <workItem from="1662288466176" duration="1953000" />
       <workItem from="1662373828345" duration="623000" />
-      <workItem from="1662385486788" duration="321000" />
+      <workItem from="1662385486788" duration="1567000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -408,7 +407,14 @@
       <option name="project" value="LOCAL" />
       <updated>1662226804832</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="添加谷歌验证器代码">
+      <created>1662385928173</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1662385928173</updated>
+    </task>
+    <option name="localTasksCounter" value="28" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -465,7 +471,8 @@
     <MESSAGE value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
     <MESSAGE value="添加Redi缓存功能" />
     <MESSAGE value="优化Redis缓存功能" />
-    <option name="LAST_COMMIT_MESSAGE" value="优化Redis缓存功能" />
+    <MESSAGE value="添加谷歌验证器代码" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加谷歌验证器代码" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>

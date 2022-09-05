@@ -30,11 +30,13 @@ func AesDecryptCBC(encrypted []byte, key []byte) (decrypted []byte) {
 	decrypted = pkcs5UnPadding(decrypted)                       // 去除补全码
 	return decrypted
 }
+
 func pkcs5Padding(ciphertext []byte, blockSize int) []byte {
 	padding := blockSize - len(ciphertext)%blockSize
 	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
 	return append(ciphertext, padtext...)
 }
+
 func pkcs5UnPadding(origData []byte) []byte {
 	length := len(origData)
 	unpadding := int(origData[length-1])
