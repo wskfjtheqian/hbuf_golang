@@ -14,12 +14,16 @@ type GoogleAuth struct {
 }
 
 func (g *GoogleAuth) GetSecret() string {
-	randomStr := g.randStr(32)
+	randomStr := g.randStr(16)
 	return strings.ToUpper(randomStr)
 }
 
+func (g *GoogleAuth) GetQRBarcode(user string, secret string) string {
+	return "otpauth://totp/" + user + "?secret=" + secret
+}
+
 func (g *GoogleAuth) randStr(strSize int) string {
-	dictionary := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	dictionary := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	var bytes = make([]byte, strSize)
 	_, _ = rand.Read(bytes)
 	for k, v := range bytes {

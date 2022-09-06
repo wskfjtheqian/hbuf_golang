@@ -6,6 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加谷歌验证器代码">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/google_auth.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/google_auth.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -223,7 +224,7 @@
       <workItem from="1662219502410" duration="1633000" />
       <workItem from="1662288466176" duration="1953000" />
       <workItem from="1662373828345" duration="623000" />
-      <workItem from="1662385486788" duration="1567000" />
+      <workItem from="1662385486788" duration="3561000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -414,7 +415,14 @@
       <option name="project" value="LOCAL" />
       <updated>1662385928173</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="添加谷歌验证器代码">
+      <created>1662387240758</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1662387240758</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
