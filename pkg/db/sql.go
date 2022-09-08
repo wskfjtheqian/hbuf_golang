@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"log"
 	"strings"
 )
@@ -55,11 +56,19 @@ func (s *Sql) ToText() string {
 }
 
 func (s *Sql) Query(ctx context.Context) (*sql.Rows, error) {
-	log.Output(2, fmt.Sprintln(s.ToText()))
-	return GET(ctx).Query(s.text.String(), s.params...)
+	_ = log.Output(2, fmt.Sprintln(s.ToText()))
+	query, err := GET(ctx).Query(s.text.String(), s.params...)
+	if err != nil {
+		return nil, utl.Wrap(err)
+	}
+	return query, nil
 }
 
 func (s *Sql) Exec(ctx context.Context) (sql.Result, error) {
-	log.Output(2, fmt.Sprintln(s.ToText()))
-	return GET(ctx).Exec(s.text.String(), s.params...)
+	_ = log.Output(2, fmt.Sprintln(s.ToText()))
+	exec, err := GET(ctx).Exec(s.text.String(), s.params...)
+	if err != nil {
+		return nil, utl.Wrap(err)
+	}
+	return exec, nil
 }

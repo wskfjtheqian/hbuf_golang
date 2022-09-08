@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"io/ioutil"
+	"log"
 	ht "net/http"
 	"reflect"
 	"sync"
@@ -192,22 +194,27 @@ func (s *ServerJson) onErrorFilter(w ht.ResponseWriter, r *ht.Request, e error) 
 	if nil == e {
 		return
 	}
-	println("Error:", e.Error()+"----"+r.URL.String())
 	switch e.(type) {
 	case *hbuf.Result:
 		buffer, err := json.Marshal(e.(*hbuf.Result))
 		if err != nil {
 			w.WriteHeader(ht.StatusInternalServerError)
+			log.Println("Error:", e.Error()+"----"+r.URL.String())
 			return
 		}
 		_, _, _, _ = s.onWriterResult(w, r, buffer)
 		return
+	case *utl.Error:
+		e.(*utl.Error).PrintStack()
 	case *Error:
+		log.Println("Error:", e.Error()+"----"+r.URL.String())
 		switch e.(*Error).Code {
 		case ht.StatusNotFound, ht.StatusInternalServerError:
 			w.WriteHeader(e.(*Error).Code)
 			return
 		}
+	default:
+		log.Println("Error:", e.Error()+"----"+r.URL.String())
 	}
 	w.WriteHeader(ht.StatusInternalServerError)
 	return

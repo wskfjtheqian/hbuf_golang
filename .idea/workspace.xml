@@ -5,8 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加谷歌验证器代码">
+      <change afterPath="$PROJECT_DIR$/pkg/utils/error.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/cache/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/utils.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/ip/ip.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_api.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip_api.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/encrypt.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/encrypt.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/utils/google_auth.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/google_auth.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/other.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/other.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -67,6 +76,9 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
   <component name="RunManager" selected="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils">
@@ -225,6 +237,9 @@
       <workItem from="1662288466176" duration="1953000" />
       <workItem from="1662373828345" duration="623000" />
       <workItem from="1662385486788" duration="3561000" />
+      <workItem from="1662485313519" duration="1879000" />
+      <workItem from="1662568093739" duration="6259000" />
+      <workItem from="1662642248652" duration="609000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -422,7 +437,14 @@
       <option name="project" value="LOCAL" />
       <updated>1662387240758</updated>
     </task>
-    <option name="localTasksCounter" value="29" />
+    <task id="LOCAL-00029" summary="添加谷歌验证器代码">
+      <created>1662485323063</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1662485323063</updated>
+    </task>
+    <option name="localTasksCounter" value="30" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

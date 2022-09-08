@@ -2,6 +2,7 @@ package ip
 
 import (
 	"encoding/json"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"net/http"
 )
 
@@ -33,7 +34,7 @@ func ipApi(ip string) (*Info, error) {
 	var info IpApiInfo
 	err = json.NewDecoder(get.Body).Decode(&info)
 	if err != nil {
-		return nil, err
+		return nil, utl.Wrap(err)
 	}
 
 	return &Info{

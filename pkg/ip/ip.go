@@ -1,7 +1,7 @@
 package ip
 
 import (
-	"errors"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"net"
 	"net/http"
 	"strings"
@@ -32,7 +32,7 @@ func init() {
 func SetDefault(key Key) error {
 	val, ok := IpMap[key]
 	if !ok {
-		return errors.New("Setting the key to obtain IP information is invalid")
+		return utl.NewError("Setting the key to obtain IP information is invalid")
 	}
 	defaultCall = val
 	return nil
@@ -42,7 +42,7 @@ func GetIpInfo(ip string) (*Info, error) {
 	if nil != defaultCall {
 		return defaultCall(ip)
 	}
-	return nil, errors.New("Must not find a way to get IP information")
+	return nil, utl.NewError("Must not find a way to get IP information")
 }
 
 func GetHttpIP(r *http.Request) (string, error) {
@@ -67,5 +67,5 @@ func GetHttpIP(r *http.Request) (string, error) {
 		return ip, nil
 	}
 
-	return "", errors.New("no valid ip found")
+	return "", utl.NewError("no valid ip found")
 }
