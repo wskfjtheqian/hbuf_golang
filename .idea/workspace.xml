@@ -4,19 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="优化错误">
-      <change afterPath="$PROJECT_DIR$/pkg/cache/config.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/etcd/config.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/etcd/lock.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加分布式锁">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/cache.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/cache.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -255,7 +245,7 @@
       <workItem from="1662568093739" duration="6259000" />
       <workItem from="1662642248652" duration="5388000" />
       <workItem from="1662730153343" duration="5901000" />
-      <workItem from="1662736091126" duration="4156000" />
+      <workItem from="1662736091126" duration="4906000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -467,7 +457,14 @@
       <option name="project" value="LOCAL" />
       <updated>1662654655414</updated>
     </task>
-    <option name="localTasksCounter" value="31" />
+    <task id="LOCAL-00031" summary="添加分布式锁">
+      <created>1662740972837</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1662740972837</updated>
+    </task>
+    <option name="localTasksCounter" value="32" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -526,7 +523,8 @@
     <MESSAGE value="优化Redis缓存功能" />
     <MESSAGE value="添加谷歌验证器代码" />
     <MESSAGE value="优化错误" />
-    <option name="LAST_COMMIT_MESSAGE" value="优化错误" />
+    <MESSAGE value="添加分布式锁" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加分布式锁" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>

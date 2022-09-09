@@ -13,12 +13,12 @@ type contextValue struct {
 	session *concurrency.Session
 }
 
-func (v *contextValue) GetSession(ctx context.Context) (*concurrency.Session, error) {
+func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.SessionOption) (*concurrency.Session, error) {
 	if nil != v.session {
 		return v.session, nil
 	}
 	var err error
-	v.session, err = concurrency.NewSession(v.client)
+	v.session, err = concurrency.NewSession(v.client, opts...)
 	if nil != err {
 		return nil, err
 	}
