@@ -7,26 +7,26 @@ import (
 	"sync"
 )
 
-type manageContext struct {
+type Context struct {
 	context.Context
 	manage *Manage
 }
 
-func (d *manageContext) Value(key interface{}) interface{} {
+func (d *Context) Value(key interface{}) interface{} {
 	if reflect.TypeOf(d) == key {
 		return d.manage
 	}
 	return d.Context.Value(key)
 }
 
-func (d *manageContext) Done() <-chan struct{} {
+func (d *Context) Done() <-chan struct{} {
 	return d.Context.Done()
 }
 
-var manageType = reflect.TypeOf(&manageContext{})
+var cType = reflect.TypeOf(&Context{})
 
 func GET(ctx context.Context) *Manage {
-	var ret = ctx.Value(manageType)
+	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
@@ -49,8 +49,8 @@ func NewManage(con *Config) *Manage {
 }
 
 func (m *Manage) OnFilter(ctx context.Context) (context.Context, error) {
-	if nil == ctx.Value(manageType) {
-		ctx = &manageContext{
+	if nil == ctx.Value(cType) {
+		ctx = &Context{
 			ctx,
 			m,
 		}

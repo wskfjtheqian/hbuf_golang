@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/cache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
+	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/http"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
@@ -12,26 +13,26 @@ import (
 	"reflect"
 )
 
-type appContext struct {
+type Context struct {
 	context.Context
 	app *App
 }
 
-func (d *appContext) Value(key interface{}) interface{} {
+func (d *Context) Value(key interface{}) interface{} {
 	if reflect.TypeOf(d) == key {
 		return d.app
 	}
 	return d.Context.Value(key)
 }
 
-func (d *appContext) Done() <-chan struct{} {
+func (d *Context) Done() <-chan struct{} {
 	return d.Context.Done()
 }
 
-var appType = reflect.TypeOf(&appContext{})
+var cType = reflect.TypeOf(&Context{})
 
 func GET(ctx context.Context) *App {
-	var ret = ctx.Value(appType)
+	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
@@ -42,9 +43,11 @@ type App struct {
 	manage       *manage.Manage
 	db           *db.Database
 	cache        *cache.Cache
+	etcd         *etc.Etcd
 	ext          *hbuf.Server
 	dataCenterId int64
 	workerId     int64
+	ctx          context.Context
 }
 
 func NewApp(con *Config) *App {
@@ -53,8 +56,10 @@ func NewApp(con *Config) *App {
 		cache:        cache.NewCache(con.Redis),
 		manage:       manage.NewManage(con.Service),
 		ext:          hbuf.NewServer(),
+		etcd:         etc.NewEtcd(con.Etcd),
 		dataCenterId: con.DataCenterId,
 		workerId:     con.WorkerId,
+		ctx:          context.Background(),
 	}
 	app.ext.AddFilter(app.OnFilter)
 	app.ext.AddFilter(app.onHttpFilter)
@@ -76,13 +81,18 @@ func (a *App) onHttpFilter(ctx context.Context) (context.Context, error) {
 }
 
 func (a *App) OnFilter(ctx context.Context) (context.Context, error) {
-	if nil == ctx.Value(appType) {
-		ctx = &appContext{
+	if nil == ctx.Value(cType) {
+		ctx = &Context{
 			ctx,
 			a,
 		}
 	}
-	ctx, err := a.db.OnFilter(ctx)
+
+	ctx, err := a.etcd.OnFilter(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = a.db.OnFilter(ctx)
 	if err != nil {
 		return nil, err
 	}

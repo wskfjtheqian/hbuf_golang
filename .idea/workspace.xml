@@ -4,18 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加谷歌验证器代码">
-      <change afterPath="$PROJECT_DIR$/pkg/utils/error.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="优化错误">
+      <change afterPath="$PROJECT_DIR$/pkg/cache/config.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/etcd/config.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/etcd/lock.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_api.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip_api.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/encrypt.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/encrypt.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/google_auth.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/google_auth.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/other.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/other.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/cache/cache.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/cache.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,6 +45,18 @@
   <component name="GoLibraries">
     <option name="indexEntireGoPath" value="false" />
   </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/pkg/etcd/config.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/etcd/lock.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/http/server.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/etcd/etcd.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/base/app.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/cache/config.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/cache/cache.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/manage/manage.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/db/database.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/cache/utils.go" root0="FORCE_HIGHLIGHTING" />
+  </component>
   <component name="ProjectId" id="28mBe05tSA8waPmP1BxwSWl1zT1" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -61,7 +74,7 @@
     <property name="go.formatter.settings.were.checked" value="true" />
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/utils" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/etcd" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
@@ -73,6 +86,7 @@
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/etcd" />
       <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
@@ -81,7 +95,7 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils">
+  <component name="RunManager" selected="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$" />
@@ -127,16 +141,16 @@
       <pattern value="^\QTest_GetSecret\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_Hbuf in hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
+      <working_directory value="$PROJECT_DIR$/pkg/base" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="hbuf_golang/pkg/hbuf" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/base" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_Hbuf\E$" />
+      <pattern value="^\QTest_ReadConfig\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_Server in hbuf_golang/pkg/http (1)" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -162,19 +176,19 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
       <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
       <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
       <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
       <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
+      <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
         <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
         <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
         <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
         <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
-        <item itemvalue="Go Test.Test_Hbuf in hbuf_golang/pkg/hbuf" />
       </list>
     </recent_temporary>
   </component>
@@ -239,7 +253,9 @@
       <workItem from="1662385486788" duration="3561000" />
       <workItem from="1662485313519" duration="1879000" />
       <workItem from="1662568093739" duration="6259000" />
-      <workItem from="1662642248652" duration="609000" />
+      <workItem from="1662642248652" duration="5388000" />
+      <workItem from="1662730153343" duration="5901000" />
+      <workItem from="1662736091126" duration="4156000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -444,7 +460,14 @@
       <option name="project" value="LOCAL" />
       <updated>1662485323063</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="优化错误">
+      <created>1662654655414</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1662654655414</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -502,7 +525,8 @@
     <MESSAGE value="添加Redi缓存功能" />
     <MESSAGE value="优化Redis缓存功能" />
     <MESSAGE value="添加谷歌验证器代码" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加谷歌验证器代码" />
+    <MESSAGE value="优化错误" />
+    <option name="LAST_COMMIT_MESSAGE" value="优化错误" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>

@@ -15,26 +15,26 @@ type contextValue struct {
 	stack int
 }
 
-type dbContext struct {
+type Context struct {
 	context.Context
 	value *contextValue
 }
 
-var dbType = reflect.TypeOf(&dbContext{})
+var cType = reflect.TypeOf(&Context{})
 
-func (d *dbContext) Value(key interface{}) interface{} {
+func (d *Context) Value(key interface{}) interface{} {
 	if reflect.TypeOf(d) == key {
 		return d.value
 	}
 	return d.Context.Value(key)
 }
 
-func (d *dbContext) Done() <-chan struct{} {
+func (d *Context) Done() <-chan struct{} {
 	return d.Context.Done()
 }
 
 func GET(ctx context.Context) *sql.DB {
-	var ret = ctx.Value(dbType)
+	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
@@ -46,8 +46,8 @@ type Database struct {
 }
 
 func (d *Database) OnFilter(ctx context.Context) (context.Context, error) {
-	if nil == ctx.Value(dbType) {
-		ctx = &dbContext{
+	if nil == ctx.Value(cType) {
+		ctx = &Context{
 			ctx,
 			&contextValue{
 				db: d.db,
@@ -85,7 +85,7 @@ func NewDB(con *Config) *Database {
 }
 
 func Begin(ctx context.Context) error {
-	var ret = ctx.Value(reflect.TypeOf(&dbContext{}))
+	var ret = ctx.Value(reflect.TypeOf(&Context{}))
 	if nil == ret {
 		return nil
 	}
@@ -100,7 +100,7 @@ func Begin(ctx context.Context) error {
 }
 
 func Commit(ctx context.Context) error {
-	var ret = ctx.Value(reflect.TypeOf(&dbContext{}))
+	var ret = ctx.Value(reflect.TypeOf(&Context{}))
 	if nil == ret || nil == ret.(*contextValue).begin {
 		return nil
 	}
@@ -117,7 +117,7 @@ func Commit(ctx context.Context) error {
 }
 
 func Rollback(ctx context.Context) {
-	var ret = ctx.Value(reflect.TypeOf(&dbContext{}))
+	var ret = ctx.Value(reflect.TypeOf(&Context{}))
 	if nil == ret {
 		return
 	}

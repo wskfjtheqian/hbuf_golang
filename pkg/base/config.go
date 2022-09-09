@@ -3,6 +3,7 @@ package base
 import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/cache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
+	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
 	"log"
 )
@@ -10,6 +11,7 @@ import (
 type Config struct {
 	Redis        *cache.Config  `yaml:"redis"`
 	DB           *db.Config     `yaml:"db"`
+	Etcd         *etc.Config    `yaml:"etcd"`
 	Service      *manage.Config `yaml:"service"`
 	WorkerId     int64          `yaml:"worker_id"`
 	DataCenterId int64          `yaml:"data_center_id"`
@@ -29,6 +31,13 @@ func (con *Config) CheckConfig() int {
 		log.Println("未找到数据库的配置文件")
 	} else {
 		errCount += con.DB.CheckConfig()
+	}
+
+	if nil == con.Etcd {
+		errCount++
+		log.Println("未找到Etcd的配置文件")
+	} else {
+		errCount += con.Etcd.CheckConfig()
 	}
 
 	if 0 == con.DataCenterId {
