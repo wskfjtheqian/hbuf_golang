@@ -4,15 +4,51 @@ import (
 	"context"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"log"
 	"reflect"
 	"time"
 )
 
+type Execute interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 type contextValue struct {
-	db    *sql.DB
-	begin *sql.Tx
-	stack int
+	db *sql.DB
+	tx *Tx
+}
+
+func (v *contextValue) Query(query string, args ...any) (*sql.Rows, error) {
+	if nil != v.tx {
+		rows, err := v.tx.t.Query(query, args...)
+		if err != nil {
+			return nil, utl.Wrap(err)
+		}
+		return rows, nil
+	}
+	rows, err := v.db.Query(query, args...)
+	if err != nil {
+		return nil, utl.Wrap(err)
+	}
+	return rows, nil
+}
+
+func (v *contextValue) Exec(query string, args ...any) (sql.Result, error) {
+	if nil != v.tx {
+		exec, err := v.tx.t.Exec(query, args...)
+		if err != nil {
+			return nil, utl.Wrap(err)
+		}
+		return exec, nil
+	}
+	exec, err := v.db.Exec(query, args...)
+	if err != nil {
+		return nil, utl.Wrap(err)
+	}
+	return exec, nil
 }
 
 type Context struct {
@@ -33,12 +69,12 @@ func (d *Context) Done() <-chan struct{} {
 	return d.Context.Done()
 }
 
-func GET(ctx context.Context) *sql.DB {
+func GET(ctx context.Context) Execute {
 	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
-	return ret.(*contextValue).db
+	return ret.(*contextValue)
 }
 
 type Database struct {
@@ -84,54 +120,46 @@ func NewDB(con *Config) *Database {
 	}
 }
 
-func Begin(ctx context.Context) error {
-	var ret = ctx.Value(reflect.TypeOf(&Context{}))
-	if nil == ret {
-		return nil
-	}
-	val := ret.(*contextValue)
-	if 0 != val.stack {
-		return nil
-	}
-	var err error
-	val.begin, err = val.db.Begin()
-	val.stack++
-	return err
+type Tx struct {
+	t *sql.Tx
 }
 
-func Commit(ctx context.Context) error {
-	var ret = ctx.Value(reflect.TypeOf(&Context{}))
-	if nil == ret || nil == ret.(*contextValue).begin {
-		return nil
+func (t *Tx) Commit() error {
+	if nil != t.t {
+		err := t.t.Commit()
+		t.t = nil
+		if err != nil {
+			return utl.Wrap(err)
+		}
 	}
-	val := ret.(*contextValue)
-	if 1 != val.stack {
-		return nil
-	}
-	err := val.begin.Commit()
-	if err != nil {
-		return err
-	}
-	val.begin = nil
 	return nil
 }
 
-func Rollback(ctx context.Context) {
+func (t *Tx) Rollback() error {
+	if nil != t.t {
+		err := t.t.Rollback()
+		if err != nil {
+			return utl.Wrap(err)
+		}
+	}
+	return nil
+}
+
+func Begin(ctx context.Context) (*Tx, error) {
 	var ret = ctx.Value(reflect.TypeOf(&Context{}))
 	if nil == ret {
-		return
+		return nil, utl.NewError("")
 	}
 	val := ret.(*contextValue)
-	val.stack--
-	if 0 != val.stack {
-		return
+	tx := &Tx{}
+	if nil != val.tx {
+		return tx, nil
 	}
-	if nil == ret.(*contextValue).begin {
-		return
+	val.tx = tx
+	var err error
+	tx.t, err = val.db.Begin()
+	if nil != err {
+		return nil, utl.Wrap(err)
 	}
-	err := val.begin.Rollback()
-	if err != nil {
-		print(err)
-	}
-	val.begin = nil
+	return tx, nil
 }
