@@ -121,13 +121,15 @@ func NewDB(con *Config) *Database {
 }
 
 type Tx struct {
-	t *sql.Tx
+	t   *sql.Tx
+	val *contextValue
 }
 
 func (t *Tx) Commit() error {
 	if nil != t.t {
 		err := t.t.Commit()
 		t.t = nil
+		t.val.tx = nil
 		if err != nil {
 			return utl.Wrap(err)
 		}
@@ -138,6 +140,8 @@ func (t *Tx) Commit() error {
 func (t *Tx) Rollback() error {
 	if nil != t.t {
 		err := t.t.Rollback()
+		t.t = nil
+		t.val.tx = nil
 		if err != nil {
 			return utl.Wrap(err)
 		}
@@ -151,7 +155,9 @@ func Begin(ctx context.Context) (*Tx, error) {
 		return nil, utl.NewError("")
 	}
 	val := ret.(*contextValue)
-	tx := &Tx{}
+	tx := &Tx{
+		val: val,
+	}
 	if nil != val.tx {
 		return tx, nil
 	}
