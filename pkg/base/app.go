@@ -9,6 +9,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/http"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
+	"log"
 
 	"reflect"
 )
@@ -18,7 +19,7 @@ type Context struct {
 	app *App
 }
 
-func (d *Context) Value(key interface{}) interface{} {
+func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
 		return d.app
 	}
@@ -59,11 +60,22 @@ func NewApp(con *Config) *App {
 		etcd:         etc.NewEtcd(con.Etcd),
 		dataCenterId: con.DataCenterId,
 		workerId:     con.WorkerId,
-		ctx:          context.Background(),
 	}
 	app.ext.AddFilter(app.OnFilter)
 	app.ext.AddFilter(app.onHttpFilter)
+	ctx, err := app.OnFilter(hbuf.NewContext(context.Background()))
+	if err != nil {
+		log.Fatalln("Init base app error:", err)
+	}
+	hbuf.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
+		c, err := app.OnFilter(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+	})
 
+	app.ctx = ctx
 	return app
 }
 
@@ -129,4 +141,12 @@ func (a *App) GetDataCenterId() int64 {
 
 func (a *App) GetWorkerId() int64 {
 	return a.workerId
+}
+
+func (a *App) GetContext() context.Context {
+	return a.ctx
+}
+
+func (a *App) Init() {
+	a.manage.Init()
 }

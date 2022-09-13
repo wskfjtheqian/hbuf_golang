@@ -4,9 +4,18 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改数据库事物">
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
+      <change afterPath="$PROJECT_DIR$/pkg/utils/ticker.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/cache/cache.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/cache.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/server_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage_test.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -85,7 +94,7 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base">
+  <component name="RunManager" selected="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$" />
@@ -174,9 +183,9 @@
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
         <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
         <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-        <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
         <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
         <item itemvalue="Go Test.Test_Server in hbuf_golang/pkg/http (1)" />
       </list>
@@ -245,7 +254,8 @@
       <workItem from="1662568093739" duration="6259000" />
       <workItem from="1662642248652" duration="5388000" />
       <workItem from="1662730153343" duration="5901000" />
-      <workItem from="1662736091126" duration="10323000" />
+      <workItem from="1662736091126" duration="22023000" />
+      <workItem from="1662975829218" duration="2110000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -478,7 +488,14 @@
       <option name="project" value="LOCAL" />
       <updated>1662777701791</updated>
     </task>
-    <option name="localTasksCounter" value="34" />
+    <task id="LOCAL-00034" summary="修改BUG">
+      <created>1662783529628</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1662783529628</updated>
+    </task>
+    <option name="localTasksCounter" value="35" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -528,7 +545,6 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="开始接口服务器" />
-    <MESSAGE value="修改BUG" />
     <MESSAGE value="添加Int64" />
     <MESSAGE value="添加Json Sever Context" />
     <MESSAGE value="优化" />
@@ -539,7 +555,8 @@
     <MESSAGE value="优化错误" />
     <MESSAGE value="添加分布式锁" />
     <MESSAGE value="修改数据库事物" />
-    <option name="LAST_COMMIT_MESSAGE" value="修改数据库事物" />
+    <MESSAGE value="修改BUG" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改BUG" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>

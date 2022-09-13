@@ -20,29 +20,30 @@ func NewSql() *Sql {
 	}
 }
 
-func (s *Sql) T(t string) *Sql {
-	s.text.WriteString(t)
+func (s *Sql) T(query string) *Sql {
+	s.text.WriteString(strings.Trim(strings.Trim(query, " "), "\t"))
+	s.text.WriteString(" ")
 	return s
 }
 
 func (s *Sql) V(a any) *Sql {
-	s.text.WriteString(" ? ")
+	s.text.WriteString("? ")
 	s.params = append(s.params, a)
 	return s
 }
 
-func (s *Sql) P(p ...any) {
-	s.params = append(s.params, p...)
+func (s *Sql) P(args ...any) {
+	s.params = append(s.params, args...)
 }
 
-func (s *Sql) L(question string, l ...any) *Sql {
-	for i, _ := range l {
+func (s *Sql) L(question string, args ...any) *Sql {
+	for i, _ := range args {
 		if 0 != i {
 			s.text.WriteString(question)
 		}
-		s.text.WriteString(" ? ")
+		s.text.WriteString("? ")
 	}
-	s.params = append(s.params, l...)
+	s.params = append(s.params, args...)
 	return s
 }
 

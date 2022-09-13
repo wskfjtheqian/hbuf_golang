@@ -166,7 +166,7 @@ func (s *ServerJson) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	}
 
 	ret := &hbuf.Result{
-		Data: string(buffer),
+		Data: buffer,
 	}
 	buffer, err = json.Marshal(ret)
 	_, _, _, _ = s.onWriterResult(w, r, buffer)

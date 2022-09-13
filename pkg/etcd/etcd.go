@@ -42,7 +42,7 @@ type Context struct {
 
 var cType = reflect.TypeOf(&Context{})
 
-func (d *Context) Value(key interface{}) interface{} {
+func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
 		return d.value
 	}

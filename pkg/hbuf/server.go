@@ -2,15 +2,50 @@ package hbuf
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"sync"
 )
 
+type Raw []byte
+
+func (m Raw) MarshalJSON() ([]byte, error) {
+	if m == nil {
+		return []byte("null"), nil
+	}
+	return m, nil
+}
+
+func (m *Raw) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
+	}
+	*m = append((*m)[0:0], data...)
+	return nil
+}
+
 type Result struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Data any    `json:"data"`
+	Data Raw    `json:"data"`
+}
+
+func (r *Result) SetData(data any) error {
+	marshal, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	r.Data = marshal
+	return nil
+}
+
+func (r *Result) GetData(data any) error {
+	err := json.Unmarshal(r.Data, data)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (h *Result) Error() string {
@@ -159,12 +194,18 @@ type ServerClient interface {
 	GetId() uint32
 }
 
+type Init interface {
+	Init()
+}
+
 type ServerRouter interface {
 	GetName() string
 
 	GetId() uint32
 
 	GetInvoke() map[string]*ServerInvoke
+
+	GetServer() Init
 }
 
 type GetServer interface {

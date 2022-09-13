@@ -12,7 +12,7 @@ type Context struct {
 	manage *Manage
 }
 
-func (d *Context) Value(key interface{}) interface{} {
+func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
 		return d.manage
 	}
@@ -35,15 +35,17 @@ func GET(ctx context.Context) *Manage {
 
 type Manage struct {
 	config *Config
-	maps   map[string]interface{}
+	maps   map[string]any
 	router map[string]hbuf.ServerRouter
+	server map[hbuf.Init]struct{}
 	lock   sync.RWMutex
 }
 
 func NewManage(con *Config) *Manage {
 	return &Manage{
 		config: con,
-		maps:   map[string]interface{}{},
+		maps:   map[string]any{},
+		server: map[hbuf.Init]struct{}{},
 		router: map[string]hbuf.ServerRouter{},
 	}
 }
@@ -62,9 +64,13 @@ func (m *Manage) Add(r hbuf.ServerRouter) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.router[r.GetName()] = r
+	m.server[r.GetServer()] = struct{}{}
 }
 
-func (m *Manage) Get(router hbuf.ServerClient) interface{} {
+func (m *Manage) Get(router hbuf.ServerClient) any {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	client := m.config.Client
 	sers := client.List[router.GetName()]
 	if nil == sers {
@@ -83,4 +89,13 @@ func (m *Manage) Get(router hbuf.ServerClient) interface{} {
 		}
 	}
 	return nil
+}
+
+func (m *Manage) Init() {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	for server, _ := range m.server {
+		server.Init()
+	}
 }

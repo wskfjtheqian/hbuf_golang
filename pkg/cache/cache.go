@@ -13,7 +13,7 @@ type Context struct {
 	con   redis.Conn
 }
 
-func (d *Context) Value(key interface{}) interface{} {
+func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
 		return d
 	}
