@@ -46,14 +46,23 @@ func GetIpInfo(ip string) (*Info, error) {
 }
 
 func GetHttpIP(r *http.Request) (string, error) {
+	if ip := r.Header.Get("X-Original-Forwarded-For"); ip != "" {
+		temp := strings.Split(ip, ",")
+		if 0 < len(temp) && 0 < len(temp[0]) {
+			if net.ParseIP(temp[0]) != nil {
+				return temp[0], nil
+			}
+		}
+	}
+
 	ip := r.Header.Get("X-Real-IP")
-	if net.ParseIP(ip) != nil {
+	if ip != "" && net.ParseIP(ip) != nil {
 		return ip, nil
 	}
 
 	ip = r.Header.Get("X-Forward-For")
 	for _, i := range strings.Split(ip, ",") {
-		if net.ParseIP(i) != nil {
+		if i != "" && net.ParseIP(i) != nil {
 			return i, nil
 		}
 	}
