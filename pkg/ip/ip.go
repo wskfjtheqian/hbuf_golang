@@ -45,25 +45,17 @@ func GetIpInfo(ip string) (*Info, error) {
 	return nil, utl.NewError("Must not find a way to get IP information")
 }
 
-func GetHttpIP(r *http.Request) (string, error) {
-	if ip := r.Header.Get("X-Original-Forwarded-For"); ip != "" {
-		temp := strings.Split(ip, ",")
-		if 0 < len(temp) && 0 < len(temp[0]) {
-			if net.ParseIP(temp[0]) != nil {
-				return temp[0], nil
+func GetHttpIP(r *http.Request, headers ...string) (string, error) {
+	var h []string
+	h = append(h, headers...)
+	h = append(h, "X-Forwarded-For", "X-Real-IP")
+
+	for _, item := range h {
+		ip := r.Header.Get(item)
+		for _, i := range strings.Split(ip, ",") {
+			if i != "" && net.ParseIP(i) != nil {
+				return i, nil
 			}
-		}
-	}
-
-	ip := r.Header.Get("X-Real-IP")
-	if ip != "" && net.ParseIP(ip) != nil {
-		return ip, nil
-	}
-
-	ip = r.Header.Get("X-Forward-For")
-	for _, i := range strings.Split(ip, ",") {
-		if i != "" && net.ParseIP(i) != nil {
-			return i, nil
 		}
 	}
 
