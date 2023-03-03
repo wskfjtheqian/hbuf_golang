@@ -25,15 +25,6 @@ server:
     #基础路基
     path: ""
 
-  #tcp服务
-  tcp:
-    #监听地址
-    address: ":10100"
-    #crt证书
-    crt: ""
-    #crt密钥
-    key: ""
-
 #客服配置
 client:
   server:

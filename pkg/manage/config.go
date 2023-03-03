@@ -13,19 +13,6 @@ func (con *Config) CheckConfig() int {
 	return errCount
 }
 
-//Tcp 服务配置
-type Tcp struct {
-	Address *string `yaml:"address"` //监听地址
-	Crt     *string `yaml:"crt"`     //crt证书
-	Key     *string `yaml:"key"`     //crt密钥
-}
-
-func (con *Tcp) CheckConfig() int {
-	errCount := 0
-
-	return errCount
-}
-
 //Http 服务配置
 type Http struct {
 	Address *string `yaml:"address"` //监听地址
@@ -43,7 +30,6 @@ func (con *Http) CheckConfig() int {
 // Server 服务配置
 type Server struct {
 	Local     *bool `yaml:"local"`      //是否开启本地服务
-	Tcp       *Tcp  `yaml:"tcp"`        //Tcp 服务配置
 	Http      *Http `yaml:"http"`       //Http 服务配置
 	WebSocket *Http `yaml:"web_socket"` //WebSocket 服务配置
 }
@@ -58,7 +44,6 @@ type ClientServer struct {
 	Local     *bool   `yaml:"local"` //是否使用本地服务
 	Http      *string `yaml:"http"`
 	Websocket *string `yaml:"websocket"`
-	Tcp       *Tcp    `yaml:"tcp"`
 }
 
 func (con *ClientServer) CheckConfig() int {
