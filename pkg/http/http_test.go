@@ -53,8 +53,10 @@ func NewPeopleRouter(people PeopleServer) *PeopleRouter {
 				FormData: func(data hbuf.Data) ([]byte, error) {
 					return json.Marshal(&data)
 				},
-				Invoke: func(cxt context.Context, data hbuf.Data) (hbuf.Data, error) {
+				SetInfo: func(cxt context.Context) {
 					hbuf.SetTag(cxt, "auth", []string{"1", ""})
+				},
+				Invoke: func(cxt context.Context, data hbuf.Data) (hbuf.Data, error) {
 					return people.GetName(cxt, data.(*GetNameReq))
 				},
 			},

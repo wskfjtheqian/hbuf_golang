@@ -162,6 +162,7 @@ func GetTag(ctx context.Context, key string) (value any, ok bool) {
 	value, ok = ret.(*Context).tags[key]
 	return
 }
+
 func SetMethod(ctx context.Context, method string) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
@@ -227,6 +228,7 @@ func NewServer() *Server {
 	}
 	return &ret
 }
+
 func (s *Server) Router() map[string]*ServerInvoke {
 	return s.router
 }
