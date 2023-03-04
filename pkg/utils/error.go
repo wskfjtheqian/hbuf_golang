@@ -12,9 +12,9 @@ type Error struct {
 	stack []byte
 }
 
-func NewError(err string) *Error {
+func NewError(msg string) *Error {
 	return &Error{
-		error: errors.New(err),
+		error: errors.New(msg),
 		stack: debug.Stack(),
 	}
 }
@@ -37,4 +37,12 @@ var errorType = reflect.TypeOf(&Error{})
 
 func IsError(err error) bool {
 	return reflect.TypeOf(err) == errorType
+}
+
+func PrintStack(e error) {
+	if err, ok := e.(*Error); ok {
+		err.PrintStack()
+	} else {
+		os.Stderr.WriteString(e.Error())
+	}
 }

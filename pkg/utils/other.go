@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,4 +25,37 @@ func IsNil(i any) bool {
 		recover()
 	}()
 	return reflect.ValueOf(i).IsNil()
+}
+
+func UrlJoin(elem ...string) string {
+	text := strings.Builder{}
+	old := ""
+	for i, item := range elem {
+		if 0 != i && "/" != old[len(old)-1:] {
+			text.WriteString("/")
+		}
+		old = item
+		text.WriteString(item)
+	}
+	return text.String()
+}
+
+func ToAnyList[T any](l []T) []any {
+	ret := make([]any, len(l))
+	for i, v := range l {
+		ret[i] = v
+	}
+	return ret
+}
+
+func ToQuestions[T any](l []T, question string) string {
+	ret := strings.Builder{}
+	for i, _ := range l {
+		if 0 != i {
+			ret.WriteString(question)
+			ret.WriteString(" ")
+		}
+		ret.WriteString("?")
+	}
+	return ret.String()
 }

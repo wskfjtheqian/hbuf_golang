@@ -1,11 +1,8 @@
 package hbuf
 
 import (
-	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -15,57 +12,22 @@ type Data interface {
 	FormData([]byte) error
 }
 
-type Time struct {
-	Time time.Time
-}
+type Time time.Time
 
 func (t *Time) UnmarshalJSON(data []byte) error {
 	parseInt, err := strconv.ParseInt(string(data), 10, 64)
 	if err != nil {
 		return err
 	}
-	t.Time = time.UnixMilli(parseInt)
+	*t = Time(time.UnixMilli(parseInt))
 	return nil
 }
 
 func (t *Time) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt(t.Time.UnixMilli(), 10)), nil
+	return []byte(strconv.FormatInt(time.Time(*t).UnixMilli(), 10)), nil
 }
 
-func (t *Time) UnmarshalText(data []byte) error {
-	parseInt, err := strconv.ParseInt(string(data), 10, 64)
-	if err != nil {
-		return err
-	}
-	t.Time = time.UnixMilli(parseInt)
-	return nil
-}
-
-func (t *Time) MarshalText() ([]byte, error) {
-	return []byte(strconv.FormatInt(t.Time.UnixMilli(), 10)), nil
-}
-
-// Scan implements the Scanner interface.
-func (t *Time) Scan(value any) error {
-	nullTime := sql.NullTime{}
-	err := nullTime.Scan(value)
-	if err != nil {
-		return err
-	}
-	if nullTime.Valid {
-		t.Time = nullTime.Time
-	}
-	return nil
-}
-
-// Value implements the driver Valuer interface.
-func (t Time) Value() (driver.Value, error) {
-	return t.Time, nil
-}
-
-type Int64 struct {
-	Val int64
-}
+type Int64 int64
 
 func unquoteIfQuoted(value any) (string, error) {
 	var bytes []byte
@@ -101,52 +63,15 @@ func (t *Int64) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	t.Val = parseInt
+	*t = Int64(parseInt)
 	return nil
 }
 
 func (t *Int64) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + strconv.FormatInt(t.Val, 10) + "\""), nil
+	return []byte("\"" + strconv.FormatInt(int64(*t), 10) + "\""), nil
 }
 
-func (t *Int64) UnmarshalText(data []byte) error {
-	if nil == data {
-		return nil
-	}
-
-	parseInt, err := strconv.ParseInt(string(data), 10, 64)
-	if err != nil {
-		return err
-	}
-	t.Val = parseInt
-	return nil
-}
-
-func (t *Int64) MarshalText() ([]byte, error) {
-	return []byte(strconv.FormatInt(t.Val, 10)), nil
-}
-
-// Scan implements the Scanner interface.
-func (t *Int64) Scan(value any) error {
-	nullInt64 := sql.NullInt64{}
-	err := nullInt64.Scan(value)
-	if err != nil {
-		return err
-	}
-	if nullInt64.Valid {
-		t.Val = nullInt64.Int64
-	}
-	return nil
-}
-
-// Value implements the driver Valuer interface.
-func (t Int64) Value() (driver.Value, error) {
-	return t.Val, nil
-}
-
-type Uint64 struct {
-	Val uint64
-}
+type Uint64 uint64
 
 func (t *Uint64) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
@@ -162,64 +87,10 @@ func (t *Uint64) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	t.Val = parseInt
+	*t = Uint64(parseInt)
 	return nil
 }
 
 func (t *Uint64) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + strconv.FormatUint(t.Val, 10) + "\""), nil
-}
-
-func (t *Uint64) UnmarshalText(data []byte) error {
-	if nil == data {
-		return nil
-	}
-	parseInt, err := strconv.ParseUint(string(data), 10, 64)
-	if err != nil {
-		return err
-	}
-	t.Val = parseInt
-	return nil
-}
-
-func (t *Uint64) MarshalText() ([]byte, error) {
-	return []byte(strconv.FormatUint(t.Val, 10)), nil
-}
-
-// Scan implements the Scanner interface.
-func (t *Uint64) Scan(value any) error {
-	nullUint64 := sql.NullInt64{}
-	err := nullUint64.Scan(value)
-	if err != nil {
-		return err
-	}
-	if nullUint64.Valid {
-		t.Val = uint64(nullUint64.Int64)
-	}
-	return nil
-}
-
-// Value implements the driver Valuer interface.
-func (t Uint64) Value() (driver.Value, error) {
-	return int64(t.Val), nil
-}
-
-func ToAnyList[T any](l []T) []any {
-	ret := make([]any, len(l))
-	for i, v := range l {
-		ret[i] = v
-	}
-	return ret
-}
-
-func ToQuestions[T any](l []T, question string) string {
-	ret := strings.Builder{}
-	for i, _ := range l {
-		if 0 != i {
-			ret.WriteString(question)
-			ret.WriteString(" ")
-		}
-		ret.WriteString("?")
-	}
-	return ret.String()
+	return []byte("\"" + strconv.FormatUint(uint64(*t), 10) + "\""), nil
 }

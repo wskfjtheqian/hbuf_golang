@@ -59,6 +59,7 @@ func tickerError(err error) {
 		log.Println(err)
 	}
 }
+
 func TickerDelay(ctx context.Context, delay time.Duration, duration time.Duration, call func(ctx context.Context) error, init func(ctx context.Context) error) {
 	if 0 >= delay {
 		_ = log.Output(2, fmt.Sprintln("TickerDelay:delay time cannot be less than 0"))
