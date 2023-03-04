@@ -31,7 +31,7 @@ func UrlJoin(elem ...string) string {
 	text := strings.Builder{}
 	old := ""
 	for i, item := range elem {
-		if 0 != i && "/" != old[len(old)-1:] {
+		if 0 != i && "/" != old[len(old)-1:] && (0 < len(item) && "/" != item[:1]) {
 			text.WriteString("/")
 		}
 		old = item
