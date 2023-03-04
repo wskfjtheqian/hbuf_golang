@@ -59,3 +59,7 @@ func ToQuestions[T any](l []T, question string) string {
 	}
 	return ret.String()
 }
+
+func ToPointer[T any](l T) *T {
+	return &l
+}
