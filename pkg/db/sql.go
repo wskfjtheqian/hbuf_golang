@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"log"
 	"reflect"
 	"regexp"
@@ -104,13 +105,41 @@ func (s *Sql) ToText() string {
 }
 
 func (s *Sql) Query(ctx context.Context) (*sql.Rows, error) {
-	_ = log.Output(2, fmt.Sprintln(s.ToText()))
-	return GET(ctx).Query(s.text.String(), s.params...)
+	var now = time.Now().UnixMilli()
+	result, err := GET(ctx).Query(s.text.String(), s.params...)
+	if err != nil {
+		printLog(now, 0, s.ToText())
+		return nil, err
+	}
+	printLog(now, 0, s.ToText())
+	return result, nil
 }
 
 func (s *Sql) Exec(ctx context.Context) (sql.Result, error) {
-	_ = log.Output(2, fmt.Sprintln(s.ToText()))
-	return GET(ctx).Exec(s.text.String(), s.params...)
+	var now = time.Now().UnixMilli()
+	result, err := GET(ctx).Exec(s.text.String(), s.params...)
+	if err != nil {
+		printLog(now, 0, s.ToText())
+		return nil, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		printLog(now, 0, s.ToText())
+		return nil, err
+	}
+	printLog(now, count, s.ToText())
+	return result, nil
+}
+
+func printLog(now, count int64, sql string) {
+	now = time.Now().UnixMilli() - now
+	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "ms]"
+	if 200 > now {
+		t = utl.Yellow(t)
+	} else {
+		t = utl.Red(t)
+	}
+	_ = log.Output(3, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
 }
 
 func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {

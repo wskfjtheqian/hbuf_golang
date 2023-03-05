@@ -1,6 +1,8 @@
 package hbuf
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strconv"
 	"time"
@@ -23,8 +25,24 @@ func (t *Time) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (t *Time) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt(time.Time(*t).UnixMilli(), 10)), nil
+func (t Time) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.FormatInt(time.Time(t).UnixMilli(), 10)), nil
+}
+
+func (t *Time) Scan(value any) error {
+	nullTime := sql.NullTime{}
+	err := nullTime.Scan(value)
+	if err != nil {
+		return err
+	}
+	if nullTime.Valid {
+		*t = Time(nullTime.Time)
+	}
+	return nil
+}
+
+func (t Time) Value() (driver.Value, error) {
+	return time.Time(t), nil
 }
 
 type Int64 int64
@@ -67,8 +85,24 @@ func (t *Int64) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (t *Int64) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + strconv.FormatInt(int64(*t), 10) + "\""), nil
+func (t Int64) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + strconv.FormatInt(int64(t), 10) + "\""), nil
+}
+
+func (t *Int64) Scan(value any) error {
+	nullInt64 := sql.NullInt64{}
+	err := nullInt64.Scan(value)
+	if err != nil {
+		return err
+	}
+	if nullInt64.Valid {
+		*t = Int64(nullInt64.Int64)
+	}
+	return nil
+}
+
+func (t Int64) Value() (driver.Value, error) {
+	return int64(t), nil
 }
 
 type Uint64 uint64
@@ -91,6 +125,22 @@ func (t *Uint64) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (t *Uint64) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + strconv.FormatUint(uint64(*t), 10) + "\""), nil
+func (t Uint64) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + strconv.FormatUint(uint64(t), 10) + "\""), nil
+}
+
+func (t *Uint64) Scan(value any) error {
+	nullUint64 := sql.NullInt64{}
+	err := nullUint64.Scan(value)
+	if err != nil {
+		return err
+	}
+	if nullUint64.Valid {
+		*t = Uint64(nullUint64.Int64)
+	}
+	return nil
+}
+
+func (t Uint64) Value() (driver.Value, error) {
+	return int64(t), nil
 }
