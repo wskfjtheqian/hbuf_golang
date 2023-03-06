@@ -104,31 +104,44 @@ func (s *Sql) ToText() string {
 	return ExplainSQL(text, nil, `'`, s.params...)
 }
 
-func (s *Sql) Query(ctx context.Context) (*sql.Rows, error) {
+func (s *Sql) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
 	var now = time.Now().UnixMilli()
 	result, err := GET(ctx).Query(s.text.String(), s.params...)
 	if err != nil {
 		printLog(now, 0, s.ToText())
-		return nil, err
+		return 0, err
 	}
-	printLog(now, 0, s.ToText())
-	return result, nil
+	defer result.Close()
+	var count int64 = 0
+	isScan := true
+	for result.Next() {
+		count++
+		if isScan {
+			isScan, err = scan(result)
+			if err != nil {
+				printLog(now, 0, s.ToText())
+				return 0, err
+			}
+		}
+	}
+	printLog(now, count, s.ToText())
+	return count, nil
 }
 
-func (s *Sql) Exec(ctx context.Context) (sql.Result, error) {
+func (s *Sql) Exec(ctx context.Context) (int64, error) {
 	var now = time.Now().UnixMilli()
 	result, err := GET(ctx).Exec(s.text.String(), s.params...)
 	if err != nil {
 		printLog(now, 0, s.ToText())
-		return nil, err
+		return 0, err
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
 		printLog(now, 0, s.ToText())
-		return nil, err
+		return 0, err
 	}
 	printLog(now, count, s.ToText())
-	return result, nil
+	return count, nil
 }
 
 func printLog(now, count int64, sql string) {

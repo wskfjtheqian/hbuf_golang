@@ -23,15 +23,12 @@ func (con *Config) CheckConfig() int {
 	if nil == con.Address || "" == *con.Address {
 		errCount++
 		log.Println("未找到Redis服务器地址")
-
 	}
 
 	conn, err := redis.Dial(*con.Network, *con.Address)
 	if err != nil {
 		errCount++
-
 		log.Fatalln("Redis链接失败，请检查配置是否正确", err)
-
 	}
 	defer func(c redis.Conn) {
 		_ = c.Close()
