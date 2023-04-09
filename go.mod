@@ -5,6 +5,8 @@ go 1.18
 require (
 	github.com/garyburd/redigo v1.6.3
 	github.com/go-sql-driver/mysql v1.6.0
+	github.com/gorilla/websocket v1.5.0
+	go.etcd.io/etcd/client/v3 v3.5.4
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -15,7 +17,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.4 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.4 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect

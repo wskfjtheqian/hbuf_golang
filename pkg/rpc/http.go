@@ -29,6 +29,9 @@ func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out 
 	if err != nil {
 		return err
 	}
+	for key, val := range GetHeaders(ctx) {
+		request.Header.Add(key, val.(string))
+	}
 	response, err := h.client.Do(request)
 	if err != nil {
 		return err
@@ -62,9 +65,11 @@ func (d *httpContext) Value(key any) any {
 	}
 	return d.Context.Value(key)
 }
+
 func (d *httpContext) Done() <-chan struct{} {
 	return d.Context.Done()
 }
+
 func GetHttp(ctx context.Context) *HttpContextValue {
 	ret := ctx.Value(payType)
 	if nil == ret {
@@ -109,6 +114,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 				return
 			}
 			_, _ = w.Write(marshal)
+			return
 		}
 		w.WriteHeader(500)
 	}

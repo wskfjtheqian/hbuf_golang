@@ -153,3 +153,28 @@ func Test_HttpServer(t *testing.T) {
 	http.Handle("/api/", httpApi)
 	http.ListenAndServe(":8901", nil)
 }
+
+func Test_WebSocketClient(t *testing.T) {
+	client := NewClientWebSocket("ws://127.0.0.1:8901/api/")
+	jsonClient := NewJsonClient(client)
+	api := NewRpcTestClient(jsonClient)
+
+	for i := 0; i < 5; i++ {
+		name, err := api.GetName(context.TODO(), &NameReq{Id: "111"})
+		if err != nil {
+			print(err)
+			return
+		}
+		println(name.Name)
+	}
+}
+
+func Test_WebSocketServer(t *testing.T) {
+	rpc := NewServer()
+	rpc.Add(NewRpcTestRouter(RpcTestServer{}))
+
+	jsonRpc := NewServerJson(rpc)
+	httpApi := NewServerWebSocket(jsonRpc)
+	http.Handle("/api/", httpApi)
+	http.ListenAndServe(":8901", nil)
+}

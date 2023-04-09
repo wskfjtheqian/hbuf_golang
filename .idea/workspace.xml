@@ -4,28 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="优化SQL">
-      <change afterPath="$PROJECT_DIR$/pkg/rpc/http.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/rpc/http_test.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/lock.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/lock.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/client.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/client_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/http.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/http_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/http/server_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_api.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip_api.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/error.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/erro/error.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/ticker.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/ticker.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/http/server_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/http.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/http_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,10 +54,9 @@
     <setting file="file://$PROJECT_DIR$/pkg/etcd/lock.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/hbuf/data.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/hbuf/server.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/http/server.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/manage/manage.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/rpc/http.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/rpc/http_test.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/rpc/rpc_test.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/utils/other.go" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="MarkdownSettingsMigration">
@@ -80,22 +67,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/heqian/dev/hbuf/hbuf_golang&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "dart.analysis.tool.window.visible": "false",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "/Users/heqian/dev/hbuf/hbuf_golang",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "show.migrate.to.gradle.popup": "false",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/rpc" />
@@ -110,7 +98,7 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc">
+  <component name="RunManager" selected="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$" />
@@ -130,18 +118,6 @@
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
       <pattern value="^\QTestSql_ToText\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/utils" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_GetSecret\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -168,16 +144,28 @@
       <pattern value="^\QTest_HttpServer\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/base" />
+      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/base" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_ReadConfig\E$" />
+      <pattern value="^\QTest_WebSocketClient\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_WebSocketServer\E$" />
       <method v="2" />
     </configuration>
     <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
@@ -193,17 +181,17 @@
     <list>
       <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       <item itemvalue="Go Test.Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
-      <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-      <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+        <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
         <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
         <item itemvalue="Go Test.Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
         <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
-        <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
-        <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
       </list>
     </recent_temporary>
   </component>
@@ -288,7 +276,7 @@
       <workItem from="1677855407974" duration="13802000" />
       <workItem from="1678108603204" duration="4673000" />
       <workItem from="1678199548037" duration="695000" />
-      <workItem from="1680962204936" duration="14748000" />
+      <workItem from="1680962204936" duration="33435000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -598,7 +586,14 @@
       <option name="project" value="LOCAL" />
       <updated>1678119723308</updated>
     </task>
-    <option name="localTasksCounter" value="45" />
+    <task id="LOCAL-00045" summary="调整RPC代码">
+      <created>1681009008315</created>
+      <option name="number" value="00045" />
+      <option name="presentableId" value="LOCAL-00045" />
+      <option name="project" value="LOCAL" />
+      <updated>1681009008315</updated>
+    </task>
+    <option name="localTasksCounter" value="46" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -659,7 +654,8 @@
     <MESSAGE value="修改BUG" />
     <MESSAGE value="优化" />
     <MESSAGE value="优化SQL" />
-    <option name="LAST_COMMIT_MESSAGE" value="优化SQL" />
+    <MESSAGE value="调整RPC代码" />
+    <option name="LAST_COMMIT_MESSAGE" value="调整RPC代码" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
@@ -668,9 +664,19 @@
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/utils/color.go</url>
-          <line>14</line>
-          <option name="timeStamp" value="1" />
+          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
+          <line>194</line>
+          <option name="timeStamp" value="66" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
+          <line>192</line>
+          <option name="timeStamp" value="69" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
+          <line>181</line>
+          <option name="timeStamp" value="84" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

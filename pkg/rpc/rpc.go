@@ -104,6 +104,14 @@ func GetHeader(ctx context.Context, key string) (value any, ok bool) {
 	return
 }
 
+func GetHeaders(ctx context.Context) (value map[string]any) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return map[string]any{}
+	}
+	return ret.(*Context).header
+}
+
 func SetTag(ctx context.Context, key string, value any) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
