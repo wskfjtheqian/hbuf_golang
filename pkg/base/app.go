@@ -5,10 +5,9 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/cache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/http"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"log"
 
 	"reflect"
@@ -45,7 +44,7 @@ type App struct {
 	db           *db.Database
 	cache        *cache.Cache
 	etcd         *etc.Etcd
-	ext          *hbuf.Server
+	ext          *rpc.Server
 	dataCenterId int64
 	workerId     int64
 	ctx          context.Context
@@ -56,18 +55,18 @@ func NewApp(con *Config) *App {
 		db:           db.NewDB(con.DB),
 		cache:        cache.NewCache(con.Redis),
 		manage:       manage.NewManage(con.Service),
-		ext:          hbuf.NewServer(),
+		ext:          rpc.NewServer(),
 		etcd:         etc.NewEtcd(con.Etcd),
 		dataCenterId: con.DataCenterId,
 		workerId:     con.WorkerId,
 	}
 	app.ext.AddFilter(app.OnFilter)
 	app.ext.AddFilter(app.onHttpFilter)
-	ctx, err := app.OnFilter(hbuf.NewContext(context.Background()))
+	ctx, err := app.OnFilter(rpc.NewContext(context.Background()))
 	if err != nil {
 		log.Fatalln("Init base app error:", err)
 	}
-	hbuf.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
+	rpc.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
 		c, err := app.OnFilter(ctx)
 		if err != nil {
 			return nil, err
@@ -80,7 +79,7 @@ func NewApp(con *Config) *App {
 }
 
 func (a *App) onHttpFilter(ctx context.Context) (context.Context, error) {
-	jc := http.Get(ctx)
+	jc := rpc.GetHttp(ctx)
 	if nil == jc {
 		return ctx, nil
 	}
@@ -88,7 +87,7 @@ func (a *App) onHttpFilter(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return nil, err
 	}
-	hbuf.SetHeader(ctx, "IP", ip)
+	rpc.SetHeader(ctx, "IP", ip)
 	return ctx, nil
 }
 
@@ -131,7 +130,7 @@ func (a *App) GetCache() *cache.Cache {
 	return a.cache
 }
 
-func (a *App) GetExt() *hbuf.Server {
+func (a *App) GetExt() *rpc.Server {
 	return a.ext
 }
 

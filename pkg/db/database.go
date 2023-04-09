@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
-	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"log"
 	"reflect"
 	"time"
@@ -25,13 +25,13 @@ func (v *contextValue) Query(query string, args ...any) (*sql.Rows, error) {
 	if nil != v.tx {
 		rows, err := v.tx.t.Query(query, args...)
 		if err != nil {
-			return nil, utl.Wrap(err)
+			return nil, erro.Wrap(err)
 		}
 		return rows, nil
 	}
 	rows, err := v.db.Query(query, args...)
 	if err != nil {
-		return nil, utl.Wrap(err)
+		return nil, erro.Wrap(err)
 	}
 	return rows, nil
 }
@@ -40,13 +40,13 @@ func (v *contextValue) Exec(query string, args ...any) (sql.Result, error) {
 	if nil != v.tx {
 		exec, err := v.tx.t.Exec(query, args...)
 		if err != nil {
-			return nil, utl.Wrap(err)
+			return nil, erro.Wrap(err)
 		}
 		return exec, nil
 	}
 	exec, err := v.db.Exec(query, args...)
 	if err != nil {
-		return nil, utl.Wrap(err)
+		return nil, erro.Wrap(err)
 	}
 	return exec, nil
 }
@@ -131,7 +131,7 @@ func (t *Tx) Commit() error {
 		t.t = nil
 		t.val.tx = nil
 		if err != nil {
-			return utl.Wrap(err)
+			return erro.Wrap(err)
 		}
 	}
 	return nil
@@ -143,7 +143,7 @@ func (t *Tx) Rollback() error {
 		t.t = nil
 		t.val.tx = nil
 		if err != nil {
-			return utl.Wrap(err)
+			return erro.Wrap(err)
 		}
 	}
 	return nil
@@ -152,7 +152,7 @@ func (t *Tx) Rollback() error {
 func Begin(ctx context.Context) (*Tx, error) {
 	var ret = ctx.Value(reflect.TypeOf(&Context{}))
 	if nil == ret {
-		return nil, utl.NewError("")
+		return nil, erro.NewError("")
 	}
 	val := ret.(*contextValue)
 	tx := &Tx{
@@ -165,7 +165,7 @@ func Begin(ctx context.Context) (*Tx, error) {
 	var err error
 	tx.t, err = val.db.Begin()
 	if nil != err {
-		return nil, utl.Wrap(err)
+		return nil, erro.Wrap(err)
 	}
 	return tx, nil
 }

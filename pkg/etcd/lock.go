@@ -2,7 +2,7 @@ package etc
 
 import (
 	"context"
-	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
+	utl "github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 

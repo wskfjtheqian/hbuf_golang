@@ -2,7 +2,7 @@ package manage
 
 import (
 	"context"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync"
 )
@@ -36,8 +36,8 @@ func GET(ctx context.Context) *Manage {
 type Manage struct {
 	config *Config
 	maps   map[string]any
-	router map[string]hbuf.ServerRouter
-	server map[hbuf.Init]struct{}
+	router map[string]rpc.ServerRouter
+	server map[rpc.Init]struct{}
 	lock   sync.RWMutex
 }
 
@@ -45,8 +45,8 @@ func NewManage(con *Config) *Manage {
 	return &Manage{
 		config: con,
 		maps:   map[string]any{},
-		server: map[hbuf.Init]struct{}{},
-		router: map[string]hbuf.ServerRouter{},
+		server: map[rpc.Init]struct{}{},
+		router: map[string]rpc.ServerRouter{},
 	}
 }
 
@@ -60,14 +60,14 @@ func (m *Manage) OnFilter(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 
-func (m *Manage) Add(r hbuf.ServerRouter) {
+func (m *Manage) Add(r rpc.ServerRouter) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.router[r.GetName()] = r
 	m.server[r.GetServer()] = struct{}{}
 }
 
-func (m *Manage) Get(router hbuf.ServerClient) any {
+func (m *Manage) Get(router rpc.ServerClient) any {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
