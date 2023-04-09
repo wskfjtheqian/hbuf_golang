@@ -1,7 +1,7 @@
 #服务配置
 server:
   #本地服务
-  loacl: true
+  local: true
 
   #http服务
   http:
@@ -24,6 +24,10 @@ server:
     key: ""
     #基础路基
     path: ""
+
+  #开启的服务
+  list:
+    - "admin"
 
 #客服配置
 client:

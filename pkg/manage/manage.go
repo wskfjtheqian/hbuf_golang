@@ -3,6 +3,8 @@ package manage
 import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"log"
+	"net/http"
 	"reflect"
 	"sync"
 )
@@ -37,7 +39,7 @@ type Manage struct {
 	config *Config
 	maps   map[string]any
 	router map[string]rpc.ServerRouter
-	server map[rpc.Init]struct{}
+	server map[string]rpc.ServerRouter
 	lock   sync.RWMutex
 }
 
@@ -45,7 +47,7 @@ func NewManage(con *Config) *Manage {
 	return &Manage{
 		config: con,
 		maps:   map[string]any{},
-		server: map[rpc.Init]struct{}{},
+		server: map[string]rpc.ServerRouter{},
 		router: map[string]rpc.ServerRouter{},
 	}
 }
@@ -63,8 +65,10 @@ func (m *Manage) OnFilter(ctx context.Context) (context.Context, error) {
 func (m *Manage) Add(r rpc.ServerRouter) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.router[r.GetName()] = r
-	m.server[r.GetServer()] = struct{}{}
+	if m.checkOpen(r.GetName()) {
+		m.router[r.GetName()] = r
+		m.server[r.GetName()] = r
+	}
 }
 
 func (m *Manage) Get(router rpc.ServerClient) any {
@@ -91,11 +95,62 @@ func (m *Manage) Get(router rpc.ServerClient) any {
 	return nil
 }
 
+func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.Invoke) (http.Handler, string)) {
+	if nil != config {
+		mux := http.NewServeMux()
+		server := rpc.NewServer()
+		for _, value := range m.router {
+			server.Add(value)
+		}
+		path := "/"
+		if nil != config.Path {
+			path = *config.Path
+		}
+		h, msg := handle(path, rpc.NewServerJson(server))
+		mux.Handle(path, h)
+		go func() {
+			if nil != config.Crt && nil != config.Key {
+				log.Println("开启 TLS 加密" + msg + ",addr=" + *config.Address)
+				err := http.ListenAndServeTLS(*config.Address, *config.Crt, *config.Key, mux)
+				if err != nil {
+					log.Println("开启 TLS 加密" + msg + "失败：" + err.Error())
+					return
+				}
+			} else {
+				log.Println("开启 " + msg + ",addr=" + *config.Address)
+				err := http.ListenAndServe(*config.Address, mux)
+				if err != nil {
+					log.Println("开启" + msg + "失败：" + err.Error())
+					return
+				}
+			}
+		}()
+	}
+}
 func (m *Manage) Init() {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	for server, _ := range m.server {
-		server.Init()
+	m.startServer(m.config.Server.Http, func(path string, invoke rpc.Invoke) (http.Handler, string) {
+		return rpc.NewServerHttp(path, invoke), "http rpc 服务"
+	})
+	m.startServer(m.config.Server.WebSocket, func(path string, invoke rpc.Invoke) (http.Handler, string) {
+		return rpc.NewServerWebSocket(invoke), "web_socket rpc  服务"
+	})
+	for _, server := range m.server {
+		log.Println("开启并初始化rpc服务：" + server.GetName())
+		server.GetServer().Init()
 	}
+}
+
+func (m *Manage) checkOpen(name string) bool {
+	if nil == m.config.Server.List {
+		return false
+	}
+	for _, item := range *m.config.Server.List {
+		if item == name {
+			return true
+		}
+	}
+	return false
 }

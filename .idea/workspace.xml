@@ -5,15 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/http/server_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/http.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/http_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -276,7 +271,7 @@
       <workItem from="1677855407974" duration="13802000" />
       <workItem from="1678108603204" duration="4673000" />
       <workItem from="1678199548037" duration="695000" />
-      <workItem from="1680962204936" duration="33435000" />
+      <workItem from="1680962204936" duration="38966000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -593,7 +588,14 @@
       <option name="project" value="LOCAL" />
       <updated>1681009008315</updated>
     </task>
-    <option name="localTasksCounter" value="46" />
+    <task id="LOCAL-00046" summary="完成 WebRPC 服务">
+      <created>1681052177330</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1681052177330</updated>
+    </task>
+    <option name="localTasksCounter" value="47" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -655,7 +657,8 @@
     <MESSAGE value="优化" />
     <MESSAGE value="优化SQL" />
     <MESSAGE value="调整RPC代码" />
-    <option name="LAST_COMMIT_MESSAGE" value="调整RPC代码" />
+    <MESSAGE value="完成 WebRPC 服务" />
+    <option name="LAST_COMMIT_MESSAGE" value="完成 WebRPC 服务" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

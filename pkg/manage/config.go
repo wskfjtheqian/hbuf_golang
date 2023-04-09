@@ -29,9 +29,10 @@ func (con *Http) CheckConfig() int {
 
 // Server 服务配置
 type Server struct {
-	Local     *bool `yaml:"local"`      //是否开启本地服务
-	Http      *Http `yaml:"http"`       //Http 服务配置
-	WebSocket *Http `yaml:"web_socket"` //WebSocket 服务配置
+	Local     *bool     `yaml:"local"`      //是否开启本地服务
+	Http      *Http     `yaml:"http"`       //Http 服务配置
+	WebSocket *Http     `yaml:"web_socket"` //WebSocket 服务配置
+	List      *[]string `yaml:"list"`       //开始的服务列表
 }
 
 func (con *Server) CheckConfig() int {
