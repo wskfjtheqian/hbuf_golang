@@ -4,11 +4,13 @@ import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/cache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"log"
+	"os"
 
 	"reflect"
 )
@@ -142,8 +144,13 @@ func (a *App) GetWorkerId() int64 {
 	return a.workerId
 }
 
-func (a *App) GetContext() context.Context {
-	return a.ctx
+func (a *App) CloneContext() context.Context {
+	ctx, err := rpc.CloneContext(a.ctx)
+	if err != nil {
+		erro.PrintStack(err)
+		os.Exit(0)
+	}
+	return ctx
 }
 
 func (a *App) Init() {

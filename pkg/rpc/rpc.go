@@ -19,7 +19,7 @@ type Context struct {
 	onClone func(ctx context.Context) (context.Context, error)
 }
 
-func NewContext(ctx context.Context) *Context {
+func NewContext(ctx context.Context) context.Context {
 	return &Context{
 		Context: ctx,
 		done:    make(chan struct{}),

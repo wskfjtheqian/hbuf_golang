@@ -4,16 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/http.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ComposerSettings">
+    <execution />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -22,10 +25,9 @@
       </list>
     </option>
   </component>
-  <component name="GOROOT" url="file://$USER_HOME$/sdk/go" />
+  <component name="GOROOT" url="file://$PROJECT_DIR$/../../../sdk/go" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
-    <option name="RESET_MODE" value="MIXED" />
   </component>
   <component name="GitSEFilterConfiguration">
     <file-type-list>
@@ -47,12 +49,7 @@
     <setting file="file://$PROJECT_DIR$/pkg/etcd/config.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/etcd/etcd.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/etcd/lock.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/hbuf/data.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/hbuf/server.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/manage/manage.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/rpc/http.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/rpc/rpc_test.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/utils/other.go" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
@@ -64,7 +61,6 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
-    "DefaultGoTemplateProperty": "Go File",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
@@ -73,34 +69,45 @@
     "WebServerToolWindowFactoryState": "false",
     "dart.analysis.tool.window.visible": "false",
     "go.import.settings.migrated": "true",
-    "last_opened_file_path": "/Users/heqian/dev/hbuf/hbuf_golang",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "last_opened_file_path": "D:/dev/1.hbuf/hbuf",
     "show.migrate.to.gradle.popup": "false",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/pkg/rpc" />
       <recent name="$PROJECT_DIR$/pkg/etcd" />
       <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/pkg/err" />
-      <recent name="$PROJECT_DIR$/pkg/rpc" />
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc">
-    <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
+  <component name="RunManager" selected="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db (1)">
+    <configuration name="TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$" />
-      <go_parameters value="-i" />
-      <kind value="FILE" />
+      <working_directory value="$PROJECT_DIR$/pkg/sql" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestSql_Debug\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db (1)" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/db" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/db" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestSql_ToText\E$" />
       <method v="2" />
     </configuration>
     <configuration name="TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -115,78 +122,44 @@
       <pattern value="^\QTestSql_ToText\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <working_directory value="$PROJECT_DIR$/pkg/utils" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_HttpClient\E$" />
+      <pattern value="^\QTest_GetSecret\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <working_directory value="$PROJECT_DIR$/pkg/base" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/base" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_HttpServer\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_WebSocketClient\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_WebSocketServer\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$" />
-      <go_parameters value="-i" />
-      <kind value="DIRECTORY" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
+      <pattern value="^\QTest_ReadConfig\E$" />
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <item itemvalue="Go Test.Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db (1)" />
+      <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
       <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
+      <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
+      <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-        <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-        <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-        <item itemvalue="Go Test.Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+        <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db (1)" />
         <item itemvalue="Go Test.TestSql_ToText in github.com/wskfjtheqian/hbuf_golang/pkg/db" />
+        <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/base" />
+        <item itemvalue="Go Test.Test_GetSecret in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
+        <item itemvalue="Go Test.TestSql_Debug in github.com/wskfjtheqian/hbuf_golang/pkg/sql" />
       </list>
     </recent_temporary>
   </component>
@@ -254,24 +227,10 @@
       <workItem from="1662642248652" duration="5388000" />
       <workItem from="1662730153343" duration="5901000" />
       <workItem from="1662736091126" duration="22023000" />
-      <workItem from="1662975829218" duration="2136000" />
-      <workItem from="1665823043303" duration="1255000" />
-      <workItem from="1666270902223" duration="1547000" />
-      <workItem from="1667094561803" duration="10836000" />
-      <workItem from="1667724343921" duration="8438000" />
-      <workItem from="1668263433893" duration="916000" />
-      <workItem from="1668303062774" duration="599000" />
-      <workItem from="1668868032487" duration="1209000" />
-      <workItem from="1668916850831" duration="592000" />
-      <workItem from="1668928492364" duration="13000" />
-      <workItem from="1671516358712" duration="682000" />
-      <workItem from="1671672353600" duration="1173000" />
-      <workItem from="1671766604566" duration="509000" />
-      <workItem from="1677849360808" duration="730000" />
-      <workItem from="1677855407974" duration="13802000" />
-      <workItem from="1678108603204" duration="4673000" />
-      <workItem from="1678199548037" duration="695000" />
-      <workItem from="1680962204936" duration="38966000" />
+      <workItem from="1662975829218" duration="2110000" />
+      <workItem from="1674964191683" duration="4142000" />
+      <workItem from="1674987261153" duration="1690000" />
+      <workItem from="1677817908587" duration="7002000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -511,91 +470,28 @@
       <option name="project" value="LOCAL" />
       <updated>1662783529628</updated>
     </task>
-    <task id="LOCAL-00035" summary="优化">
-      <created>1663036207309</created>
+    <task id="LOCAL-00035" summary="修改获得IP函数">
+      <created>1666853792205</created>
       <option name="number" value="00035" />
       <option name="presentableId" value="LOCAL-00035" />
       <option name="project" value="LOCAL" />
-      <updated>1663036207309</updated>
+      <updated>1666853792205</updated>
     </task>
-    <task id="LOCAL-00036" summary="优化">
-      <created>1677849452337</created>
+    <task id="LOCAL-00036" summary="修改获得IP函数">
+      <created>1666857405891</created>
       <option name="number" value="00036" />
       <option name="presentableId" value="LOCAL-00036" />
       <option name="project" value="LOCAL" />
-      <updated>1677849452338</updated>
+      <updated>1666857405891</updated>
     </task>
-    <task id="LOCAL-00037" summary="优化">
-      <created>1677855456778</created>
+    <task id="LOCAL-00037" summary="修改SQL文本生成功能">
+      <created>1677818684247</created>
       <option name="number" value="00037" />
       <option name="presentableId" value="LOCAL-00037" />
       <option name="project" value="LOCAL" />
-      <updated>1677855456778</updated>
+      <updated>1677818684247</updated>
     </task>
-    <task id="LOCAL-00038" summary="优化">
-      <created>1677943625265</created>
-      <option name="number" value="00038" />
-      <option name="presentableId" value="LOCAL-00038" />
-      <option name="project" value="LOCAL" />
-      <updated>1677943625265</updated>
-    </task>
-    <task id="LOCAL-00039" summary="优化">
-      <created>1677944638444</created>
-      <option name="number" value="00039" />
-      <option name="presentableId" value="LOCAL-00039" />
-      <option name="project" value="LOCAL" />
-      <updated>1677944638444</updated>
-    </task>
-    <task id="LOCAL-00040" summary="优化">
-      <created>1677947266191</created>
-      <option name="number" value="00040" />
-      <option name="presentableId" value="LOCAL-00040" />
-      <option name="project" value="LOCAL" />
-      <updated>1677947266191</updated>
-    </task>
-    <task id="LOCAL-00041" summary="优化SQL">
-      <created>1678024354392</created>
-      <option name="number" value="00041" />
-      <option name="presentableId" value="LOCAL-00041" />
-      <option name="project" value="LOCAL" />
-      <updated>1678024354392</updated>
-    </task>
-    <task id="LOCAL-00042" summary="优化SQL">
-      <created>1678025220805</created>
-      <option name="number" value="00042" />
-      <option name="presentableId" value="LOCAL-00042" />
-      <option name="project" value="LOCAL" />
-      <updated>1678025220805</updated>
-    </task>
-    <task id="LOCAL-00043" summary="优化SQL">
-      <created>1678114828270</created>
-      <option name="number" value="00043" />
-      <option name="presentableId" value="LOCAL-00043" />
-      <option name="project" value="LOCAL" />
-      <updated>1678114828270</updated>
-    </task>
-    <task id="LOCAL-00044" summary="优化SQL">
-      <created>1678119723308</created>
-      <option name="number" value="00044" />
-      <option name="presentableId" value="LOCAL-00044" />
-      <option name="project" value="LOCAL" />
-      <updated>1678119723308</updated>
-    </task>
-    <task id="LOCAL-00045" summary="调整RPC代码">
-      <created>1681009008315</created>
-      <option name="number" value="00045" />
-      <option name="presentableId" value="LOCAL-00045" />
-      <option name="project" value="LOCAL" />
-      <updated>1681009008315</updated>
-    </task>
-    <task id="LOCAL-00046" summary="完成 WebRPC 服务">
-      <created>1681052177330</created>
-      <option name="number" value="00046" />
-      <option name="presentableId" value="LOCAL-00046" />
-      <option name="project" value="LOCAL" />
-      <updated>1681052177330</updated>
-    </task>
-    <option name="localTasksCounter" value="47" />
+    <option name="localTasksCounter" value="38" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -646,6 +542,7 @@
     <MESSAGE value="开始接口服务器" />
     <MESSAGE value="添加Int64" />
     <MESSAGE value="添加Json Sever Context" />
+    <MESSAGE value="优化" />
     <MESSAGE value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
     <MESSAGE value="添加Redi缓存功能" />
     <MESSAGE value="优化Redis缓存功能" />
@@ -653,48 +550,16 @@
     <MESSAGE value="优化错误" />
     <MESSAGE value="添加分布式锁" />
     <MESSAGE value="修改数据库事物" />
+    <MESSAGE value="修改获得IP函数" />
+    <MESSAGE value="修改SQL文本生成功能" />
     <MESSAGE value="修改BUG" />
-    <MESSAGE value="优化" />
-    <MESSAGE value="优化SQL" />
-    <MESSAGE value="调整RPC代码" />
-    <MESSAGE value="完成 WebRPC 服务" />
-    <option name="LAST_COMMIT_MESSAGE" value="完成 WebRPC 服务" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改BUG" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
   </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
-          <line>194</line>
-          <option name="timeStamp" value="66" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
-          <line>192</line>
-          <option name="timeStamp" value="69" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
-          <line>181</line>
-          <option name="timeStamp" value="84" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
-    <watches-manager>
-      <configuration name="GoTestRunConfiguration">
-        <watch expression="nil == next" />
-        <watch expression=" fmt.Sprintf(&quot;%v&quot;, value)" />
-      </configuration>
-    </watches-manager>
-  </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
     <select />
-  </component>
-  <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/hbuf_golang$Test_HttpClient_in_github_com_wskfjtheqian_hbuf_golang_pkg_rpc.out" NAME="Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc Coverage Results" MODIFIED="1680972688302" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="GoCoverage" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" />
   </component>
 </project>

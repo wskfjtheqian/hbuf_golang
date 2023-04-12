@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"io"
 	ht "net/http"
@@ -93,9 +94,8 @@ func NewServerHttp(pathPrefix string, invoke Invoke) *ServerHttp {
 }
 
 func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
-	ctx = NewContext(ctx)
+	ctx := NewContext(context.TODO())
+	defer CloseContext(ctx)
 	for key, _ := range r.Header {
 		SetHeader(ctx, key, r.Header.Get(key))
 	}
@@ -116,6 +116,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 			_, _ = w.Write(marshal)
 			return
 		}
+		erro.PrintStack(err)
 		w.WriteHeader(500)
 	}
 	return
