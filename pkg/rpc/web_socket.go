@@ -111,9 +111,8 @@ func (w *WebSocketRpc) Run() {
 			}
 			if data.Type == Request {
 				func(data *DataRpc) {
-					ctx, cancel := context.WithCancel(context.TODO())
-					defer cancel()
-					ctx = NewContext(ctx)
+					ctx := NewContext(context.TODO())
+					defer CloseContext(ctx)
 					for key, _ := range data.Header {
 						SetHeader(ctx, key, data.Header.Get(key))
 					}
