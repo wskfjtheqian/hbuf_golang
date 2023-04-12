@@ -3,6 +3,8 @@ package cache
 import (
 	"context"
 	"github.com/garyburd/redigo/redis"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"time"
 )
@@ -82,7 +84,7 @@ func NewCache(con *Config) *Cache {
 	}
 }
 
-func (c *Cache) OnFilter(ctx context.Context) (context.Context, error) {
+func (c *Cache) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
@@ -90,5 +92,5 @@ func (c *Cache) OnFilter(ctx context.Context) (context.Context, error) {
 			nil,
 		}
 	}
-	return ctx, nil
+	return in.OnNext(ctx, data, call)
 }

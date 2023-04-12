@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"log"
 	"reflect"
 	"time"
@@ -81,7 +83,7 @@ type Database struct {
 	db *sql.DB
 }
 
-func (d *Database) OnFilter(ctx context.Context) (context.Context, error) {
+func (d *Database) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
@@ -90,7 +92,7 @@ func (d *Database) OnFilter(ctx context.Context) (context.Context, error) {
 			},
 		}
 	}
-	return ctx, nil
+	return in.OnNext(ctx, data, call)
 }
 
 func NewDB(con *Config) *Database {

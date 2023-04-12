@@ -2,6 +2,8 @@ package etc
 
 import (
 	"context"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"log"
@@ -81,7 +83,7 @@ func NewEtcd(config *Config) *Etcd {
 	}
 }
 
-func (d *Etcd) OnFilter(ctx context.Context) (context.Context, error) {
+func (d *Etcd) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
@@ -90,5 +92,5 @@ func (d *Etcd) OnFilter(ctx context.Context) (context.Context, error) {
 			},
 		}
 	}
-	return ctx, nil
+	return in.OnNext(ctx, data, call)
 }

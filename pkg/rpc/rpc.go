@@ -170,48 +170,73 @@ type ServerRouter interface {
 type GetServer interface {
 	Get(router ServerClient) any
 }
+type FilterCall func(ctx context.Context, data hbuf.Data) (context.Context, hbuf.Data, error)
+type FilterNext func(ctx context.Context, data hbuf.Data, in *Filter, call FilterCall) (context.Context, hbuf.Data, error)
+type Filter struct {
+	next      *Filter
+	call      FilterNext
+	isDefault bool
+}
 
-type Filter = func(ctx context.Context) (context.Context, error)
+func (f *Filter) OnNext(ctx context.Context, data hbuf.Data, call FilterCall) (context.Context, hbuf.Data, error) {
+	if f.isDefault {
+		next := f.next
+		if nil == next {
+			next = &Filter{
+				isDefault: false,
+			}
+		}
+		return call(ctx, data)
+	} else if nil != f.next {
+		return f.next.call(ctx, data, f, call)
+	}
+	return ctx, data, nil
+}
 
 type Server struct {
 	router map[string]*ServerInvoke
 	lock   sync.RWMutex
-	filter []Filter
+	filter *Filter
 }
 
 func NewServer() *Server {
 	ret := Server{
 		router: map[string]*ServerInvoke{},
-		filter: []Filter{},
+		filter: &Filter{
+			isDefault: true,
+		},
 	}
 	return &ret
+}
+
+func (s *Server) GetFilter() *Filter {
+	return s.filter
 }
 
 func (s *Server) Router() map[string]*ServerInvoke {
 	return s.router
 }
 
-func (s *Server) AddFilter(inc Filter) {
+func (s *Server) AddFilter(inc FilterNext) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.filter = append(s.filter, inc)
-}
-
-func (s *Server) InsertFilter(inc Filter) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.filter = append([]Filter{inc}, s.filter...)
-}
-
-func (s *Server) Filter(ctx context.Context) (context.Context, error) {
-	var err error
-	for _, filter := range s.filter {
-		ctx, err = filter(ctx)
-		if err != nil {
-			return nil, err
-		}
+	s.filter = &Filter{
+		isDefault: false,
+		call:      inc,
 	}
-	return ctx, nil
+}
+
+func (s *Server) InsertFilter(inc FilterNext) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	filter := s.filter
+	for nil != filter.next {
+		filter = filter.next
+	}
+	filter.next = &Filter{
+		isDefault: false,
+		call:      inc,
+	}
 }
 
 func (s *Server) Add(router ServerRouter) {

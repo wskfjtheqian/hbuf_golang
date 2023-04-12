@@ -2,6 +2,7 @@ package manage
 
 import (
 	"context"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"log"
 	"net/http"
@@ -52,14 +53,14 @@ func NewManage(con *Config) *Manage {
 	}
 }
 
-func (m *Manage) OnFilter(ctx context.Context) (context.Context, error) {
+func (m *Manage) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
 			m,
 		}
 	}
-	return ctx, nil
+	return in.OnNext(ctx, data, call)
 }
 
 func (m *Manage) Add(r rpc.ServerRouter) {

@@ -6,10 +6,10 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
-	"log"
 	"os"
 
 	"reflect"
@@ -63,61 +63,45 @@ func NewApp(con *Config) *App {
 		workerId:     con.WorkerId,
 	}
 	app.ext.AddFilter(app.OnFilter)
+	app.ext.AddFilter(app.etcd.OnFilter)
+	app.ext.AddFilter(app.db.OnFilter)
+	app.ext.AddFilter(app.manage.OnFilter)
+	app.ext.AddFilter(app.cache.OnFilter)
 	app.ext.AddFilter(app.onHttpFilter)
-	ctx, err := app.OnFilter(rpc.NewContext(context.Background()))
-	if err != nil {
-		log.Fatalln("Init base app error:", err)
-	}
+
+	ctx := rpc.NewContext(context.Background())
 	rpc.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
-		c, err := app.OnFilter(ctx)
+		ctx, _, err := app.ext.GetFilter().OnNext(ctx, nil, nil)
 		if err != nil {
 			return nil, err
 		}
-		return c, nil
+		return ctx, nil
 	})
 
 	app.ctx = ctx
 	return app
 }
 
-func (a *App) onHttpFilter(ctx context.Context) (context.Context, error) {
+func (a *App) onHttpFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	jc := rpc.GetHttp(ctx)
-	if nil == jc {
-		return ctx, nil
+	if nil != jc {
+		ip, err := ip.GetHttpIP(jc.Request)
+		if err != nil {
+			return nil, data, err
+		}
+		rpc.SetHeader(ctx, "IP", ip)
 	}
-	ip, err := ip.GetHttpIP(jc.Request)
-	if err != nil {
-		return nil, err
-	}
-	rpc.SetHeader(ctx, "IP", ip)
-	return ctx, nil
+	return in.OnNext(ctx, data, call)
 }
 
-func (a *App) OnFilter(ctx context.Context) (context.Context, error) {
+func (a *App) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
 			a,
 		}
 	}
-
-	ctx, err := a.etcd.OnFilter(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ctx, err = a.db.OnFilter(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ctx, err = a.manage.OnFilter(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ctx, err = a.cache.OnFilter(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return ctx, nil
+	return in.OnNext(ctx, data, call)
 }
 
 func (a *App) GetManage() *manage.Manage {
