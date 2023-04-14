@@ -62,12 +62,12 @@ func NewApp(con *Config) *App {
 		dataCenterId: con.DataCenterId,
 		workerId:     con.WorkerId,
 	}
-	app.ext.AddFilter(app.OnFilter)
-	app.ext.AddFilter(app.etcd.OnFilter)
-	app.ext.AddFilter(app.db.OnFilter)
-	app.ext.AddFilter(app.manage.OnFilter)
-	app.ext.AddFilter(app.cache.OnFilter)
-	app.ext.AddFilter(app.onHttpFilter)
+	app.ext.PrefixFilter(app.OnFilter)
+	app.ext.PrefixFilter(app.etcd.OnFilter)
+	app.ext.PrefixFilter(app.db.OnFilter)
+	app.ext.PrefixFilter(app.manage.OnFilter)
+	app.ext.PrefixFilter(app.cache.OnFilter)
+	app.ext.PrefixFilter(app.onHttpFilter)
 
 	ctx := rpc.NewContext(context.Background())
 	rpc.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
@@ -77,7 +77,10 @@ func NewApp(con *Config) *App {
 		}
 		return ctx, nil
 	})
-
+	ctx, _, err := app.ext.GetFilter().OnNext(ctx, nil, nil)
+	if err != nil {
+		return nil
+	}
 	app.ctx = ctx
 	return app
 }

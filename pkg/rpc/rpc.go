@@ -180,15 +180,11 @@ type Filter struct {
 
 func (f *Filter) OnNext(ctx context.Context, data hbuf.Data, call FilterCall) (context.Context, hbuf.Data, error) {
 	if f.isDefault {
-		next := f.next
-		if nil == next {
-			next = &Filter{
-				isDefault: false,
-			}
+		if nil != call {
+			return call(ctx, data)
 		}
-		return call(ctx, data)
-	} else if nil != f.next {
-		return f.next.call(ctx, data, f, call)
+	} else if nil != f.call {
+		return f.call(ctx, data, f.next, call)
 	}
 	return ctx, data, nil
 }
@@ -217,16 +213,36 @@ func (s *Server) Router() map[string]*ServerInvoke {
 	return s.router
 }
 
-func (s *Server) AddFilter(inc FilterNext) {
+// PrefixFilter 前
+func (s *Server) PrefixFilter(inc FilterNext) {
+	if nil == inc {
+		return
+	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.filter = &Filter{
+	filter := s.filter
+	prefix := s.filter
+	for nil != filter.next {
+		prefix = filter
+		filter = filter.next
+	}
+	self := &Filter{
 		isDefault: false,
 		call:      inc,
+		next:      filter,
+	}
+	if filter == prefix {
+		s.filter = self
+	} else {
+		prefix.next = self
 	}
 }
 
-func (s *Server) InsertFilter(inc FilterNext) {
+// SuffixFilter 后
+func (s *Server) SuffixFilter(inc FilterNext) {
+	if nil == inc {
+		return
+	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	filter := s.filter

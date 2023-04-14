@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -177,4 +178,13 @@ func Test_WebSocketServer(t *testing.T) {
 	httpApi := NewServerWebSocket(jsonRpc)
 	http.Handle("/api/", httpApi)
 	http.ListenAndServe(":8901", nil)
+}
+
+type AAA func(t *testing.T)
+
+func Test_P(t *testing.T) {
+	var a AAA = Test_WebSocketServer
+	if reflect.DeepEqual(a, Test_WebSocketServer) {
+		println("")
+	}
 }
