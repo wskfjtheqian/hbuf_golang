@@ -141,5 +141,7 @@ func (a *App) CloneContext() context.Context {
 }
 
 func (a *App) Init() {
-	a.manage.Init()
+	ctx := a.CloneContext()
+	defer rpc.CloneContext(ctx)
+	a.manage.Init(ctx)
 }

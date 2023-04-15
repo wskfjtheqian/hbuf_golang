@@ -78,6 +78,7 @@ func NewEtcd(config *Config) *Etcd {
 	if err != nil {
 		log.Fatalln("Etcd服务器连接失败，请检查配置是否正确", err)
 	}
+
 	return &Etcd{
 		client: client,
 	}

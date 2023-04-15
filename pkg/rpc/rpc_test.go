@@ -36,7 +36,7 @@ func (d *NameReps) FormData([]byte) error {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type RpcTest interface {
-	Init()
+	Init(ctx context.Context)
 
 	GetName(ctx context.Context, req *NameReq) (*NameReps, error)
 }
@@ -123,7 +123,7 @@ func NewRpcTestRouter(server RpcTest) *RpcTestRouter {
 type RpcTestServer struct {
 }
 
-func (r RpcTestServer) Init() {
+func (r RpcTestServer) Init(ctx context.Context) {
 
 }
 

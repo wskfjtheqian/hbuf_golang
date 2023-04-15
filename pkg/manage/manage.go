@@ -128,7 +128,7 @@ func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.I
 		}()
 	}
 }
-func (m *Manage) Init() {
+func (m *Manage) Init(ctx context.Context) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
@@ -140,7 +140,7 @@ func (m *Manage) Init() {
 	})
 	for _, server := range m.server {
 		log.Println("开启并初始化rpc服务：" + server.GetName())
-		server.GetServer().Init()
+		server.GetServer().Init(ctx)
 	}
 }
 

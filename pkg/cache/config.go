@@ -12,6 +12,7 @@ type Config struct {
 	MaxIdle     *int    `yaml:"max_idle"`     // 最大空闲链接数 默认8
 	MaxActive   *int    `yaml:"max_active"`   // 表示和数据库的最大链接数， 默认0 表示没有限制
 	IdleTimeout *int    `yaml:"idle_timeout"` // 最大空闲时间  默认0100ms
+	Db          int     `yaml:"db"`           // 数据库ID
 }
 
 func (con *Config) CheckConfig() int {
@@ -38,9 +39,7 @@ func (con *Config) CheckConfig() int {
 		_, err := conn.Do("AUTH", *con.Password)
 		if err != nil {
 			errCount++
-
 			log.Println("Redis 认证失败，请检查密码是否正确", err)
-
 		}
 	}
 	log.Println("Redis 检查：Ok")
