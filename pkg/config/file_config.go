@@ -9,8 +9,9 @@ import (
 type fileConfig struct {
 	path     string
 	value    string
-	onChange func(c any)
+	onChange func(c string)
 	hostname string
+	watcher  *fsnotify.Watcher
 }
 
 func (c *fileConfig) Yaml() string {
@@ -21,33 +22,40 @@ func (c *fileConfig) CheckConfig() int {
 	return 0
 }
 
-func (c *fileConfig) OnChange(f func(c any)) {
-	c.onChange = f
+func (c *fileConfig) OnChange(call func(value string)) error {
+	if 0 == len(c.value) {
+		err := c.readConfig()
+		if err != nil {
+			return err
+		}
+		if nil != call {
+			call(c.value)
+		}
+	}
+	c.onChange = call
+	return nil
 }
 
 func NewFileConfig(hostname string, path string) Watch {
-	return &fileConfig{
-		hostname: hostname,
-		path:     path,
-	}
-}
-
-func (c *fileConfig) Watch() {
-	err := c.readConfig()
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer watcher.Close()
+	return &fileConfig{
+		watcher:  watcher,
+		hostname: hostname,
+		path:     path,
+	}
+}
+func (c *fileConfig) Close() error {
+	return c.watcher.Close()
+}
+func (c *fileConfig) Watch() error {
 	done := make(chan bool)
 	go func() {
 		for {
 			select {
-			case event, ok := <-watcher.Events:
+			case event, ok := <-c.watcher.Events:
 				if !ok {
 					return
 				}
@@ -58,7 +66,7 @@ func (c *fileConfig) Watch() {
 						log.Println("读取配置文件失败:", c.path)
 					}
 				}
-			case err, ok := <-watcher.Errors:
+			case err, ok := <-c.watcher.Errors:
 				if !ok {
 					return
 				}
@@ -66,11 +74,12 @@ func (c *fileConfig) Watch() {
 			}
 		}
 	}()
-	err = watcher.Add(c.path)
+	err := c.watcher.Add(c.path)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	<-done
+	return nil
 }
 
 func (c *fileConfig) readConfig() error {

@@ -98,36 +98,41 @@ func (d *Database) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter,
 	return in.OnNext(ctx, data, call)
 }
 
-func (d *Database) onConfig(v *ConfigValue) {
+func (d *Database) SetConfig(config *Config) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	if nil == v {
+	if nil == config {
 		if nil != d.db {
 			d.db.Close()
 		}
 		d.db = nil
+		d.config = nil
 		return
 	}
+	if nil != d.config && d.config.Yaml() == config.Yaml() {
+		return
+	}
+	d.config = config
 
-	db, err := sql.Open(*v.Type, *v.Username+":"+*v.Password+"@"+*v.URL+"&parseTime=true&clientFoundRows=true")
+	db, err := sql.Open(*config.Type, *config.Username+":"+*config.Password+"@"+*config.URL+"&parseTime=true&clientFoundRows=true")
 	if err != nil {
 		log.Fatalln("数据库链接失败，请检查配置是否正确", err)
 	}
 	maxIdle := 8
-	if nil != v.MaxIdle {
-		maxIdle = *v.MaxIdle
+	if nil != config.MaxIdle {
+		maxIdle = *config.MaxIdle
 	}
 	db.SetMaxIdleConns(maxIdle)
 
 	maxOpen := 16
-	if nil != v.MaxActive {
-		maxOpen = *v.MaxActive
+	if nil != config.MaxActive {
+		maxOpen = *config.MaxActive
 	}
 	db.SetMaxOpenConns(maxOpen)
 
 	idleTimeout := time.Millisecond * 100
-	if nil != v.IdleTimeout {
-		idleTimeout = time.Millisecond * time.Duration(*v.IdleTimeout)
+	if nil != config.IdleTimeout {
+		idleTimeout = time.Millisecond * time.Duration(*config.IdleTimeout)
 	}
 	db.SetConnMaxIdleTime(idleTimeout)
 	if nil != d.db {
@@ -136,11 +141,8 @@ func (d *Database) onConfig(v *ConfigValue) {
 	d.db = db
 }
 
-func NewDB(con *Config) *Database {
-	ret := &Database{
-		config: con,
-	}
-	ret.config.OnChange(ret.onConfig)
+func NewDB() *Database {
+	ret := &Database{}
 	return ret
 
 }

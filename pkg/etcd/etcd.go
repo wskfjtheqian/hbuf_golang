@@ -76,29 +76,32 @@ type Etcd struct {
 	lock   sync.Mutex
 }
 
-func NewEtcd(config *Config) *Etcd {
-	ret := &Etcd{
-		config: config,
-	}
-	ret.config.OnChange(ret.onConfig)
+func NewEtcd() *Etcd {
+	ret := &Etcd{}
 	return ret
 }
 
-func (d *Etcd) onConfig(v *ConfigValue) {
+func (d *Etcd) SetConfig(config *Config) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	if nil == v {
+	if nil == config {
 		if nil != d.client {
 			d.client.Close()
 		}
 		d.client = nil
+		d.config = nil
 		return
 	}
-	c := clientv3.Config{
-		Endpoints: v.Endpoints,
+	if nil != d.config && d.config.Yaml() == config.Yaml() {
+		return
 	}
-	if nil != v.DialTimeout {
-		c.DialTimeout = *v.DialTimeout
+	d.config = config
+
+	c := clientv3.Config{
+		Endpoints: config.Endpoints,
+	}
+	if nil != config.DialTimeout {
+		c.DialTimeout = *config.DialTimeout
 	}
 	client, err := clientv3.New(c)
 	if err != nil {

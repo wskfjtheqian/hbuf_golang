@@ -55,38 +55,41 @@ type Cache struct {
 	config *Config
 }
 
-func NewCache(con *Config) *Cache {
-	ret := Cache{
-		config: con,
-	}
-	ret.config.OnChange(ret.onConfig)
+func NewCache() *Cache {
+	ret := Cache{}
 	return &ret
 }
 
-func (c *Cache) onConfig(v *ConfigValue) {
+func (c *Cache) SetConfig(config *Config) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if nil == v {
+	if nil == config {
 		if nil != c.pool {
 			c.pool.Close()
 		}
 		c.pool = nil
+		c.config = nil
 		return
 	}
 
+	if nil != c.config && c.config.Yaml() == config.Yaml() {
+		return
+	}
+	c.config = config
+
 	maxIdle := 8
-	if nil != v.MaxIdle {
-		maxIdle = *v.MaxIdle
+	if nil != config.MaxIdle {
+		maxIdle = *config.MaxIdle
 	}
 
 	maxActive := 16
-	if nil != v.MaxActive {
-		maxActive = *v.MaxActive
+	if nil != config.MaxActive {
+		maxActive = *config.MaxActive
 	}
 
 	idleTimeout := time.Millisecond * 100
-	if nil != v.IdleTimeout {
-		idleTimeout = time.Millisecond * time.Duration(*v.IdleTimeout)
+	if nil != config.IdleTimeout {
+		idleTimeout = time.Millisecond * time.Duration(*config.IdleTimeout)
 	}
 
 	if nil != c.pool {
@@ -98,11 +101,11 @@ func (c *Cache) onConfig(v *ConfigValue) {
 		IdleTimeout: idleTimeout,
 		Dial: func() (redis.Conn, error) {
 			option := make([]redis.DialOption, 0)
-			if nil != v.Password && 0 < len(*v.Password) {
-				option = append(option, redis.DialPassword(*v.Password))
+			if nil != config.Password && 0 < len(*config.Password) {
+				option = append(option, redis.DialPassword(*config.Password))
 			}
-			option = append(option, redis.DialDatabase(v.Db))
-			return redis.Dial(*v.Network, *v.Address, option...)
+			option = append(option, redis.DialDatabase(config.Db))
+			return redis.Dial(*config.Network, *config.Address, option...)
 		},
 	}
 }

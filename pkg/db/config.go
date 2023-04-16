@@ -3,12 +3,11 @@ package db
 import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/config"
 	"gopkg.in/yaml.v3"
 	"log"
 )
 
-type ConfigValue struct {
+type Config struct {
 	Type        *string `yaml:"type"`         // 数据库类型
 	URL         *string `yaml:"url"`          // 数据库链接
 	Username    *string `yaml:"username"`     // 用户名
@@ -18,7 +17,7 @@ type ConfigValue struct {
 	IdleTimeout *int    `yaml:"idle_timeout"` // 最大空闲时间  默认0100ms
 }
 
-func (c *ConfigValue) Yaml() string {
+func (c *Config) Yaml() string {
 	bytes, err := yaml.Marshal(c)
 	if err != nil {
 		return ""
@@ -26,7 +25,7 @@ func (c *ConfigValue) Yaml() string {
 	return string(bytes)
 }
 
-func (con *ConfigValue) CheckConfig() int {
+func (con *Config) CheckConfig() int {
 	errCount := 0
 	if nil == con.Type || !("mysql" == *con.Type) {
 		errCount++
@@ -55,16 +54,4 @@ func (con *ConfigValue) CheckConfig() int {
 	}(db)
 	log.Println("数据库链接 检查：Ok")
 	return errCount
-}
-
-type Config struct {
-	config.Config
-}
-
-func (c *Config) OnChange(call func(v *ConfigValue)) {
-	c.Config.OnChange(func(value config.Value) {
-		if nil != call {
-			call(value.(*ConfigValue))
-		}
-	})
 }

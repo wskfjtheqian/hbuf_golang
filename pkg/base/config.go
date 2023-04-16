@@ -2,7 +2,6 @@ package base
 
 import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/cache"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/config"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
@@ -10,16 +9,16 @@ import (
 	"log"
 )
 
-type ConfigValue struct {
-	Redis        *cache.ConfigValue  `yaml:"redis"`
-	DB           *db.ConfigValue     `yaml:"db"`
-	Etcd         *etc.ConfigValue    `yaml:"etcd"`
-	Service      *manage.ConfigValue `yaml:"service"`
-	WorkerId     int64               `yaml:"worker_id"`
-	DataCenterId int64               `yaml:"data_center_id"`
+type Config struct {
+	Redis        *cache.Config  `yaml:"redis"`
+	DB           *db.Config     `yaml:"db"`
+	Etcd         *etc.Config    `yaml:"etcd"`
+	Server       *manage.Config `yaml:"service"`
+	WorkerId     int64          `yaml:"worker_id"`
+	DataCenterId int64          `yaml:"data_center_id"`
 }
 
-func (con *ConfigValue) Yaml() string {
+func (con *Config) Yaml() string {
 	marshal, err := yaml.Marshal(con)
 	if err != nil {
 		return ""
@@ -27,7 +26,7 @@ func (con *ConfigValue) Yaml() string {
 	return string(marshal)
 }
 
-func (con *ConfigValue) CheckConfig() int {
+func (con *Config) CheckConfig() int {
 	errCount := 0
 
 	if nil == con.Redis {
@@ -60,27 +59,4 @@ func (con *ConfigValue) CheckConfig() int {
 		log.Println("机器ID设置错误，请设置 worker_id 大于 0")
 	}
 	return errCount
-}
-
-func (con *ConfigValue) OnChange(func(c *ConfigValue)) {
-}
-
-type Config struct {
-	config.Config
-	Etcd    *etc.Config
-	DB      *db.Config
-	Redis   *cache.Config
-	Service *manage.Config
-}
-
-func (c *Config) OnChange(call func(v *ConfigValue)) {
-	c.Config.OnChange(func(value config.Value) {
-		if nil != call {
-			call(value.(*ConfigValue))
-		}
-		c.Etcd.Change(value.(*ConfigValue).Etcd)
-		c.DB.Change(value.(*ConfigValue).DB)
-		c.Redis.Change(value.(*ConfigValue).Redis)
-		c.Service.Change(value.(*ConfigValue).Service)
-	})
 }

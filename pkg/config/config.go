@@ -6,7 +6,9 @@ import (
 )
 
 type Watch interface {
-	Watch()
+	Watch() error
+	Close() error
+	OnChange(call func(value string)) error
 }
 
 type Value interface {
@@ -51,7 +53,7 @@ func (c *Config) Change(v Value) {
 	}
 }
 
-func WatchConfig() Watch {
+func NewWatch() Watch {
 	var hostname string
 	flag.StringVar(&hostname, "h", "", "Host name")
 	var path string
@@ -60,7 +62,7 @@ func WatchConfig() Watch {
 	flag.StringVar(&endpoints, "e", "", "Etcd endpoints")
 	flag.Parse()
 	if 0 == len(hostname) {
-		log.Fatal("Please input Host name")
+		log.Fatal("请输入 Host name")
 	}
 
 	var c Watch
@@ -73,21 +75,7 @@ func WatchConfig() Watch {
 		log.Println("Config.yaml file path:" + path)
 		c = NewFileConfig(hostname, path)
 	} else {
-		log.Fatal("Please input config.yaml file path or etcd endpoints")
+		log.Fatal("请输入 config.yaml file path or etcd endpoints")
 	}
-	go c.Watch()
 	return c
 }
-
-//func ReadConfig(r io.Reader, config Config) *Config {
-//	var dec = yaml.NewDecoder(r)
-//	err := dec.Decode(config)
-//	if err != nil {
-//		log.Fatalf("解析配置文件失败，请检查配置文件书写是否有误 '%s'\n", err)
-//	}
-//	errCount := config.CheckConfig()
-//	if 0 < errCount {
-//		os.Exit(1)
-//	}
-//	return &config
-//}

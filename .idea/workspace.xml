@@ -6,13 +6,13 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/cache/cache.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/cache.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/cache/cache_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/cache_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/cache/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/config_test.go" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/config/etcd_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/etcd_config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/config/file_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/file_config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/db/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/config.go" afterDir="false" />
@@ -23,7 +23,6 @@
       <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/manage/manage_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/config.go" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -77,23 +76,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/heqian/dev/hbuf/hbuf_golang/pkg/etcd&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "dart.analysis.tool.window.visible": "false",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "/Users/heqian/dev/hbuf/hbuf_golang/pkg/etcd",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "show.migrate.to.gradle.popup": "false",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/etcd" />
@@ -289,7 +289,7 @@
       <workItem from="1678199548037" duration="695000" />
       <workItem from="1680962204936" duration="39001000" />
       <workItem from="1681516559874" duration="11380000" />
-      <workItem from="1681605248191" duration="10939000" />
+      <workItem from="1681605248191" duration="16557000" />
     </task>
     <task id="LOCAL-00001" summary="开始接口服务器">
       <created>1651833934541</created>
@@ -627,7 +627,14 @@
       <option name="project" value="LOCAL" />
       <updated>1681572106572</updated>
     </task>
-    <option name="localTasksCounter" value="49" />
+    <task id="LOCAL-00049" summary="开始添加动态配置">
+      <created>1681618739833</created>
+      <option name="number" value="00049" />
+      <option name="presentableId" value="LOCAL-00049" />
+      <option name="project" value="LOCAL" />
+      <updated>1681618739833</updated>
+    </task>
+    <option name="localTasksCounter" value="50" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

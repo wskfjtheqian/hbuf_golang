@@ -15,7 +15,7 @@ func Test_ReadConfig(t *testing.T) {
 	defer f.Close()
 
 	var dec = yaml.NewDecoder(f)
-	var config ConfigValue
+	var config Config
 	err = dec.Decode(&config)
 	if err != nil {
 		log.Fatalf("dec.Decode() failed with '%s'\n", err)

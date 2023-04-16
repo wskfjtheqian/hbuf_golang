@@ -11,6 +11,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"os"
+	"sync"
 
 	"reflect"
 )
@@ -42,6 +43,7 @@ func GET(ctx context.Context) *App {
 }
 
 type App struct {
+	lock         sync.Mutex
 	manage       *manage.Manage
 	db           *db.Database
 	cache        *cache.Cache
@@ -50,20 +52,18 @@ type App struct {
 	dataCenterId int64
 	workerId     int64
 	ctx          context.Context
+	config       *Config
 }
 
-func NewApp(con Config) *App {
+func NewApp() *App {
 	app := &App{
-		db:     db.NewDB(con.DB),
-		cache:  cache.NewCache(con.Redis),
-		manage: manage.NewManage(con.Service),
+		db:     db.NewDB(),
+		cache:  cache.NewCache(),
+		manage: manage.NewManage(),
 		ext:    rpc.NewServer(),
-		etcd:   etc.NewEtcd(con.Etcd),
+		etcd:   etc.NewEtcd(),
 	}
-	con.OnChange(func(v *ConfigValue) {
-		app.dataCenterId = v.DataCenterId
-		app.workerId = v.WorkerId
-	})
+
 	app.ext.PrefixFilter(app.OnFilter)
 	app.ext.PrefixFilter(app.etcd.OnFilter)
 	app.ext.PrefixFilter(app.db.OnFilter)
@@ -85,6 +85,35 @@ func NewApp(con Config) *App {
 	}
 	app.ctx = ctx
 	return app
+
+}
+func (a *App) SetConfig(config *Config) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	if nil == config {
+		a.db.SetConfig(nil)
+		a.cache.SetConfig(nil)
+		a.manage.SetConfig(nil)
+		a.etcd.SetConfig(nil)
+		a.config = nil
+		return
+	}
+
+	if nil != a.config && a.config.Yaml() == config.Yaml() {
+		return
+	}
+	a.config = config
+
+	a.db.SetConfig(config.DB)
+	a.cache.SetConfig(config.Redis)
+	a.manage.SetConfig(config.Server)
+	a.etcd.SetConfig(config.Etcd)
+
+	if nil != config {
+		a.dataCenterId = config.DataCenterId
+		a.workerId = config.WorkerId
+	}
 }
 
 func (a *App) onHttpFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {

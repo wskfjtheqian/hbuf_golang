@@ -44,22 +44,16 @@ type Manage struct {
 	lock   sync.RWMutex
 }
 
-func (m *Manage) Config() *ConfigValue {
-	return m.config.Value().(*ConfigValue)
-}
-
-func NewManage(con *Config) *Manage {
+func NewManage() *Manage {
 	ret := &Manage{
-		config: con,
 		maps:   map[string]any{},
 		server: map[string]rpc.ServerRouter{},
 		router: map[string]rpc.ServerRouter{},
 	}
-	ret.config.OnChange(ret.onConfig)
 	return ret
 }
 
-func (m *Manage) onConfig(v *ConfigValue) {
+func (m *Manage) SetConfig(config *Config) {
 
 }
 
@@ -76,17 +70,17 @@ func (m *Manage) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, c
 func (m *Manage) Add(r rpc.ServerRouter) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if m.checkOpen(r.GetName()) {
-		m.router[r.GetName()] = r
-		m.server[r.GetName()] = r
-	}
+	//if m.checkOpen(r.GetName()) {
+	//	m.router[r.GetName()] = r
+	//	m.server[r.GetName()] = r
+	//}
 }
 
 func (m *Manage) Get(router rpc.ServerClient) any {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	client := m.Config().Client
+	client := m.config.Client
 	sers := client.List[router.GetName()]
 	if nil == sers {
 		return nil
@@ -138,14 +132,15 @@ func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.I
 		}()
 	}
 }
+
 func (m *Manage) Init(ctx context.Context) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	m.startServer(m.Config().Server.Http, func(path string, invoke rpc.Invoke) (http.Handler, string) {
+	m.startServer(m.config.Server.Http, func(path string, invoke rpc.Invoke) (http.Handler, string) {
 		return rpc.NewServerHttp(path, invoke), "http rpc 服务"
 	})
-	m.startServer(m.Config().Server.WebSocket, func(path string, invoke rpc.Invoke) (http.Handler, string) {
+	m.startServer(m.config.Server.WebSocket, func(path string, invoke rpc.Invoke) (http.Handler, string) {
 		return rpc.NewServerWebSocket(invoke), "web_socket rpc  服务"
 	})
 	for _, server := range m.server {
@@ -155,10 +150,10 @@ func (m *Manage) Init(ctx context.Context) {
 }
 
 func (m *Manage) checkOpen(name string) bool {
-	if nil == m.Config().Server.List {
+	if nil == m.config.Server.List {
 		return false
 	}
-	for _, item := range *m.Config().Server.List {
+	for _, item := range *m.config.Server.List {
 		if item == name {
 			return true
 		}
