@@ -10,14 +10,13 @@ import (
 
 type etcdConfig struct {
 	endpoints []string
+	hostname  string
 }
 
-func (c *etcdConfig) OnChange(f func(c any)) {
-}
-
-func NewEtcdConfig(path string) Config {
+func NewEtcdConfig(hostname string, endpoints string) Watch {
 	return &etcdConfig{
-		endpoints: strings.Split(path, ","),
+		hostname:  hostname,
+		endpoints: strings.Split(endpoints, ","),
 	}
 }
 

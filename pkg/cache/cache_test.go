@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"testing"
@@ -15,7 +15,7 @@ func Test_ReadConfig(t *testing.T) {
 	defer f.Close()
 
 	var dec = yaml.NewDecoder(f)
-	var config Config
+	var config ConfigValue
 	err = dec.Decode(&config)
 	if err != nil {
 		log.Fatalf("dec.Decode() failed with '%s'\n", err)

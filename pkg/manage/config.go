@@ -1,16 +1,39 @@
 package manage
 
-type Config struct {
+import "github.com/wskfjtheqian/hbuf_golang/pkg/config"
+import "gopkg.in/yaml.v3"
+
+type ConfigValue struct {
 	Server Server `yaml:"server"` //服务配置
 	Client Client `yaml:"client"` //客服配置
 }
 
-func (con *Config) CheckConfig() int {
+func (c *ConfigValue) Yaml() string {
+	bytes, err := yaml.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+
+func (con *ConfigValue) CheckConfig() int {
 	errCount := 0
 	errCount += con.Server.CheckConfig()
 	errCount += con.Client.CheckConfig()
 
 	return errCount
+}
+
+type Config struct {
+	config.Config
+}
+
+func (c *Config) OnChange(call func(v *ConfigValue)) {
+	c.Config.OnChange(func(value config.Value) {
+		if nil != call {
+			call(value.(*ConfigValue))
+		}
+	})
 }
 
 //Http 服务配置

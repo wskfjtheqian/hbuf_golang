@@ -52,16 +52,18 @@ type App struct {
 	ctx          context.Context
 }
 
-func NewApp(con *Config) *App {
+func NewApp(con Config) *App {
 	app := &App{
-		db:           db.NewDB(con.DB),
-		cache:        cache.NewCache(con.Redis),
-		manage:       manage.NewManage(con.Service),
-		ext:          rpc.NewServer(),
-		etcd:         etc.NewEtcd(con.Etcd),
-		dataCenterId: con.DataCenterId,
-		workerId:     con.WorkerId,
+		db:     db.NewDB(con.DB),
+		cache:  cache.NewCache(con.Redis),
+		manage: manage.NewManage(con.Service),
+		ext:    rpc.NewServer(),
+		etcd:   etc.NewEtcd(con.Etcd),
 	}
+	con.OnChange(func(v *ConfigValue) {
+		app.dataCenterId = v.DataCenterId
+		app.workerId = v.WorkerId
+	})
 	app.ext.PrefixFilter(app.OnFilter)
 	app.ext.PrefixFilter(app.etcd.OnFilter)
 	app.ext.PrefixFilter(app.db.OnFilter)

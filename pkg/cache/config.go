@@ -2,10 +2,12 @@ package cache
 
 import (
 	"github.com/garyburd/redigo/redis"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/config"
+	"gopkg.in/yaml.v3"
 	"log"
 )
 
-type Config struct {
+type ConfigValue struct {
 	Network     *string `yaml:"network"`      // 网络类型
 	Address     *string `yaml:"address"`      // Redis 服务器地址
 	Password    *string `yaml:"password"`     // 密码
@@ -15,7 +17,15 @@ type Config struct {
 	Db          int     `yaml:"db"`           // 数据库ID
 }
 
-func (con *Config) CheckConfig() int {
+func (c *ConfigValue) Yaml() string {
+	bytes, err := yaml.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+
+func (con *ConfigValue) CheckConfig() int {
 	errCount := 0
 	if nil == con.Network || !("tcp" == *con.Network) {
 		errCount++
@@ -44,4 +54,16 @@ func (con *Config) CheckConfig() int {
 	}
 	log.Println("Redis 检查：Ok")
 	return errCount
+}
+
+type Config struct {
+	config.Config
+}
+
+func (c *Config) OnChange(call func(v *ConfigValue)) {
+	c.Config.OnChange(func(value config.Value) {
+		if nil != call {
+			call(value.(*ConfigValue))
+		}
+	})
 }

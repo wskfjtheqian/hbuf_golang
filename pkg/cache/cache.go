@@ -6,6 +6,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -49,38 +50,59 @@ func GET(ctx context.Context) redis.Conn {
 }
 
 type Cache struct {
-	pool *redis.Pool
+	pool   *redis.Pool
+	lock   sync.Mutex
+	config *Config
 }
 
 func NewCache(con *Config) *Cache {
+	ret := Cache{
+		config: con,
+	}
+	ret.config.OnChange(ret.onConfig)
+	return &ret
+}
+
+func (c *Cache) onConfig(v *ConfigValue) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if nil == v {
+		if nil != c.pool {
+			c.pool.Close()
+		}
+		c.pool = nil
+		return
+	}
+
 	maxIdle := 8
-	if nil != con.MaxIdle {
-		maxIdle = *con.MaxIdle
+	if nil != v.MaxIdle {
+		maxIdle = *v.MaxIdle
 	}
 
 	maxActive := 16
-	if nil != con.MaxActive {
-		maxActive = *con.MaxActive
+	if nil != v.MaxActive {
+		maxActive = *v.MaxActive
 	}
 
 	idleTimeout := time.Millisecond * 100
-	if nil != con.IdleTimeout {
-		idleTimeout = time.Millisecond * time.Duration(*con.IdleTimeout)
+	if nil != v.IdleTimeout {
+		idleTimeout = time.Millisecond * time.Duration(*v.IdleTimeout)
 	}
 
-	return &Cache{
-		pool: &redis.Pool{
-			MaxIdle:     maxIdle,
-			MaxActive:   maxActive,
-			IdleTimeout: idleTimeout,
-			Dial: func() (redis.Conn, error) {
-				option := make([]redis.DialOption, 0)
-				if nil != con.Password && 0 < len(*con.Password) {
-					option = append(option, redis.DialPassword(*con.Password))
-				}
-				option = append(option, redis.DialDatabase(con.Db))
-				return redis.Dial(*con.Network, *con.Address, option...)
-			},
+	if nil != c.pool {
+		c.pool.Close()
+	}
+	c.pool = &redis.Pool{
+		MaxIdle:     maxIdle,
+		MaxActive:   maxActive,
+		IdleTimeout: idleTimeout,
+		Dial: func() (redis.Conn, error) {
+			option := make([]redis.DialOption, 0)
+			if nil != v.Password && 0 < len(*v.Password) {
+				option = append(option, redis.DialPassword(*v.Password))
+			}
+			option = append(option, redis.DialDatabase(v.Db))
+			return redis.Dial(*v.Network, *v.Address, option...)
 		},
 	}
 }
