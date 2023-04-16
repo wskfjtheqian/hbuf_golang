@@ -6,9 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/etcd_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/etcd_config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/file_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/file_config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -276,14 +277,7 @@
       <workItem from="1678199548037" duration="695000" />
       <workItem from="1680962204936" duration="39001000" />
       <workItem from="1681516559874" duration="11380000" />
-      <workItem from="1681605248191" duration="18818000" />
-    </task>
-    <task id="LOCAL-00002" summary="开始接口服务器">
-      <created>1651853975942</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1651853975942</updated>
+      <workItem from="1681605248191" duration="23660000" />
     </task>
     <task id="LOCAL-00003" summary="开始接口服务器">
       <created>1652546218860</created>
@@ -621,7 +615,14 @@
       <option name="project" value="LOCAL" />
       <updated>1681642532234</updated>
     </task>
-    <option name="localTasksCounter" value="51" />
+    <task id="LOCAL-00051" summary="完成动态配置">
+      <created>1681654314619</created>
+      <option name="number" value="00051" />
+      <option name="presentableId" value="LOCAL-00051" />
+      <option name="project" value="LOCAL" />
+      <updated>1681654314619</updated>
+    </task>
+    <option name="localTasksCounter" value="52" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

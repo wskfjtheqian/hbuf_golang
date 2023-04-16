@@ -59,10 +59,11 @@ func NewApp() *App {
 	app := &App{
 		db:     db.NewDB(),
 		cache:  cache.NewCache(),
+		etcd:   etc.NewEtcd(),
 		manage: manage.NewManage(),
 		ext:    rpc.NewServer(),
-		etcd:   etc.NewEtcd(),
 	}
+	app.manage.SetEtcd(app.etcd)
 
 	app.ext.PrefixFilter(app.OnFilter)
 	app.ext.PrefixFilter(app.etcd.OnFilter)
@@ -94,8 +95,8 @@ func (a *App) SetConfig(config *Config) {
 	if nil == config {
 		a.db.SetConfig(nil)
 		a.cache.SetConfig(nil)
-		a.manage.SetConfig(nil)
 		a.etcd.SetConfig(nil)
+		a.manage.SetConfig(nil)
 		a.config = nil
 		return
 	}
@@ -107,9 +108,8 @@ func (a *App) SetConfig(config *Config) {
 
 	a.db.SetConfig(config.DB)
 	a.cache.SetConfig(config.Redis)
-	a.manage.SetConfig(config.Server)
 	a.etcd.SetConfig(config.Etcd)
-
+	a.manage.SetConfig(config.Server)
 	if nil != config {
 		a.dataCenterId = config.DataCenterId
 		a.workerId = config.WorkerId

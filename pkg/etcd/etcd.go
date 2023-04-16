@@ -121,3 +121,7 @@ func (d *Etcd) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, cal
 	}
 	return in.OnNext(ctx, data, call)
 }
+
+func (d *Etcd) GetClient() *clientv3.Client {
+	return d.client
+}
