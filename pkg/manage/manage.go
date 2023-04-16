@@ -54,6 +54,13 @@ func NewManage() *Manage {
 }
 
 func (m *Manage) SetConfig(config *Config) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if nil != m.config && m.config.Yaml() == config.Yaml() {
+		return
+	}
+	m.config = config
 
 }
 

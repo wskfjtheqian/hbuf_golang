@@ -16,43 +16,6 @@ type Value interface {
 	CheckConfig() int
 }
 
-type Config struct {
-	value Value
-	call  func(Value)
-}
-
-func (c *Config) Value() Value {
-	return c.value
-}
-
-func (c *Config) OnChange(call func(value Value)) {
-	c.call = call
-	if nil != c.call {
-		c.call(c.value)
-	}
-}
-
-func (c *Config) Change(v Value) {
-	if c.value != v {
-		if nil == c.value {
-			c.value = v
-			if nil != c.call {
-				c.call(v)
-			}
-		} else if nil == c.value {
-			c.value = v
-			if nil != c.call {
-				c.call(v)
-			}
-		} else if c.value.Yaml() != v.Yaml() {
-			c.value = v
-			if nil != c.call {
-				c.call(v)
-			}
-		}
-	}
-}
-
 func NewWatch() Watch {
 	var hostname string
 	flag.StringVar(&hostname, "h", "", "Host name")

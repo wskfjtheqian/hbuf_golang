@@ -24,10 +24,12 @@ func (c *fileConfig) CheckConfig() int {
 
 func (c *fileConfig) OnChange(call func(value string)) error {
 	if 0 == len(c.value) {
-		err := c.readConfig()
+		log.Println("配置文件路径:", c.path)
+		buffer, err := ioutil.ReadFile(c.path)
 		if err != nil {
-			return err
+			log.Println("读取配置文件失败:", c.path)
 		}
+		c.value = string(buffer)
 		if nil != call {
 			call(c.value)
 		}
@@ -60,11 +62,17 @@ func (c *fileConfig) Watch() error {
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					log.Println("配置文件忆 file:", event.Name)
-					err := c.readConfig()
+					log.Println("配置文件路径:", c.path)
+					buffer, err := ioutil.ReadFile(c.path)
 					if err != nil {
 						log.Println("读取配置文件失败:", c.path)
 					}
+					value := string(buffer)
+					if value != c.value && nil != c.onChange {
+						log.Println("配置文件改变：" + value)
+						c.onChange(c.value)
+					}
+					c.value = value
 				}
 			case err, ok := <-c.watcher.Errors:
 				if !ok {
@@ -79,19 +87,5 @@ func (c *fileConfig) Watch() error {
 		return err
 	}
 	<-done
-	return nil
-}
-
-func (c *fileConfig) readConfig() error {
-	buffer, err := ioutil.ReadFile(c.path)
-	if err != nil {
-		return err
-	}
-	value := string(buffer)
-	if c.value != value {
-		if nil != c.onChange {
-			c.onChange(string(buffer))
-		}
-	}
 	return nil
 }

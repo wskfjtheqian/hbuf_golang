@@ -64,11 +64,11 @@ func (c *etcdConfig) Watch() error {
 			} else {
 				value = string(ev.Kv.Value)
 			}
-			if value != c.value {
-				if nil != c.onChange {
-					c.onChange(c.value)
-				}
+			if value != c.value && nil != c.onChange {
+				log.Println("配置文件改变：" + value)
+				c.onChange(c.value)
 			}
+			c.value = value
 		}
 	}
 	return nil
