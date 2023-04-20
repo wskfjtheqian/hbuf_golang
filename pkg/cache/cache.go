@@ -6,6 +6,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -49,38 +50,62 @@ func GET(ctx context.Context) redis.Conn {
 }
 
 type Cache struct {
-	pool *redis.Pool
+	pool   *redis.Pool
+	lock   sync.Mutex
+	config *Config
 }
 
-func NewCache(con *Config) *Cache {
+func NewCache() *Cache {
+	ret := Cache{}
+	return &ret
+}
+
+func (c *Cache) SetConfig(config *Config) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if nil == config {
+		if nil != c.pool {
+			c.pool.Close()
+		}
+		c.pool = nil
+		c.config = nil
+		return
+	}
+
+	if nil != c.config && c.config.Yaml() == config.Yaml() {
+		return
+	}
+	c.config = config
+
 	maxIdle := 8
-	if nil != con.MaxIdle {
-		maxIdle = *con.MaxIdle
+	if nil != config.MaxIdle {
+		maxIdle = *config.MaxIdle
 	}
 
 	maxActive := 16
-	if nil != con.MaxActive {
-		maxActive = *con.MaxActive
+	if nil != config.MaxActive {
+		maxActive = *config.MaxActive
 	}
 
 	idleTimeout := time.Millisecond * 100
-	if nil != con.IdleTimeout {
-		idleTimeout = time.Millisecond * time.Duration(*con.IdleTimeout)
+	if nil != config.IdleTimeout {
+		idleTimeout = time.Millisecond * time.Duration(*config.IdleTimeout)
 	}
 
-	return &Cache{
-		pool: &redis.Pool{
-			MaxIdle:     maxIdle,
-			MaxActive:   maxActive,
-			IdleTimeout: idleTimeout,
-			Dial: func() (redis.Conn, error) {
-				option := make([]redis.DialOption, 0)
-				if nil != con.Password && 0 < len(*con.Password) {
-					option = append(option, redis.DialPassword(*con.Password))
-				}
-				option = append(option, redis.DialDatabase(con.Db))
-				return redis.Dial(*con.Network, *con.Address, option...)
-			},
+	if nil != c.pool {
+		c.pool.Close()
+	}
+	c.pool = &redis.Pool{
+		MaxIdle:     maxIdle,
+		MaxActive:   maxActive,
+		IdleTimeout: idleTimeout,
+		Dial: func() (redis.Conn, error) {
+			option := make([]redis.DialOption, 0)
+			if nil != config.Password && 0 < len(*config.Password) {
+				option = append(option, redis.DialPassword(*config.Password))
+			}
+			option = append(option, redis.DialDatabase(config.Db))
+			return redis.Dial(*config.Network, *config.Address, option...)
 		},
 	}
 }

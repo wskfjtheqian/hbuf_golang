@@ -5,6 +5,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
+	"gopkg.in/yaml.v3"
 	"log"
 )
 
@@ -12,9 +13,17 @@ type Config struct {
 	Redis        *cache.Config  `yaml:"redis"`
 	DB           *db.Config     `yaml:"db"`
 	Etcd         *etc.Config    `yaml:"etcd"`
-	Service      *manage.Config `yaml:"service"`
+	Server       *manage.Config `yaml:"service"`
 	WorkerId     int64          `yaml:"worker_id"`
 	DataCenterId int64          `yaml:"data_center_id"`
+}
+
+func (con *Config) Yaml() string {
+	marshal, err := yaml.Marshal(con)
+	if err != nil {
+		return ""
+	}
+	return string(marshal)
 }
 
 func (con *Config) CheckConfig() int {

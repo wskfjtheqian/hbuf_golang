@@ -9,6 +9,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"log"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -80,7 +81,9 @@ func GET(ctx context.Context) Execute {
 }
 
 type Database struct {
-	db *sql.DB
+	db     *sql.DB
+	config *Config
+	lock   sync.Mutex
 }
 
 func (d *Database) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
@@ -95,31 +98,53 @@ func (d *Database) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter,
 	return in.OnNext(ctx, data, call)
 }
 
-func NewDB(con *Config) *Database {
-	db, err := sql.Open(*con.Type, *con.Username+":"+*con.Password+"@"+*con.URL+"&parseTime=true&clientFoundRows=true")
+func (d *Database) SetConfig(config *Config) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	if nil == config {
+		if nil != d.db {
+			d.db.Close()
+		}
+		d.db = nil
+		d.config = nil
+		return
+	}
+	if nil != d.config && d.config.Yaml() == config.Yaml() {
+		return
+	}
+	d.config = config
+
+	db, err := sql.Open(*config.Type, *config.Username+":"+*config.Password+"@"+*config.URL+"&parseTime=true&clientFoundRows=true")
 	if err != nil {
 		log.Fatalln("数据库链接失败，请检查配置是否正确", err)
 	}
 	maxIdle := 8
-	if nil != con.MaxIdle {
-		maxIdle = *con.MaxIdle
+	if nil != config.MaxIdle {
+		maxIdle = *config.MaxIdle
 	}
 	db.SetMaxIdleConns(maxIdle)
 
 	maxOpen := 16
-	if nil != con.MaxActive {
-		maxOpen = *con.MaxActive
+	if nil != config.MaxActive {
+		maxOpen = *config.MaxActive
 	}
 	db.SetMaxOpenConns(maxOpen)
 
 	idleTimeout := time.Millisecond * 100
-	if nil != con.IdleTimeout {
-		idleTimeout = time.Millisecond * time.Duration(*con.IdleTimeout)
+	if nil != config.IdleTimeout {
+		idleTimeout = time.Millisecond * time.Duration(*config.IdleTimeout)
 	}
 	db.SetConnMaxIdleTime(idleTimeout)
-	return &Database{
-		db: db,
+	if nil != d.db {
+		d.db.Close()
 	}
+	d.db = db
+}
+
+func NewDB() *Database {
+	ret := &Database{}
+	return ret
+
 }
 
 type Tx struct {

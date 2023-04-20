@@ -2,12 +2,15 @@ package etc
 
 import (
 	"context"
+	"github.com/garyburd/redigo/redis"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"log"
 	"reflect"
+	"sync"
 )
 
 type contextValue struct {
@@ -16,6 +19,9 @@ type contextValue struct {
 }
 
 func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.SessionOption) (*concurrency.Session, error) {
+	if nil != v.client {
+		return nil, erro.NewError("未开启Etcd 功能")
+	}
 	if nil != v.session {
 		return v.session, nil
 	}
@@ -65,9 +71,32 @@ func GET(ctx context.Context) *contextValue {
 
 type Etcd struct {
 	client *clientv3.Client
+	config *Config
+	pool   *redis.Pool
+	lock   sync.Mutex
 }
 
-func NewEtcd(config *Config) *Etcd {
+func NewEtcd() *Etcd {
+	ret := &Etcd{}
+	return ret
+}
+
+func (d *Etcd) SetConfig(config *Config) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	if nil == config {
+		if nil != d.client {
+			d.client.Close()
+		}
+		d.client = nil
+		d.config = nil
+		return
+	}
+	if nil != d.config && d.config.Yaml() == config.Yaml() {
+		return
+	}
+	d.config = config
+
 	c := clientv3.Config{
 		Endpoints: config.Endpoints,
 	}
@@ -76,11 +105,9 @@ func NewEtcd(config *Config) *Etcd {
 	}
 	client, err := clientv3.New(c)
 	if err != nil {
-		log.Fatalln("Etcd服务器连接失败，请检查配置是否正确", err)
+		log.Println("Etcd服务器连接失败，请检查配置是否正确", err)
 	}
-	return &Etcd{
-		client: client,
-	}
+	d.client = client
 }
 
 func (d *Etcd) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
@@ -93,4 +120,8 @@ func (d *Etcd) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, cal
 		}
 	}
 	return in.OnNext(ctx, data, call)
+}
+
+func (d *Etcd) GetClient() *clientv3.Client {
+	return d.client
 }

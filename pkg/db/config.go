@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	"gopkg.in/yaml.v3"
 	"log"
 )
 
@@ -14,6 +15,14 @@ type Config struct {
 	MaxIdle     *int    `yaml:"max_idle"`     // 最大空闲链接数 默认8
 	MaxActive   *int    `yaml:"max_active"`   // 表示和数据库的最大链接数， 默认0 表示没有限制
 	IdleTimeout *int    `yaml:"idle_timeout"` // 最大空闲时间  默认0100ms
+}
+
+func (c *Config) Yaml() string {
+	bytes, err := yaml.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
 }
 
 func (con *Config) CheckConfig() int {

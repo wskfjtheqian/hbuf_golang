@@ -1,8 +1,18 @@
 package manage
 
+import "gopkg.in/yaml.v3"
+
 type Config struct {
 	Server Server `yaml:"server"` //服务配置
 	Client Client `yaml:"client"` //客服配置
+}
+
+func (c *Config) Yaml() string {
+	bytes, err := yaml.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
 }
 
 func (con *Config) CheckConfig() int {
@@ -21,7 +31,15 @@ type Http struct {
 	Path    *string `yaml:"path"`    //路径
 }
 
-func (con *Http) CheckConfig() int {
+func (h *Http) Yaml() string {
+	bytes, err := yaml.Marshal(h)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+
+func (h *Http) CheckConfig() int {
 	errCount := 0
 
 	return errCount
@@ -29,36 +47,60 @@ func (con *Http) CheckConfig() int {
 
 // Server 服务配置
 type Server struct {
-	Local     *bool     `yaml:"local"`      //是否开启本地服务
+	Register  bool      `yaml:"register"`   //是否注册服务到注册中心
+	Local     bool      `yaml:"local"`      //是否开启本地服务
 	Http      *Http     `yaml:"http"`       //Http 服务配置
 	WebSocket *Http     `yaml:"web_socket"` //WebSocket 服务配置
 	List      *[]string `yaml:"list"`       //开始的服务列表
 }
 
-func (con *Server) CheckConfig() int {
+func (s *Server) Yaml() string {
+	bytes, err := yaml.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+func (s *Server) CheckConfig() int {
 	errCount := 0
 
 	return errCount
 }
 
 type ClientServer struct {
-	Local     *bool   `yaml:"local"` //是否使用本地服务
+	Local     bool    `yaml:"local"` //是否使用本地服务
 	Http      *string `yaml:"http"`
 	Websocket *string `yaml:"websocket"`
 }
 
-func (con *ClientServer) CheckConfig() int {
+func (s *ClientServer) Yaml() string {
+	bytes, err := yaml.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+func (s *ClientServer) CheckConfig() int {
 	errCount := 0
 
 	return errCount
 }
 
 type Client struct {
+	Find   bool                    `yaml:"find"` //是否开启服务发现功能
 	Server map[string]ClientServer `yaml:"server"`
 	List   map[string][]string     `yaml:"list"`
 }
 
-func (con *Client) CheckConfig() int {
+func (c *Client) Yaml() string {
+	bytes, err := yaml.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+
+func (c *Client) CheckConfig() int {
 	errCount := 0
 
 	return errCount
