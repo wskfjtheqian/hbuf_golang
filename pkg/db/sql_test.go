@@ -31,7 +31,7 @@ func TestSql_Query(t *testing.T) {
 func TestSql_Exec(t *testing.T) {
 	s := NewSql()
 
-	_, err := s.Exec(context.TODO())
+	_, _, err := s.Exec(context.TODO())
 	if err != nil {
 		return
 	}

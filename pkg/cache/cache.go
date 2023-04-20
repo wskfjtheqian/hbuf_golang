@@ -78,6 +78,7 @@ func NewCache(con *Config) *Cache {
 				if nil != con.Password && 0 < len(*con.Password) {
 					option = append(option, redis.DialPassword(*con.Password))
 				}
+				option = append(option, redis.DialDatabase(con.Db))
 				return redis.Dial(*con.Network, *con.Address, option...)
 			},
 		},

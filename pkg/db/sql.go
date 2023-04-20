@@ -128,20 +128,25 @@ func (s *Sql) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (in
 	return count, nil
 }
 
-func (s *Sql) Exec(ctx context.Context) (int64, error) {
+func (s *Sql) Exec(ctx context.Context) (int64, int64, error) {
 	var now = time.Now().UnixMilli()
 	result, err := GET(ctx).Exec(s.text.String(), s.params...)
 	if err != nil {
 		printLog(now, 0, s.ToText())
-		return 0, err
+		return 0, 0, err
 	}
 	count, err := result.RowsAffected()
 	if err != nil {
 		printLog(now, 0, s.ToText())
-		return 0, err
+		return 0, 0, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		printLog(now, count, s.ToText())
+		return 0, 0, err
 	}
 	printLog(now, count, s.ToText())
-	return count, nil
+	return count, id, nil
 }
 
 func printLog(now, count int64, sql string) {
