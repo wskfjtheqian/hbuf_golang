@@ -154,7 +154,7 @@ type ServerClient interface {
 }
 
 type Init interface {
-	Init()
+	Init(ctx context.Context)
 }
 
 type ServerRouter interface {

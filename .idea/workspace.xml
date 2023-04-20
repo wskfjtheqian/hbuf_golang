@@ -7,9 +7,10 @@
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="调整 服务过滤器">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/sql_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/other.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/other.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -28,6 +29,11 @@
   </component>
   <component name="GOROOT" url="file://$PROJECT_DIR$/../../../sdk/go" />
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitSEFilterConfiguration">
@@ -577,7 +583,8 @@
     <MESSAGE value="修改SQL文本生成功能" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="调整 服务过滤器" />
-    <option name="LAST_COMMIT_MESSAGE" value="调整 服务过滤器" />
+    <MESSAGE value="合并" />
+    <option name="LAST_COMMIT_MESSAGE" value="合并" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
