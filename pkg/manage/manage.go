@@ -48,24 +48,31 @@ type serverClient struct {
 }
 
 type Manage struct {
-	config  *Config
-	maps    map[string]any
-	install map[string]*serverClient    //安装的服务
-	router  map[string][]rcpClient      //已获取的服务地址
-	server  map[string]rpc.ServerRouter //开启的服务
-	lock    sync.RWMutex
-	etcd    *etc.Etcd
+	config    *Config
+	maps      map[string]any
+	install   map[string]*serverClient    //安装的服务
+	router    map[string][]rcpClient      //已获取的服务地址
+	server    map[string]rpc.ServerRouter //开启的服务
+	lock      sync.RWMutex
+	etcd      *etc.Etcd
+	rpcServer *rpc.Server
 }
 
 func NewManage() *Manage {
 	ret := &Manage{
-		maps:    map[string]any{},
-		server:  map[string]rpc.ServerRouter{},
-		router:  map[string][]rcpClient{},
-		install: map[string]*serverClient{},
+		maps:      map[string]any{},
+		server:    map[string]rpc.ServerRouter{},
+		router:    map[string][]rcpClient{},
+		install:   map[string]*serverClient{},
+		rpcServer: rpc.NewServer(),
 	}
 	return ret
 }
+
+func (m *Manage) RpcServer() *rpc.Server {
+	return m.rpcServer
+}
+
 func (m *Manage) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
@@ -90,7 +97,7 @@ func (m *Manage) Get(router rpc.ServerClient) any {
 	defer m.lock.RUnlock()
 
 	if list, ok := m.router[router.GetName()]; ok && 0 < len(list) {
-		return list[rand.Intn(len(list))]
+		return list[rand.Intn(len(list))].getClient()
 	}
 	return nil
 }
@@ -122,6 +129,7 @@ func (m *Manage) SetConfig(config *Config) {
 			if isSockt {
 				m.registerServer(router.router, "socket")
 			}
+			m.rpcServer.Add(router.router)
 			m.server[name] = router.router
 		}
 	}
@@ -136,15 +144,11 @@ func (m *Manage) SetConfig(config *Config) {
 func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.Invoke) (http.Handler, string)) bool {
 	if nil != config {
 		mux := http.NewServeMux()
-		server := rpc.NewServer()
-		for _, value := range m.server {
-			server.Add(value)
-		}
 		path := "/"
 		if nil != config.Path {
 			path = *config.Path
 		}
-		h, msg := handle(path, rpc.NewServerJson(server))
+		h, msg := handle(path[1:], rpc.NewServerJson(m.rpcServer))
 		mux.Handle(path, h)
 		go func() {
 			if nil != config.Crt && nil != config.Key {
@@ -206,7 +210,7 @@ func (m *Manage) registerServer(router rpc.ServerRouter, types string) {
 	}
 
 	name := "/register/server/" + types + "/" + router.GetName()
-	value := "127.0.0.1"
+	value := "http://127.0.0.1:10101"
 	_, err = m.etcd.GetClient().Put(context.TODO(), name, value, clientv3.WithLease(grant.ID))
 	if err != nil {
 		log.Println("注册服务失败：name=" + name + "; value=" + value)

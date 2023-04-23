@@ -64,13 +64,20 @@ func NewApp() *App {
 		ext:    rpc.NewServer(),
 	}
 	app.manage.SetEtcd(app.etcd)
+	server := app.ext
+	server.PrefixFilter(app.OnFilter)
+	server.PrefixFilter(app.etcd.OnFilter)
+	server.PrefixFilter(app.db.OnFilter)
+	server.PrefixFilter(app.manage.OnFilter)
+	server.PrefixFilter(app.cache.OnFilter)
+	server.PrefixFilter(app.onHttpFilter)
 
-	app.ext.PrefixFilter(app.OnFilter)
-	app.ext.PrefixFilter(app.etcd.OnFilter)
-	app.ext.PrefixFilter(app.db.OnFilter)
-	app.ext.PrefixFilter(app.manage.OnFilter)
-	app.ext.PrefixFilter(app.cache.OnFilter)
-	app.ext.PrefixFilter(app.onHttpFilter)
+	server = app.manage.RpcServer()
+	server.PrefixFilter(app.OnFilter)
+	server.PrefixFilter(app.etcd.OnFilter)
+	server.PrefixFilter(app.db.OnFilter)
+	server.PrefixFilter(app.manage.OnFilter)
+	server.PrefixFilter(app.cache.OnFilter)
 
 	ctx := rpc.NewContext(context.Background())
 	rpc.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
