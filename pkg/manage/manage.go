@@ -47,11 +47,16 @@ type serverClient struct {
 	client CallClient
 }
 
+type clientList struct {
+	Keys map[string]rcpClient
+	List []rcpClient
+}
+
 type Manage struct {
 	config    *Config
 	maps      map[string]any
 	install   map[string]*serverClient    //安装的服务
-	router    map[string][]rcpClient      //已获取的服务地址
+	router    map[string]*clientList      //已获取的服务地址
 	server    map[string]rpc.ServerRouter //开启的服务
 	lock      sync.RWMutex
 	etcd      *etc.Etcd
@@ -62,7 +67,7 @@ func NewManage() *Manage {
 	ret := &Manage{
 		maps:      map[string]any{},
 		server:    map[string]rpc.ServerRouter{},
-		router:    map[string][]rcpClient{},
+		router:    map[string]*clientList{},
 		install:   map[string]*serverClient{},
 		rpcServer: rpc.NewServer(),
 	}
@@ -96,8 +101,8 @@ func (m *Manage) Get(router rpc.ServerClient) any {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	if list, ok := m.router[router.GetName()]; ok && 0 < len(list) {
-		return list[rand.Intn(len(list))].getClient()
+	if list, ok := m.router[router.GetName()]; ok && 0 < len(list.List) {
+		return list.List[rand.Intn(len(list.List))].getClient()
 	}
 	return nil
 }
@@ -124,10 +129,18 @@ func (m *Manage) SetConfig(config *Config) {
 	for name, router := range m.install {
 		if m.checkOpen(name) {
 			if isHttp {
-				m.registerServer(router.router, "http")
+				scheme := "http"
+				if nil != m.config.Server.Http.Key {
+					scheme = "https"
+				}
+				m.registerServer(router.router, m.config.Server.Http, scheme)
 			}
 			if isSockt {
-				m.registerServer(router.router, "socket")
+				scheme := "ws"
+				if nil != m.config.Server.WebSocket.Key {
+					scheme = "wss"
+				}
+				m.registerServer(router.router, m.config.Server.WebSocket, scheme)
 			}
 			m.rpcServer.Add(router.router)
 			m.server[name] = router.router
@@ -199,7 +212,7 @@ func (m *Manage) SetEtcd(etcd *etc.Etcd) {
 }
 
 //注册服务到发现中心
-func (m *Manage) registerServer(router rpc.ServerRouter, types string) {
+func (m *Manage) registerServer(router rpc.ServerRouter, config *Http, scheme string) {
 	if !m.config.Server.Register {
 		return
 	}
@@ -209,8 +222,11 @@ func (m *Manage) registerServer(router rpc.ServerRouter, types string) {
 		return
 	}
 
-	name := "/register/server/" + types + "/" + router.GetName()
-	value := "http://127.0.0.1:10101"
+	name := "/register/server/" + scheme + "/" + router.GetName()
+	port := (*config.Address)
+	port = port[strings.Index(port, ":"):]
+	value := scheme + "://127.0.0.1" + port
+
 	_, err = m.etcd.GetClient().Put(context.TODO(), name, value, clientv3.WithLease(grant.ID))
 	if err != nil {
 		log.Println("注册服务失败：name=" + name + "; value=" + value)
@@ -232,59 +248,70 @@ func (m *Manage) findServer() {
 		return
 	}
 	for _, item := range reps.Kvs {
-		m.editServerList(string(item.Key), item.Value)
+		m.editCleintList(string(item.Key), string(item.Value), true)
 	}
 	rch := m.etcd.GetClient().Watch(context.TODO(), "/register/server/", clientv3.WithPrefix())
 	for wresp := range rch {
 		for _, ev := range wresp.Events {
 			log.Println(ev.Kv.Key, ev.Type.String(), ev.Kv.Value)
 			if clientv3.EventTypeDelete == ev.Type {
-				m.editServerList(string(ev.Kv.Key), nil)
+				m.editCleintList(string(ev.Kv.Key), string(ev.Kv.Value), false)
 			} else {
-				m.editServerList(string(ev.Kv.Key), ev.Kv.Value)
+				m.editCleintList(string(ev.Kv.Key), string(ev.Kv.Value), true)
 			}
 		}
 	}
 }
 
 //添加或删除服务
-func (m *Manage) editServerList(key string, value []byte) {
+func (m *Manage) editCleintList(key string, value string, isAdd bool) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	key = key[17:]
-	index := strings.Index(key, "/")
-	types := key[:index]
-	name := key[index+1:]
-	if val, ok := m.install[name]; ok && nil != val.client {
-		if "http" == types {
-			m.addHttpClient(value, val, name)
-		} else if "socket" == types {
-			m.addSocketClient(value, val, name)
-		}
-	}
-}
+	name := key[17:]
+	index := strings.Index(name, "/")
+	types := name[:index]
+	name = name[index+1:]
+	key = key + "/" + value
 
-func (m *Manage) addSocketClient(value []byte, val *serverClient, name string) {
-	c := newHttpRpcClient(string(value), val.client)
-	routers := m.router[name]
-	for i, item := range routers {
-		if _, ok := item.(*socketRpcClient); ok {
-			routers[i] = c
-		}
-	}
-	m.router[name] = append(routers, c)
-}
+	if isAdd {
+		if val, ok := m.install[name]; ok && nil != val.client {
+			var rc rcpClient
+			if "http" == types || "https" == types {
+				rc = newHttpRpcClient(value, val.client)
+			} else if "ws" == types || "wss" == types {
+				rc = newSocketRpcClient(value, val.client)
+			}
+			routers, ok := m.router[name]
+			if !ok {
+				routers = &clientList{
+					Keys: map[string]rcpClient{},
+					List: []rcpClient{},
+				}
+				m.router[name] = routers
+			}
 
-func (m *Manage) addHttpClient(value []byte, val *serverClient, name string) {
-	c := newHttpRpcClient(string(value), val.client)
-	routers := m.router[name]
-	for i, item := range routers {
-		if _, ok := item.(*httpRpcClient); ok {
-			routers[i] = c
+			routers.Keys[key] = rc
+			list := make([]rcpClient, len(routers.Keys))
+			i := 0
+			for _, client := range routers.Keys {
+				list[i] = client
+				i++
+			}
+			routers.List = list
+		}
+	} else {
+		if routers, ok := m.router[name]; ok {
+			delete(routers.Keys, key)
+			list := make([]rcpClient, len(routers.Keys))
+			i := 0
+			for _, client := range routers.Keys {
+				list[i] = client
+				i++
+			}
+			routers.List = list
 		}
 	}
-	m.router[name] = append(routers, c)
 }
 
 type rcpClient interface {

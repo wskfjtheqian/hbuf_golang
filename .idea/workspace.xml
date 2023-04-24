@@ -4,14 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="开始服务注册和发现">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/other.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/other.go" afterDir="false" />
-    </list>
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -279,14 +272,7 @@
       <workItem from="1681516559874" duration="11380000" />
       <workItem from="1681605248191" duration="23879000" />
       <workItem from="1681830448004" duration="6010000" />
-      <workItem from="1682264002694" duration="2674000" />
-    </task>
-    <task id="LOCAL-00005" summary="修改BUG">
-      <created>1652619440804</created>
-      <option name="number" value="00005" />
-      <option name="presentableId" value="LOCAL-00005" />
-      <option name="project" value="LOCAL" />
-      <updated>1652619440804</updated>
+      <workItem from="1682264002694" duration="2965000" />
     </task>
     <task id="LOCAL-00006" summary="修改BUG">
       <created>1655041559587</created>
@@ -624,7 +610,14 @@
       <option name="project" value="LOCAL" />
       <updated>1682264141417</updated>
     </task>
-    <option name="localTasksCounter" value="54" />
+    <task id="LOCAL-00054" summary="完成服务注册和发现">
+      <created>1682270679956</created>
+      <option name="number" value="00054" />
+      <option name="presentableId" value="LOCAL-00054" />
+      <option name="project" value="LOCAL" />
+      <updated>1682270679957</updated>
+    </task>
+    <option name="localTasksCounter" value="55" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -690,7 +683,8 @@
     <MESSAGE value="开始添加动态配置" />
     <MESSAGE value="完成动态配置" />
     <MESSAGE value="开始服务注册和发现" />
-    <option name="LAST_COMMIT_MESSAGE" value="开始服务注册和发现" />
+    <MESSAGE value="完成服务注册和发现" />
+    <option name="LAST_COMMIT_MESSAGE" value="完成服务注册和发现" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

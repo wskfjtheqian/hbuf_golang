@@ -61,6 +61,7 @@ func (s *Server) Yaml() string {
 	}
 	return string(bytes)
 }
+
 func (s *Server) CheckConfig() int {
 	errCount := 0
 
