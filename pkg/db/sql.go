@@ -61,8 +61,9 @@ func ToString(value interface{}) string {
 }
 
 type Sql struct {
-	text   strings.Builder
-	params []any
+	text     strings.Builder
+	params   []any
+	cacheKey string
 }
 
 func NewSql() *Sql {
