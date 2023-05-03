@@ -39,22 +39,26 @@ func (h *ClientMq) Invoke(ctx context.Context, name string, in io.Reader, out io
 	}
 	buffer, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return erro.Wrap(err)
 	}
 	response, err := h.client.Request(name, buffer, 100*time.Microsecond)
 	if err != nil {
-		return err
+		return erro.Wrap(err)
+	}
+	err = h.client.Flush()
+	if err != nil {
+		return erro.Wrap(err)
 	}
 	err = json.Unmarshal(response.Data, data)
 	if err != nil {
-		return err
+		return erro.Wrap(err)
 	}
 	if data.Status != ht.StatusOK {
 		return errors.New(ht.StatusText(data.Status))
 	}
 	_, err = io.Copy(out, bytes.NewBuffer(data.Data))
 	if err != nil {
-		return err
+		return erro.Wrap(err)
 	}
 	return nil
 }
