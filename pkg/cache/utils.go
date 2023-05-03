@@ -68,7 +68,34 @@ func Del(ctx context.Context, key string) error {
 	return c.Flush()
 }
 
+func SetNx(ctx context.Context, key string, duration time.Duration) (bool, error) {
+	c := GET(ctx)
+	reply, err := c.Do("SETNX", key)
+	if err != nil {
+		return false, utl.Wrap(err)
+	}
+	if nil == reply || 0 == len(reply.([]uint8)) {
+		return false, nil
+	}
+	var value int
+	err = json.Unmarshal(reply.([]uint8), &value)
+	if err != nil {
+		return false, utl.Wrap(err)
+	}
+	if 0 < duration && 0 != value {
+		err = c.Send("EXPIRE", key, strconv.Itoa(int(duration/time.Second)))
+		if err != nil {
+			return false, utl.Wrap(err)
+		}
+	}
+	return 0 != value, nil
+}
+
 func DbSet(ctx context.Context, dbName string, sql *db.Sql, value any, duration time.Duration) error {
+	lock, err := DbLock(ctx, dbName)
+	if err != nil || !lock {
+		return err
+	}
 	key, err := createDbKey(dbName, sql)
 	if err != nil {
 		return utl.Wrap(err)
@@ -89,12 +116,30 @@ func DbGet[T any](ctx context.Context, dbName string, sql *db.Sql, value *T) (*T
 }
 
 func DbDel(ctx context.Context, dbName string) error {
+	_, err := DbLock(ctx, dbName)
+	if err != nil {
+		return err
+	}
 	key := strings.Builder{}
 	key.WriteString("db/")
 	key.WriteString(dbName)
 	key.WriteString("/")
 	key.WriteString("*")
 	return Del(ctx, key.String())
+}
+
+func DbLock(ctx context.Context, dbName string) (bool, error) {
+	lock := strings.Builder{}
+	lock.WriteString("db/cache/lock/")
+	lock.WriteString(dbName)
+	return SetNx(ctx, lock.String(), 0)
+}
+
+func DbUnLock(ctx context.Context, dbName string) error {
+	lock := strings.Builder{}
+	lock.WriteString("db/cache/lock/")
+	lock.WriteString(dbName)
+	return Del(ctx, lock.String())
 }
 
 func createDbKey(dbName string, sql *db.Sql) (string, error) {
