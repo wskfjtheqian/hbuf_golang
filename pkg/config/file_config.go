@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/fsnotify/fsnotify"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"io/ioutil"
 	"log"
 )
@@ -12,6 +13,7 @@ type fileConfig struct {
 	onChange func(c string)
 	hostname string
 	watcher  *fsnotify.Watcher
+	keyVal   map[string]any
 }
 
 func (c *fileConfig) Yaml() string {
@@ -31,14 +33,20 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 		}
 		c.value = string(buffer)
 		if nil != call {
-			call(c.value)
+			config, err := generateConfig(c.value, c.keyVal)
+			if err != nil {
+				erro.PrintStack(err)
+				return err
+			}
+			log.Println("读取配置文件：" + config)
+			call(config)
 		}
 	}
 	c.onChange = call
 	return nil
 }
 
-func NewFileConfig(hostname string, path string) Watch {
+func NewFileConfig(hostname string, path string, val map[string]any) Watch {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -47,6 +55,7 @@ func NewFileConfig(hostname string, path string) Watch {
 		watcher:  watcher,
 		hostname: hostname,
 		path:     path,
+		keyVal:   val,
 	}
 }
 func (c *fileConfig) Close() error {
@@ -69,8 +78,13 @@ func (c *fileConfig) Watch() error {
 					}
 					value := string(buffer)
 					if value != c.value && nil != c.onChange {
-						log.Println("配置文件改变：" + value)
-						c.onChange(c.value)
+						config, err := generateConfig(c.value, c.keyVal)
+						if err != nil {
+							erro.PrintStack(err)
+							return
+						}
+						log.Println("配置文件改变：" + config)
+						c.onChange(config)
 					}
 					c.value = value
 				}

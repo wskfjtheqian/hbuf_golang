@@ -14,6 +14,7 @@ type etcdConfig struct {
 	client    *clientv3.Client
 	value     string
 	onChange  func(c string)
+	keyVal    map[string]any
 }
 
 func (c *etcdConfig) OnChange(call func(value string)) error {
@@ -27,17 +28,24 @@ func (c *etcdConfig) OnChange(call func(value string)) error {
 		}
 		c.value = string(get.Kvs[0].Value)
 		if nil != call {
-			call(c.value)
+			config, err := generateConfig(c.value, c.keyVal)
+			if err != nil {
+				erro.PrintStack(err)
+				return err
+			}
+			log.Println("读取配置文件：" + config)
+			call(config)
 		}
 	}
 	c.onChange = call
 	return nil
 }
 
-func NewEtcdConfig(hostname string, endpoints string) Watch {
+func NewEtcdConfig(hostname string, endpoints string, val map[string]any) Watch {
 	ret := &etcdConfig{
 		hostname:  hostname,
 		endpoints: strings.Split(endpoints, ","),
+		keyVal:    val,
 	}
 	etc := clientv3.Config{
 		Endpoints: ret.endpoints,
@@ -66,7 +74,13 @@ func (c *etcdConfig) Watch() error {
 			}
 			if value != c.value && nil != c.onChange {
 				log.Println("配置文件改变：" + value)
-				c.onChange(c.value)
+				config, err := generateConfig(value, c.keyVal)
+				if err != nil {
+					erro.PrintStack(err)
+					return err
+				}
+				log.Println("配置文件改变：" + config)
+				c.onChange(config)
 			}
 			c.value = value
 		}

@@ -61,6 +61,12 @@ type Manage struct {
 	lock      sync.RWMutex
 	etcd      *etc.Etcd
 	rpcServer *rpc.Server
+
+	wsServer   *http.Server
+	httpServer *http.Server
+	findCancel context.CancelFunc
+	httpListen *http.Server
+	wssListen  *http.Server
 }
 
 func NewManage() *Manage {
@@ -102,7 +108,12 @@ func (m *Manage) Get(router rpc.ServerClient) any {
 	defer m.lock.RUnlock()
 
 	if list, ok := m.router[router.GetName()]; ok && 0 < len(list.List) {
-		return list.List[rand.Intn(len(list.List))].getClient()
+		if nil != list.List {
+			item := list.List[rand.Intn(len(list.List))]
+			if nil != item {
+				return item.getClient()
+			}
+		}
 	}
 	return nil
 }
@@ -111,6 +122,8 @@ func (m *Manage) SetConfig(config *Config) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if nil == config {
+		if nil != m.httpServer {
+		}
 		m.config = nil
 	}
 
@@ -119,42 +132,70 @@ func (m *Manage) SetConfig(config *Config) {
 	}
 	m.config = config
 
-	isHttp := m.startServer(m.config.Server.Http, func(path string, invoke rpc.Invoke) (http.Handler, string) {
-		return rpc.NewServerHttp(path, invoke), "http rpc 服务"
-	})
-	isSockt := m.startServer(m.config.Server.WebSocket, func(path string, invoke rpc.Invoke) (http.Handler, string) {
-		return rpc.NewServerWebSocket(invoke), "web_socket rpc 服务"
-	})
+	m.server = map[string]rpc.ServerRouter{}
+	if nil != m.httpListen {
+		_ = m.httpListen.Close()
+		m.httpListen = nil
+	}
+	if nil != m.wssListen {
+		_ = m.wssListen.Close()
+		m.wssListen = nil
+	}
+	if nil != config.Server {
+		serConfig := m.config.Server
 
-	for name, router := range m.install {
-		if m.checkOpen(name) {
-			if isHttp {
-				scheme := "http"
-				if nil != m.config.Server.Http.Key {
-					scheme = "https"
+		m.httpListen = m.startServer(serConfig.Http, func(path string, invoke rpc.Invoke) (http.Handler, string) {
+			return rpc.NewServerHttp(path, invoke), "http rpc 服务"
+		})
+		m.wssListen = m.startServer(serConfig.WebSocket, func(path string, invoke rpc.Invoke) (http.Handler, string) {
+			return rpc.NewServerWebSocket(invoke), "web_socket rpc 服务"
+		})
+
+		for name, router := range m.install {
+			if m.checkOpen(name) {
+				if nil != m.httpListen {
+					scheme := "http"
+					if nil != serConfig.Http.Key && nil != serConfig.Http.Crt {
+						scheme = "https"
+					}
+					m.registerServer(router.router, serConfig.Http, scheme)
 				}
-				m.registerServer(router.router, m.config.Server.Http, scheme)
-			}
-			if isSockt {
-				scheme := "ws"
-				if nil != m.config.Server.WebSocket.Key {
-					scheme = "wss"
+				if nil != m.wssListen {
+					scheme := "ws"
+					if nil != serConfig.WebSocket.Key && nil != serConfig.Http.Crt {
+						scheme = "wss"
+					}
+					m.registerServer(router.router, serConfig.WebSocket, scheme)
 				}
-				m.registerServer(router.router, m.config.Server.WebSocket, scheme)
+				m.rpcServer.Add(router.router)
+				m.server[name] = router.router
 			}
-			m.rpcServer.Add(router.router)
-			m.server[name] = router.router
 		}
 	}
 
-	if config.Client.Find {
-		go m.findServer()
+	if nil != m.findCancel {
+		m.findCancel()
+		m.findCancel = nil
 	}
+	m.router = map[string]*clientList{}
+	if nil != config.Client {
+		cliConfig := config.Client
+		if cliConfig.Find {
+			go m.findServer()
+		}
 
+		if nil != cliConfig.Server {
+			for key, list := range cliConfig.Server {
+				for _, item := range list {
+					m.clientList(key, item, true)
+				}
+			}
+		}
+	}
 }
 
 //开始远程服务
-func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.Invoke) (http.Handler, string)) bool {
+func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.Invoke) (http.Handler, string)) *http.Server {
 	if nil != config {
 		mux := http.NewServeMux()
 		path := "/"
@@ -163,26 +204,31 @@ func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.I
 		}
 		h, msg := handle(path[1:], rpc.NewServerJson(m.rpcServer))
 		mux.Handle(path, h)
+
+		ser := http.Server{
+			Addr:    *config.Address,
+			Handler: mux,
+		}
 		go func() {
 			if nil != config.Crt && nil != config.Key {
 				log.Println("开启 TLS 加密" + msg + ",addr=" + *config.Address)
-				err := http.ListenAndServeTLS(*config.Address, *config.Crt, *config.Key, mux)
+				err := ser.ListenAndServeTLS(*config.Crt, *config.Key)
 				if err != nil {
 					log.Println("开启 TLS 加密" + msg + "失败：" + err.Error())
 					return
 				}
 			} else {
 				log.Println("开启 " + msg + ",addr=" + *config.Address)
-				err := http.ListenAndServe(*config.Address, mux)
+				err := ser.ListenAndServe()
 				if err != nil {
 					log.Println("开启" + msg + "失败：" + err.Error())
 					return
 				}
 			}
 		}()
-		return true
+		return &ser
 	}
-	return false
+	return nil
 }
 
 func (m *Manage) Init(ctx context.Context) {
@@ -222,10 +268,10 @@ func (m *Manage) registerServer(router rpc.ServerRouter, config *Http, scheme st
 		return
 	}
 
-	name := "/register/server/" + scheme + "/" + router.GetName()
-	port := (*config.Address)
+	name := "/register/server/" + scheme + "/" + *config.Hostname + "/" + router.GetName()
+	port := *config.Address
 	port = port[strings.Index(port, ":"):]
-	value := scheme + "://127.0.0.1" + port
+	value := scheme + "://" + *config.Hostname + port
 
 	_, err = m.etcd.GetClient().Put(context.TODO(), name, value, clientv3.WithLease(grant.ID))
 	if err != nil {
@@ -242,45 +288,54 @@ func (m *Manage) registerServer(router rpc.ServerRouter, config *Http, scheme st
 
 //处理发现服务
 func (m *Manage) findServer() {
-	reps, err := m.etcd.GetClient().Get(context.TODO(), "/register/server/", clientv3.WithPrefix())
+	ctx, cancel := context.WithCancel(context.TODO())
+	m.findCancel = cancel
+	reps, err := m.etcd.GetClient().Get(ctx, "/register/server/", clientv3.WithPrefix())
 	if err != nil {
 		log.Println("自动获得服务出错", err.Error())
 		return
 	}
 	for _, item := range reps.Kvs {
-		m.editCleintList(string(item.Key), string(item.Value), true)
+		m.editClientList(string(item.Key), string(item.Value), true)
 	}
-	rch := m.etcd.GetClient().Watch(context.TODO(), "/register/server/", clientv3.WithPrefix())
-	for wresp := range rch {
-		for _, ev := range wresp.Events {
+
+	rch := m.etcd.GetClient().Watch(ctx, "/register/server/", clientv3.WithPrefix())
+	for wResp := range rch {
+		for _, ev := range wResp.Events {
 			log.Println(ev.Kv.Key, ev.Type.String(), ev.Kv.Value)
 			if clientv3.EventTypeDelete == ev.Type {
-				m.editCleintList(string(ev.Kv.Key), string(ev.Kv.Value), false)
+				m.editClientList(string(ev.Kv.Key), string(ev.Kv.Value), false)
 			} else {
-				m.editCleintList(string(ev.Kv.Key), string(ev.Kv.Value), true)
+				m.editClientList(string(ev.Kv.Key), string(ev.Kv.Value), true)
 			}
 		}
 	}
 }
 
 //添加或删除服务
-func (m *Manage) editCleintList(key string, value string, isAdd bool) {
+func (m *Manage) editClientList(key string, value string, isAdd bool) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	name := key[17:]
 	index := strings.Index(name, "/")
-	types := name[:index]
+	index = strings.LastIndex(name, "/")
 	name = name[index+1:]
 	key = key + "/" + value
+	m.clientList(name, value, isAdd)
+}
 
+func (m *Manage) clientList(name string, address string, isAdd bool) {
+	key := address + "/" + name
 	if isAdd {
 		if val, ok := m.install[name]; ok && nil != val.client {
 			var rc rcpClient
-			if "http" == types || "https" == types {
-				rc = newHttpRpcClient(value, val.client)
-			} else if "ws" == types || "wss" == types {
-				rc = newSocketRpcClient(value, val.client)
+			if "local" == address {
+				rc = newLocalRpcClient(val.router)
+			} else if 0 == strings.Index(address, "https://") || 0 == strings.Index(address, "http://") {
+				rc = newHttpRpcClient(address, val.client)
+			} else if 0 == strings.Index(address, "ws://") || 0 == strings.Index(address, "wss://") {
+				rc = newSocketRpcClient(address, val.client)
 			}
 			routers, ok := m.router[name]
 			if !ok {
@@ -322,9 +377,9 @@ type localRpcClient struct {
 	client rpc.Init
 }
 
-func newLocalRpcClient(router rpc.Init) rcpClient {
+func newLocalRpcClient(router rpc.ServerRouter) rcpClient {
 	return &localRpcClient{
-		client: router,
+		client: router.GetServer(),
 	}
 }
 

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"flag"
+	"html/template"
 	"log"
 )
 
@@ -28,17 +30,36 @@ func NewWatch() Watch {
 		log.Fatal("请输入 Host name")
 	}
 
+	keyVal := map[string]any{
+		"HostName": hostname,
+	}
+
 	var c Watch
 	if 0 != len(endpoints) {
 		log.Println("Host name:" + hostname)
 		log.Println("Etcd endpoints:" + endpoints)
-		c = NewEtcdConfig(hostname, endpoints)
+		c = NewEtcdConfig(hostname, endpoints, keyVal)
 	} else if 0 != len(path) {
 		log.Println("Host name:" + hostname)
 		log.Println("Config.yaml file path:" + path)
-		c = NewFileConfig(hostname, path)
+		c = NewFileConfig(hostname, path, keyVal)
 	} else {
 		log.Fatal("请输入 config.yaml file path or etcd endpoints")
 	}
 	return c
+}
+
+var parse = template.New("config")
+
+func generateConfig(config string, keyVal map[string]any) (string, error) {
+	t, err := parse.Parse(config)
+	if err != nil {
+		return "", err
+	}
+	w := bytes.NewBuffer(nil)
+	err = t.Execute(w, keyVal)
+	if err != nil {
+		return "", err
+	}
+	return w.String(), nil
 }

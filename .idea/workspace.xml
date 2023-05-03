@@ -4,7 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="完成服务注册和发现">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/etcd_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/etcd_config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/file_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/file_config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -273,13 +280,9 @@
       <workItem from="1681605248191" duration="23879000" />
       <workItem from="1681830448004" duration="6010000" />
       <workItem from="1682264002694" duration="2965000" />
-    </task>
-    <task id="LOCAL-00006" summary="修改BUG">
-      <created>1655041559587</created>
-      <option name="number" value="00006" />
-      <option name="presentableId" value="LOCAL-00006" />
-      <option name="project" value="LOCAL" />
-      <updated>1655041559587</updated>
+      <workItem from="1682355969362" duration="27000" />
+      <workItem from="1682614186491" duration="10000" />
+      <workItem from="1683077799232" duration="10871000" />
     </task>
     <task id="LOCAL-00007" summary="修改BUG">
       <created>1655656530294</created>
@@ -617,7 +620,14 @@
       <option name="project" value="LOCAL" />
       <updated>1682270679957</updated>
     </task>
-    <option name="localTasksCounter" value="55" />
+    <task id="LOCAL-00055" summary="完成服务注册和发现">
+      <created>1682355983094</created>
+      <option name="number" value="00055" />
+      <option name="presentableId" value="LOCAL-00055" />
+      <option name="project" value="LOCAL" />
+      <updated>1682355983095</updated>
+    </task>
+    <option name="localTasksCounter" value="56" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
