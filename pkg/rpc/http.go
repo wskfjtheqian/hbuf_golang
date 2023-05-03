@@ -117,7 +117,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 			return
 		}
 		erro.PrintStack(err)
-		w.WriteHeader(500)
+		w.WriteHeader(ht.StatusInternalServerError)
 	}
 	return
 }

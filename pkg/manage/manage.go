@@ -2,6 +2,7 @@ package manage
 
 import (
 	"context"
+	"github.com/nats-io/nats.go"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
@@ -60,6 +61,7 @@ type Manage struct {
 	server    map[string]rpc.ServerRouter //开启的服务
 	lock      sync.RWMutex
 	etcd      *etc.Etcd
+	nats      *nats.Conn
 	rpcServer *rpc.Server
 
 	wsServer   *http.Server
@@ -169,6 +171,10 @@ func (m *Manage) SetConfig(config *Config) {
 				}
 				m.rpcServer.Add(router.router)
 				m.server[name] = router.router
+
+				if serConfig.Mq {
+					rpc.NewServerMq(m.nats, router.router)
+				}
 			}
 		}
 	}
@@ -332,6 +338,8 @@ func (m *Manage) clientList(name string, address string, isAdd bool) {
 			var rc rcpClient
 			if "local" == address {
 				rc = newLocalRpcClient(val.router)
+			} else if "mq" == address {
+				rc = newMqRpcClient(m.nats, val.client)
 			} else if 0 == strings.Index(address, "https://") || 0 == strings.Index(address, "http://") {
 				rc = newHttpRpcClient(address, val.client)
 			} else if 0 == strings.Index(address, "ws://") || 0 == strings.Index(address, "wss://") {
@@ -367,6 +375,22 @@ func (m *Manage) clientList(name string, address string, isAdd bool) {
 			routers.List = list
 		}
 	}
+}
+
+type mqRpcClient struct {
+	client rpc.Init
+}
+
+func newMqRpcClient(conn *nats.Conn, call CallClient) rcpClient {
+	client := rpc.NewClientMq(conn)
+	jsonClient := rpc.NewJsonClient(client)
+	return &mqRpcClient{
+		client: call(jsonClient),
+	}
+}
+
+func (c *mqRpcClient) getClient() rpc.Init {
+	return c.client
 }
 
 type rcpClient interface {

@@ -53,6 +53,7 @@ type Server struct {
 	Http      *Http     `yaml:"http"`       //Http 服务配置
 	WebSocket *Http     `yaml:"web_socket"` //WebSocket 服务配置
 	List      *[]string `yaml:"list"`       //开始的服务列表
+	Mq        bool      `yaml:"mq"`         //开始Etcd消息队列的请求响应模式
 }
 
 func (s *Server) Yaml() string {

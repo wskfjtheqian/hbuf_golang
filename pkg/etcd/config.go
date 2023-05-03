@@ -1,7 +1,6 @@
 package etc
 
 import (
-	_ "github.com/go-sql-driver/mysql"
 	"gopkg.in/yaml.v3"
 	"log"
 	"time"

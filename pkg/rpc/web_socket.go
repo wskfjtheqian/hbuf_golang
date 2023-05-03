@@ -28,7 +28,7 @@ type rpcType int
 const Request = 0
 const Response = 1
 
-type DataRpc struct {
+type WebSocketData struct {
 	Type   rpcType   `json:"type"`
 	Header ht.Header `json:"header"`
 	Data   Raw       `json:"data"`
@@ -43,18 +43,18 @@ type WebSocketRpc struct {
 	wsConn   *websocket.Conn
 	invoke   Invoke
 	id       int64
-	response map[int64]chan *DataRpc
+	response map[int64]chan *WebSocketData
 	lock     sync.RWMutex
 }
 
-type responseWrite struct {
+type webSocketWrite struct {
 	wsConn *websocket.Conn
 	id     int64
 	Status int64
 }
 
-func (r *responseWrite) Write(p []byte) (n int, err error) {
-	data := DataRpc{
+func (r *webSocketWrite) Write(p []byte) (n int, err error) {
+	data := WebSocketData{
 		Type:   Response,
 		Id:     r.id,
 		Status: ht.StatusOK,
@@ -71,8 +71,8 @@ func (r *responseWrite) Write(p []byte) (n int, err error) {
 	return len(buffer), nil
 }
 
-func (r *responseWrite) WriteStatus(status int) error {
-	data := DataRpc{
+func (r *webSocketWrite) WriteStatus(status int) error {
+	data := WebSocketData{
 		Type:   Response,
 		Id:     r.id,
 		Status: status,
@@ -93,7 +93,7 @@ func NewWebSocketRpc(wsConn *websocket.Conn, invoke Invoke) *WebSocketRpc {
 		wsConn:   wsConn,
 		invoke:   invoke,
 		id:       time.Now().UnixMilli(),
-		response: map[int64]chan *DataRpc{},
+		response: map[int64]chan *WebSocketData{},
 	}
 }
 
@@ -104,19 +104,19 @@ func (w *WebSocketRpc) Run() {
 			if err != nil {
 				return
 			}
-			var data *DataRpc
+			var data *WebSocketData
 			err = json.Unmarshal(buffer, &data)
 			if err != nil {
 				return
 			}
 			if data.Type == Request {
-				func(data *DataRpc) {
+				func(data *WebSocketData) {
 					ctx := NewContext(context.TODO())
 					defer CloseContext(ctx)
 					for key, _ := range data.Header {
 						SetHeader(ctx, key, data.Header.Get(key))
 					}
-					response := &responseWrite{
+					response := &webSocketWrite{
 						wsConn: w.wsConn,
 						id:     data.Id,
 					}
@@ -147,7 +147,7 @@ func (w *WebSocketRpc) Run() {
 }
 
 func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
-	data := DataRpc{
+	data := WebSocketData{
 		Type:   Request,
 		Path:   "/" + name,
 		Id:     atomic.AddInt64(&w.id, 1),
@@ -166,7 +166,7 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 		return err
 	}
 
-	response := make(chan *DataRpc, 1)
+	response := make(chan *WebSocketData, 1)
 	w.lock.Lock()
 	w.response[data.Id] = response
 	w.lock.Unlock()
@@ -189,6 +189,9 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 	case <-timer.C:
 		return errors.New("time out")
 	case val := <-response:
+		if val.Status != ht.StatusOK {
+			return errors.New(ht.StatusText(val.Status))
+		}
 		_, _ = out.Write(val.Data)
 	}
 	return nil

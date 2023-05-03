@@ -1,45 +1,21 @@
-package etc
+package mq
 
 import (
 	"context"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/garyburd/redigo/redis"
+	"github.com/nats-io/nats.go"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
-	v3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"log"
 	"reflect"
+	"strings"
 	"sync"
 )
 
 type contextValue struct {
-	client  *v3.Client
+	client  *nats.Conn
 	session *concurrency.Session
-}
-
-func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.SessionOption) (*concurrency.Session, error) {
-	if nil != v.client {
-		return nil, erro.NewError("未开启Etcd 功能")
-	}
-	if nil != v.session {
-		return v.session, nil
-	}
-	var err error
-	v.session, err = concurrency.NewSession(v.client, opts...)
-	if nil != err {
-		return nil, err
-	}
-	go func() {
-		select {
-		case <-ctx.Done():
-			err := v.session.Close()
-			if err != nil {
-				log.Println(err)
-			}
-			v.session = nil
-		}
-	}()
-	return v.session, nil
 }
 
 type Context struct {
@@ -69,8 +45,9 @@ func GET(ctx context.Context) *contextValue {
 }
 
 type Etcd struct {
-	client *v3.Client
+	client *nats.Conn
 	config *Config
+	pool   *redis.Pool
 	lock   sync.Mutex
 }
 
@@ -95,13 +72,32 @@ func (d *Etcd) SetConfig(config *Config) {
 	}
 	d.config = config
 
-	c := v3.Config{
-		Endpoints: config.Endpoints,
+	var c []nats.Option
+	if nil != config.Timeout {
+		c = append(c, nats.Timeout(*config.Timeout))
 	}
-	if nil != config.DialTimeout {
-		c.DialTimeout = *config.DialTimeout
+	if nil != config.DrainTimeout {
+		c = append(c, nats.DrainTimeout(*config.DrainTimeout))
 	}
-	client, err := v3.New(c)
+	if nil != config.MaxReconnects {
+		c = append(c, nats.MaxReconnects(*config.MaxReconnects))
+	}
+	if nil != config.MaxPingsOutstanding {
+		c = append(c, nats.MaxPingsOutstanding(*config.MaxPingsOutstanding))
+	}
+	if nil != config.Name {
+		c = append(c, nats.Name(*config.Name))
+	}
+	if nil != config.Username && nil != config.Password {
+		c = append(c, nats.UserInfo(*config.Username, *config.Password))
+	}
+	if nil != config.CertFile && nil != config.KeyFile {
+		c = append(c, nats.ClientCert(*config.CertFile, *config.KeyFile))
+	}
+	if nil != config.Token {
+		c = append(c, nats.Token(*config.Token))
+	}
+	client, err := nats.Connect(strings.Join(config.Endpoints, ","), c...)
 	if err != nil {
 		log.Println("Etcd服务器连接失败，请检查配置是否正确", err)
 	}
@@ -120,6 +116,6 @@ func (d *Etcd) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, cal
 	return in.OnNext(ctx, data, call)
 }
 
-func (d *Etcd) GetClient() *v3.Client {
+func (d *Etcd) GetClient() *nats.Conn {
 	return d.client
 }
