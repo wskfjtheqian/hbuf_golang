@@ -6,8 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -279,14 +279,7 @@
       <workItem from="1682264002694" duration="2965000" />
       <workItem from="1682355969362" duration="27000" />
       <workItem from="1682614186491" duration="10000" />
-      <workItem from="1683077799232" duration="19432000" />
-    </task>
-    <task id="LOCAL-00009" summary="修改BUG">
-      <created>1655917880057</created>
-      <option name="number" value="00009" />
-      <option name="presentableId" value="LOCAL-00009" />
-      <option name="project" value="LOCAL" />
-      <updated>1655917880057</updated>
+      <workItem from="1683077799232" duration="22327000" />
     </task>
     <task id="LOCAL-00010" summary="添加Int64">
       <created>1658245302777</created>
@@ -624,7 +617,14 @@
       <option name="project" value="LOCAL" />
       <updated>1683093721051</updated>
     </task>
-    <option name="localTasksCounter" value="58" />
+    <task id="LOCAL-00058" summary="解决缓存一致性的问题">
+      <created>1683112402435</created>
+      <option name="number" value="00058" />
+      <option name="presentableId" value="LOCAL-00058" />
+      <option name="project" value="LOCAL" />
+      <updated>1683112402435</updated>
+    </task>
+    <option name="localTasksCounter" value="59" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
