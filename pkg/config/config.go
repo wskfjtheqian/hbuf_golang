@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"flag"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"html/template"
 	"log"
 )
@@ -49,17 +50,16 @@ func NewWatch() Watch {
 	return c
 }
 
-var parse = template.New("config")
-
 func generateConfig(config string, keyVal map[string]any) (string, error) {
+	parse := template.New("config")
 	t, err := parse.Parse(config)
 	if err != nil {
-		return "", err
+		return "", erro.Wrap(err)
 	}
 	w := bytes.NewBuffer(nil)
 	err = t.Execute(w, keyVal)
 	if err != nil {
-		return "", err
+		return "", erro.Wrap(err)
 	}
 	return w.String(), nil
 }
