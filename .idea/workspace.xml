@@ -4,11 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="合并">
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
+      <change afterPath="$PROJECT_DIR$/pkg/id/generator.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/erro/error.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/erro/error.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/id/snow_flake_id.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/id/snow_flake_id.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -288,13 +287,6 @@
       <workItem from="1682355969362" duration="27000" />
       <workItem from="1682614186491" duration="10000" />
       <workItem from="1683077799232" duration="22327000" />
-    </task>
-    <task id="LOCAL-00010" summary="添加Int64">
-      <created>1658245302777</created>
-      <option name="number" value="00010" />
-      <option name="presentableId" value="LOCAL-00010" />
-      <option name="project" value="LOCAL" />
-      <updated>1658245302777</updated>
     </task>
     <task id="LOCAL-00011" summary="添加Int64">
       <created>1658245533511</created>
@@ -632,7 +624,14 @@
       <option name="project" value="LOCAL" />
       <updated>1683112402435</updated>
     </task>
-    <option name="localTasksCounter" value="59" />
+    <task id="LOCAL-00059" summary="修改BUG">
+      <created>1683350681276</created>
+      <option name="number" value="00059" />
+      <option name="presentableId" value="LOCAL-00059" />
+      <option name="project" value="LOCAL" />
+      <updated>1683350681276</updated>
+    </task>
+    <option name="localTasksCounter" value="60" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -702,7 +701,6 @@
     <MESSAGE value="优化错误" />
     <MESSAGE value="添加分布式锁" />
     <MESSAGE value="修改数据库事物" />
-    <MESSAGE value="修改BUG" />
     <MESSAGE value="优化" />
     <MESSAGE value="优化SQL" />
     <MESSAGE value="调整RPC代码" />
@@ -713,7 +711,8 @@
     <MESSAGE value="完成服务注册和发现" />
     <MESSAGE value="服务管理添加动态配置功能" />
     <MESSAGE value="解决缓存一致性的问题" />
-    <option name="LAST_COMMIT_MESSAGE" value="解决缓存一致性的问题" />
+    <MESSAGE value="修改BUG" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改BUG" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

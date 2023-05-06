@@ -101,11 +101,26 @@ func (p *SnowFlakeId) init(dataCenterId int64, workerId int64) {
 	p.lastTimestamp = -1
 }
 
-// 生成ID，注意此方法已经通过加锁来保证线程安全
-func (p *SnowFlakeId) NextId() int64 {
+// NextId 生成ID，注意此方法已经通过加锁来保证线程安全
+func (p *SnowFlakeId) NextId() (int64, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	return p.next(), nil
+}
+
+func (p *SnowFlakeId) NextIds(count uint) ([]int64, error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	ids := make([]int64, count)
+	for i := 0; i < int(count); i++ {
+		ids[i] = p.next()
+	}
+	return ids, nil
+}
+
+func (p *SnowFlakeId) next() int64 {
 	timestamp := p.timeGen()
 	// 如果当前时间小于上一次 ID 生成的时间戳，说明发生时钟回拨，为保证ID不重复抛出异常。
 	if timestamp < p.lastTimestamp {
