@@ -68,8 +68,8 @@ func CloneContext(ctx context.Context) (context.Context, error) {
 	c = &Context{
 		Context: c.Context,
 		done:    make(chan struct{}),
-		header:  header,
-		tags:    tags,
+		//header:  header,
+		//tags:    tags,
 		onClone: c.onClone,
 	}
 

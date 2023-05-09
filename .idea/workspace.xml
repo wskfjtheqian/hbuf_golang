@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加统一的ID生成接口">
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="新的ID生成方式">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/id/generator.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/id/generator.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/id/snow_flake_id.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/id/snow_flake_id.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,7 +22,7 @@
       </list>
     </option>
   </component>
-  <component name="GOROOT" url="file://$USER_HOME$/sdk/go" />
+  <component name="GOROOT" url="file://$PROJECT_DIR$/../../../sdk/go" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="RESET_MODE" value="MIXED" />
@@ -79,7 +77,7 @@
     "WebServerToolWindowFactoryState": "false",
     "dart.analysis.tool.window.visible": "false",
     "go.import.settings.migrated": "true",
-    "last_opened_file_path": "D:/dev/apk_rebuild",
+    "last_opened_file_path": "D:/dev/1.hbuf/hbuf_golang",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "preferences.pluginManager",
     "show.migrate.to.gradle.popup": "false",
@@ -101,15 +99,6 @@
     </key>
   </component>
   <component name="RunManager" selected="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config">
-    <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$" />
-      <go_parameters value="-i" />
-      <kind value="FILE" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <method v="2" />
-    </configuration>
     <configuration name="Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/rpc" />
@@ -169,16 +158,6 @@
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
       <pattern value="^\QTest_WebSocketServer\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$" />
-      <go_parameters value="-i" />
-      <kind value="DIRECTORY" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
       <method v="2" />
     </configuration>
     <list>
@@ -287,13 +266,7 @@
       <workItem from="1682355969362" duration="27000" />
       <workItem from="1682614186491" duration="10000" />
       <workItem from="1683077799232" duration="22327000" />
-    </task>
-    <task id="LOCAL-00012" summary="添加Int64">
-      <created>1658246731235</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1658246731235</updated>
+      <workItem from="1683615153758" duration="48000" />
     </task>
     <task id="LOCAL-00013" summary="添加Int64">
       <created>1658246851480</created>
@@ -631,7 +604,14 @@
       <option name="project" value="LOCAL" />
       <updated>1683353881987</updated>
     </task>
-    <option name="localTasksCounter" value="61" />
+    <task id="LOCAL-00061" summary="新的ID生成方式">
+      <created>1683359889968</created>
+      <option name="number" value="00061" />
+      <option name="presentableId" value="LOCAL-00061" />
+      <option name="project" value="LOCAL" />
+      <updated>1683359889968</updated>
+    </task>
+    <option name="localTasksCounter" value="62" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -713,7 +693,8 @@
     <MESSAGE value="解决缓存一致性的问题" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="添加统一的ID生成接口" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加统一的ID生成接口" />
+    <MESSAGE value="新的ID生成方式" />
+    <option name="LAST_COMMIT_MESSAGE" value="新的ID生成方式" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
