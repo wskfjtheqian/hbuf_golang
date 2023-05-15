@@ -235,9 +235,13 @@ func (m *Manage) Init(ctx context.Context) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	for _, server := range m.server {
-		log.Println("开启并初始化rpc服务：" + server.GetName())
-		server.GetServer().Init(ctx)
+	if nil != m.config.Server.List {
+		for _, item := range *m.config.Server.List {
+			if server, ok := m.server[item]; ok {
+				log.Println("开启并初始化rpc服务：" + server.GetName())
+				server.GetServer().Init(ctx)
+			}
+		}
 	}
 }
 
