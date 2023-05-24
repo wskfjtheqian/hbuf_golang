@@ -14,6 +14,8 @@ type Info struct {
 	Lat         float64
 	Lon         float64
 	Query       string
+	Region      string
+	RegionName  string
 }
 
 type Key string

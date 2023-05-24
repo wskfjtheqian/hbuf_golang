@@ -4,8 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改BUG">
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改服务管理器初始化顺序">
+      <change afterPath="$PROJECT_DIR$/pkg/ip/ip_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/ip/ip.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_api.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip_api.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,24 +69,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/dev/9.recruit/app&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "dart.analysis.tool.window.visible": "false",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "D:/dev/1.hbuf/hbuf",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "show.migrate.to.gradle.popup": "false",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/etcd" />
@@ -98,17 +101,17 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config">
-    <configuration name="Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+  <component name="RunManager" selected="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip">
+    <configuration name="TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <working_directory value="$PROJECT_DIR$/pkg/ip" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_HttpClient\E$" />
+      <pattern value="^\QTestIpApi\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -161,19 +164,19 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
       <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
       <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
-      <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
         <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
         <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
         <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
         <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-        <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       </list>
     </recent_temporary>
   </component>
@@ -269,13 +272,10 @@
       <workItem from="1683615153758" duration="1343000" />
       <workItem from="1683870583252" duration="2558000" />
       <workItem from="1683875645088" duration="668000" />
-    </task>
-    <task id="LOCAL-00014" summary="添加Int64">
-      <created>1658678686844</created>
-      <option name="number" value="00014" />
-      <option name="presentableId" value="LOCAL-00014" />
-      <option name="project" value="LOCAL" />
-      <updated>1658678686844</updated>
+      <workItem from="1684122018794" duration="3078000" />
+      <workItem from="1684201524241" duration="374000" />
+      <workItem from="1684202373844" duration="1189000" />
+      <workItem from="1684287568800" duration="3608000" />
     </task>
     <task id="LOCAL-00015" summary="添加Json Sever Context">
       <created>1658941263929</created>
@@ -613,7 +613,14 @@
       <option name="project" value="LOCAL" />
       <updated>1683615278794</updated>
     </task>
-    <option name="localTasksCounter" value="63" />
+    <task id="LOCAL-00063" summary="修改服务管理器初始化顺序">
+      <created>1684122297131</created>
+      <option name="number" value="00063" />
+      <option name="presentableId" value="LOCAL-00063" />
+      <option name="project" value="LOCAL" />
+      <updated>1684122297131</updated>
+    </task>
+    <option name="localTasksCounter" value="64" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -696,7 +703,8 @@
     <MESSAGE value="添加统一的ID生成接口" />
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
-    <option name="LAST_COMMIT_MESSAGE" value="修改BUG" />
+    <MESSAGE value="修改服务管理器初始化顺序" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改服务管理器初始化顺序" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
@@ -718,6 +726,16 @@
           <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
           <line>180</line>
           <option name="timeStamp" value="84" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/ip/ip_test.go</url>
+          <line>6</line>
+          <option name="timeStamp" value="85" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/ip/ip_api.go</url>
+          <line>35</line>
+          <option name="timeStamp" value="86" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
