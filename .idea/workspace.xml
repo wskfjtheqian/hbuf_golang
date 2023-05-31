@@ -4,11 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改服务管理器初始化顺序">
-      <change afterPath="$PROJECT_DIR$/pkg/ip/ip_test.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="获得IP地址添加密钥功能">
+      <change afterPath="$PROJECT_DIR$/pkg/db/converter.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_api.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/ip/ip_api.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -80,7 +78,7 @@
     "WebServerToolWindowFactoryState": "false",
     "dart.analysis.tool.window.visible": "false",
     "go.import.settings.migrated": "true",
-    "last_opened_file_path": "D:/dev/1.hbuf/hbuf",
+    "last_opened_file_path": "D:/dev/1.hbuf/hbuf_golang",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "preferences.pluginManager",
     "show.migrate.to.gradle.popup": "false",
@@ -275,14 +273,8 @@
       <workItem from="1684122018794" duration="3078000" />
       <workItem from="1684201524241" duration="374000" />
       <workItem from="1684202373844" duration="1189000" />
-      <workItem from="1684287568800" duration="3608000" />
-    </task>
-    <task id="LOCAL-00015" summary="添加Json Sever Context">
-      <created>1658941263929</created>
-      <option name="number" value="00015" />
-      <option name="presentableId" value="LOCAL-00015" />
-      <option name="project" value="LOCAL" />
-      <updated>1658941263929</updated>
+      <workItem from="1684287568800" duration="6194000" />
+      <workItem from="1685440740529" duration="2447000" />
     </task>
     <task id="LOCAL-00016" summary="添加Json Sever Context">
       <created>1658941553835</created>
@@ -620,7 +612,14 @@
       <option name="project" value="LOCAL" />
       <updated>1684122297131</updated>
     </task>
-    <option name="localTasksCounter" value="64" />
+    <task id="LOCAL-00064" summary="获得IP地址添加密钥功能">
+      <created>1684896722740</created>
+      <option name="number" value="00064" />
+      <option name="presentableId" value="LOCAL-00064" />
+      <option name="project" value="LOCAL" />
+      <updated>1684896722740</updated>
+    </task>
+    <option name="localTasksCounter" value="65" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -673,11 +672,6 @@
         </entry>
       </map>
     </option>
-    <option name="OPEN_GENERIC_TABS">
-      <map>
-        <entry key="0de2db5c-5a60-45b2-8873-b848a2e10ed6" value="TOOL_WINDOW" />
-      </map>
-    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="开始接口服务器" />
@@ -704,7 +698,8 @@
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="修改服务管理器初始化顺序" />
-    <option name="LAST_COMMIT_MESSAGE" value="修改服务管理器初始化顺序" />
+    <MESSAGE value="获得IP地址添加密钥功能" />
+    <option name="LAST_COMMIT_MESSAGE" value="获得IP地址添加密钥功能" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
@@ -731,11 +726,6 @@
           <url>file://$PROJECT_DIR$/pkg/ip/ip_test.go</url>
           <line>6</line>
           <option name="timeStamp" value="85" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/ip/ip_api.go</url>
-          <line>35</line>
-          <option name="timeStamp" value="86" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
