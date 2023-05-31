@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="获得IP地址添加密钥功能">
-      <change afterPath="$PROJECT_DIR$/pkg/db/converter.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/converter.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/converter.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -274,14 +274,7 @@
       <workItem from="1684201524241" duration="374000" />
       <workItem from="1684202373844" duration="1189000" />
       <workItem from="1684287568800" duration="6194000" />
-      <workItem from="1685440740529" duration="2447000" />
-    </task>
-    <task id="LOCAL-00016" summary="添加Json Sever Context">
-      <created>1658941553835</created>
-      <option name="number" value="00016" />
-      <option name="presentableId" value="LOCAL-00016" />
-      <option name="project" value="LOCAL" />
-      <updated>1658941553835</updated>
+      <workItem from="1685440740529" duration="3280000" />
     </task>
     <task id="LOCAL-00017" summary="添加Json Sever Context">
       <created>1659115338356</created>
@@ -619,7 +612,14 @@
       <option name="project" value="LOCAL" />
       <updated>1684896722740</updated>
     </task>
-    <option name="localTasksCounter" value="65" />
+    <task id="LOCAL-00065" summary="添加DB Json转换器">
+      <created>1685497877723</created>
+      <option name="number" value="00065" />
+      <option name="presentableId" value="LOCAL-00065" />
+      <option name="project" value="LOCAL" />
+      <updated>1685497877724</updated>
+    </task>
+    <option name="localTasksCounter" value="66" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -674,7 +674,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="开始接口服务器" />
     <MESSAGE value="添加Int64" />
     <MESSAGE value="添加Json Sever Context" />
     <MESSAGE value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
@@ -699,7 +698,8 @@
     <MESSAGE value="修改BUG" />
     <MESSAGE value="修改服务管理器初始化顺序" />
     <MESSAGE value="获得IP地址添加密钥功能" />
-    <option name="LAST_COMMIT_MESSAGE" value="获得IP地址添加密钥功能" />
+    <MESSAGE value="添加DB Json转换器" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加DB Json转换器" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

@@ -17,11 +17,13 @@ func (t *ConverterJson) Scan(value any) error {
 		if err != nil {
 			return err
 		}
+		return nil
 	case string:
 		err := json.Unmarshal([]byte(v), t.data)
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 	return fmt.Errorf("Can't convert %T to DbToJson", value)
 }
