@@ -156,7 +156,7 @@ func Test_HttpServer(t *testing.T) {
 }
 
 func Test_WebSocketClient(t *testing.T) {
-	client := NewClientWebSocket("ws://127.0.0.1:8901/api/")
+	client := NewClientWebSocket("ws://127.0.0.1:8901/api/", nil)
 	jsonClient := NewJsonClient(client)
 	api := NewRpcTestClient(jsonClient)
 

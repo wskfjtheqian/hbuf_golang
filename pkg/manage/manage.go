@@ -412,7 +412,7 @@ type socketRpcClient struct {
 }
 
 func newSocketRpcClient(url string, call CallClient) rcpClient {
-	client := rpc.NewClientWebSocket(url)
+	client := rpc.NewClientWebSocket(url, nil)
 	jsonClient := rpc.NewJsonClient(client)
 	return &socketRpcClient{
 		client: call(jsonClient),

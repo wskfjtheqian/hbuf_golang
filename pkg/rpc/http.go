@@ -31,7 +31,7 @@ func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out 
 		return err
 	}
 	for key, val := range GetHeaders(ctx) {
-		request.Header.Add(key, val.(string))
+		request.Header.Add(key, val)
 	}
 	response, err := h.client.Do(request)
 	if err != nil {
@@ -58,7 +58,7 @@ type HttpContextValue struct {
 	Request *ht.Request
 }
 
-var payType = reflect.TypeOf(&httpContext{})
+var httpType = reflect.TypeOf(&httpContext{})
 
 func (d *httpContext) Value(key any) any {
 	if reflect.TypeOf(d) == key {
@@ -72,7 +72,7 @@ func (d *httpContext) Done() <-chan struct{} {
 }
 
 func GetHttp(ctx context.Context) *HttpContextValue {
-	ret := ctx.Value(payType)
+	ret := ctx.Value(httpType)
 	if nil == ret {
 		return nil
 	}
@@ -117,7 +117,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 			return
 		}
 		erro.PrintStack(err)
-		w.WriteHeader(500)
+		w.WriteHeader(ht.StatusInternalServerError)
 	}
 	return
 }
