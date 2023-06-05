@@ -63,3 +63,14 @@ func ToQuestions[T any](l []T, question string) string {
 func ToPointer[T any](l T) *T {
 	return &l
 }
+
+func GetFieldsByList[F any, E any](list []E, call func(item E) F) []F {
+	field := make([]F, len(list))
+	if nil == list {
+		return field
+	}
+	for i, item := range list {
+		field[i] = call(item)
+	}
+	return field
+}

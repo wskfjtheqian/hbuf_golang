@@ -13,7 +13,7 @@ import (
 type Context struct {
 	context.Context
 	done    chan struct{}
-	header  map[string]any
+	header  map[string]string
 	tags    map[string]any
 	method  string
 	onClone func(ctx context.Context) (context.Context, error)
@@ -23,7 +23,7 @@ func NewContext(ctx context.Context) context.Context {
 	return &Context{
 		Context: ctx,
 		done:    make(chan struct{}),
-		header:  make(map[string]any, 0),
+		header:  make(map[string]string, 0),
 		tags:    make(map[string]any, 0),
 	}
 }
@@ -87,7 +87,7 @@ func CloseContext(ctx context.Context) {
 	close(ret.(*Context).done)
 }
 
-func SetHeader(ctx context.Context, key string, value any) {
+func SetHeader(ctx context.Context, key string, value string) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return
@@ -95,24 +95,24 @@ func SetHeader(ctx context.Context, key string, value any) {
 	ret.(*Context).header[key] = value
 }
 
-func GetHeader(ctx context.Context, key string) (value any, ok bool) {
+func GetHeader(ctx context.Context, key string) (value string, ok bool) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
-		return nil, false
+		return "", false
 	}
 	value, ok = ret.(*Context).header[key]
 	return
 }
 
-func GetHeaders(ctx context.Context) (value map[string]any) {
+func GetHeaders(ctx context.Context) (value map[string]string) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
-		return map[string]any{}
+		return map[string]string{}
 	}
 	return ret.(*Context).header
 }
 
-func SetTag(ctx context.Context, key string, value any) {
+func SetTag(ctx context.Context, key string, value string) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return
