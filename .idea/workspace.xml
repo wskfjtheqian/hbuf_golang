@@ -5,6 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/pkg/hbuf/serialize.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/hbuf/serialize_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -65,36 +67,36 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/heqian/dev/3.hbuf/hbuf_golang&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "main",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "/home/heqian/dev/7.ab/Rummy3",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "show.migrate.to.gradle.popup": "false",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/hbuf" />
       <recent name="$PROJECT_DIR$/pkg/etcd" />
       <recent name="$PROJECT_DIR$/pkg/rpc" />
       <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
-      <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/err" />
@@ -102,7 +104,7 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip">
+  <component name="RunManager" selected="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf">
     <configuration name="TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/ip" />
@@ -115,69 +117,68 @@
       <pattern value="^\QTestIpApi\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/cache" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_ReadConfig\E$" />
+      <pattern value="^\QTest_Data\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_FormatTag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/config" />
-      <parameters value="-h" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/config" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_Watch\E$" />
+      <pattern value="^\QTest_FormatTag\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_WebSocketClient\E$" />
+      <pattern value="^\QTest_Int\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_WebSocketServer\E$" />
+      <pattern value="^\QTest_Tag\E$" />
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.Test_FormatTag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <item itemvalue="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
-      <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
-      <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
-      <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.Test_FormatTag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
         <item itemvalue="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
-        <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
-        <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
-        <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-        <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       </list>
     </recent_temporary>
   </component>
@@ -280,6 +281,7 @@
       <workItem from="1685440740529" duration="5744000" />
       <workItem from="1689072445468" duration="230000" />
       <workItem from="1689151478460" duration="2122000" />
+      <workItem from="1691026166375" duration="21017000" />
     </task>
     <task id="LOCAL-00018" summary="优化">
       <created>1659288259274</created>
@@ -624,7 +626,7 @@
       <option name="project" value="LOCAL" />
       <updated>1685517513782</updated>
     </task>
-    <option name="localTasksCounter" value="68" />
+    <option name="localTasksCounter" value="69" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -660,26 +662,13 @@
         </entry>
         <entry key="MAIN">
           <value>
-            <State>
-              <option name="FILTERS">
-                <map>
-                  <entry key="branch">
-                    <value>
-                      <list>
-                        <option value="main" />
-                      </list>
-                    </value>
-                  </entry>
-                </map>
-              </option>
-            </State>
+            <State />
           </value>
         </entry>
       </map>
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="添加Json Sever Context" />
     <MESSAGE value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
     <MESSAGE value="添加Redi缓存功能" />
     <MESSAGE value="优化Redis缓存功能" />
@@ -704,7 +693,8 @@
     <MESSAGE value="获得IP地址添加密钥功能" />
     <MESSAGE value="添加DB Json转换器" />
     <MESSAGE value="数据库和Redis添加Ping" />
-    <option name="LAST_COMMIT_MESSAGE" value="数据库和Redis添加Ping" />
+    <MESSAGE value="修改SQL日志时间的错误BUG" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改SQL日志时间的错误BUG" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
@@ -738,6 +728,8 @@
       <configuration name="GoTestRunConfiguration">
         <watch expression="nil == next" />
         <watch expression=" fmt.Sprintf(&quot;%v&quot;, value)" />
+        <watch expression="idLen &amp; 4" language="go" />
+        <watch expression="val &amp; 0xff" language="go" />
       </configuration>
     </watches-manager>
   </component>
