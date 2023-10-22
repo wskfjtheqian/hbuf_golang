@@ -5,8 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/pkg/utils/utils_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/server.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/encrypt.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/encrypt.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -23,7 +24,7 @@
       </list>
     </option>
   </component>
-  <component name="GOROOT" url="file://$PROJECT_DIR$/../../../sdk/go" />
+  <component name="GOROOT" url="file://$USER_HOME$/sdk/go" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="RESET_MODE" value="MIXED" />
@@ -53,41 +54,49 @@
     <setting file="file://$PROJECT_DIR$/pkg/etcd/lock.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/hbuf/data.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/manage/manage.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/pkg/rpc/http.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/rpc/rpc_test.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/pkg/utils/other.go" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/database/sql/sql.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/sdk/go/src/database/sql/sql.go" root0="SKIP_INSPECTION" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 6
+}]]></component>
   <component name="ProjectId" id="28mBe05tSA8waPmP1BxwSWl1zT1" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/dev/1.hbuf/hbuf_golang&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "RunOnceActivity.go.modules.automatic.dependencies.download": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "main",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "/Users/heqian/dev/2.hbuf/hbuf_golang",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "show.migrate.to.gradle.popup": "false",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/pkg/etcd" />
       <recent name="$PROJECT_DIR$/pkg/rpc" />
+      <recent name="$PROJECT_DIR$/pkg/etcd" />
       <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
       <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
@@ -98,17 +107,17 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip">
-    <configuration name="TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+  <component name="RunManager" selected="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils">
+    <configuration name="TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/ip" />
+      <working_directory value="$PROJECT_DIR$/pkg/utils" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTestIpApi\E$" />
+      <pattern value="^\QTestEncrypt\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -161,7 +170,7 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
+      <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
       <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
       <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
       <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
@@ -169,7 +178,7 @@
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Test.TestIpApi in github.com/wskfjtheqian/hbuf_golang/pkg/ip" />
+        <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
         <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
         <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
         <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
@@ -269,11 +278,28 @@
       <workItem from="1683615153758" duration="1343000" />
       <workItem from="1683870583252" duration="2558000" />
       <workItem from="1683875645088" duration="668000" />
-      <workItem from="1684122018794" duration="3078000" />
-      <workItem from="1684201524241" duration="374000" />
-      <workItem from="1684202373844" duration="1189000" />
-      <workItem from="1684287568800" duration="6194000" />
-      <workItem from="1685440740529" duration="5744000" />
+      <workItem from="1685890154062" duration="569000" />
+      <workItem from="1686147241712" duration="597000" />
+      <workItem from="1686233618011" duration="486000" />
+      <workItem from="1686319457509" duration="546000" />
+      <workItem from="1687014768394" duration="2609000" />
+      <workItem from="1687228093344" duration="1930000" />
+      <workItem from="1687498180800" duration="1770000" />
+      <workItem from="1697942534976" duration="638000" />
+    </task>
+    <task id="LOCAL-00016" summary="添加Json Sever Context">
+      <created>1658941553835</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1658941553835</updated>
+    </task>
+    <task id="LOCAL-00017" summary="添加Json Sever Context">
+      <created>1659115338356</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1659115338356</updated>
     </task>
     <task id="LOCAL-00018" summary="优化">
       <created>1659288259274</created>
@@ -590,47 +616,37 @@
       <option name="project" value="LOCAL" />
       <updated>1683615278794</updated>
     </task>
-    <task id="LOCAL-00063" summary="修改服务管理器初始化顺序">
-      <created>1684122297131</created>
+    <task id="LOCAL-00063" summary="修改BUG">
+      <created>1685890172841</created>
       <option name="number" value="00063" />
       <option name="presentableId" value="LOCAL-00063" />
       <option name="project" value="LOCAL" />
-      <updated>1684122297131</updated>
+      <updated>1685890172841</updated>
     </task>
-    <task id="LOCAL-00064" summary="获得IP地址添加密钥功能">
-      <created>1684896722740</created>
+    <task id="LOCAL-00064" summary="GetFieldsByList">
+      <created>1685890235235</created>
       <option name="number" value="00064" />
       <option name="presentableId" value="LOCAL-00064" />
       <option name="project" value="LOCAL" />
-      <updated>1684896722740</updated>
+      <updated>1685890235235</updated>
     </task>
-    <task id="LOCAL-00065" summary="添加DB Json转换器">
-      <created>1685497877723</created>
-      <option name="number" value="00065" />
-      <option name="presentableId" value="LOCAL-00065" />
-      <option name="project" value="LOCAL" />
-      <updated>1685497877724</updated>
-    </task>
-    <task id="LOCAL-00066" summary="添加DB Json转换器">
-      <created>1685517513782</created>
-      <option name="number" value="00066" />
-      <option name="presentableId" value="LOCAL-00066" />
-      <option name="project" value="LOCAL" />
-      <updated>1685517513782</updated>
-    </task>
-    <option name="localTasksCounter" value="67" />
+    <option name="localTasksCounter" value="65" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
+    <option name="OPEN_GENERIC_TABS">
+      <map>
+        <entry key="0de2db5c-5a60-45b2-8873-b848a2e10ed6" value="TOOL_WINDOW" />
+      </map>
+    </option>
     <option name="TAB_STATES">
       <map>
         <entry key="0de2db5c-5a60-45b2-8873-b848a2e10ed6">
           <value>
             <State>
-              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
               <option name="FILTERS">
                 <map>
                   <entry key="branch">
@@ -649,6 +665,7 @@
                   </entry>
                 </map>
               </option>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
             </State>
           </value>
         </entry>
@@ -673,6 +690,7 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
+    <MESSAGE value="开始接口服务器" />
     <MESSAGE value="添加Int64" />
     <MESSAGE value="添加Json Sever Context" />
     <MESSAGE value="添加数据库，Redis缓存，服务管理，配置，基本功能等" />
@@ -695,39 +713,13 @@
     <MESSAGE value="添加统一的ID生成接口" />
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
-    <MESSAGE value="修改服务管理器初始化顺序" />
-    <MESSAGE value="获得IP地址添加密钥功能" />
-    <MESSAGE value="添加DB Json转换器" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加DB Json转换器" />
+    <MESSAGE value="GetFieldsByList" />
+    <option name="LAST_COMMIT_MESSAGE" value="GetFieldsByList" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
   </component>
   <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
-          <line>193</line>
-          <option name="timeStamp" value="66" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
-          <line>191</line>
-          <option name="timeStamp" value="69" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/rpc/web_socket.go</url>
-          <line>180</line>
-          <option name="timeStamp" value="84" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/ip/ip_test.go</url>
-          <line>6</line>
-          <option name="timeStamp" value="85" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
     <watches-manager>
       <configuration name="GoTestRunConfiguration">
         <watch expression="nil == next" />
