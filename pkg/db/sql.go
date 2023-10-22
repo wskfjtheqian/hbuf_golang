@@ -152,7 +152,7 @@ func (s *Sql) Exec(ctx context.Context) (int64, int64, error) {
 
 func printLog(now, count int64, sql string) {
 	now = time.Now().UnixMilli() - now
-	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "ms]"
+	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "s]"
 	if 200 > now {
 		t = utl.Yellow(t)
 	} else {

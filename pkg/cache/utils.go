@@ -67,6 +67,18 @@ func Del(ctx context.Context, key string) error {
 	return c.Flush()
 }
 
+func Ping(ctx context.Context) error {
+	c := GET(ctx)
+	reply, err := c.Do("PING")
+	if err != nil {
+		return erro.Wrap(err)
+	}
+	if nil == reply || "PONG" != strings.ToUpper(reply.(string)) {
+		return erro.NewError(reply.(string))
+	}
+	return nil
+}
+
 func SetNx(ctx context.Context, key string, value any, duration time.Duration) (bool, error) {
 	marshal, err := json.Marshal(value)
 	if err != nil {

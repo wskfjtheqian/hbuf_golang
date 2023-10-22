@@ -141,10 +141,13 @@ func (d *Database) SetConfig(config *Config) {
 	d.db = db
 }
 
+func (d *Database) Ping() error {
+	return d.db.Ping()
+}
+
 func NewDB() *Database {
 	ret := &Database{}
 	return ret
-
 }
 
 type Tx struct {
