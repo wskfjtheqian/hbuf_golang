@@ -80,7 +80,7 @@
     &quot;RunOnceActivity.go.modules.automatic.dependencies.download&quot;: &quot;true&quot;,
     &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
     &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
     &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Users/heqian/dev/2.hbuf/hbuf_golang&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -286,6 +286,7 @@
       <workItem from="1687228093344" duration="1930000" />
       <workItem from="1687498180800" duration="1770000" />
       <workItem from="1697942534976" duration="638000" />
+      <workItem from="1697974625148" duration="117000" />
     </task>
     <task id="LOCAL-00016" summary="添加Json Sever Context">
       <created>1658941553835</created>
