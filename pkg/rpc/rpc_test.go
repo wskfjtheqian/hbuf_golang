@@ -17,7 +17,7 @@ func (d *NameReq) ToData() ([]byte, error) {
 	return nil, nil
 }
 
-func (d *NameReq) FormData([]byte) error {
+func (d *NameReq) FormData([]byte, uint32, uint32) error {
 	return nil
 }
 
@@ -29,7 +29,7 @@ func (d *NameReps) ToData() ([]byte, error) {
 	return nil, nil
 }
 
-func (d *NameReps) FormData([]byte) error {
+func (d *NameReps) FormData([]byte, uint32, uint32) error {
 	return nil
 }
 

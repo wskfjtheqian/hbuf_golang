@@ -4,10 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/pkg/utils/utils_test.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/encrypt.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/encrypt.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/serialize.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/serialize.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/serialize_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/serialize_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,6 +28,11 @@
   </component>
   <component name="GOROOT" url="file://$USER_HOME$/sdk/go" />
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="RESET_MODE" value="MIXED" />
   </component>
@@ -58,6 +65,17 @@
     <setting file="file://$PROJECT_DIR$/pkg/utils/other.go" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$USER_HOME$/sdk/go/src/database/sql/sql.go" root0="SKIP_INSPECTION" />
   </component>
+  <component name="KubernetesApiProvider"><![CDATA[{
+  "contexts": [
+    {
+      "name": "docker-desktop"
+    }
+  ],
+  "isMigrated": true
+}]]></component>
+  <component name="KubernetesSettings">
+    <option name="contextName" value="docker-desktop" />
+  </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
@@ -69,30 +87,30 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.modules.automatic.dependencies.download&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/heqian/dev/2.hbuf/hbuf_golang&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "RunOnceActivity.go.modules.automatic.dependencies.download": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "dev",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "/Users/heqian/dev/2.hbuf/hbuf_golang",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "show.migrate.to.gradle.popup": "false",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/rpc" />
@@ -107,7 +125,7 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils">
+  <component name="RunManager" selected="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf">
     <configuration name="TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/utils" />
@@ -120,16 +138,40 @@
       <pattern value="^\QTestEncrypt\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/cache" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
       <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_ReadConfig\E$" />
+      <pattern value="^\QTest_Data\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_Int\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_Tag\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -145,44 +187,20 @@
       <pattern value="^\QTest_Watch\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_WebSocketClient\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_WebSocketServer\E$" />
-      <method v="2" />
-    </configuration>
     <list>
+      <item itemvalue="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-      <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
       <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
-      <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-      <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
         <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
         <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
-        <item itemvalue="Go Test.Test_ReadConfig in github.com/wskfjtheqian/hbuf_golang/pkg/cache" />
-        <item itemvalue="Go Test.Test_WebSocketClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
-        <item itemvalue="Go Test.Test_WebSocketServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       </list>
     </recent_temporary>
   </component>
@@ -631,7 +649,7 @@
       <option name="project" value="LOCAL" />
       <updated>1685890235235</updated>
     </task>
-    <option name="localTasksCounter" value="65" />
+    <option name="localTasksCounter" value="66" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -715,7 +733,8 @@
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="GetFieldsByList" />
-    <option name="LAST_COMMIT_MESSAGE" value="GetFieldsByList" />
+    <MESSAGE value="1" />
+    <option name="LAST_COMMIT_MESSAGE" value="1" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

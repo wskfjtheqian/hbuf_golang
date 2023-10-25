@@ -11,7 +11,7 @@ import (
 type Data interface {
 	ToData() ([]byte, error)
 
-	FormData([]byte) error
+	FormData(buf []byte, start uint32, len uint32) error
 }
 
 type Time time.Time
