@@ -17,7 +17,7 @@ func (d *NameReq) ToData() ([]byte, error) {
 	return nil, nil
 }
 
-func (d *NameReq) FormData([]byte, uint32, uint32) error {
+func (d *NameReq) FormData([]byte) error {
 	return nil
 }
 
@@ -29,7 +29,7 @@ func (d *NameReps) ToData() ([]byte, error) {
 	return nil, nil
 }
 
-func (d *NameReps) FormData([]byte, uint32, uint32) error {
+func (d *NameReps) FormData([]byte) error {
 	return nil
 }
 
@@ -139,7 +139,7 @@ func Test_HttpClient(t *testing.T) {
 	api := NewRpcTestClient(jsonClient)
 	name, err := api.GetName(context.TODO(), &NameReq{Id: "111"})
 	if err != nil {
-		print(err)
+		print(err.Error())
 		return
 	}
 	print(name.Name)

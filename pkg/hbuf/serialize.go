@@ -239,7 +239,7 @@ func ParseString(ret *string) func(buf []byte, start uint32, len uint32, typ Hbu
 
 func ParseData(ret Data) func(buf []byte, start uint32, len uint32, typ HbufType) error {
 	return func(buf []byte, start uint32, len uint32, typ HbufType) error {
-		return ret.FormData(buf, start, len)
+		return ret.FormData(buf)
 	}
 }
 

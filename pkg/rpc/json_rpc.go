@@ -76,22 +76,19 @@ func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out 
 	value.SetInfo(ctx)
 
 	SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
-		ctx, _, err := s.server.GetFilter().OnNext(ctx, nil, nil)
+		ctx, _, err := s.server.OnNext(ctx, nil, nil)
 		if err != nil {
 			return nil, err
 		}
 		return ctx, nil
 	})
-	ctx, data, err = s.server.GetFilter().OnNext(ctx, data, func(ctx context.Context, data hbuf.Data) (context.Context, hbuf.Data, error) {
+	ctx, data, err = s.server.OnNext(ctx, data, func(ctx context.Context, data hbuf.Data) (context.Context, hbuf.Data, error) {
 		data, err := value.Invoke(ctx, data)
 		if err != nil {
 			return nil, nil, err
 		}
 		return ctx, data, nil
 	})
-	if err != nil {
-		return err
-	}
 	if err != nil {
 		return err
 	}

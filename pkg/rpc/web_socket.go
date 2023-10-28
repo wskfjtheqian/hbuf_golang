@@ -10,7 +10,6 @@ import (
 	"io"
 	ht "net/http"
 	"reflect"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,24 +71,25 @@ func GetWebSocket(ctx context.Context) *WebSocketRpc {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type WebSocketRpc struct {
-	wsConn    *websocket.Conn
-	invoke    Invoke
-	id        int64
-	response  map[int64]chan *WebSocketData
-	lock      sync.RWMutex
-	connectId int64
+	wsConn   *websocket.Conn
+	invoke   Invoke
+	id       int64
+	response map[int64]chan *WebSocketData
+	lock     sync.RWMutex
+	values   map[string]any
 }
 
 func (w *WebSocketRpc) WsConn() *websocket.Conn {
 	return w.wsConn
 }
 
-func (w *WebSocketRpc) ConnectId() int64 {
-	return w.connectId
+func (w *WebSocketRpc) GetValue(key string) (any, bool) {
+	val, ok := w.values[key]
+	return val, ok
 }
 
-func (w *WebSocketRpc) SetConnectId(connectId int64) {
-	w.connectId = connectId
+func (w *WebSocketRpc) SetValue(key string, val any) {
+	w.values[key] = val
 }
 
 type webSocketWrite struct {
@@ -135,11 +135,13 @@ func (r *webSocketWrite) WriteStatus(status int) error {
 
 func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke) *WebSocketRpc {
 	return &WebSocketRpc{
-		wsConn:    wsConn,
-		invoke:    invoke,
-		id:        0,
-		connectId: time.Now().UnixMilli(),
-		response:  map[int64]chan *WebSocketData{},
+		wsConn:   wsConn,
+		invoke:   invoke,
+		id:       0,
+		response: map[int64]chan *WebSocketData{},
+		values: map[string]any{
+			WebSocketConnectId: time.Now().UnixMilli(),
+		},
 	}
 }
 
@@ -174,10 +176,12 @@ func (w *WebSocketRpc) Run() {
 						value:   w,
 					})
 
-					SetHeader(ctx, WebSocketConnectId, strconv.FormatInt(w.connectId, 10))
 					defer CloseContext(ctx)
 					for key, _ := range data.Header {
 						SetHeader(ctx, key, data.Header.Get(key))
+					}
+					for key, val := range w.values {
+						SetValue(ctx, key, val)
 					}
 
 					err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response)

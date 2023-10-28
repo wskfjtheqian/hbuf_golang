@@ -15,6 +15,7 @@ type Context struct {
 	done    chan struct{}
 	header  map[string]string
 	tags    map[string]any
+	values  map[string]any
 	method  string
 	onClone func(ctx context.Context) (context.Context, error)
 }
@@ -23,8 +24,9 @@ func NewContext(ctx context.Context) context.Context {
 	return &Context{
 		Context: ctx,
 		done:    make(chan struct{}),
-		header:  make(map[string]string, 0),
-		tags:    make(map[string]any, 0),
+		header:  make(map[string]string),
+		tags:    make(map[string]any),
+		values:  make(map[string]any),
 	}
 }
 
@@ -129,6 +131,23 @@ func GetTag(ctx context.Context, key string) (value any, ok bool) {
 	return
 }
 
+func SetValue(ctx context.Context, key string, value any) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
+	ret.(*Context).values[key] = value
+}
+
+func GetValue(ctx context.Context, key string) (value any, ok bool) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return nil, false
+	}
+	value, ok = ret.(*Context).values[key]
+	return
+}
+
 func SetMethod(ctx context.Context, method string) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
@@ -143,6 +162,57 @@ func GetMethod(ctx context.Context) (method string) {
 		return ""
 	}
 	return ret.(*Context).method
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+type FilterCall func(ctx context.Context, data hbuf.Data) (context.Context, hbuf.Data, error)
+type FilterNext func(ctx context.Context, data hbuf.Data, in *Filter, call FilterCall) (context.Context, hbuf.Data, error)
+type Filter struct {
+	next      *Filter
+	call      FilterNext
+	isDefault bool
+}
+
+func (f *Filter) OnNext(ctx context.Context, data hbuf.Data, call FilterCall) (context.Context, hbuf.Data, error) {
+	if f.isDefault {
+		if nil != call {
+			return call(ctx, data)
+		}
+	} else if nil != f.call {
+		return f.call(ctx, data, f.next, call)
+	}
+	return ctx, data, nil
+}
+
+// PrefixFilter 前
+func (s *Filter) PrefixFilter(inc FilterNext) {
+	if nil == inc {
+		return
+	}
+	self := &Filter{
+		isDefault: s.isDefault,
+		call:      s.call,
+		next:      s.next,
+	}
+	s.isDefault = false
+	s.next = self
+	s.call = inc
+}
+
+// SuffixFilter 后
+func (s *Filter) SuffixFilter(inc FilterNext) {
+	if nil == inc {
+		return
+	}
+	filter := s
+	for nil != filter.next {
+		filter = filter.next
+	}
+	filter.next = &Filter{
+		isDefault: false,
+		call:      inc,
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,89 +240,25 @@ type ServerRouter interface {
 type GetServer interface {
 	Get(router ServerClient) any
 }
-type FilterCall func(ctx context.Context, data hbuf.Data) (context.Context, hbuf.Data, error)
-type FilterNext func(ctx context.Context, data hbuf.Data, in *Filter, call FilterCall) (context.Context, hbuf.Data, error)
-type Filter struct {
-	next      *Filter
-	call      FilterNext
-	isDefault bool
-}
-
-func (f *Filter) OnNext(ctx context.Context, data hbuf.Data, call FilterCall) (context.Context, hbuf.Data, error) {
-	if f.isDefault {
-		if nil != call {
-			return call(ctx, data)
-		}
-	} else if nil != f.call {
-		return f.call(ctx, data, f.next, call)
-	}
-	return ctx, data, nil
-}
 
 type Server struct {
-	router map[string]*ServerInvoke
+	Filter
 	lock   sync.RWMutex
-	filter *Filter
+	router map[string]*ServerInvoke
 }
 
 func NewServer() *Server {
 	ret := Server{
-		router: map[string]*ServerInvoke{},
-		filter: &Filter{
+		Filter: Filter{
 			isDefault: true,
 		},
+		router: map[string]*ServerInvoke{},
 	}
 	return &ret
 }
 
-func (s *Server) GetFilter() *Filter {
-	return s.filter
-}
-
 func (s *Server) Router() map[string]*ServerInvoke {
 	return s.router
-}
-
-// PrefixFilter 前
-func (s *Server) PrefixFilter(inc FilterNext) {
-	if nil == inc {
-		return
-	}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	filter := s.filter
-	prefix := s.filter
-	for nil != filter.next {
-		prefix = filter
-		filter = filter.next
-	}
-	self := &Filter{
-		isDefault: false,
-		call:      inc,
-		next:      filter,
-	}
-	if filter == prefix {
-		s.filter = self
-	} else {
-		prefix.next = self
-	}
-}
-
-// SuffixFilter 后
-func (s *Server) SuffixFilter(inc FilterNext) {
-	if nil == inc {
-		return
-	}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	filter := s.filter
-	for nil != filter.next {
-		filter = filter.next
-	}
-	filter.next = &Filter{
-		isDefault: false,
-		call:      inc,
-	}
 }
 
 func (s *Server) Add(router ServerRouter) {

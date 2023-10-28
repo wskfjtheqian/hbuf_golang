@@ -81,13 +81,13 @@ func NewApp() *App {
 
 	ctx := rpc.NewContext(context.Background())
 	rpc.SetContextOnClone(ctx, func(ctx context.Context) (context.Context, error) {
-		ctx, _, err := app.ext.GetFilter().OnNext(ctx, nil, nil)
+		ctx, _, err := app.ext.OnNext(ctx, nil, nil)
 		if err != nil {
 			return nil, err
 		}
 		return ctx, nil
 	})
-	ctx, _, err := app.ext.GetFilter().OnNext(ctx, nil, nil)
+	ctx, _, err := app.ext.OnNext(ctx, nil, nil)
 	if err != nil {
 		return nil
 	}

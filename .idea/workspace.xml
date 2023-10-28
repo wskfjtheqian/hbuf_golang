@@ -6,10 +6,14 @@
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/hbuf/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/hbuf/serialize.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/serialize.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/serialize_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/serialize_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -125,19 +129,7 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf">
-    <configuration name="TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/utils" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTestEncrypt\E$" />
-      <method v="2" />
-    </configuration>
+  <component name="RunManager" selected="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc">
     <configuration name="Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
@@ -148,6 +140,30 @@
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
       <pattern value="^\QTest_Data\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_HttpClient\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/rpc" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_HttpServer\E$" />
       <method v="2" />
     </configuration>
     <configuration name="Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -174,33 +190,20 @@
       <pattern value="^\QTest_Tag\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/config" />
-      <parameters value="-h" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/config" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gotest" />
-      <pattern value="^\QTest_Watch\E$" />
-      <method v="2" />
-    </configuration>
     <list>
       <item itemvalue="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+      <item itemvalue="Go Test.Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
       <item itemvalue="Go Test.Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
       <item itemvalue="Go Test.Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-      <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Test.Test_HttpServer in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
+        <item itemvalue="Go Test.Test_HttpClient in github.com/wskfjtheqian/hbuf_golang/pkg/rpc" />
         <item itemvalue="Go Test.Test_Data in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
         <item itemvalue="Go Test.Test_Tag in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
         <item itemvalue="Go Test.Test_Int in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-        <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
-        <item itemvalue="Go Test.Test_Watch in github.com/wskfjtheqian/hbuf_golang/pkg/config" />
       </list>
     </recent_temporary>
   </component>
@@ -649,7 +652,7 @@
       <option name="project" value="LOCAL" />
       <updated>1685890235235</updated>
     </task>
-    <option name="localTasksCounter" value="66" />
+    <option name="localTasksCounter" value="67" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -740,6 +743,15 @@
     <settings-migrated>true</settings-migrated>
   </component>
   <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/rpc/rpc_test.go</url>
+          <line>130</line>
+          <option name="timeStamp" value="21" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
     <watches-manager>
       <configuration name="GoTestRunConfiguration">
         <watch expression="nil == next" />
