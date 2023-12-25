@@ -19,7 +19,7 @@ type contextValue struct {
 }
 
 func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.SessionOption) (*concurrency.Session, error) {
-	if nil != v.client {
+	if nil == v.client {
 		return nil, erro.NewError("未开启Etcd 功能")
 	}
 	if nil != v.session {
