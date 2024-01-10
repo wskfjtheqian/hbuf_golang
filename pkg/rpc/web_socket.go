@@ -78,6 +78,7 @@ type WebSocketRpc struct {
 	response  map[int64]chan *WebSocketData
 	lock      sync.RWMutex
 	connectId int64
+	header    ht.Header
 }
 
 func (w *WebSocketRpc) WsConn() *websocket.Conn {
@@ -133,13 +134,14 @@ func (r *webSocketWrite) WriteStatus(status int) error {
 	return nil
 }
 
-func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke) *WebSocketRpc {
+func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, header ht.Header) *WebSocketRpc {
 	return &WebSocketRpc{
 		wsConn:    wsConn,
 		invoke:    invoke,
 		id:        0,
 		connectId: time.Now().UnixMilli(),
 		response:  map[int64]chan *WebSocketData{},
+		header:    header,
 	}
 }
 
@@ -173,9 +175,14 @@ func (w *WebSocketRpc) Run() {
 						Context: context.TODO(),
 						value:   w,
 					})
+					defer CloseContext(ctx)
 
 					SetHeader(ctx, WebSocketConnectId, strconv.FormatInt(w.connectId, 10))
-					defer CloseContext(ctx)
+					for key, values := range w.header {
+						for _, value := range values {
+							SetHeader(ctx, key, value)
+						}
+					}
 					for key, _ := range data.Header {
 						SetHeader(ctx, key, data.Header.Get(key))
 					}
@@ -223,8 +230,10 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 		return err
 	}
 	data.Data = buffer
-	for key, val := range GetHeaders(ctx) {
-		data.Header.Add(key, val)
+	for key, values := range GetHeaders(ctx) {
+		for _, value := range values {
+			data.Header.Add(key, value)
+		}
 	}
 	buffer, err = json.Marshal(&data)
 	if err != nil {
@@ -278,7 +287,7 @@ func NewClientWebSocket(base string, invoke Invoke) *ClientWebSocket {
 	ret := &ClientWebSocket{
 		base:   base,
 		client: &ht.Client{},
-		rpc:    newWebSocketRpc(dial, invoke),
+		rpc:    newWebSocketRpc(dial, invoke, nil),
 	}
 	ret.rpc.Run()
 	return ret
@@ -309,5 +318,5 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		return
 	}
 
-	newWebSocketRpc(wsConn, s.invoke).Run()
+	newWebSocketRpc(wsConn, s.invoke, r.Header).Run()
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
+	"net/http"
 	"reflect"
 	"sync"
 )
@@ -13,7 +14,7 @@ import (
 type Context struct {
 	context.Context
 	done    chan struct{}
-	header  map[string]string
+	header  http.Header
 	tags    map[string]any
 	method  string
 	onClone func(ctx context.Context) (context.Context, error)
@@ -23,7 +24,7 @@ func NewContext(ctx context.Context) context.Context {
 	return &Context{
 		Context: ctx,
 		done:    make(chan struct{}),
-		header:  make(map[string]string, 0),
+		header:  http.Header{},
 		tags:    make(map[string]any, 0),
 	}
 }
@@ -92,7 +93,7 @@ func SetHeader(ctx context.Context, key string, value string) {
 	if nil == ret {
 		return
 	}
-	ret.(*Context).header[key] = value
+	ret.(*Context).header.Add(key, value)
 }
 
 func GetHeader(ctx context.Context, key string) (value string, ok bool) {
@@ -100,14 +101,14 @@ func GetHeader(ctx context.Context, key string) (value string, ok bool) {
 	if nil == ret {
 		return "", false
 	}
-	value, ok = ret.(*Context).header[key]
-	return
+	value = ret.(*Context).header.Get(key)
+	return value, len(value) > 0
 }
 
-func GetHeaders(ctx context.Context) (value map[string]string) {
+func GetHeaders(ctx context.Context) (value http.Header) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
-		return map[string]string{}
+		return http.Header{}
 	}
 	return ret.(*Context).header
 }
