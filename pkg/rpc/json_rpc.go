@@ -8,7 +8,6 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	ht "net/http"
-	"sync"
 )
 
 type ClientJson struct {
@@ -50,7 +49,6 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 
 type ServerJson struct {
 	server *Server
-	lock   sync.RWMutex
 }
 
 func NewServerJson(server *Server) *ServerJson {

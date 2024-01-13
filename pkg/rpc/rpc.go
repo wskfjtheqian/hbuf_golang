@@ -7,6 +7,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	"net/http"
+	"net/textproto"
 	"reflect"
 	"sync"
 )
@@ -38,6 +39,10 @@ func (c *Context) Value(key any) any {
 		return c
 	}
 	return c.Context.Value(key)
+}
+
+func IsContext(ctx context.Context) bool {
+	return nil != ctx.Value(contextType)
 }
 
 var contextType = reflect.TypeOf(&Context{})
@@ -101,8 +106,9 @@ func GetHeader(ctx context.Context, key string) (value string, ok bool) {
 	if nil == ret {
 		return "", false
 	}
-	value = ret.(*Context).header.Get(key)
-	return value, len(value) > 0
+	header := ret.(*Context).header
+	_, ok = header[textproto.CanonicalMIMEHeaderKey(key)]
+	return header.Get(key), ok
 }
 
 func GetHeaders(ctx context.Context) (value http.Header) {

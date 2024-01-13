@@ -10,7 +10,6 @@ import (
 	"io"
 	ht "net/http"
 	"reflect"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,25 +71,16 @@ func GetWebSocket(ctx context.Context) *WebSocketRpc {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type WebSocketRpc struct {
-	wsConn    *websocket.Conn
-	invoke    Invoke
-	id        int64
-	response  map[int64]chan *WebSocketData
-	lock      sync.RWMutex
-	connectId int64
-	header    ht.Header
+	wsConn   *websocket.Conn
+	invoke   Invoke
+	id       int64
+	response map[int64]chan *WebSocketData
+	lock     sync.RWMutex
+	Context  func() context.Context
 }
 
 func (w *WebSocketRpc) WsConn() *websocket.Conn {
 	return w.wsConn
-}
-
-func (w *WebSocketRpc) ConnectId() int64 {
-	return w.connectId
-}
-
-func (w *WebSocketRpc) SetConnectId(connectId int64) {
-	w.connectId = connectId
 }
 
 type webSocketWrite struct {
@@ -134,14 +124,13 @@ func (r *webSocketWrite) WriteStatus(status int) error {
 	return nil
 }
 
-func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, header ht.Header) *WebSocketRpc {
+func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, ctx func() context.Context) *WebSocketRpc {
 	return &WebSocketRpc{
-		wsConn:    wsConn,
-		invoke:    invoke,
-		id:        0,
-		connectId: time.Now().UnixMilli(),
-		response:  map[int64]chan *WebSocketData{},
-		header:    header,
+		wsConn:   wsConn,
+		invoke:   invoke,
+		id:       0,
+		response: map[int64]chan *WebSocketData{},
+		Context:  ctx,
 	}
 }
 
@@ -171,18 +160,19 @@ func (w *WebSocketRpc) Run() {
 						}
 						return
 					}
-					ctx := NewContext(&webSocketContext{
-						Context: context.TODO(),
+					var ctx context.Context
+					if w.Context == nil || IsContext(w.Context()) {
+						ctx = NewContext(context.TODO())
+					} else {
+						ctx = w.Context()
+					}
+
+					ctx = &webSocketContext{
+						Context: ctx,
 						value:   w,
-					})
+					}
 					defer CloseContext(ctx)
 
-					SetHeader(ctx, WebSocketConnectId, strconv.FormatInt(w.connectId, 10))
-					for key, values := range w.header {
-						for _, value := range values {
-							SetHeader(ctx, key, value)
-						}
-					}
 					for key, _ := range data.Header {
 						SetHeader(ctx, key, data.Header.Get(key))
 					}
@@ -274,7 +264,7 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 
 type ClientWebSocket struct {
 	base   string
-	client *ht.Client
+	clie  nt *ht.Client
 	rpc    *WebSocketRpc
 }
 
@@ -300,7 +290,8 @@ func (h *ClientWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type ServerWebSocket struct {
-	invoke Invoke
+	invoke  Invoke
+	Context func() context.Context
 }
 
 func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
@@ -318,5 +309,5 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		return
 	}
 
-	newWebSocketRpc(wsConn, s.invoke, r.Header).Run()
+	newWebSocketRpc(wsConn, s.invoke, s.Context).Run()
 }

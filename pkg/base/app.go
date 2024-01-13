@@ -7,7 +7,6 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"os"
@@ -70,7 +69,6 @@ func NewApp() *App {
 	server.PrefixFilter(app.db.OnFilter)
 	server.PrefixFilter(app.manage.OnFilter)
 	server.PrefixFilter(app.cache.OnFilter)
-	server.PrefixFilter(app.onHttpFilter)
 
 	server = app.manage.RpcServer()
 	server.PrefixFilter(app.OnFilter)
@@ -123,18 +121,6 @@ func (a *App) SetConfig(config *Config) {
 	}
 }
 
-func (a *App) onHttpFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
-	jc := rpc.GetHttp(ctx)
-	if nil != jc {
-		ip, err := ip.GetHttpIP(jc.Request)
-		if err != nil {
-			return nil, data, err
-		}
-		rpc.SetHeader(ctx, "IP", ip)
-	}
-	return in.OnNext(ctx, data, call)
-}
-
 func (a *App) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
@@ -143,6 +129,10 @@ func (a *App) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call
 		}
 	}
 	return in.OnNext(ctx, data, call)
+}
+
+func (a *App) GetEtcd() *etc.Etcd {
+	return a.etcd
 }
 
 func (a *App) GetManage() *manage.Manage {

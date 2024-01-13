@@ -30,8 +30,10 @@ func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out 
 	if err != nil {
 		return err
 	}
-	for key, val := range GetHeaders(ctx) {
-		request.Header.Add(key, val)
+	for key, values := range GetHeaders(ctx) {
+		for _, value := range values {
+			request.Header.Add(key, value)
+		}
 	}
 	response, err := h.client.Do(request)
 	if err != nil {
@@ -47,7 +49,7 @@ func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out 
 	return nil
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 type httpContext struct {
 	context.Context
 	value *HttpContextValue
