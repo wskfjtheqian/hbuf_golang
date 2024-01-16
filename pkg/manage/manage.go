@@ -14,14 +14,18 @@ import (
 	"sync"
 )
 
+type Manage interface {
+	Get(router rpc.ServerClient) any
+}
+
 type Context struct {
 	context.Context
-	manage *Manage
+	Manage Manage
 }
 
 func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
-		return d.manage
+		return d.Manage
 	}
 	return d.Context.Value(key)
 }
@@ -32,12 +36,12 @@ func (d *Context) Done() <-chan struct{} {
 
 var cType = reflect.TypeOf(&Context{})
 
-func GET(ctx context.Context) *Manage {
+func GET(ctx context.Context) Manage {
 	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
-	return ret.(*Manage)
+	return ret.(Manage)
 }
 
 type CallClient func(client rpc.Client) rpc.Init
@@ -48,11 +52,11 @@ type serverClient struct {
 }
 
 type clientList struct {
-	Keys map[string]rcpClient
-	List []rcpClient
+	Keys map[string]RcpClient
+	List []RcpClient
 }
 
-type Manage struct {
+type BaseManage struct {
 	config    *Config
 	maps      map[string]any
 	install   map[string]*serverClient    //安装的服务
@@ -69,8 +73,8 @@ type Manage struct {
 	wssListen  *http.Server
 }
 
-func NewManage() *Manage {
-	ret := &Manage{
+func NewManage() *BaseManage {
+	ret := &BaseManage{
 		maps:      map[string]any{},
 		server:    map[string]rpc.ServerRouter{},
 		router:    map[string]*clientList{},
@@ -80,11 +84,11 @@ func NewManage() *Manage {
 	return ret
 }
 
-func (m *Manage) RpcServer() *rpc.Server {
+func (m *BaseManage) RpcServer() *rpc.Server {
 	return m.rpcServer
 }
 
-func (m *Manage) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
+func (m *BaseManage) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
@@ -94,7 +98,7 @@ func (m *Manage) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, c
 	return in.OnNext(ctx, data, call)
 }
 
-func (m *Manage) Add(r rpc.ServerRouter, c CallClient) {
+func (m *BaseManage) Add(r rpc.ServerRouter, c CallClient) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.install[r.GetName()] = &serverClient{
@@ -103,7 +107,7 @@ func (m *Manage) Add(r rpc.ServerRouter, c CallClient) {
 	}
 }
 
-func (m *Manage) Get(router rpc.ServerClient) any {
+func (m *BaseManage) Get(router rpc.ServerClient) any {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
@@ -118,7 +122,7 @@ func (m *Manage) Get(router rpc.ServerClient) any {
 	return nil
 }
 
-func (m *Manage) SetConfig(config *Config) {
+func (m *BaseManage) SetConfig(config *Config) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if nil == config {
@@ -194,8 +198,8 @@ func (m *Manage) SetConfig(config *Config) {
 	}
 }
 
-//开始远程服务
-func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.Invoke) (http.Handler, string)) *http.Server {
+// 开始远程服务
+func (m *BaseManage) startServer(config *Http, handle func(path string, invoke rpc.Invoke) (http.Handler, string)) *http.Server {
 	if nil != config {
 		mux := http.NewServeMux()
 		path := "/"
@@ -231,7 +235,7 @@ func (m *Manage) startServer(config *Http, handle func(path string, invoke rpc.I
 	return nil
 }
 
-func (m *Manage) Init(ctx context.Context) {
+func (m *BaseManage) Init(ctx context.Context) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
@@ -245,7 +249,7 @@ func (m *Manage) Init(ctx context.Context) {
 	}
 }
 
-func (m *Manage) checkOpen(name string) bool {
+func (m *BaseManage) checkOpen(name string) bool {
 	if nil == m.config.Server.List {
 		return false
 	}
@@ -257,12 +261,12 @@ func (m *Manage) checkOpen(name string) bool {
 	return false
 }
 
-func (m *Manage) SetEtcd(etcd *etc.Etcd) {
+func (m *BaseManage) SetEtcd(etcd *etc.Etcd) {
 	m.etcd = etcd
 }
 
-//注册服务到发现中心
-func (m *Manage) registerServer(router rpc.ServerRouter, config *Http, scheme string) {
+// 注册服务到发现中心
+func (m *BaseManage) registerServer(router rpc.ServerRouter, config *Http, scheme string) {
 	if !m.config.Server.Register {
 		return
 	}
@@ -290,8 +294,8 @@ func (m *Manage) registerServer(router rpc.ServerRouter, config *Http, scheme st
 	}
 }
 
-//处理发现服务
-func (m *Manage) findServer() {
+// 处理发现服务
+func (m *BaseManage) findServer() {
 	ctx, cancel := context.WithCancel(context.TODO())
 	m.findCancel = cancel
 	reps, err := m.etcd.GetClient().Get(ctx, "/register/server/", clientv3.WithPrefix())
@@ -316,8 +320,8 @@ func (m *Manage) findServer() {
 	}
 }
 
-//添加或删除服务
-func (m *Manage) editClientList(key string, value string, isAdd bool) {
+// 添加或删除服务
+func (m *BaseManage) editClientList(key string, value string, isAdd bool) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -329,11 +333,11 @@ func (m *Manage) editClientList(key string, value string, isAdd bool) {
 	m.clientList(name, value, isAdd)
 }
 
-func (m *Manage) clientList(name string, address string, isAdd bool) {
+func (m *BaseManage) clientList(name string, address string, isAdd bool) {
 	key := address + "/" + name
 	if isAdd {
 		if val, ok := m.install[name]; ok && nil != val.client {
-			var rc rcpClient
+			var rc RcpClient
 			if "local" == address {
 				rc = newLocalRpcClient(val.router)
 			} else if 0 == strings.Index(address, "https://") || 0 == strings.Index(address, "http://") {
@@ -344,14 +348,14 @@ func (m *Manage) clientList(name string, address string, isAdd bool) {
 			routers, ok := m.router[name]
 			if !ok {
 				routers = &clientList{
-					Keys: map[string]rcpClient{},
-					List: []rcpClient{},
+					Keys: map[string]RcpClient{},
+					List: []RcpClient{},
 				}
 				m.router[name] = routers
 			}
 
 			routers.Keys[key] = rc
-			list := make([]rcpClient, len(routers.Keys))
+			list := make([]RcpClient, len(routers.Keys))
 			i := 0
 			for _, client := range routers.Keys {
 				list[i] = client
@@ -362,7 +366,7 @@ func (m *Manage) clientList(name string, address string, isAdd bool) {
 	} else {
 		if routers, ok := m.router[name]; ok {
 			delete(routers.Keys, key)
-			list := make([]rcpClient, len(routers.Keys))
+			list := make([]RcpClient, len(routers.Keys))
 			i := 0
 			for _, client := range routers.Keys {
 				list[i] = client
@@ -373,7 +377,7 @@ func (m *Manage) clientList(name string, address string, isAdd bool) {
 	}
 }
 
-type rcpClient interface {
+type RcpClient interface {
 	getClient() rpc.Init
 }
 
@@ -381,7 +385,7 @@ type localRpcClient struct {
 	client rpc.Init
 }
 
-func newLocalRpcClient(router rpc.ServerRouter) rcpClient {
+func newLocalRpcClient(router rpc.ServerRouter) RcpClient {
 	return &localRpcClient{
 		client: router.GetServer(),
 	}
@@ -395,7 +399,7 @@ type httpRpcClient struct {
 	client rpc.Init
 }
 
-func newHttpRpcClient(url string, call CallClient) rcpClient {
+func newHttpRpcClient(url string, call CallClient) RcpClient {
 	client := rpc.NewClientHttp(url)
 	jsonClient := rpc.NewJsonClient(client)
 	return &httpRpcClient{
@@ -411,7 +415,7 @@ type socketRpcClient struct {
 	client rpc.Init
 }
 
-func newSocketRpcClient(url string, call CallClient) rcpClient {
+func newSocketRpcClient(url string, call CallClient) RcpClient {
 	client := rpc.NewClientWebSocket(url, nil)
 	jsonClient := rpc.NewJsonClient(client)
 	return &socketRpcClient{

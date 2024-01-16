@@ -264,7 +264,7 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 
 type ClientWebSocket struct {
 	base   string
-	clie  nt *ht.Client
+	client *ht.Client
 	rpc    *WebSocketRpc
 }
 
@@ -292,6 +292,7 @@ func (h *ClientWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 type ServerWebSocket struct {
 	invoke  Invoke
 	Context func() context.Context
+	rpc     *WebSocketRpc
 }
 
 func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
@@ -309,5 +310,10 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		return
 	}
 
-	newWebSocketRpc(wsConn, s.invoke, s.Context).Run()
+	s.rpc = newWebSocketRpc(wsConn, s.invoke, s.Context)
+	s.rpc.Run()
+}
+
+func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+	return h.rpc.Invoke(ctx, name, in, out)
 }

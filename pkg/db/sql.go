@@ -64,6 +64,7 @@ type Sql struct {
 	text     strings.Builder
 	params   []any
 	cacheKey string
+	del      string
 }
 
 func NewSql() *Sql {
@@ -74,7 +75,7 @@ func NewSql() *Sql {
 }
 
 func (s *Sql) T(query string) *Sql {
-	s.text.WriteString(strings.Trim(strings.Trim(query, " "), "\t"))
+	s.text.WriteString(s.removeStart(strings.Trim(strings.Trim(query, " "), "\t")))
 	s.text.WriteString(" ")
 	return s
 }
@@ -92,12 +93,26 @@ func (s *Sql) P(args ...any) {
 func (s *Sql) L(question string, args ...any) *Sql {
 	for i, _ := range args {
 		if 0 != i {
-			s.text.WriteString(question)
+			s.text.WriteString(s.removeStart(question))
 		}
 		s.text.WriteString("? ")
 	}
 	s.params = append(s.params, args...)
 	return s
+}
+
+func (s *Sql) removeStart(question string) string {
+	if len(s.del) > 0 {
+		if 0 == strings.Index(question, s.del) {
+			question = question[len(s.del):]
+		}
+		s.del = ""
+	}
+	return question
+}
+
+func (s *Sql) Del(text string) {
+	s.del = text
 }
 
 func (s *Sql) ToText() string {

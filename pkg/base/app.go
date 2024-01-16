@@ -43,7 +43,7 @@ func GET(ctx context.Context) *App {
 
 type App struct {
 	lock         sync.Mutex
-	manage       *manage.Manage
+	manage       *manage.BaseManage
 	db           *db.Database
 	cache        *cache.Cache
 	etcd         *etc.Etcd
@@ -135,7 +135,7 @@ func (a *App) GetEtcd() *etc.Etcd {
 	return a.etcd
 }
 
-func (a *App) GetManage() *manage.Manage {
+func (a *App) GetManage() *manage.BaseManage {
 	return a.manage
 }
 
@@ -170,6 +170,6 @@ func (a *App) CloneContext() context.Context {
 
 func (a *App) Init() {
 	ctx := a.CloneContext()
-	defer rpc.CloneContext(ctx)
+	defer rpc.CloseContext(ctx)
 	a.manage.Init(ctx)
 }

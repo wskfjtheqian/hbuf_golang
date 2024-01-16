@@ -47,6 +47,10 @@ func (t Time) Value() (driver.Value, error) {
 
 type Int64 int64
 
+func (t *Int64) String() string {
+	return strconv.FormatInt(int64(*t), 10)
+}
+
 func unquoteIfQuoted(value any) (string, error) {
 	var bytes []byte
 

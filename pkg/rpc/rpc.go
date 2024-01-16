@@ -74,8 +74,8 @@ func CloneContext(ctx context.Context) (context.Context, error) {
 	c = &Context{
 		Context: c.Context,
 		done:    make(chan struct{}),
-		//header:  header,
-		//tags:    tags,
+		header:  http.Header{},
+		tags:    map[string]any{},
 		onClone: c.onClone,
 	}
 
