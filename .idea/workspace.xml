@@ -4,11 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="优化Websocket RPC">
-      <change afterPath="$PROJECT_DIR$/pkg/utils/time.go" afterDir="false" />
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加辅助方法">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/other.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/other.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/time.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/time.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -37,27 +37,27 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "DefaultGoTemplateProperty": "Go File",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.go.formatter.settings.were.checked": "true",
-    "RunOnceActivity.go.migrated.go.modules.settings": "true",
-    "RunOnceActivity.go.modules.automatic.dependencies.download": "true",
-    "WebServerToolWindowFactoryState": "false",
-    "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "main",
-    "go.import.settings.migrated": "true",
-    "last_opened_file_path": "E:/dev/3.hbuf/hbuf_golang/pkg/utils",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "show.migrate.to.gradle.popup": "false",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.automatic.dependencies.download&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;E:/dev/3.hbuf/hbuf_golang/pkg/utils&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="E:\dev\3.hbuf\hbuf_golang\pkg\utils" />
@@ -73,7 +73,8 @@
       <updated>1704877999362</updated>
       <workItem from="1704878000541" duration="8886000" />
       <workItem from="1705052412748" duration="11834000" />
-      <workItem from="1705368871297" duration="5054000" />
+      <workItem from="1705368871297" duration="8367000" />
+      <workItem from="1705572338270" duration="580000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -99,7 +100,15 @@
       <option name="project" value="LOCAL" />
       <updated>1705400486872</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="添加辅助方法">
+      <option name="closed" value="true" />
+      <created>1705471503320</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1705471503320</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -107,7 +116,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="优化Websocket RPC" />
-    <option name="LAST_COMMIT_MESSAGE" value="优化Websocket RPC" />
+    <MESSAGE value="添加辅助方法" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加辅助方法" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

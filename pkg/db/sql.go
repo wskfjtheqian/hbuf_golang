@@ -74,12 +74,14 @@ func NewSql() *Sql {
 	}
 }
 
+// T 添加文本
 func (s *Sql) T(query string) *Sql {
 	s.text.WriteString(s.removeStart(strings.Trim(strings.Trim(query, " "), "\t")))
 	s.text.WriteString(" ")
 	return s
 }
 
+// V 添加值得
 func (s *Sql) V(a any) *Sql {
 	s.text.WriteString("? ")
 	s.params = append(s.params, a)
