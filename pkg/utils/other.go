@@ -138,3 +138,15 @@ func MapTList[K SliceType, F any, E any](maps map[K]F, call func(key K, val F) E
 func TPointer[E any](val E) *E {
 	return &val
 }
+
+const NotFind = -1
+
+// 按条件查找
+func ListFirst[E any](list []E, call func(val E) bool) int {
+	for i, item := range list {
+		if call(item) {
+			return i
+		}
+	}
+	return -1
+}

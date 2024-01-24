@@ -161,7 +161,7 @@ func (w *WebSocketRpc) Run() {
 						return
 					}
 					var ctx context.Context
-					if w.Context == nil || IsContext(w.Context()) {
+					if w.Context == nil || !IsContext(w.Context()) {
 						ctx = NewContext(context.TODO())
 					} else {
 						ctx = w.Context()
