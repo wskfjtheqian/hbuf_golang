@@ -40,6 +40,11 @@ type WebSocketData struct {
 	Status int       `json:"status"`
 }
 
+func (w *WebSocketData) Write(p []byte) (n int, err error) {
+	w.Data = p
+	return len(p), err
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type webSocketContext struct {
@@ -77,6 +82,7 @@ type WebSocketRpc struct {
 	response map[int64]chan *WebSocketData
 	lock     sync.RWMutex
 	Context  func() context.Context
+	write    chan *WebSocketData
 }
 
 func (w *WebSocketRpc) WsConn() *websocket.Conn {
@@ -131,6 +137,7 @@ func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, ctx func() context.C
 		id:       0,
 		response: map[int64]chan *WebSocketData{},
 		Context:  ctx,
+		write:    make(chan *WebSocketData),
 	}
 }
 
@@ -139,6 +146,7 @@ func (w *WebSocketRpc) Run() {
 		for {
 			_, buffer, err := w.wsConn.ReadMessage()
 			if err != nil {
+				erro.PrintStack(err)
 				return
 			}
 			var data *WebSocketData
@@ -147,55 +155,7 @@ func (w *WebSocketRpc) Run() {
 				return
 			}
 			if data.Type == Request {
-				go func(data *WebSocketData) {
-					response := &webSocketWrite{
-						wsConn: w.wsConn,
-						id:     data.Id,
-					}
-					if nil == w.invoke {
-						err = response.WriteStatus(ht.StatusNotFound)
-						if err != nil {
-							erro.PrintStack(err)
-							return
-						}
-						return
-					}
-					var ctx context.Context
-					if w.Context == nil || !IsContext(w.Context()) {
-						ctx = NewContext(context.TODO())
-					} else {
-						ctx = w.Context()
-					}
-
-					ctx = &webSocketContext{
-						Context: ctx,
-						value:   w,
-					}
-					defer CloseContext(ctx)
-
-					for key, _ := range data.Header {
-						SetHeader(ctx, key, data.Header.Get(key))
-					}
-
-					err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response)
-					if err != nil {
-						if res, ok := err.(*Result); ok {
-							marshal, err := json.Marshal(res)
-							if err != nil {
-								erro.PrintStack(err)
-								return
-							}
-							_, err = response.Write(marshal)
-							if err != nil {
-								erro.PrintStack(err)
-								return
-							}
-							return
-						}
-						_ = response.WriteStatus(ht.StatusInternalServerError)
-					}
-					return
-				}(data)
+				go w.onRequest(data)
 			} else if data.Type == Response {
 				w.lock.RLock()
 				response, ok := w.response[data.Id]
@@ -205,6 +165,23 @@ func (w *WebSocketRpc) Run() {
 				}
 			}
 		}
+	}()
+
+	go func() {
+		for {
+			write := <-w.write
+			marshal, err := json.Marshal(write)
+			if err != nil {
+				erro.PrintStack(err)
+				return
+			}
+			err = w.wsConn.WriteMessage(websocket.BinaryMessage, marshal)
+			if err != nil {
+				erro.PrintStack(err)
+				return
+			}
+		}
+
 	}()
 }
 
@@ -258,6 +235,54 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 		_, _ = out.Write(val.Data)
 	}
 	return nil
+}
+
+func (w *WebSocketRpc) onRequest(data *WebSocketData) {
+	response := &WebSocketData{
+		Id:     data.Id,
+		Type:   Response,
+		Status: ht.StatusOK,
+	}
+	if nil == w.invoke {
+		response.Status = ht.StatusNotFound
+		w.write <- response
+		return
+	}
+	var ctx context.Context
+	if w.Context == nil || !IsContext(w.Context()) {
+		ctx = NewContext(context.TODO())
+	} else {
+		ctx = w.Context()
+	}
+
+	ctx = &webSocketContext{
+		Context: ctx,
+		value:   w,
+	}
+	defer CloseContext(ctx)
+
+	for key, _ := range data.Header {
+		SetHeader(ctx, key, data.Header.Get(key))
+	}
+
+	err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response)
+	if err != nil {
+		if res, ok := err.(*Result); ok {
+			marshal, err := json.Marshal(res)
+			if err != nil {
+				erro.PrintStack(err)
+				return
+			}
+			_, err = response.Write(marshal)
+			w.write <- response
+			return
+		} else {
+			response.Status = ht.StatusInternalServerError
+		}
+	} else {
+		response.Status = ht.StatusOK
+	}
+	w.write <- response
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
