@@ -186,7 +186,7 @@ func (w *WebSocketRpc) Run() {
 }
 
 func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
-	data := WebSocketData{
+	data := &WebSocketData{
 		Type:   Request,
 		Path:   "/" + name,
 		Id:     atomic.AddInt64(&w.id, 1),
@@ -202,10 +202,6 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 			data.Header.Add(key, value)
 		}
 	}
-	buffer, err = json.Marshal(&data)
-	if err != nil {
-		return err
-	}
 
 	response := make(chan *WebSocketData, 1)
 	w.lock.Lock()
@@ -218,10 +214,7 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 		w.lock.Unlock()
 		close(response)
 	}()
-	err = w.wsConn.WriteMessage(websocket.BinaryMessage, buffer)
-	if err != nil {
-		return err
-	}
+	w.write <- data
 
 	timer := time.NewTimer(30 * time.Second)
 	defer timer.Stop()

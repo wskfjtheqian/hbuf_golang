@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改websocket rpc 的并发的BUG" />
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改websocket rpc 的并发的BUG">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/utils/time.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/utils/time.go" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -78,7 +82,8 @@
       <workItem from="1705572338270" duration="1776000" />
       <workItem from="1705632257660" duration="2774000" />
       <workItem from="1706238588110" duration="1622000" />
-      <workItem from="1706263944178" duration="2493000" />
+      <workItem from="1706263944178" duration="4588000" />
+      <workItem from="1706516692619" duration="588000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -136,7 +141,15 @@
       <option name="project" value="LOCAL" />
       <updated>1706265867445</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="修改websocket rpc 的并发的BUG">
+      <option name="closed" value="true" />
+      <created>1706349175064</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1706349175064</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
