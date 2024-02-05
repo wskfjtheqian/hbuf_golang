@@ -142,6 +142,7 @@ func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, ctx func() context.C
 }
 
 func (w *WebSocketRpc) Run() {
+
 	go func() {
 		for {
 			_, buffer, err := w.wsConn.ReadMessage()
@@ -149,6 +150,7 @@ func (w *WebSocketRpc) Run() {
 				erro.PrintStack(err)
 				return
 			}
+
 			var data *WebSocketData
 			err = json.Unmarshal(buffer, &data)
 			if err != nil {
@@ -181,7 +183,6 @@ func (w *WebSocketRpc) Run() {
 				return
 			}
 		}
-
 	}()
 }
 
@@ -271,6 +272,7 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData) {
 			return
 		} else {
 			response.Status = ht.StatusInternalServerError
+			erro.PrintStack(err)
 		}
 	} else {
 		response.Status = ht.StatusOK
