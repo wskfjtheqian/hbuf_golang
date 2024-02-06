@@ -14,7 +14,7 @@ type Config struct {
 	Redis        *cache.Config  `yaml:"redis"`
 	DB           *db.Config     `yaml:"db"`
 	Etcd         *etc.Config    `yaml:"etcd"`
-	Nats         *mq.Config     `yaml:"etcd"`
+	Nats         *mq.Config     `yaml:"nats"`
 	Server       *manage.Config `yaml:"service"`
 	WorkerId     int64          `yaml:"worker_id"`
 	DataCenterId int64          `yaml:"data_center_id"`

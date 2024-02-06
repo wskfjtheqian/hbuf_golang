@@ -53,7 +53,7 @@ type App struct {
 	workerId     int64
 	ctx          context.Context
 	config       *Config
-	mq           *mq.Nats
+	nats         *mq.Nats
 }
 
 func NewApp() *App {
@@ -61,7 +61,7 @@ func NewApp() *App {
 		db:     db.NewDB(),
 		cache:  cache.NewCache(),
 		etcd:   etc.NewEtcd(),
-		mq:     mq.NewNats(),
+		nats:   mq.NewNats(),
 		manage: manage.NewManage(),
 		ext:    rpc.NewServer(),
 	}
@@ -69,7 +69,7 @@ func NewApp() *App {
 	server := app.ext
 	server.PrefixFilter(app.OnFilter)
 	server.PrefixFilter(app.etcd.OnFilter)
-	server.PrefixFilter(app.mq.OnFilter)
+	server.PrefixFilter(app.nats.OnFilter)
 	server.PrefixFilter(app.db.OnFilter)
 	server.PrefixFilter(app.manage.OnFilter)
 	server.PrefixFilter(app.cache.OnFilter)
@@ -77,7 +77,7 @@ func NewApp() *App {
 	server = app.manage.RpcServer()
 	server.PrefixFilter(app.OnFilter)
 	server.PrefixFilter(app.etcd.OnFilter)
-	server.PrefixFilter(app.mq.OnFilter)
+	server.PrefixFilter(app.nats.OnFilter)
 	server.PrefixFilter(app.db.OnFilter)
 	server.PrefixFilter(app.manage.OnFilter)
 	server.PrefixFilter(app.cache.OnFilter)
@@ -106,7 +106,7 @@ func (a *App) SetConfig(config *Config) {
 		a.db.SetConfig(nil)
 		a.cache.SetConfig(nil)
 		a.etcd.SetConfig(nil)
-		a.mq.SetConfig(nil)
+		a.nats.SetConfig(nil)
 		a.manage.SetConfig(nil)
 		a.config = nil
 		return
@@ -120,7 +120,7 @@ func (a *App) SetConfig(config *Config) {
 	a.db.SetConfig(config.DB)
 	a.cache.SetConfig(config.Redis)
 	a.etcd.SetConfig(config.Etcd)
-	a.mq.SetConfig(config.Nats)
+	a.nats.SetConfig(config.Nats)
 	a.manage.SetConfig(config.Server)
 	if nil != config {
 		a.dataCenterId = config.DataCenterId
@@ -157,7 +157,9 @@ func (a *App) GetCache() *cache.Cache {
 func (a *App) GetExt() *rpc.Server {
 	return a.ext
 }
-
+func (a *App) GetNats() *mq.Nats {
+	return a.nats
+}
 func (a *App) GetDataCenterId() int64 {
 	return a.dataCenterId
 }

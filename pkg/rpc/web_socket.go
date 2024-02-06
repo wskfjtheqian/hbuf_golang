@@ -76,13 +76,14 @@ func GetWebSocket(ctx context.Context) *WebSocketRpc {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type WebSocketRpc struct {
-	wsConn   *websocket.Conn
-	invoke   Invoke
-	id       int64
-	response map[int64]chan *WebSocketData
-	lock     sync.RWMutex
-	Context  func() context.Context
-	write    chan *WebSocketData
+	wsConn    *websocket.Conn
+	invoke    Invoke
+	id        int64
+	response  map[int64]chan *WebSocketData
+	lock      sync.RWMutex
+	Context   func() context.Context
+	write     chan *WebSocketData
+	closeCall func()
 }
 
 func (w *WebSocketRpc) WsConn() *websocket.Conn {
@@ -142,13 +143,12 @@ func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, ctx func() context.C
 }
 
 func (w *WebSocketRpc) Run() {
-
 	go func() {
 		for {
 			_, buffer, err := w.wsConn.ReadMessage()
 			if err != nil {
 				erro.PrintStack(err)
-				return
+				break
 			}
 
 			var data *WebSocketData
@@ -166,6 +166,9 @@ func (w *WebSocketRpc) Run() {
 					response <- data
 				}
 			}
+		}
+		if w.closeCall != nil {
+			w.closeCall()
 		}
 	}()
 
@@ -287,6 +290,10 @@ func (w *WebSocketRpc) Close() error {
 	return nil
 }
 
+func (w *WebSocketRpc) OnClose(f func()) {
+	w.closeCall = f
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type ClientWebSocket struct {
@@ -347,4 +354,8 @@ func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 
 func (s *ServerWebSocket) Close() error {
 	return s.rpc.Close()
+}
+
+func (s *ServerWebSocket) OnClose(f func()) {
+	s.rpc.OnClose(f)
 }
