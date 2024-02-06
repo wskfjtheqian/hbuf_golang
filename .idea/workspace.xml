@@ -6,6 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="打印错误日志">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -84,7 +85,7 @@
       <workItem from="1706516692619" duration="1204000" />
       <workItem from="1706694414742" duration="586000" />
       <workItem from="1706778261141" duration="15000" />
-      <workItem from="1707103412383" duration="2424000" />
+      <workItem from="1707103412383" duration="3540000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -166,7 +167,15 @@
       <option name="project" value="LOCAL" />
       <updated>1707104477845</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="打印错误日志">
+      <option name="closed" value="true" />
+      <created>1707123348697</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1707123348697</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

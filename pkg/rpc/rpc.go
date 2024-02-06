@@ -98,6 +98,14 @@ func SetHeader(ctx context.Context, key string, value string) {
 	if nil == ret {
 		return
 	}
+	ret.(*Context).header.Set(key, value)
+}
+
+func AddHeader(ctx context.Context, key string, value string) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
 	ret.(*Context).header.Add(key, value)
 }
 
@@ -109,6 +117,26 @@ func GetHeader(ctx context.Context, key string) (value string, ok bool) {
 	header := ret.(*Context).header
 	_, ok = header[textproto.CanonicalMIMEHeaderKey(key)]
 	return header.Get(key), ok
+}
+
+func DelHeader(ctx context.Context, key string) (ok bool) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return false
+	}
+	header := ret.(*Context).header
+	_, ok = header[textproto.CanonicalMIMEHeaderKey(key)]
+	header.Del(key)
+	return ok
+}
+
+func ValuesHeader(ctx context.Context, key string) []string {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return nil
+	}
+	header := ret.(*Context).header
+	return header.Values(key)
 }
 
 func GetHeaders(ctx context.Context) (value http.Header) {
