@@ -280,6 +280,13 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData) {
 	w.write <- response
 }
 
+func (w *WebSocketRpc) Close() error {
+	if nil != w.wsConn {
+		return w.wsConn.Close()
+	}
+	return nil
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type ClientWebSocket struct {
@@ -336,4 +343,8 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 
 func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
 	return h.rpc.Invoke(ctx, name, in, out)
+}
+
+func (s *ServerWebSocket) Close() error {
+	return s.rpc.Close()
 }
