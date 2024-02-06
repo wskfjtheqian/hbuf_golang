@@ -5,6 +5,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/mq"
 	"gopkg.in/yaml.v3"
 	"log"
 )
@@ -13,6 +14,7 @@ type Config struct {
 	Redis        *cache.Config  `yaml:"redis"`
 	DB           *db.Config     `yaml:"db"`
 	Etcd         *etc.Config    `yaml:"etcd"`
+	Nats         *mq.Config     `yaml:"etcd"`
 	Server       *manage.Config `yaml:"service"`
 	WorkerId     int64          `yaml:"worker_id"`
 	DataCenterId int64          `yaml:"data_center_id"`

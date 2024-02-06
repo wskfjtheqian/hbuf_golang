@@ -4,9 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="打印错误日志">
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="优化rpc Header">
+      <change afterPath="$PROJECT_DIR$/pkg/mq/config.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/mq/config.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/mq/nats.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -85,7 +90,7 @@
       <workItem from="1706516692619" duration="1204000" />
       <workItem from="1706694414742" duration="586000" />
       <workItem from="1706778261141" duration="15000" />
-      <workItem from="1707103412383" duration="3540000" />
+      <workItem from="1707103412383" duration="4622000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -175,7 +180,15 @@
       <option name="project" value="LOCAL" />
       <updated>1707123348697</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="优化rpc Header">
+      <option name="closed" value="true" />
+      <created>1707188889697</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1707188889697</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -197,7 +210,8 @@
     <MESSAGE value="添加辅助方法" />
     <MESSAGE value="修改websocket rpc 的并发的BUG" />
     <MESSAGE value="打印错误日志" />
-    <option name="LAST_COMMIT_MESSAGE" value="打印错误日志" />
+    <MESSAGE value="优化rpc Header" />
+    <option name="LAST_COMMIT_MESSAGE" value="优化rpc Header" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
