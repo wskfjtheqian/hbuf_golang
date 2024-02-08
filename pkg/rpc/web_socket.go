@@ -29,6 +29,8 @@ type rpcType int
 
 const Request = 0
 const Response = 1
+const Broadcast = 2
+const Heartbeat = 3
 const WebSocketConnectId = "WebSocketConnectId"
 
 type WebSocketData struct {
@@ -158,6 +160,10 @@ func (w *WebSocketRpc) Run() {
 			}
 			if data.Type == Request {
 				go w.onRequest(data)
+			} else if data.Type == Heartbeat {
+				w.write <- &WebSocketData{
+					Type: Heartbeat,
+				}
 			} else if data.Type == Response {
 				w.lock.RLock()
 				response, ok := w.response[data.Id]
