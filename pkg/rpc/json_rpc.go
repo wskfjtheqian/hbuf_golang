@@ -94,7 +94,7 @@ func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out 
 		return err
 	}
 
-	if value.FormData == nil {
+	if value.FormData != nil {
 		buffer, err = value.FormData(data)
 		if err != nil {
 			return err

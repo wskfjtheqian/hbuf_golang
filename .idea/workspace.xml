@@ -5,10 +5,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加Websocket 心跳检测">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/http.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -98,6 +94,7 @@
       <workItem from="1707298954687" duration="1326000" />
       <workItem from="1707356109067" duration="2508000" />
       <workItem from="1708219757893" duration="1780000" />
+      <workItem from="1708328836635" duration="834000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />

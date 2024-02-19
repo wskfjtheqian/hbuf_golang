@@ -151,8 +151,8 @@ func (w *WebSocketRpc) Run() {
 			if err != nil {
 				return
 			}
-			if data.Type == Request {
-				go w.onRequest(data)
+			if data.Type == Request || data.Type == Broadcast {
+				go w.onRequest(data, data.Type == Broadcast)
 			} else if data.Type == Heartbeat {
 				w.write <- &WebSocketData{
 					Type: Heartbeat,
@@ -236,7 +236,7 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 	return nil
 }
 
-func (w *WebSocketRpc) onRequest(data *WebSocketData) {
+func (w *WebSocketRpc) onRequest(data *WebSocketData, broadcast bool) {
 	response := &WebSocketData{
 		Id:     data.Id,
 		Type:   Response,
@@ -262,6 +262,14 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData) {
 
 	for key, _ := range data.Header {
 		SetHeader(ctx, key, data.Header.Get(key))
+	}
+
+	if broadcast {
+		err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response, true)
+		if err != nil {
+			erro.PrintStack(err)
+		}
+		return
 	}
 
 	err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response, false)
@@ -350,8 +358,8 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	s.rpc.Run()
 }
 
-func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
-	return h.rpc.Invoke(ctx, name, in, out, false)
+func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
+	return h.rpc.Invoke(ctx, name, in, out, broadcast)
 }
 
 func (s *ServerWebSocket) Close() error {
