@@ -26,7 +26,7 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 		return nil, utl.Wrap(err)
 	}
 	b := bytes.NewBuffer(nil)
-	err = s.client.Invoke(ctx, name, bytes.NewReader(buffer), b)
+	err = s.client.Invoke(ctx, name, bytes.NewReader(buffer), b, nil == nameInvoke.ToData)
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +37,9 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 	}
 	if res.Code != 0 {
 		return nil, utl.Wrap(&res)
+	}
+	if nil == nameInvoke.ToData {
+		return nil, nil
 	}
 	data, err := nameInvoke.ToData(res.Data)
 	if err != nil {
@@ -57,7 +60,7 @@ func NewServerJson(server *Server) *ServerJson {
 	}
 }
 
-func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	value, ok := s.server.Router()[name]
 	if !ok {
 		return &Result{Code: ht.StatusNotFound, Msg: "not found"}
@@ -90,13 +93,16 @@ func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out 
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
+
+	if value.FormData == nil {
+		buffer, err = value.FormData(data)
+		if err != nil {
+			return err
+		}
+	} else {
+		buffer = nil
 	}
-	buffer, err = value.FormData(data)
-	if err != nil {
-		return err
-	}
+
 	buffer, err = json.Marshal(Result{
 		Code: 0,
 		Msg:  "Ok",

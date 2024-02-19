@@ -4,8 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加Nats">
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加Websocket 心跳检测">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/http.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/http.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -29,6 +32,10 @@
       </GitPushTagMode>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$USER_HOME$/go/pkg/mod/go.etcd.io/etcd/client/v3@v3.5.4/concurrency/session.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/net/http/header.go" root0="SKIP_INSPECTION" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
@@ -89,7 +96,8 @@
       <workItem from="1707208254816" duration="588000" />
       <workItem from="1707270479813" duration="587000" />
       <workItem from="1707298954687" duration="1326000" />
-      <workItem from="1707356109067" duration="1155000" />
+      <workItem from="1707356109067" duration="2508000" />
+      <workItem from="1708219757893" duration="1780000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -211,7 +219,15 @@
       <option name="project" value="LOCAL" />
       <updated>1707204689080</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="添加Websocket 心跳检测">
+      <option name="closed" value="true" />
+      <created>1707360085345</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1707360085345</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -235,7 +251,8 @@
     <MESSAGE value="打印错误日志" />
     <MESSAGE value="优化rpc Header" />
     <MESSAGE value="添加Nats" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加Nats" />
+    <MESSAGE value="添加Websocket 心跳检测" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加Websocket 心跳检测" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

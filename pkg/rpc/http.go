@@ -25,7 +25,7 @@ func NewClientHttp(base string) *ClientHttp {
 	}
 }
 
-func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	request, err := ht.NewRequest("POST", utl.UrlJoin(h.base, name), in)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 			Request: r,
 		},
 	}
-	err := s.invoke.Invoke(ctx, r.URL.Path[len(s.pathPrefix):], r.Body, w)
+	err := s.invoke.Invoke(ctx, r.URL.Path[len(s.pathPrefix):], r.Body, w, false)
 	if err != nil {
 		if res, ok := err.(*Result); ok {
 			marshal, err := json.Marshal(res)

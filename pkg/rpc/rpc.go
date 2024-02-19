@@ -12,6 +12,13 @@ import (
 	"sync"
 )
 
+type rpcType int
+
+const Request = 0
+const Response = 1
+const Broadcast = 2
+const Heartbeat = 3
+
 type Context struct {
 	context.Context
 	done    chan struct{}
@@ -352,7 +359,7 @@ type Client interface {
 }
 
 type Invoke interface {
-	Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error
+	Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

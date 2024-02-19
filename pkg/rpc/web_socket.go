@@ -25,12 +25,6 @@ var upGrader = websocket.Upgrader{
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-type rpcType int
-
-const Request = 0
-const Response = 1
-const Broadcast = 2
-const Heartbeat = 3
 const WebSocketConnectId = "WebSocketConnectId"
 
 type WebSocketData struct {
@@ -152,7 +146,6 @@ func (w *WebSocketRpc) Run() {
 				erro.PrintStack(err)
 				break
 			}
-
 			var data *WebSocketData
 			err = json.Unmarshal(buffer, &data)
 			if err != nil {
@@ -195,7 +188,7 @@ func (w *WebSocketRpc) Run() {
 	}()
 }
 
-func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	data := &WebSocketData{
 		Type:   Request,
 		Path:   "/" + name,
@@ -225,6 +218,9 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 		close(response)
 	}()
 	w.write <- data
+	if broadcast {
+		return nil
+	}
 
 	timer := time.NewTimer(30 * time.Second)
 	defer timer.Stop()
@@ -268,7 +264,7 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData) {
 		SetHeader(ctx, key, data.Header.Get(key))
 	}
 
-	err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response)
+	err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response, false)
 	if err != nil {
 		if res, ok := err.(*Result); ok {
 			marshal, err := json.Marshal(res)
@@ -323,8 +319,8 @@ func NewClientWebSocket(base string, invoke Invoke) *ClientWebSocket {
 	return ret
 }
 
-func (h *ClientWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
-	return h.rpc.Invoke(ctx, name, in, out)
+func (h *ClientWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
+	return h.rpc.Invoke(ctx, name, in, out, broadcast)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -355,7 +351,7 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 }
 
 func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
-	return h.rpc.Invoke(ctx, name, in, out)
+	return h.rpc.Invoke(ctx, name, in, out, false)
 }
 
 func (s *ServerWebSocket) Close() error {
