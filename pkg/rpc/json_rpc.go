@@ -30,6 +30,9 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 	if err != nil {
 		return nil, err
 	}
+	if nil == nameInvoke.ToData {
+		return nil, nil
+	}
 	var res Result
 	err = json.Unmarshal(b.Bytes(), &res)
 	if err != nil {
@@ -37,9 +40,6 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 	}
 	if res.Code != 0 {
 		return nil, utl.Wrap(&res)
-	}
-	if nil == nameInvoke.ToData {
-		return nil, nil
 	}
 	data, err := nameInvoke.ToData(res.Data)
 	if err != nil {

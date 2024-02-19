@@ -190,9 +190,7 @@ func (w *WebSocketRpc) Run() {
 
 func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	data := &WebSocketData{
-		Type:   Request,
 		Path:   "/" + name,
-		Id:     atomic.AddInt64(&w.id, 1),
 		Header: ht.Header{},
 	}
 	buffer, err := io.ReadAll(in)
@@ -205,6 +203,14 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 			data.Header.Add(key, value)
 		}
 	}
+	if broadcast {
+		data.Type = Broadcast
+		w.write <- data
+		return nil
+	}
+
+	data.Type = Request
+	data.Id = atomic.AddInt64(&w.id, 1)
 
 	response := make(chan *WebSocketData, 1)
 	w.lock.Lock()
@@ -218,9 +224,6 @@ func (w *WebSocketRpc) Invoke(ctx context.Context, name string, in io.Reader, ou
 		close(response)
 	}()
 	w.write <- data
-	if broadcast {
-		return nil
-	}
 
 	timer := time.NewTimer(30 * time.Second)
 	defer timer.Stop()

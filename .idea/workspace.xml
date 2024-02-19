@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加Websocket 心跳检测">
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加broadcast 的支持">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -94,7 +96,7 @@
       <workItem from="1707298954687" duration="1326000" />
       <workItem from="1707356109067" duration="2508000" />
       <workItem from="1708219757893" duration="1780000" />
-      <workItem from="1708328836635" duration="834000" />
+      <workItem from="1708328836635" duration="1673000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -224,7 +226,15 @@
       <option name="project" value="LOCAL" />
       <updated>1707360085345</updated>
     </task>
-    <option name="localTasksCounter" value="17" />
+    <task id="LOCAL-00017" summary="添加broadcast 的支持">
+      <option name="closed" value="true" />
+      <created>1708329994751</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1708329994751</updated>
+    </task>
+    <option name="localTasksCounter" value="18" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -249,7 +259,8 @@
     <MESSAGE value="优化rpc Header" />
     <MESSAGE value="添加Nats" />
     <MESSAGE value="添加Websocket 心跳检测" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加Websocket 心跳检测" />
+    <MESSAGE value="添加broadcast 的支持" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加broadcast 的支持" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
