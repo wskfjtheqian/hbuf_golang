@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加broadcast 的支持">
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改websocket认证方式">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
@@ -96,7 +96,7 @@
       <workItem from="1707356109067" duration="2508000" />
       <workItem from="1708219757893" duration="1780000" />
       <workItem from="1708328836635" duration="4140000" />
-      <workItem from="1708407396885" duration="2733000" />
+      <workItem from="1708407396885" duration="3427000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -242,7 +242,15 @@
       <option name="project" value="LOCAL" />
       <updated>1708336931126</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="修改websocket认证方式">
+      <option name="closed" value="true" />
+      <created>1708486897504</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1708486897504</updated>
+    </task>
+    <option name="localTasksCounter" value="20" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -268,7 +276,8 @@
     <MESSAGE value="添加Nats" />
     <MESSAGE value="添加Websocket 心跳检测" />
     <MESSAGE value="添加broadcast 的支持" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加broadcast 的支持" />
+    <MESSAGE value="修改websocket认证方式" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改websocket认证方式" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

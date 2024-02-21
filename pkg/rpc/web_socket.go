@@ -296,9 +296,10 @@ func (h *ClientWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 
 type ServerWebSocket struct {
 	invoke  Invoke
-	Context func() context.Context
 	rpc     *WebSocketRpc
+	Context func() context.Context
 	OnAuth  func(request *ht.Request) bool
+	OnClose func()
 }
 
 func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
@@ -324,6 +325,7 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		_ = wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(4401, "authentication failed"))
 	}
 	s.rpc = newWebSocketRpc(wsConn, s.invoke, s.Context)
+	s.rpc.OnClose(s.OnClose)
 	s.rpc.Run()
 }
 
@@ -333,8 +335,4 @@ func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 
 func (s *ServerWebSocket) Close() error {
 	return s.rpc.Close()
-}
-
-func (s *ServerWebSocket) OnClose(f func()) {
-	s.rpc.OnClose(f)
 }
