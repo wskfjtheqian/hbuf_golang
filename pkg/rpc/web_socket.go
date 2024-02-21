@@ -28,12 +28,12 @@ var upGrader = websocket.Upgrader{
 const WebSocketConnectId = "WebSocketConnectId"
 
 type WebSocketData struct {
-	Type   rpcType   `json:"type"`
-	Header ht.Header `json:"header"`
-	Data   Raw       `json:"data"`
-	Id     int64     `json:"id"`
-	Path   string    `json:"path"`
-	Status int       `json:"status"`
+	Type   rpcType   `json:"type,omitempty"`
+	Header ht.Header `json:"header,omitempty"`
+	Data   Raw       `json:"data,omitempty"`
+	Id     int64     `json:"id,omitempty"`
+	Path   string    `json:"path,omitempty"`
+	Status int       `json:"status,omitempty"`
 }
 
 func (w *WebSocketData) Write(p []byte) (n int, err error) {
@@ -86,47 +86,6 @@ func (w *WebSocketRpc) WsConn() *websocket.Conn {
 	return w.wsConn
 }
 
-type webSocketWrite struct {
-	wsConn *websocket.Conn
-	id     int64
-	Status int64
-}
-
-func (r *webSocketWrite) Write(p []byte) (n int, err error) {
-	data := WebSocketData{
-		Type:   Response,
-		Id:     r.id,
-		Status: ht.StatusOK,
-		Data:   p,
-	}
-	buffer, err := json.Marshal(data)
-	if err != nil {
-		return 0, erro.Wrap(err)
-	}
-	err = r.wsConn.WriteMessage(websocket.BinaryMessage, buffer)
-	if err != nil {
-		return 0, erro.Wrap(err)
-	}
-	return len(buffer), nil
-}
-
-func (r *webSocketWrite) WriteStatus(status int) error {
-	data := WebSocketData{
-		Type:   Response,
-		Id:     r.id,
-		Status: status,
-	}
-	buffer, err := json.Marshal(data)
-	if err != nil {
-		return erro.Wrap(err)
-	}
-	err = r.wsConn.WriteMessage(websocket.BinaryMessage, buffer)
-	if err != nil {
-		return erro.Wrap(err)
-	}
-	return nil
-}
-
 func newWebSocketRpc(wsConn *websocket.Conn, invoke Invoke, ctx func() context.Context) *WebSocketRpc {
 	return &WebSocketRpc{
 		wsConn:   wsConn,
@@ -169,6 +128,7 @@ func (w *WebSocketRpc) Run() {
 		if w.closeCall != nil {
 			w.closeCall()
 		}
+
 	}()
 
 	go func() {
@@ -277,7 +237,8 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData, broadcast bool) {
 
 	err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response, false)
 	if err != nil {
-		if res, ok := err.(*Result); ok {
+		var res *Result
+		if errors.As(err, &res) {
 			marshal, err := json.Marshal(res)
 			if err != nil {
 				erro.PrintStack(err)
@@ -286,9 +247,6 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData, broadcast bool) {
 			_, err = response.Write(marshal)
 			w.write <- response
 			return
-		} else {
-			response.Status = ht.StatusInternalServerError
-			erro.PrintStack(err)
 		}
 	} else {
 		response.Status = ht.StatusOK
@@ -340,6 +298,7 @@ type ServerWebSocket struct {
 	invoke  Invoke
 	Context func() context.Context
 	rpc     *WebSocketRpc
+	OnAuth  func(request *ht.Request) bool
 }
 
 func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
@@ -349,6 +308,10 @@ func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
 }
 
 func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
+	auth := true
+	if nil != s.OnAuth {
+		auth = s.OnAuth(r)
+	}
 	if !websocket.IsWebSocketUpgrade(r) {
 		return
 	}
@@ -357,6 +320,9 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 		return
 	}
 
+	if !auth {
+		_ = wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(4401, "authentication failed"))
+	}
 	s.rpc = newWebSocketRpc(wsConn, s.invoke, s.Context)
 	s.rpc.Run()
 }
