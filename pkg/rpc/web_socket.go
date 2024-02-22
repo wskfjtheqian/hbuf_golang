@@ -323,6 +323,8 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 
 	if !auth {
 		_ = wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(4401, "authentication failed"))
+		_ = wsConn.Close()
+		return
 	}
 	s.rpc = newWebSocketRpc(wsConn, s.invoke, s.Context)
 	s.rpc.OnClose(s.OnClose)
