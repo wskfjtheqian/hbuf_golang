@@ -238,16 +238,18 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData, broadcast bool) {
 	err := w.invoke.Invoke(ctx, data.Path, bytes.NewBuffer(data.Data), response, false)
 	if err != nil {
 		var res *Result
-		if errors.As(err, &res) {
-			marshal, err := json.Marshal(res)
-			if err != nil {
-				erro.PrintStack(err)
-				return
+		if !errors.As(err, &res) {
+			res = &Result{
+				Code: 1,
+				Msg:  "Server error",
 			}
-			_, err = response.Write(marshal)
-			w.write <- response
+		}
+		marshal, err := json.Marshal(res)
+		if err != nil {
+			erro.PrintStack(err)
 			return
 		}
+		_, err = response.Write(marshal)
 	} else {
 		response.Status = ht.StatusOK
 	}
