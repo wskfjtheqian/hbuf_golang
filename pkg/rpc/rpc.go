@@ -18,6 +18,8 @@ const Request = 0
 const Response = 1
 const Broadcast = 2
 const Heartbeat = 3
+const AuthSuccess = 4
+const AuthFailure = 5
 
 type Context struct {
 	context.Context

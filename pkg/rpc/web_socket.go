@@ -9,6 +9,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"io"
 	ht "net/http"
+	"net/url"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -128,7 +129,6 @@ func (w *WebSocketRpc) Run() {
 		if w.closeCall != nil {
 			w.closeCall()
 		}
-
 	}()
 
 	go func() {
@@ -298,7 +298,7 @@ type ServerWebSocket struct {
 	invoke  Invoke
 	rpc     *WebSocketRpc
 	Context func() context.Context
-	OnAuth  func(request *ht.Request) bool
+	OnAuth  func(request *ht.Request, Query url.Values) bool
 	OnClose func()
 }
 
@@ -309,20 +309,41 @@ func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
 }
 
 func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
+	protocol := r.Header.Get("Sec-Websocket-Protocol")
 	auth := true
-	if nil != s.OnAuth {
-		auth = s.OnAuth(r)
+	var responseHeader ht.Header
+	if len(protocol) > 0 {
+		responseHeader = ht.Header{"Sec-Websocket-Protocol": {protocol}}
+		if nil != s.OnAuth {
+			unescape, err := url.QueryUnescape(protocol)
+			if err == nil {
+				query, err := url.ParseQuery(unescape)
+				if err == nil {
+					auth = s.OnAuth(r, query)
+				}
+			}
+		}
 	}
 	if !websocket.IsWebSocketUpgrade(r) {
 		return
 	}
-	wsConn, err := upGrader.Upgrade(w, r, nil)
+	wsConn, err := upGrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		return
 	}
 
+	data := &WebSocketData{}
+	if auth {
+		data.Type = AuthSuccess
+	} else {
+		data.Type = AuthFailure
+	}
+	marshal, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	_ = wsConn.WriteMessage(websocket.BinaryMessage, marshal)
 	if !auth {
-		_ = wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(4401, "authentication failed"))
 		_ = wsConn.Close()
 		return
 	}
