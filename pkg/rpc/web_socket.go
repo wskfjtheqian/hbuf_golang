@@ -239,6 +239,7 @@ func (w *WebSocketRpc) onRequest(data *WebSocketData, broadcast bool) {
 	if err != nil {
 		var res *Result
 		if !errors.As(err, &res) {
+			erro.PrintStack(err)
 			res = &Result{
 				Code: 1,
 				Msg:  "Server error",
