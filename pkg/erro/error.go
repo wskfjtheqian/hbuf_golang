@@ -27,7 +27,7 @@ func Wrap(err error) *Error {
 }
 
 func (e *Error) PrintStack() {
-	os.Stderr.WriteString(e.Error())
+	_, _ = os.Stderr.WriteString(e.Error())
 	_, _ = os.Stderr.Write(e.stack)
 }
 
@@ -40,9 +40,10 @@ func IsError(err error) bool {
 }
 
 func PrintStack(e error) {
-	if err, ok := e.(*Error); ok {
+	var err *Error
+	if errors.As(e, &err) {
 		err.PrintStack()
 	} else {
-		os.Stderr.WriteString(e.Error())
+		_, _ = os.Stderr.WriteString(e.Error() + "\n")
 	}
 }
