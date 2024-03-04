@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改错误处理的BUG" />
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改错误处理的BUG">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -96,7 +98,9 @@
       <workItem from="1708407396885" duration="4029000" />
       <workItem from="1708585076306" duration="10055000" />
       <workItem from="1708926883839" duration="590000" />
-      <workItem from="1709004084245" duration="1284000" />
+      <workItem from="1709004084245" duration="2514000" />
+      <workItem from="1709109446545" duration="587000" />
+      <workItem from="1709172382944" duration="2084000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -298,7 +302,15 @@
       <option name="project" value="LOCAL" />
       <updated>1709014363984</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="修改错误处理的BUG">
+      <option name="closed" value="true" />
+      <created>1709014412102</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1709014412102</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
