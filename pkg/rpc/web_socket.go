@@ -360,5 +360,8 @@ func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 }
 
 func (s *ServerWebSocket) Close() error {
+	if nil == s.rpc {
+		return nil
+	}
 	return s.rpc.Close()
 }

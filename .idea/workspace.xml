@@ -6,7 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改错误处理的BUG">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/erro/error.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/erro/error.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/cache/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/utils.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -101,7 +102,10 @@
       <workItem from="1708926883839" duration="590000" />
       <workItem from="1709004084245" duration="2514000" />
       <workItem from="1709109446545" duration="587000" />
-      <workItem from="1709172382944" duration="3075000" />
+      <workItem from="1709172382944" duration="6279000" />
+      <workItem from="1709883806535" duration="587000" />
+      <workItem from="1709889003133" duration="581000" />
+      <workItem from="1709889947665" duration="2384000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -319,7 +323,15 @@
       <option name="project" value="LOCAL" />
       <updated>1709516440849</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="修改错误处理的BUG">
+      <option name="closed" value="true" />
+      <created>1709519589693</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1709519589693</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
