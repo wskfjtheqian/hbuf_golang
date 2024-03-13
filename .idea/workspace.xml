@@ -4,23 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加Glog日记库">
-      <change afterPath="$PROJECT_DIR$/pkg/hlog/hlog.go" afterDir="false" />
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加 hlog日志库">
+      <change afterPath="$PROJECT_DIR$/pkg/hlog/file.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/etcd_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/etcd_config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/file_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/file_config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/sql.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/mq/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/mq/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/mq/nats.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/mq/nats.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/erro/error.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/erro/error.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hlog/hlog.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hlog/log.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -135,7 +123,7 @@
       <workItem from="1709883806535" duration="587000" />
       <workItem from="1709889003133" duration="581000" />
       <workItem from="1709889947665" duration="10381000" />
-      <workItem from="1710311631700" duration="7408000" />
+      <workItem from="1710311631700" duration="16598000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -385,7 +373,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710310628035</updated>
     </task>
-    <option name="localTasksCounter" value="32" />
+    <task id="LOCAL-00032" summary="添加 hlog日志库">
+      <option name="closed" value="true" />
+      <created>1710319607014</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1710319607014</updated>
+    </task>
+    <option name="localTasksCounter" value="33" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -414,7 +410,8 @@
     <MESSAGE value="修改websocket认证方式" />
     <MESSAGE value="修改错误处理的BUG" />
     <MESSAGE value="添加Glog日记库" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加Glog日记库" />
+    <MESSAGE value="添加 hlog日志库" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加 hlog日志库" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

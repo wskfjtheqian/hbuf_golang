@@ -2,6 +2,7 @@ package erro
 
 import (
 	"errors"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"os"
 	"reflect"
 	"runtime/debug"
@@ -44,6 +45,6 @@ func PrintStack(e error) {
 	if errors.As(e, &err) {
 		err.PrintStack()
 	} else {
-		_, _ = os.Stderr.WriteString(e.Error() + "\n")
+		hlog.Errorln(e.Error())
 	}
 }

@@ -2,6 +2,7 @@ package hlog
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -46,17 +47,26 @@ const (
 )
 
 type Logger struct {
-	outMu sync.Mutex
+	lock sync.Mutex
 
 	prefix    atomic.Pointer[string] // prefix on each line to identify the logger (but see Lmsgprefix)
 	flag      atomic.Int32           // properties
 	isDiscard atomic.Bool
+
+	isOut    atomic.Bool
+	outLevel atomic.Int32
+	out      map[Level]SyncWriter
 }
 
 func NewLogger(prefix string, flag int) *Logger {
-	l := new(Logger)
+	l := &Logger{
+		out: map[Level]SyncWriter{},
+	}
 	l.SetPrefix(prefix)
 	l.SetFlags(flag)
+	l.out[10000000] = newConsoleWriter(os.Stderr)
+
+	go l.flushDaemon()
 	return l
 }
 
@@ -69,33 +79,37 @@ func (l *Logger) SetFlags(flag int) {
 }
 
 func (l *Logger) Flush() {
-
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	for _, writer := range l.out {
+		_ = writer.Flush()
+	}
 }
 func (l *Logger) Debugln(v ...any) {
-	l.output(0, 2, DEBUG, func(b []byte) []byte {
+	_ = l.output(0, 2, DEBUG, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 func (l *Logger) Infoln(v ...any) {
-	l.output(0, 2, INFO, func(b []byte) []byte {
+	_ = l.output(0, 2, INFO, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func (l *Logger) Warnln(v ...any) {
-	l.output(0, 2, WARN, func(b []byte) []byte {
+	_ = l.output(0, 2, WARN, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func (l *Logger) Errorln(v ...any) {
-	l.output(0, 2, ERROR, func(b []byte) []byte {
+	_ = l.output(0, 2, ERROR, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func (l *Logger) Exitln(v ...any) {
-	l.output(0, 2, EXIT, func(b []byte) []byte {
+	_ = l.output(0, 2, EXIT, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
@@ -156,9 +170,19 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 }
 
 func (l *Logger) writer(level Level, data []byte) error {
-	l.outMu.Lock()
-	defer l.outMu.Unlock()
-	print(string(data))
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	if level < Level(l.outLevel.Load()) {
+		return nil
+	}
+	if _, ok := l.out[level]; !ok {
+		l.out[level] = newFileWriter(level)
+	}
+
+	for _, writer := range l.out {
+		_, _ = writer.Write(level, data)
+	}
 	return nil
 }
 
@@ -171,6 +195,19 @@ func (l *Logger) Prefix() string {
 
 func (l *Logger) Flags() int {
 	return int(l.flag.Load())
+}
+
+func (l *Logger) flushDaemon() {
+	tick := time.NewTicker(30 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-tick.C:
+			l.Flush()
+			//case sev := <-s.flushChan:
+			//	s.flush(sev)
+		}
+	}
 }
 
 var bufferPool = sync.Pool{New: func() any { return new([]byte) }}
@@ -289,35 +326,37 @@ var std = NewLogger("", LstdFlags)
 func SetFlags(flag int) {
 	std.SetFlags(flag)
 }
+
 func SetPrefix(prefix string) {
 	std.SetPrefix(prefix)
 }
+
 func Debugln(v ...any) {
-	std.output(0, 2, DEBUG, func(b []byte) []byte {
+	_ = std.output(0, 2, DEBUG, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func Infoln(v ...any) {
-	std.output(0, 2, INFO, func(b []byte) []byte {
+	_ = std.output(0, 2, INFO, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func Warnln(v ...any) {
-	std.output(0, 2, WARN, func(b []byte) []byte {
+	_ = std.output(0, 2, WARN, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func Errorln(v ...any) {
-	std.output(0, 2, ERROR, func(b []byte) []byte {
+	_ = std.output(0, 2, ERROR, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
 
 func Exitln(v ...any) {
-	std.output(0, 2, EXIT, func(b []byte) []byte {
+	_ = std.output(0, 2, EXIT, func(b []byte) []byte {
 		return fmt.Appendln(b, v...)
 	})
 }
