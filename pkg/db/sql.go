@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"github.com/golang/glog"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
-	"log"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -175,7 +175,7 @@ func printLog(now, count int64, sql string) {
 	} else {
 		t = utl.Red(t)
 	}
-	_ = log.Output(3, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
+	glog.InfoDepth(3, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
 }
 
 func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {

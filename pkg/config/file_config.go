@@ -2,9 +2,9 @@ package config
 
 import (
 	"github.com/fsnotify/fsnotify"
+	"github.com/golang/glog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"io/ioutil"
-	"log"
 )
 
 type fileConfig struct {
@@ -26,10 +26,10 @@ func (c *fileConfig) CheckConfig() int {
 
 func (c *fileConfig) OnChange(call func(value string)) error {
 	if 0 == len(c.value) {
-		log.Println("配置文件路径:", c.path)
+		glog.Infoln("配置文件路径:", c.path)
 		buffer, err := ioutil.ReadFile(c.path)
 		if err != nil {
-			log.Println("读取配置文件失败:", c.path)
+			glog.Infoln("读取配置文件失败:", c.path)
 		}
 		c.value = string(buffer)
 		if nil != call {
@@ -38,7 +38,7 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 				erro.PrintStack(err)
 				return err
 			}
-			log.Println("读取配置文件：" + config)
+			glog.Infoln("读取配置文件：" + config)
 			call(config)
 		}
 	}
@@ -49,7 +49,7 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 func NewFileConfig(hostname string, path string, val map[string]any) Watch {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		glog.Errorln(err)
 	}
 	return &fileConfig{
 		watcher:  watcher,
@@ -71,10 +71,10 @@ func (c *fileConfig) Watch() error {
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					log.Println("配置文件路径:", c.path)
+					glog.Infoln("配置文件路径:", c.path)
 					buffer, err := ioutil.ReadFile(c.path)
 					if err != nil {
-						log.Println("读取配置文件失败:", c.path)
+						glog.Infoln("读取配置文件失败:", c.path)
 					}
 					value := string(buffer)
 					if value != c.value && nil != c.onChange {
@@ -83,7 +83,7 @@ func (c *fileConfig) Watch() error {
 							erro.PrintStack(err)
 							return
 						}
-						log.Println("配置文件改变：" + config)
+						glog.Infoln("配置文件改变：" + config)
 						c.onChange(config)
 					}
 					c.value = value
@@ -92,7 +92,7 @@ func (c *fileConfig) Watch() error {
 				if !ok {
 					return
 				}
-				log.Println("error:", err)
+				glog.Infoln("error:", err)
 			}
 		}
 	}()

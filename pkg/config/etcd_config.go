@@ -2,9 +2,9 @@ package config
 
 import (
 	"context"
+	"github.com/golang/glog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"log"
 	"strings"
 )
 
@@ -33,7 +33,7 @@ func (c *etcdConfig) OnChange(call func(value string)) error {
 				erro.PrintStack(err)
 				return err
 			}
-			log.Println("读取配置文件：" + config)
+			glog.Infoln("读取配置文件：" + config)
 			call(config)
 		}
 	}
@@ -52,7 +52,7 @@ func NewEtcdConfig(hostname string, endpoints string, val map[string]any) Watch 
 	}
 	client, err := clientv3.New(etc)
 	if err != nil {
-		log.Fatalln("Etcd服务器连接失败，请检查配置是否正确", err)
+		glog.Errorln("Etcd服务器连接失败，请检查配置是否正确", err)
 	}
 	ret.client = client
 	return ret
@@ -73,13 +73,13 @@ func (c *etcdConfig) Watch() error {
 				value = string(ev.Kv.Value)
 			}
 			if value != c.value && nil != c.onChange {
-				log.Println("配置文件改变：" + value)
+				glog.Infoln("配置文件改变：" + value)
 				config, err := generateConfig(value, c.keyVal)
 				if err != nil {
 					erro.PrintStack(err)
 					return err
 				}
-				log.Println("配置文件改变：" + config)
+				glog.Infoln("配置文件改变：" + config)
 				c.onChange(config)
 			}
 			c.value = value

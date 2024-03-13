@@ -3,10 +3,10 @@ package mq
 import (
 	"context"
 	"github.com/garyburd/redigo/redis"
+	"github.com/golang/glog"
 	"github.com/nats-io/nats.go"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
-	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -97,7 +97,7 @@ func (d *Nats) SetConfig(config *Config) {
 	}
 	client, err := nats.Connect(strings.Join(config.Endpoints, ","), c...)
 	if err != nil {
-		log.Println("Nats服务器连接失败，请检查配置是否正确", err)
+		glog.Errorln("Nats服务器连接失败，请检查配置是否正确", err)
 	}
 	d.client = client
 }
