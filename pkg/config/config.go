@@ -3,8 +3,8 @@ package config
 import (
 	"bytes"
 	"flag"
-	"github.com/golang/glog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"html/template"
 )
 
@@ -27,10 +27,9 @@ func NewWatch() Watch {
 	var endpoints string
 	flag.StringVar(&endpoints, "e", "", "Etcd endpoints")
 	flag.Parse()
-	glog.Flush()
 
 	if 0 == len(hostname) {
-		glog.Exitln("请输入 Host name")
+		hlog.Exitln("请输入 Host name")
 	}
 
 	keyVal := map[string]any{
@@ -39,15 +38,15 @@ func NewWatch() Watch {
 
 	var c Watch
 	if 0 != len(endpoints) {
-		glog.Infoln("Host name:" + hostname)
-		glog.Infoln("Etcd endpoints:" + endpoints)
+		hlog.Infoln("Host name:" + hostname)
+		hlog.Infoln("Etcd endpoints:" + endpoints)
 		c = NewEtcdConfig(hostname, endpoints, keyVal)
 	} else if 0 != len(path) {
-		glog.Infoln("Host name:" + hostname)
-		glog.Infoln("Config.yaml file path:" + path)
+		hlog.Infoln("Host name:" + hostname)
+		hlog.Infoln("Config.yaml file path:" + path)
 		c = NewFileConfig(hostname, path, keyVal)
 	} else {
-		glog.Errorln("请输入 config.yaml file path or etcd endpoints")
+		hlog.Errorln("请输入 config.yaml file path or etcd endpoints")
 	}
 	return c
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/golang/glog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync"
@@ -116,7 +116,7 @@ func (d *Database) SetConfig(config *Config) {
 
 	db, err := sql.Open(*config.Type, *config.Username+":"+*config.Password+"@"+*config.URL+"&parseTime=true&clientFoundRows=true")
 	if err != nil {
-		glog.Exitln("数据库链接失败，请检查配置是否正确", err)
+		hlog.Exitln("数据库链接失败，请检查配置是否正确", err)
 	}
 	maxIdle := 8
 	if nil != config.MaxIdle {

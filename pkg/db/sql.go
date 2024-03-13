@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/golang/glog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
 	"reflect"
 	"regexp"
@@ -175,7 +175,7 @@ func printLog(now, count int64, sql string) {
 	} else {
 		t = utl.Red(t)
 	}
-	glog.InfoDepth(3, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
+	_ = hlog.Output(3, hlog.INFO, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
 }
 
 func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {

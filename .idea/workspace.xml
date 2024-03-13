@@ -4,7 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="修改错误处理的BUG">
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加Glog日记库">
+      <change afterPath="$PROJECT_DIR$/pkg/hlog/hlog.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
@@ -44,6 +45,11 @@
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog_file.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog_flags.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog_test.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/internal/logsink/logsink.go" root0="SKIP_INSPECTION" />
     <setting file="file://$USER_HOME$/go/pkg/mod/go.etcd.io/etcd/client/v3@v3.5.4/concurrency/session.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/net/http/header.go" root0="SKIP_INSPECTION" />
   </component>
@@ -84,6 +90,17 @@
       <recent name="E:\dev\3.hbuf\hbuf_golang\pkg\utils" />
     </key>
   </component>
+  <component name="RunManager">
+    <configuration name="go build hlog.go" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/pkg/hlog/hlog.go" />
+      <method v="2" />
+    </configuration>
+  </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
@@ -117,7 +134,8 @@
       <workItem from="1709172382944" duration="6279000" />
       <workItem from="1709883806535" duration="587000" />
       <workItem from="1709889003133" duration="581000" />
-      <workItem from="1709889947665" duration="9265000" />
+      <workItem from="1709889947665" duration="10381000" />
+      <workItem from="1710311631700" duration="7408000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -359,7 +377,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710136353001</updated>
     </task>
-    <option name="localTasksCounter" value="31" />
+    <task id="LOCAL-00031" summary="添加Glog日记库">
+      <option name="closed" value="true" />
+      <created>1710310628035</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1710310628035</updated>
+    </task>
+    <option name="localTasksCounter" value="32" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -387,7 +413,8 @@
     <MESSAGE value="添加broadcast 的支持" />
     <MESSAGE value="修改websocket认证方式" />
     <MESSAGE value="修改错误处理的BUG" />
-    <option name="LAST_COMMIT_MESSAGE" value="修改错误处理的BUG" />
+    <MESSAGE value="添加Glog日记库" />
+    <option name="LAST_COMMIT_MESSAGE" value="添加Glog日记库" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

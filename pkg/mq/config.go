@@ -2,7 +2,7 @@ package mq
 
 import (
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/golang/glog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"gopkg.in/yaml.v3"
 	"time"
 )
@@ -33,7 +33,7 @@ func (con *Config) CheckConfig() int {
 	errCount := 0
 	if nil == con.Endpoints || 0 == len(con.Endpoints) {
 		errCount++
-		glog.Errorln("未找到Nats 连接地址")
+		hlog.Errorln("未找到Nats 连接地址")
 	}
 	return errCount
 }
