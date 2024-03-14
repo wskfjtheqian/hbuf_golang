@@ -60,7 +60,7 @@ type Logger struct {
 	outLevel  atomic.Int32
 	out       map[Level]SyncWriter
 	outTarget atomic.Pointer[func(level Level) SyncWriter]
-	simple    func(v1 Level, v2 Level) bool
+	compare   func(v1 Level, v2 Level) bool
 }
 
 func NewLogger(prefix string, flag int) *Logger {
@@ -188,7 +188,9 @@ func (l *Logger) writer(level Level, data []byte) error {
 	if _, ok := l.out[level]; !ok {
 		call := l.outTarget.Load()
 		if nil != call {
-			l.out[level] = (*call)(level)
+			temp := (*call)(level)
+			temp.Compare(l.compare)
+			l.out[level] = temp
 		}
 	}
 
@@ -236,16 +238,16 @@ func (l *Logger) setOutError(err bool) {
 
 func (l *Logger) setSimple(simple bool) {
 	if simple {
-		l.simple = func(v1 Level, v2 Level) bool {
+		l.compare = func(v1 Level, v2 Level) bool {
 			return v1 == v2
 		}
 	} else {
-		l.simple = func(v1 Level, v2 Level) bool {
+		l.compare = func(v1 Level, v2 Level) bool {
 			return v1 < v2
 		}
 	}
 	for _, val := range l.out {
-		val.Compare(l.simple)
+		val.Compare(l.compare)
 	}
 }
 
