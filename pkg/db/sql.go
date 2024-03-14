@@ -167,6 +167,12 @@ func (s *Sql) Exec(ctx context.Context) (int64, int64, error) {
 	return count, id, nil
 }
 
+var LogSQL = hlog.INFO + 100
+
+func init() {
+	hlog.SetLevelName(LogSQL, "SQL")
+}
+
 func printLog(now, count int64, sql string) {
 	now = time.Now().UnixMilli() - now
 	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "s]"
@@ -175,7 +181,7 @@ func printLog(now, count int64, sql string) {
 	} else {
 		t = utl.Red(t)
 	}
-	_ = hlog.Output(3, hlog.INFO, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
+	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
 }
 
 func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {

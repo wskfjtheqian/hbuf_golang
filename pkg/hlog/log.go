@@ -16,10 +16,33 @@ import (
 type Level int
 
 func (l Level) String() string {
-	if text, ok := LevelName[l]; ok {
+	if text, ok := (*levelName.Load())[l]; ok {
 		return text
 	}
 	return strconv.Itoa(int(l))
+}
+
+func SetLevelName(level Level, name string) {
+	temp := map[Level]string{}
+	m := (*levelName.Load())
+	for key, val := range m {
+		if val != name {
+			temp[key] = val
+		}
+	}
+	if level == DEBUG {
+		name = "DEBUG"
+	} else if level == INFO {
+		name = "INFO"
+	} else if level == WARN {
+		name = "WARN"
+	} else if level == ERROR {
+		name = "ERROR"
+	} else if level == EXIT {
+		name = "EXIT"
+	}
+	temp[level] = name
+	levelName.Store(&temp)
 }
 
 const (
@@ -30,13 +53,7 @@ const (
 	EXIT  Level = 40000
 )
 
-var LevelName map[Level]string = map[Level]string{
-	INFO:  "INFO",
-	WARN:  "WARN",
-	ERROR: "ERROR",
-	EXIT:  "EXIT",
-	DEBUG: "DEBUG",
-}
+var levelName atomic.Pointer[map[Level]string]
 
 const (
 	Ldate         = 1 << iota     // the date in the local time zone: 2009/01/23
@@ -359,6 +376,14 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 var std = NewLogger("", LstdFlags)
 
 func init() {
+	levelName.Store(&map[Level]string{
+		INFO:  "INFO",
+		WARN:  "WARN",
+		ERROR: "ERROR",
+		EXIT:  "EXIT",
+		DEBUG: "DEBUG",
+	})
+
 	flag.Func("log_out", "日志输入目标,支持目录和Http上传地址", func(s string) error {
 		if strings.Index(s, "http://") == 0 || strings.Index(s, "https://") == 0 {
 			std.SetOutTarget(func(level Level) SyncWriter {
