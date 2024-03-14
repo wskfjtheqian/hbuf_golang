@@ -19,16 +19,14 @@ type Value interface {
 	CheckConfig() int
 }
 
-func NewWatch() Watch {
-	var hostname string
-	flag.StringVar(&hostname, "h", "", "Host name")
-	var path string
-	flag.StringVar(&path, "c", "", "Config.yaml file path")
-	var endpoints string
-	flag.StringVar(&endpoints, "e", "", "Etcd endpoints")
-	flag.Parse()
+var (
+	hostname  = flag.String("h", "", "Host name")
+	path      = flag.String("c", "", "Config.yaml file path")
+	endpoints = flag.String("e", "", "Etcd endpoints")
+)
 
-	if 0 == len(hostname) {
+func NewWatch() Watch {
+	if 0 == len(*hostname) {
 		hlog.Exitln("请输入 Host name")
 	}
 
@@ -37,14 +35,14 @@ func NewWatch() Watch {
 	}
 
 	var c Watch
-	if 0 != len(endpoints) {
-		hlog.Infoln("Host name:" + hostname)
-		hlog.Infoln("Etcd endpoints:" + endpoints)
-		c = NewEtcdConfig(hostname, endpoints, keyVal)
-	} else if 0 != len(path) {
-		hlog.Infoln("Host name:" + hostname)
-		hlog.Infoln("Config.yaml file path:" + path)
-		c = NewFileConfig(hostname, path, keyVal)
+	if 0 != len(*endpoints) {
+		hlog.Infoln("Host name:" + *hostname)
+		hlog.Infoln("Etcd endpoints:" + *endpoints)
+		c = NewEtcdConfig(*hostname, *endpoints, keyVal)
+	} else if 0 != len(*path) {
+		hlog.Infoln("Host name:" + *hostname)
+		hlog.Infoln("Config.yaml file path:" + *path)
+		c = NewFileConfig(*hostname, *path, keyVal)
 	} else {
 		hlog.Errorln("请输入 config.yaml file path or etcd endpoints")
 	}

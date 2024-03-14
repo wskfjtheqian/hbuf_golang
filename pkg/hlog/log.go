@@ -1,10 +1,13 @@
 package hlog
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,9 +56,11 @@ type Logger struct {
 	flag      atomic.Int32           // properties
 	isDiscard atomic.Bool
 
-	isOut    atomic.Bool
-	outLevel atomic.Int32
-	out      map[Level]SyncWriter
+	outErr    atomic.Bool
+	outLevel  atomic.Int32
+	out       map[Level]SyncWriter
+	outTarget atomic.Pointer[func(level Level) SyncWriter]
+	simple    func(v1 Level, v2 Level) bool
 }
 
 func NewLogger(prefix string, flag int) *Logger {
@@ -64,8 +69,9 @@ func NewLogger(prefix string, flag int) *Logger {
 	}
 	l.SetPrefix(prefix)
 	l.SetFlags(flag)
-	l.out[10000000] = newConsoleWriter(os.Stderr)
-
+	l.SetOutLevel(ERROR)
+	l.setSimple(false)
+	l.setOutError(true)
 	go l.flushDaemon()
 	return l
 }
@@ -172,12 +178,18 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 func (l *Logger) writer(level Level, data []byte) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+	if l.outErr.Load() {
+		os.Stderr.Write(data)
+	}
 
 	if level < Level(l.outLevel.Load()) {
 		return nil
 	}
 	if _, ok := l.out[level]; !ok {
-		l.out[level] = newFileWriter(level)
+		call := l.outTarget.Load()
+		if nil != call {
+			l.out[level] = (*call)(level)
+		}
 	}
 
 	for _, writer := range l.out {
@@ -210,6 +222,33 @@ func (l *Logger) flushDaemon() {
 	}
 }
 
+func (l *Logger) SetOutLevel(level Level) {
+	l.outLevel.Store(int32(level))
+}
+
+func (l *Logger) SetOutTarget(target func(level Level) SyncWriter) {
+	l.outTarget.Store(&target)
+}
+
+func (l *Logger) setOutError(err bool) {
+	l.outErr.Store(err)
+}
+
+func (l *Logger) setSimple(simple bool) {
+	if simple {
+		l.simple = func(v1 Level, v2 Level) bool {
+			return v1 == v2
+		}
+	} else {
+		l.simple = func(v1 Level, v2 Level) bool {
+			return v1 < v2
+		}
+	}
+	for _, val := range l.out {
+		val.Compare(l.simple)
+	}
+}
+
 var bufferPool = sync.Pool{New: func() any { return new([]byte) }}
 
 func getBuffer() *[]byte {
@@ -219,12 +258,6 @@ func getBuffer() *[]byte {
 }
 
 func putBuffer(p *[]byte) {
-	// Proper usage of a sync.Pool requires each entry to have approximately
-	// the same memory cost. To obtain this property when the stored type
-	// contains a variably-sized buffer, we add a hard limit on the maximum buffer
-	// to place back in the pool.
-	//
-	// See https://go.dev/issue/23199
 	if cap(*p) > 64<<10 {
 		*p = nil
 	}
@@ -323,6 +356,44 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 
 var std = NewLogger("", LstdFlags)
 
+func init() {
+	flag.Func("log_out", "日志输入目标,支持目录和Http上传地址", func(s string) error {
+		if strings.Index(s, "http://") == 0 || strings.Index(s, "https://") == 0 {
+			std.SetOutTarget(func(level Level) SyncWriter {
+				return newHttpWriter(s, level)
+			})
+		} else if len(s) > 0 {
+			stat, err := os.Stat(s)
+			if err != nil {
+				return err
+			}
+			if !stat.IsDir() {
+				return errors.New(s + " Not a directory")
+			}
+			std.SetOutTarget(func(level Level) SyncWriter {
+				return newFileWriter(s, level)
+			})
+		}
+		return nil
+	})
+	flag.Func("log_level", "日志输出等级,DEBUG(00000)、INFO(10000)、WARN(20000)、ERROR(30000)[默认]、EXIT(40000)", func(s string) error {
+		atoi, err := strconv.Atoi(s)
+		if err != nil {
+			return err
+		}
+		std.SetOutLevel(Level(atoi))
+		return nil
+	})
+	flag.BoolFunc("log_simple", "开启简单模式，默认false。简单模式日志文件中只有当前第级的日志，复杂模式日志文件中会包含低等级的日志", func(s string) error {
+		std.setSimple("true" == s)
+		return nil
+	})
+	flag.BoolFunc("log_err", "是否输出日志到控制台,默认为 true", func(s string) error {
+		std.setOutError("true" == s)
+		return nil
+	})
+}
+
 func SetFlags(flag int) {
 	std.SetFlags(flag)
 }
@@ -370,4 +441,14 @@ func Output(calldepth int, level Level, s string) error {
 
 func Flush() {
 	std.Flush()
+}
+
+type SyncWriter interface {
+	Flush() error
+
+	Sync() error
+
+	Write(level Level, p []byte) (n int, err error)
+
+	Compare(call func(v1 Level, v2 Level) bool)
 }

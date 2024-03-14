@@ -3,52 +3,30 @@ package hlog
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 var MaxSize uint64 = 1024 * 1024 * 1800
-
-type SyncWriter interface {
-	Flush() error
-	Sync() error
-
-	Write(level Level, p []byte) (n int, err error)
-}
-
-type consoleWriter struct {
-	out io.Writer
-}
-
-func newConsoleWriter(out io.Writer) *consoleWriter {
-	return &consoleWriter{
-		out: out,
-	}
-}
-
-func (c *consoleWriter) Flush() error {
-	return nil
-}
-
-func (c *consoleWriter) Sync() error {
-	return nil
-}
-
-func (c *consoleWriter) Write(level Level, p []byte) (n int, err error) {
-	return c.out.Write(p)
-}
 
 type fileWriter struct {
 	file   *os.File
 	out    *bufio.Writer
 	nbytes uint64
 	level  Level
+	dir    string
+	call   func(v1 Level, v2 Level) bool
 }
 
-func newFileWriter(level Level) *fileWriter {
-	ret := &fileWriter{level: level}
+func (f *fileWriter) Compare(call func(v1 Level, v2 Level) bool) {
+	f.call = call
+}
+
+func newFileWriter(dir string, level Level) *fileWriter {
+	ret := &fileWriter{level: level, dir: dir}
 	ret.rotateFile(time.Now())
 	return ret
 }
@@ -62,7 +40,7 @@ func (f *fileWriter) Sync() error {
 }
 
 func (f *fileWriter) Write(level Level, p []byte) (n int, err error) {
-	if level < f.level {
+	if f.call(level, f.level) {
 		return 0, err
 	}
 	if f.nbytes+uint64(len(p)) >= MaxSize {
@@ -81,7 +59,7 @@ const bufferSize = 256 * 1024
 // rotateFile closes the syncBuffer's file and starts a new one.
 func (f *fileWriter) rotateFile(now time.Time) error {
 	var err error
-	file, _, err := create(f.level.String(), now)
+	file, _, err := create(f.dir, f.level.String(), now)
 	if f.file != nil {
 		f.Flush()
 		f.file.Close()
@@ -96,7 +74,7 @@ func (f *fileWriter) rotateFile(now time.Time) error {
 	return err
 }
 
-func create(tag string, now time.Time) (*os.File, string, error) {
+func create(dir, tag string, now time.Time) (*os.File, string, error) {
 	//onceLogDirs.Do(createLogDirs)
 	//if len(logDirs) == 0 {
 	//	return nil, "", errors.New("log: no log dirs")
@@ -120,23 +98,21 @@ func create(tag string, now time.Time) (*os.File, string, error) {
 	//	lastErr = err
 	//}
 
-	dir := os.TempDir()
 	name, link := logName(tag, now)
-	dir = filepath.Join(dir, name) + ".log"
+	dir = filepath.Join(dir, name)
 	file, err := os.Create(dir)
 	if err != nil {
 		return nil, "", err
 	}
-
 	return file, link, nil
 }
 
 // the name for the symlink for tag.
 func logName(tag string, t time.Time) (name, link string) {
-	name = fmt.Sprintf("%s.%s.%s.log.%s.%04d%02d%02d-%02d%02d%02d.%d",
-		"program",
-		"host",
-		"userName",
+	name = fmt.Sprintf("%s.%s.%s.%s.%04d%02d%02d-%02d%02d%02d.%d.log",
+		program,
+		host,
+		userName,
 		tag,
 		t.Year(),
 		t.Month(),
@@ -144,6 +120,43 @@ func logName(tag string, t time.Time) (name, link string) {
 		t.Hour(),
 		t.Minute(),
 		t.Second(),
-		"pid")
-	return name, "program" + "." + tag
+		pid)
+	return name, program + "." + tag
+}
+
+var (
+	pid      = os.Getpid()
+	program  = filepath.Base(os.Args[0])
+	host     = "unknownhost"
+	userName = "unknownuser"
+)
+
+func init() {
+	h, err := os.Hostname()
+	if err == nil {
+		host = shortHostname(h)
+	}
+
+	current, err := user.Current()
+	if err == nil {
+		userName = current.Username
+	}
+	// Sanitize userName since it is used to construct file paths.
+	userName = strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		default:
+			return '_'
+		}
+		return r
+	}, userName)
+}
+
+func shortHostname(hostname string) string {
+	if i := strings.Index(hostname, "."); i >= 0 {
+		return hostname[:i]
+	}
+	return hostname
 }

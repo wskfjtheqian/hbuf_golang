@@ -5,10 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="添加 hlog日志库">
-      <change afterPath="$PROJECT_DIR$/pkg/hlog/file.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/hlog/http.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/erro/error.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/erro/error.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hlog/hlog.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hlog/log.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hlog/file.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hlog/file.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hlog/log.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hlog/log.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/web_socket.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -39,7 +43,14 @@
     <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog_test.go" root0="SKIP_INSPECTION" />
     <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/internal/logsink/logsink.go" root0="SKIP_INSPECTION" />
     <setting file="file://$USER_HOME$/go/pkg/mod/go.etcd.io/etcd/client/v3@v3.5.4/concurrency/session.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/pkg/config/config.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/pkg/hlog/file.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/pkg/hlog/log.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/pkg/rpc/web_socket.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/flag/flag.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/net/http/header.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/os/user/lookup.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/sync/atomic/type.go" root0="SKIP_INSPECTION" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
@@ -123,7 +134,9 @@
       <workItem from="1709883806535" duration="587000" />
       <workItem from="1709889003133" duration="581000" />
       <workItem from="1709889947665" duration="10381000" />
-      <workItem from="1710311631700" duration="16598000" />
+      <workItem from="1710311631700" duration="28054000" />
+      <workItem from="1710398331525" duration="102000" />
+      <workItem from="1710398461935" duration="635000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -381,7 +394,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710319607014</updated>
     </task>
-    <option name="localTasksCounter" value="33" />
+    <task id="LOCAL-00033" summary="添加 hlog日志库">
+      <option name="closed" value="true" />
+      <created>1710331921106</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1710331921106</updated>
+    </task>
+    <option name="localTasksCounter" value="34" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

@@ -10,7 +10,6 @@ require (
 	github.com/nats-io/nats.go v1.32.0
 	go.etcd.io/etcd/client/v3 v3.5.4
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
-	github.com/golang/glog v1.2.0
 )
 
 require (

@@ -45,6 +45,6 @@ func PrintStack(e error) {
 	if errors.As(e, &err) {
 		err.PrintStack()
 	} else {
-		hlog.Errorln(e.Error())
+		_ = hlog.Output(2, hlog.ERROR, e.Error())
 	}
 }

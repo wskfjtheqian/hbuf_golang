@@ -332,6 +332,7 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	}
 	wsConn, err := upGrader.Upgrade(w, r, responseHeader)
 	if err != nil {
+		erro.PrintStack(err)
 		return
 	}
 
@@ -343,6 +344,7 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	}
 	marshal, err := json.Marshal(data)
 	if err != nil {
+		erro.PrintStack(err)
 		return
 	}
 	_ = wsConn.WriteMessage(websocket.BinaryMessage, marshal)
