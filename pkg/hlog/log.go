@@ -245,6 +245,10 @@ func (l *Logger) SetOutLevel(level Level) {
 	l.outLevel.Store(int32(level))
 }
 
+func (l *Logger) GetOutLevel() Level {
+	return Level(l.outLevel.Load())
+}
+
 func (l *Logger) SetOutTarget(target func(level Level) SyncWriter) {
 	l.outTarget.Store(&target)
 }
@@ -464,6 +468,10 @@ func Output(calldepth int, level Level, s string) error {
 	return std.output(0, calldepth, level, func(b []byte) []byte {
 		return append(b, s...)
 	})
+}
+
+func GetOutLevel() Level {
+	return std.GetOutLevel()
 }
 
 func Flush() {

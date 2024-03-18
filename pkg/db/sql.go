@@ -123,65 +123,83 @@ func (s *Sql) ToText() string {
 }
 
 func (s *Sql) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
-	var now = time.Now().UnixMilli()
+	var count int64 = 0
+	defer newPrintLog(s, &count).print()
+
 	result, err := GET(ctx).Query(s.text.String(), s.params...)
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, err
 	}
 	defer result.Close()
-	var count int64 = 0
+
 	isScan := true
 	for result.Next() {
 		count++
 		if isScan {
 			isScan, err = scan(result)
 			if err != nil {
-				printLog(now, 0, s.ToText())
 				return 0, err
 			}
 		}
 	}
-	printLog(now, count, s.ToText())
 	return count, nil
 }
 
 func (s *Sql) Exec(ctx context.Context) (int64, int64, error) {
-	var now = time.Now().UnixMilli()
+	var count int64 = 0
+	defer newPrintLog(s, &count).print()
+
 	result, err := GET(ctx).Exec(s.text.String(), s.params...)
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, 0, err
 	}
-	count, err := result.RowsAffected()
+	count, err = result.RowsAffected()
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, 0, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, 0, err
 	}
-	printLog(now, count, s.ToText())
 	return count, id, nil
 }
 
-var LogSQL = hlog.INFO + 100
-
-func init() {
-	hlog.SetLevelName(LogSQL, "SQL")
+type printLog struct {
+	now   int64
+	count *int64
+	s     *Sql
 }
 
-func printLog(now, count int64, sql string) {
-	now = time.Now().UnixMilli() - now
+func (p *printLog) print() {
+	if !PrintSQL {
+		return
+	}
+	now := time.Now().UnixMilli() - p.now
 	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "s]"
 	if 200 > now {
 		t = utl.Yellow(t)
 	} else {
 		t = utl.Red(t)
 	}
-	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
+	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(*p.count, 10)+"] "), utl.Green(p.s.ToText())))
+}
+
+func newPrintLog(s *Sql, count *int64) *printLog {
+	ret := &printLog{
+		s:     s,
+		count: count,
+	}
+	if PrintSQL {
+		ret.now = time.Now().UnixMilli()
+	}
+	return ret
+}
+
+var LogSQL = hlog.INFO + 100
+var PrintSQL = true
+
+func init() {
+	hlog.SetLevelName(LogSQL, "SQL")
 }
 
 func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {
