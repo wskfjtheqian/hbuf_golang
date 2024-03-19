@@ -1,6 +1,10 @@
 package manage
 
-import "gopkg.in/yaml.v3"
+import (
+	"crypto/tls"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"gopkg.in/yaml.v3"
+)
 
 type Config struct {
 	Server *Server `yaml:"server"` //服务配置
@@ -43,6 +47,13 @@ func (h *Http) Yaml() string {
 func (h *Http) CheckConfig() int {
 	errCount := 0
 
+	if h.Crt != nil && h.Key != nil {
+		_, err := tls.LoadX509KeyPair(*h.Crt, *h.Key)
+		if err != nil {
+			hlog.Errorln("HttpRpc 证书错误:", err.Error())
+			errCount++
+		}
+	}
 	return errCount
 }
 
