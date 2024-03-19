@@ -23,7 +23,7 @@ func (con *Config) CheckConfig() int {
 	return errCount
 }
 
-//Http 服务配置
+// Http 服务配置
 type Http struct {
 	Hostname *string `yaml:"hostname"` //主机名
 	Address  *string `yaml:"address"`  //监听地址
@@ -48,11 +48,10 @@ func (h *Http) CheckConfig() int {
 
 // Server 服务配置
 type Server struct {
-	Register  bool      `yaml:"register"`   //是否注册服务到注册中心
-	Local     bool      `yaml:"local"`      //是否开启本地服务
-	Http      *Http     `yaml:"http"`       //Http 服务配置
-	WebSocket *Http     `yaml:"web_socket"` //WebSocket 服务配置
-	List      *[]string `yaml:"list"`       //开始的服务列表
+	Register bool      `yaml:"register"` //是否注册服务到注册中心
+	Local    bool      `yaml:"local"`    //是否开启本地服务
+	Http     *Http     `yaml:"http"`     //Http 服务配置
+	List     *[]string `yaml:"list"`     //开始的服务列表
 }
 
 func (s *Server) Yaml() string {
@@ -65,6 +64,7 @@ func (s *Server) Yaml() string {
 
 func (s *Server) CheckConfig() int {
 	errCount := 0
+	errCount += s.Http.CheckConfig()
 
 	return errCount
 }

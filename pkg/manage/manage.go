@@ -66,11 +66,9 @@ type BaseManage struct {
 	etcd      *etc.Etcd
 	rpcServer *rpc.Server
 
-	wsServer   *http.Server
 	httpServer *http.Server
 	findCancel context.CancelFunc
 	httpListen *http.Server
-	wssListen  *http.Server
 }
 
 func NewManage() *BaseManage {
@@ -141,18 +139,12 @@ func (m *BaseManage) SetConfig(config *Config) {
 		_ = m.httpListen.Close()
 		m.httpListen = nil
 	}
-	if nil != m.wssListen {
-		_ = m.wssListen.Close()
-		m.wssListen = nil
-	}
+
 	if nil != config.Server {
 		serConfig := m.config.Server
 
 		m.httpListen = m.startServer(serConfig.Http, func(path string, invoke rpc.Invoke) (http.Handler, string) {
 			return rpc.NewServerHttp(path, invoke), "http rpc 服务"
-		})
-		m.wssListen = m.startServer(serConfig.WebSocket, func(path string, invoke rpc.Invoke) (http.Handler, string) {
-			return rpc.NewServerWebSocket(invoke), "web_socket rpc 服务"
 		})
 
 		for name, router := range m.install {
@@ -163,13 +155,6 @@ func (m *BaseManage) SetConfig(config *Config) {
 						scheme = "https"
 					}
 					m.registerServer(router.router, serConfig.Http, scheme)
-				}
-				if nil != m.wssListen {
-					scheme := "ws"
-					if nil != serConfig.WebSocket.Key && nil != serConfig.Http.Crt {
-						scheme = "wss"
-					}
-					m.registerServer(router.router, serConfig.WebSocket, scheme)
 				}
 				m.rpcServer.Add(router.router)
 				m.server[name] = router.router
@@ -342,8 +327,6 @@ func (m *BaseManage) clientList(name string, address string, isAdd bool) {
 				rc = newLocalRpcClient(val.router)
 			} else if 0 == strings.Index(address, "https://") || 0 == strings.Index(address, "http://") {
 				rc = newHttpRpcClient(address, val.client)
-			} else if 0 == strings.Index(address, "ws://") || 0 == strings.Index(address, "wss://") {
-				rc = newSocketRpcClient(address, val.client)
 			}
 			routers, ok := m.router[name]
 			if !ok {
@@ -408,22 +391,5 @@ func newHttpRpcClient(url string, call CallClient) RcpClient {
 }
 
 func (c *httpRpcClient) getClient() rpc.Init {
-	return c.client
-}
-
-type socketRpcClient struct {
-	client rpc.Init
-}
-
-func newSocketRpcClient(url string, call CallClient) RcpClient {
-	client := rpc.NewClientWebSocket(url, nil)
-	jsonClient := rpc.NewJsonClient(client)
-	return &socketRpcClient{
-		client: call(jsonClient),
-	}
-
-}
-
-func (c *socketRpcClient) getClient() rpc.Init {
 	return c.client
 }

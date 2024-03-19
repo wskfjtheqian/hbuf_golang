@@ -2,13 +2,16 @@ package rpc
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
+	"golang.org/x/net/http2"
 	"io"
 	ht "net/http"
 	"reflect"
+	"strings"
 )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,9 +22,20 @@ type ClientHttp struct {
 }
 
 func NewClientHttp(base string) *ClientHttp {
+	transport := &ht.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	if 0 == strings.Index(base, "https://") {
+		err := http2.ConfigureTransport(transport)
+		if err != nil {
+			erro.PrintStack(err)
+		}
+	}
 	return &ClientHttp{
-		base:   base,
-		client: &ht.Client{},
+		base: base,
+		client: &ht.Client{
+			Transport: transport,
+		},
 	}
 }
 
