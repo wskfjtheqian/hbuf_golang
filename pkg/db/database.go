@@ -116,7 +116,7 @@ func (d *Database) SetConfig(config *Config) {
 
 	db, err := sql.Open(*config.Type, *config.Username+":"+*config.Password+"@"+*config.URL+"&parseTime=true&clientFoundRows=true")
 	if err != nil {
-		hlog.Exitln("数据库链接失败，请检查配置是否正确", err)
+		hlog.Exit("数据库链接失败，请检查配置是否正确", err)
 	}
 	maxIdle := 8
 	if nil != config.MaxIdle {

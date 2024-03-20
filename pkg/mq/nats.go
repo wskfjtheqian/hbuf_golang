@@ -97,7 +97,7 @@ func (d *Nats) SetConfig(config *Config) {
 	}
 	client, err := nats.Connect(strings.Join(config.Endpoints, ","), c...)
 	if err != nil {
-		hlog.Exitln("Nats服务器连接失败，请检查配置是否正确", err)
+		hlog.Exit("Nats服务器连接失败，请检查配置是否正确", err)
 	}
 	d.client = client
 }

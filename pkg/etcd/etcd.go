@@ -35,7 +35,7 @@ func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.Sessi
 		case <-ctx.Done():
 			err := v.session.Close()
 			if err != nil {
-				hlog.Exitln(err)
+				hlog.Exit(err)
 			}
 			v.session = nil
 		}
@@ -105,7 +105,7 @@ func (d *Etcd) SetConfig(config *Config) {
 	}
 	client, err := clientv3.New(c)
 	if err != nil {
-		hlog.Exitln("Etcd服务器连接失败，请检查配置是否正确", err)
+		hlog.Exit("Etcd服务器连接失败，请检查配置是否正确", err)
 	}
 	d.client = client
 }

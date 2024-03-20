@@ -200,17 +200,17 @@ func (m *BaseManage) startServer(config *Http, handle func(path string, invoke r
 		}
 		go func() {
 			if nil != config.Crt && nil != config.Key {
-				hlog.Infoln("开启 TLS 加密" + msg + ",addr=" + *config.Address)
+				hlog.Info("开启 TLS 加密" + msg + ",addr=" + *config.Address)
 				err := ser.ListenAndServeTLS(*config.Crt, *config.Key)
 				if err != nil {
-					hlog.Errorln("开启 TLS 加密" + msg + "失败：" + err.Error())
+					hlog.Error("开启 TLS 加密" + msg + "失败：" + err.Error())
 					return
 				}
 			} else {
-				hlog.Infoln("开启 " + msg + ",addr=" + *config.Address)
+				hlog.Info("开启 " + msg + ",addr=" + *config.Address)
 				err := ser.ListenAndServe()
 				if err != nil {
-					hlog.Errorln("开启" + msg + "失败：" + err.Error())
+					hlog.Error("开启" + msg + "失败：" + err.Error())
 					return
 				}
 			}
@@ -227,7 +227,7 @@ func (m *BaseManage) Init(ctx context.Context) {
 	if nil != m.config.Server.List {
 		for _, item := range *m.config.Server.List {
 			if server, ok := m.server[item]; ok {
-				hlog.Infoln("开启并初始化rpc服务：" + server.GetName())
+				hlog.Info("开启并初始化rpc服务：" + server.GetName())
 				server.GetServer().Init(ctx)
 			}
 		}
@@ -257,7 +257,7 @@ func (m *BaseManage) registerServer(router rpc.ServerRouter, config *Http, schem
 	}
 	grant, err := m.etcd.GetClient().Grant(context.TODO(), 5)
 	if err != nil {
-		hlog.Errorln("申请租约失败", err.Error())
+		hlog.Error("申请租约失败", err.Error())
 		return
 	}
 
@@ -268,13 +268,13 @@ func (m *BaseManage) registerServer(router rpc.ServerRouter, config *Http, schem
 
 	_, err = m.etcd.GetClient().Put(context.TODO(), name, value, clientv3.WithLease(grant.ID))
 	if err != nil {
-		hlog.Errorln("注册服务失败：name=" + name + "; value=" + value)
+		hlog.Error("注册服务失败：name=" + name + "; value=" + value)
 	} else {
-		hlog.Errorln("注册服务成功：name=" + name + "; value=" + value)
+		hlog.Error("注册服务成功：name=" + name + "; value=" + value)
 	}
 	_, err = m.etcd.GetClient().KeepAlive(context.TODO(), grant.ID)
 	if err != nil {
-		hlog.Errorln("开始续租失败", err.Error())
+		hlog.Error("开始续租失败", err.Error())
 		return
 	}
 }
@@ -285,7 +285,7 @@ func (m *BaseManage) findServer() {
 	m.findCancel = cancel
 	reps, err := m.etcd.GetClient().Get(ctx, "/register/server/", clientv3.WithPrefix())
 	if err != nil {
-		hlog.Infoln("自动获得服务出错", err.Error())
+		hlog.Info("自动获得服务出错", err.Error())
 		return
 	}
 	for _, item := range reps.Kvs {
@@ -295,7 +295,7 @@ func (m *BaseManage) findServer() {
 	rch := m.etcd.GetClient().Watch(ctx, "/register/server/", clientv3.WithPrefix())
 	for wResp := range rch {
 		for _, ev := range wResp.Events {
-			hlog.Infoln(ev.Kv.Key, ev.Type.String(), ev.Kv.Value)
+			hlog.Info(ev.Kv.Key, ev.Type.String(), ev.Kv.Value)
 			if clientv3.EventTypeDelete == ev.Type {
 				m.editClientList(string(ev.Kv.Key), string(ev.Kv.Value), false)
 			} else {

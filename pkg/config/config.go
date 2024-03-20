@@ -27,7 +27,7 @@ var (
 
 func NewWatch() Watch {
 	if 0 == len(*hostname) {
-		hlog.Exitln("请输入 Host name")
+		hlog.Exit("请输入 Host name")
 	}
 
 	keyVal := map[string]any{
@@ -36,15 +36,15 @@ func NewWatch() Watch {
 
 	var c Watch
 	if 0 != len(*endpoints) {
-		hlog.Infoln("Host name:" + *hostname)
-		hlog.Infoln("Etcd endpoints:" + *endpoints)
+		hlog.Info("Host name:" + *hostname)
+		hlog.Info("Etcd endpoints:" + *endpoints)
 		c = NewEtcdConfig(*hostname, *endpoints, keyVal)
 	} else if 0 != len(*path) {
-		hlog.Infoln("Host name:" + *hostname)
-		hlog.Infoln("Config.yaml file path:" + *path)
+		hlog.Info("Host name:" + *hostname)
+		hlog.Info("Config.yaml file path:" + *path)
 		c = NewFileConfig(*hostname, *path, keyVal)
 	} else {
-		hlog.Errorln("请输入 config.yaml file path or etcd endpoints")
+		hlog.Error("请输入 config.yaml file path or etcd endpoints")
 	}
 	return c
 }

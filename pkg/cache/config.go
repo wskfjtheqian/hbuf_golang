@@ -28,17 +28,17 @@ func (con *Config) CheckConfig() int {
 	errCount := 0
 	if nil == con.Network || !("tcp" == *con.Network) {
 		errCount++
-		hlog.Errorln("未找到Redis支持的网络类型，请使用 tcp")
+		hlog.Error("未找到Redis支持的网络类型，请使用 tcp")
 	}
 	if nil == con.Address || "" == *con.Address {
 		errCount++
-		hlog.Errorln("未找到Redis服务器地址")
+		hlog.Error("未找到Redis服务器地址")
 	}
 
 	conn, err := redis.Dial(*con.Network, *con.Address)
 	if err != nil {
 		errCount++
-		hlog.Errorln("Redis链接失败，请检查配置是否正确", err)
+		hlog.Error("Redis链接失败，请检查配置是否正确", err)
 	}
 	defer func(c redis.Conn) {
 		_ = c.Close()
@@ -48,9 +48,9 @@ func (con *Config) CheckConfig() int {
 		_, err := conn.Do("AUTH", *con.Password)
 		if err != nil {
 			errCount++
-			hlog.Errorln("Redis 认证失败，请检查密码是否正确", err)
+			hlog.Error("Redis 认证失败，请检查密码是否正确", err)
 		}
 	}
-	hlog.Infoln("Redis 检查：Ok")
+	hlog.Info("Redis 检查：Ok")
 	return errCount
 }

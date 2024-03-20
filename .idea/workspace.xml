@@ -4,9 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="删除websocket rpc 管理&#10;添加https rpc 的支持">
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment=" 优化日志">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hlog/log.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hlog/log.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/base/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/cache/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/etcd_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/etcd_config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/file_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/file_config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/db/database.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/etcd/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/etcd/etcd.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/manage/manage.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/mq/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/mq/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/mq/nats.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/mq/nats.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -133,7 +145,7 @@
       <workItem from="1710398461935" duration="4132000" />
       <workItem from="1710406868621" duration="586000" />
       <workItem from="1710726101132" duration="9677000" />
-      <workItem from="1710921502815" duration="69000" />
+      <workItem from="1710921502815" duration="870000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -447,7 +459,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710826877326</updated>
     </task>
-    <option name="localTasksCounter" value="40" />
+    <task id="LOCAL-00040" summary=" 优化日志">
+      <option name="closed" value="true" />
+      <created>1710921596833</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1710921596833</updated>
+    </task>
+    <option name="localTasksCounter" value="41" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -479,7 +499,8 @@
     <MESSAGE value="添加 hlog日志库" />
     <MESSAGE value="完成日志 hlog日志库" />
     <MESSAGE value="删除websocket rpc 管理&#10;添加https rpc 的支持" />
-    <option name="LAST_COMMIT_MESSAGE" value="删除websocket rpc 管理&#10;添加https rpc 的支持" />
+    <MESSAGE value=" 优化日志" />
+    <option name="LAST_COMMIT_MESSAGE" value=" 优化日志" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

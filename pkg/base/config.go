@@ -33,32 +33,32 @@ func (con *Config) CheckConfig() int {
 
 	if nil == con.Redis {
 		errCount++
-		hlog.Errorln("未找到Redis的配置文件")
+		hlog.Error("未找到Redis的配置文件")
 	} else {
 		errCount += con.Redis.CheckConfig()
 	}
 	if nil == con.DB {
 		errCount++
-		hlog.Errorln("未找到数据库的配置文件")
+		hlog.Error("未找到数据库的配置文件")
 	} else {
 		errCount += con.DB.CheckConfig()
 	}
 
 	if nil == con.Etcd {
 		errCount++
-		hlog.Errorln("未找到Etcd的配置文件")
+		hlog.Error("未找到Etcd的配置文件")
 	} else {
 		errCount += con.Etcd.CheckConfig()
 	}
 
 	if 0 == con.DataCenterId {
 		errCount++
-		hlog.Errorln("机房ID设置错误，请设置 data_center_id 大于 0")
+		hlog.Error("机房ID设置错误，请设置 data_center_id 大于 0")
 	}
 
 	if 0 == con.WorkerId {
 		errCount++
-		hlog.Errorln("机器ID设置错误，请设置 worker_id 大于 0")
+		hlog.Error("机器ID设置错误，请设置 worker_id 大于 0")
 	}
 	return errCount
 }

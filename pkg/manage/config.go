@@ -50,7 +50,7 @@ func (h *Http) CheckConfig() int {
 	if h.Crt != nil && h.Key != nil {
 		_, err := tls.LoadX509KeyPair(*h.Crt, *h.Key)
 		if err != nil {
-			hlog.Errorln("HttpRpc 证书错误:", err.Error())
+			hlog.Error("HttpRpc 证书错误:", err.Error())
 			errCount++
 		}
 	}
