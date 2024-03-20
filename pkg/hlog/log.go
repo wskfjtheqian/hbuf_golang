@@ -108,33 +108,34 @@ func (l *Logger) Flush() {
 		_ = writer.Flush()
 	}
 }
-func (l *Logger) Debugln(v ...any) {
+func (l *Logger) Debug(v ...any) {
 	_ = l.output(0, 2, DEBUG, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
-func (l *Logger) Infoln(v ...any) {
+func (l *Logger) Info(v ...any) {
 	_ = l.output(0, 2, INFO, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func (l *Logger) Warnln(v ...any) {
+func (l *Logger) Warn(v ...any) {
 	_ = l.output(0, 2, WARN, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func (l *Logger) Errorln(v ...any) {
+func (l *Logger) Error(v ...any) {
 	_ = l.output(0, 2, ERROR, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func (l *Logger) Exitln(v ...any) {
+func (l *Logger) Exit(v ...any) {
 	_ = l.output(0, 2, EXIT, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
+	os.Exit(-1)
 }
 
 func (l *Logger) Output(calldepth int, level Level, s string) error {
@@ -433,34 +434,35 @@ func SetPrefix(prefix string) {
 	std.SetPrefix(prefix)
 }
 
-func Debugln(v ...any) {
+func Debug(v ...any) {
 	_ = std.output(0, 2, DEBUG, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func Infoln(v ...any) {
+func Info(v ...any) {
 	_ = std.output(0, 2, INFO, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func Warnln(v ...any) {
+func Warn(v ...any) {
 	_ = std.output(0, 2, WARN, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func Errorln(v ...any) {
+func Error(v ...any) {
 	_ = std.output(0, 2, ERROR, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
 }
 
-func Exitln(v ...any) {
+func Exit(v ...any) {
 	_ = std.output(0, 2, EXIT, func(b []byte) []byte {
-		return fmt.Appendln(b, v...)
+		return fmt.Append(b, v...)
 	})
+	os.Exit(-1)
 }
 
 func Output(calldepth int, level Level, s string) error {
