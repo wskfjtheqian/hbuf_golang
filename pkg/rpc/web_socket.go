@@ -276,9 +276,14 @@ type ClientWebSocket struct {
 	rpc    *WebSocketRpc
 }
 
-func NewClientWebSocket(base string, invoke Invoke) *ClientWebSocket {
-	dial, _, err := websocket.DefaultDialer.Dial(base, nil)
+func NewClientWebSocket(base string, invoke Invoke, params *url.Values) *ClientWebSocket {
+	requestHeader := ht.Header{}
+	if nil != params {
+		requestHeader.Add("Sec-Websocket-Protocol", url.QueryEscape(params.Encode()))
+	}
+	dial, _, err := websocket.DefaultDialer.Dial(base, requestHeader)
 	if err != nil {
+		erro.PrintStack(err)
 		return nil
 	}
 
