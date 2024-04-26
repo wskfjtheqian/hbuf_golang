@@ -4,11 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="开始测试框架">
-      <change afterPath="$PROJECT_DIR$/pkg/hstat/canal.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/hstat/convert.go" afterDir="false" />
+    <list default="true" id="872b1d16-0998-4836-a055-eae949421ab0" name="Changes" comment="开始实时统计框架">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/rpc/rpc.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,6 +31,11 @@
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/go-mysql-org/go-mysql@v1.7.0/canal/dump.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/go-mysql-org/go-mysql@v1.7.0/canal/handler.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/go-mysql-org/go-mysql@v1.7.0/canal/rows.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/go-mysql-org/go-mysql@v1.7.0/replication/event.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$USER_HOME$/go/pkg/mod/github.com/go-mysql-org/go-mysql@v1.7.0/schema/schema.go" root0="SKIP_INSPECTION" />
     <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog.go" root0="SKIP_INSPECTION" />
     <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog_file.go" root0="SKIP_INSPECTION" />
     <setting file="file://$USER_HOME$/go/pkg/mod/github.com/golang/glog@v1.2.0/glog_flags.go" root0="SKIP_INSPECTION" />
@@ -43,9 +46,11 @@
     <setting file="file://$PROJECT_DIR$/pkg/hlog/file.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/pkg/hlog/log.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/pkg/rpc/web_socket.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/builtin/builtin.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/flag/flag.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/net/http/header.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/os/user/lookup.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/reflect/value.go" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../../sdk/go/src/sync/atomic/type.go" root0="SKIP_INSPECTION" />
   </component>
   <component name="MarkdownSettingsMigration">
@@ -137,7 +142,13 @@
       <workItem from="1710726101132" duration="9677000" />
       <workItem from="1710921502815" duration="3957000" />
       <workItem from="1710999860232" duration="7089000" />
-      <workItem from="1711332065678" duration="11554000" />
+      <workItem from="1711332065678" duration="12460000" />
+      <workItem from="1711532926037" duration="1203000" />
+      <workItem from="1712481701440" duration="1154000" />
+      <workItem from="1712797904828" duration="574000" />
+      <workItem from="1712888742183" duration="582000" />
+      <workItem from="1713404098680" duration="570000" />
+      <workItem from="1714127088486" duration="302000" />
     </task>
     <task id="LOCAL-00001" summary="优化Websocket RPC">
       <option name="closed" value="true" />
@@ -491,7 +502,15 @@
       <option name="project" value="LOCAL" />
       <updated>1711096688151</updated>
     </task>
-    <option name="localTasksCounter" value="45" />
+    <task id="LOCAL-00045" summary="开始实时统计框架">
+      <option name="closed" value="true" />
+      <created>1711501400755</created>
+      <option name="number" value="00045" />
+      <option name="presentableId" value="LOCAL-00045" />
+      <option name="project" value="LOCAL" />
+      <updated>1711501400755</updated>
+    </task>
+    <option name="localTasksCounter" value="46" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -508,7 +527,7 @@
                   <entry key="branch">
                     <value>
                       <list>
-                        <option value="main" />
+                        <option value="origin/main" />
                       </list>
                     </value>
                   </entry>
@@ -538,7 +557,8 @@
     <MESSAGE value=" 优化日志" />
     <MESSAGE value="优化rpc" />
     <MESSAGE value="开始测试框架" />
-    <option name="LAST_COMMIT_MESSAGE" value="开始测试框架" />
+    <MESSAGE value="开始实时统计框架" />
+    <option name="LAST_COMMIT_MESSAGE" value="开始实时统计框架" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
