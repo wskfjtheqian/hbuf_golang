@@ -29,15 +29,17 @@ func IsNil(i any) bool {
 
 func UrlJoin(elem ...string) string {
 	text := strings.Builder{}
-	old := ""
 	for i, item := range elem {
-		if 0 != i && (0 < len(old) && "/" != old[len(old)-1:]) && (0 < len(item) && "/" != item[:1]) {
-			text.WriteString("/")
+		if 0 == i {
+			text.WriteString(strings.TrimRight(item, "/"))
+		} else if len(elem)-1 == i {
+			text.WriteString(strings.TrimLeft(item, "/"))
+		} else {
+			text.WriteString(strings.Trim(item, "/"))
 		}
-		old = item
-		text.WriteString(item)
+		text.WriteString("/")
 	}
-	return text.String()
+	return text.String()[:text.Len()-1]
 }
 
 func ToAnyList[T any](l []T) []any {
