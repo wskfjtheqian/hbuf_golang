@@ -2,13 +2,16 @@ package rpc
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
+	"golang.org/x/net/http2"
 	"io"
 	ht "net/http"
 	"reflect"
+	"strings"
 )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,13 +22,24 @@ type ClientHttp struct {
 }
 
 func NewClientHttp(base string) *ClientHttp {
+	transport := &ht.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	if 0 == strings.Index(base, "https://") {
+		err := http2.ConfigureTransport(transport)
+		if err != nil {
+			erro.PrintStack(err)
+		}
+	}
 	return &ClientHttp{
-		base:   base,
-		client: &ht.Client{},
+		base: base,
+		client: &ht.Client{
+			Transport: transport,
+		},
 	}
 }
 
-func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	request, err := ht.NewRequest("POST", utl.UrlJoin(h.base, name), in)
 	if err != nil {
 		return err
@@ -108,7 +122,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 			Request: r,
 		},
 	}
-	err := s.invoke.Invoke(ctx, r.URL.Path[len(s.pathPrefix):], r.Body, w)
+	err := s.invoke.Invoke(ctx, r.URL.Path[len(s.pathPrefix):], r.Body, w, false)
 	if err != nil {
 		if res, ok := err.(*Result); ok {
 			marshal, err := json.Marshal(res)

@@ -3,8 +3,8 @@ package db
 import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"gopkg.in/yaml.v3"
-	"log"
 )
 
 type Config struct {
@@ -29,29 +29,29 @@ func (con *Config) CheckConfig() int {
 	errCount := 0
 	if nil == con.Type || !("mysql" == *con.Type) {
 		errCount++
-		log.Println("未找到支持的数据库类型，请使用 mysql")
+		hlog.Error("未找到支持的数据库类型，请使用 mysql")
 	}
 	if nil == con.Username || "" == *con.Username {
 		errCount++
-		log.Println("未找到数据库用户名")
+		hlog.Error("未找到数据库用户名")
 	}
 	if nil == con.Password || "" == *con.Password {
 		errCount++
-		log.Println("未找到数据库密码")
+		hlog.Error("未找到数据库密码")
 	}
 	if nil == con.URL || "" == *con.URL {
 		errCount++
-		log.Println("未找到数据库链接")
+		hlog.Error("未找到数据库链接")
 	}
 
 	db, err := sql.Open(*con.Type, *con.Username+":"+*con.Password+"@"+*con.URL)
 	if err != nil {
 		errCount++
-		log.Fatalln("数据库链接失败，请检查配置是否正确", err)
+		hlog.Error("数据库链接失败，请检查配置是否正确", err)
 	}
 	defer func(db *sql.DB) {
 		_ = db.Close()
 	}(db)
-	log.Println("数据库链接 检查：Ok")
+	hlog.Info("数据库链接 检查：Ok")
 	return errCount
 }

@@ -6,8 +6,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
-	"log"
 	"reflect"
 	"sync"
 	"time"
@@ -17,53 +17,73 @@ type Execute interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 
 	Exec(query string, args ...any) (sql.Result, error)
+
+	Table(name string) string
+
+	Db() *sql.DB
 }
 
-type contextValue struct {
+type Context struct {
+	context.Context
+
 	db *sql.DB
+
 	tx *Tx
+
+	tableName func(ctx context.Context, name string) string
 }
 
-func (v *contextValue) Query(query string, args ...any) (*sql.Rows, error) {
-	if nil != v.tx {
-		rows, err := v.tx.t.Query(query, args...)
+func NewContext(context context.Context, db *sql.DB, tableName func(ctx context.Context, name string) string) *Context {
+	return &Context{
+		Context:   context,
+		db:        db,
+		tableName: tableName,
+	}
+}
+
+func (c *Context) Query(query string, args ...any) (*sql.Rows, error) {
+	if nil != c.tx {
+		rows, err := c.tx.t.Query(query, args...)
 		if err != nil {
 			return nil, erro.Wrap(err)
 		}
 		return rows, nil
 	}
-	rows, err := v.db.Query(query, args...)
+	rows, err := c.db.Query(query, args...)
 	if err != nil {
 		return nil, erro.Wrap(err)
 	}
 	return rows, nil
 }
 
-func (v *contextValue) Exec(query string, args ...any) (sql.Result, error) {
-	if nil != v.tx {
-		exec, err := v.tx.t.Exec(query, args...)
+func (c *Context) Exec(query string, args ...any) (sql.Result, error) {
+	if nil != c.tx {
+		exec, err := c.tx.t.Exec(query, args...)
 		if err != nil {
 			return nil, erro.Wrap(err)
 		}
 		return exec, nil
 	}
-	exec, err := v.db.Exec(query, args...)
+	exec, err := c.db.Exec(query, args...)
 	if err != nil {
 		return nil, erro.Wrap(err)
 	}
 	return exec, nil
 }
 
-type Context struct {
-	context.Context
-	value *contextValue
+func (c *Context) Table(name string) string {
+	return c.tableName(c, name)
+}
+
+func (c *Context) Db() *sql.DB {
+	return c.db
 }
 
 var cType = reflect.TypeOf(&Context{})
 
 func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
-		return d.value
+		return d
 	}
 	return d.Context.Value(key)
 }
@@ -77,7 +97,7 @@ func GET(ctx context.Context) Execute {
 	if nil == ret {
 		return nil
 	}
-	return ret.(*contextValue)
+	return ret.(*Context)
 }
 
 type Database struct {
@@ -89,9 +109,11 @@ type Database struct {
 func (d *Database) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
-			ctx,
-			&contextValue{
-				db: d.db,
+			Context: ctx,
+			db:      d.db,
+			tx:      nil,
+			tableName: func(ctx context.Context, name string) string {
+				return name
 			},
 		}
 	}
@@ -116,7 +138,7 @@ func (d *Database) SetConfig(config *Config) {
 
 	db, err := sql.Open(*config.Type, *config.Username+":"+*config.Password+"@"+*config.URL+"&parseTime=true&clientFoundRows=true")
 	if err != nil {
-		log.Fatalln("数据库链接失败，请检查配置是否正确", err)
+		hlog.Exit("数据库链接失败，请检查配置是否正确", err)
 	}
 	maxIdle := 8
 	if nil != config.MaxIdle {
@@ -152,7 +174,7 @@ func NewDB() *Database {
 
 type Tx struct {
 	t   *sql.Tx
-	val *contextValue
+	val *Context
 }
 
 func (t *Tx) Commit() error {
@@ -184,7 +206,7 @@ func Begin(ctx context.Context) (*Tx, error) {
 	if nil == ret {
 		return nil, erro.NewError("")
 	}
-	val := ret.(*contextValue)
+	val := ret.(*Context)
 	tx := &Tx{
 		val: val,
 	}

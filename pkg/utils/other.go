@@ -3,6 +3,7 @@ package utl
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -89,7 +90,8 @@ type SliceType interface {
 	int | uint | int8 | uint8 | int16 | uint16 | int32 | uint32 | int64 | uint64 | float32 | float64 | string | bool |
 		*int | *uint | *int8 | *uint8 | *int16 | *uint16 | *int32 | *uint32 | *int64 | *uint64 | *float32 | *float64 | *string | *bool |
 		chan int | chan uint | chan int8 | chan uint8 | chan int16 | chan uint16 | chan int32 | chan uint32 | chan int64 | chan uint64 | chan float32 | chan float64 | chan string | chan bool |
-		chan *int | chan *uint | chan *int8 | chan *uint8 | chan *int16 | chan *uint16 | chan *int32 | chan *uint32 | chan *int64 | chan *uint64 | chan *float32 | chan *float64 | chan *string | chan *bool
+		chan *int | chan *uint | chan *int8 | chan *uint8 | chan *int16 | chan *uint16 | chan *int32 | chan *uint32 | chan *int64 | chan *uint64 | chan *float32 | chan *float64 | chan *string | chan *bool |
+		hbuf.Int64 | *hbuf.Int64 | hbuf.Uint64 | *hbuf.Uint64
 }
 
 // 转换映射

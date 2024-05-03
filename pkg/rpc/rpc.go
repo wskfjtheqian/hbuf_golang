@@ -12,11 +12,20 @@ import (
 	"sync"
 )
 
+type rpcType int
+
+const Request = 0
+const Response = 1
+const Broadcast = 2
+const Heartbeat = 3
+const AuthSuccess = 4
+const AuthFailure = 5
+
 type Context struct {
 	context.Context
 	done    chan struct{}
 	header  http.Header
-	tags    map[string]any
+	tags    map[string][]any
 	method  string
 	onClone func(ctx context.Context) (context.Context, error)
 }
@@ -26,7 +35,7 @@ func NewContext(ctx context.Context) context.Context {
 		Context: ctx,
 		done:    make(chan struct{}),
 		header:  http.Header{},
-		tags:    make(map[string]any, 0),
+		tags:    make(map[string][]any, 0),
 	}
 }
 
@@ -75,7 +84,7 @@ func CloneContext(ctx context.Context) (context.Context, error) {
 		Context: c.Context,
 		done:    make(chan struct{}),
 		header:  http.Header{},
-		tags:    map[string]any{},
+		tags:    map[string][]any{},
 		onClone: c.onClone,
 	}
 
@@ -98,6 +107,14 @@ func SetHeader(ctx context.Context, key string, value string) {
 	if nil == ret {
 		return
 	}
+	ret.(*Context).header.Set(key, value)
+}
+
+func AddHeader(ctx context.Context, key string, value string) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
 	ret.(*Context).header.Add(key, value)
 }
 
@@ -111,6 +128,26 @@ func GetHeader(ctx context.Context, key string) (value string, ok bool) {
 	return header.Get(key), ok
 }
 
+func DelHeader(ctx context.Context, key string) (ok bool) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return false
+	}
+	header := ret.(*Context).header
+	_, ok = header[textproto.CanonicalMIMEHeaderKey(key)]
+	header.Del(key)
+	return ok
+}
+
+func ValuesHeader(ctx context.Context, key string) []string {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return nil
+	}
+	header := ret.(*Context).header
+	return header.Values(key)
+}
+
 func GetHeaders(ctx context.Context) (value http.Header) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
@@ -119,7 +156,7 @@ func GetHeaders(ctx context.Context) (value http.Header) {
 	return ret.(*Context).header
 }
 
-func SetTag(ctx context.Context, key string, value string) {
+func SetTag(ctx context.Context, key string, value ...any) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return
@@ -127,7 +164,7 @@ func SetTag(ctx context.Context, key string, value string) {
 	ret.(*Context).tags[key] = value
 }
 
-func GetTag(ctx context.Context, key string) (value any, ok bool) {
+func GetTag(ctx context.Context, key string) (value []any, ok bool) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return nil, false
@@ -324,7 +361,7 @@ type Client interface {
 }
 
 type Invoke interface {
-	Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error
+	Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
