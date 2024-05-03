@@ -44,7 +44,7 @@ func NewWatch() Watch {
 		hlog.Info("Config.yaml file path:" + *path)
 		c = NewFileConfig(*hostname, *path, keyVal)
 	} else {
-		hlog.Error("请输入 config.yaml file path or etcd endpoints")
+		hlog.Exit("请输入 config.yaml file path or etcd endpoints")
 	}
 	return c
 }
