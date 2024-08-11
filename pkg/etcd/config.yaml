@@ -1,6 +1,0 @@
-#Etcd 连接地址
-endpoints:
-  - "127.0.0.1:2379"
-
-#Etcd Dial超时时间
-dial_timeout: 5000
