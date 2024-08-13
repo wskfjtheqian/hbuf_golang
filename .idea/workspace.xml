@@ -5,62 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加本地Key锁">
-      <change afterPath="$PROJECT_DIR$/pkg/hbuf/buffer.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/hbuf/buffer_test.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pkg/hbuf/data_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/hbuf_golang.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/hbuf_golang.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/app.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/base_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/base/config.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/Readme.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/cache.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/cache_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/config.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/utils.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/etcd_config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/config/file_config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/Readme.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/config.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/converter.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/database.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/database_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/db/sql_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/erro/error.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/config.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/etcd.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/etcd/lock.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/buffer.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/buffer.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/buffer_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/buffer_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/hbuf/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/serialize.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/serialize_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/id/generator.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/id/snow_flake_id.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_api.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/ip/ip_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/Readme.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/config.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/config.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/manage/manage_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/http.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/json_rpc.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/rpc_test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/rpc/web_socket.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/color.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/encrypt.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/google_auth.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/key_lock.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/other.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/ticker.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/utils/utils_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/hbuf/data_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data_test.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -77,13 +27,8 @@
       </list>
     </option>
   </component>
-  <component name="GOROOT" url="file://$USER_HOME$/sdk/go" />
+  <component name="GOROOT" url="file://$PROJECT_DIR$/../../../sdk/go" />
   <component name="Git.Settings">
-    <option name="RECENT_BRANCH_BY_REPOSITORY">
-      <map>
-        <entry key="$PROJECT_DIR$" value="master" />
-      </map>
-    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="RESET_MODE" value="MIXED" />
   </component>
@@ -131,19 +76,10 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "DefaultGoTemplateProperty": "Go File",
-    "Go Test.BenchmarkGetLength in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
-    "Go Test.BenchmarkGetLength2 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
-    "Go Test.Benchmark_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.Benchmark_Json in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
-    "Go Test.TestDecoderDouble in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
     "Go Test.TestDecoderField in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.TestDecoderFloat in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.TestDecoderId in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
-    "Go Test.TestName in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.Test_DecoderInt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.Test_DecoderUnt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.Test_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
-    "Go Test.Test_HType in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
+    "Go Test.TestDecoderId in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
+    "Go Test.TestDecoderInt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
+    "Go Test.go test github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
@@ -154,7 +90,8 @@
     "dart.analysis.tool.window.visible": "false",
     "git-widget-placeholder": "v2.0.0",
     "go.import.settings.migrated": "true",
-    "last_opened_file_path": "/Users/heqian/dev/2.hbuf/hbuf_golang",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "E:/dev/3.hbuf/hbuf_golang",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -179,44 +116,8 @@
       <recent name="$PROJECT_DIR$/pkg/utils" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Test.Test_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf">
-    <configuration name="BenchmarkGetLength in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gobench" />
-      <pattern value="^\QBenchmarkGetLength\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="BenchmarkGetLength2 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gobench" />
-      <pattern value="^\QBenchmarkGetLength2\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Benchmark_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
-      <module name="hbuf_golang" />
-      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
-      <root_directory value="$PROJECT_DIR$" />
-      <kind value="PACKAGE" />
-      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$" />
-      <framework value="gobench" />
-      <pattern value="^\QBenchmark_Encoder\E$" />
-      <method v="2" />
-    </configuration>
-    <configuration name="TestName in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+  <component name="RunManager" selected="Go Test.go test github.com/wskfjtheqian/hbuf_golang/pkg/hbuf">
+    <configuration name="TestDecoderField in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
@@ -225,10 +126,10 @@
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTestName\E$" />
+      <pattern value="^\QTestDecoderField\E$" />
       <method v="2" />
     </configuration>
-    <configuration name="Test_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+    <configuration name="TestDecoderId in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
       <module name="hbuf_golang" />
       <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
       <root_directory value="$PROJECT_DIR$" />
@@ -237,25 +138,68 @@
       <directory value="$PROJECT_DIR$" />
       <filePath value="$PROJECT_DIR$" />
       <framework value="gotest" />
-      <pattern value="^\QTest_Encoder\E$" />
+      <pattern value="^\QTestDecoderId\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestDecoderInt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestDecoderInt64\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/utils" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestEncrypt\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go test github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hbuf_golang" />
+      <working_directory value="$PROJECT_DIR$/pkg/hbuf" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Test.BenchmarkGetLength in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <item itemvalue="Go Test.BenchmarkGetLength2 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <item itemvalue="Go Test.Benchmark_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <item itemvalue="Go Test.TestName in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-      <item itemvalue="Go Test.Test_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.TestDecoderField in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.TestDecoderId in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.TestDecoderInt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.go test github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+      <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Test.Test_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-        <item itemvalue="Go Test.TestName in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-        <item itemvalue="Go Test.BenchmarkGetLength2 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-        <item itemvalue="Go Test.BenchmarkGetLength in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
-        <item itemvalue="Go Test.Benchmark_Encoder in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.go test github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.TestDecoderInt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.TestDecoderField in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.TestDecoderId in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf" />
+        <item itemvalue="Go Test.TestEncrypt in github.com/wskfjtheqian/hbuf_golang/pkg/utils" />
       </list>
     </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-9823dce3aa75-b114ca120d71-intellij.indexing.shared.core-IU-242.20224.300" />
+        <option value="bundled-js-predefined-d6986cc7102b-410509235cf1-JavaScript-IU-242.20224.300" />
+      </set>
+    </attachedChunks>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
@@ -358,6 +302,7 @@
       <workItem from="1687498180800" duration="1770000" />
       <workItem from="1697942534976" duration="638000" />
       <workItem from="1697974625148" duration="117000" />
+      <workItem from="1723516151536" duration="10776000" />
     </task>
     <task id="LOCAL-00016" summary="添加Json Sever Context">
       <created>1658941553835</created>
@@ -786,37 +731,18 @@
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="GetFieldsByList" />
-    <MESSAGE value="添加本地Key锁" />
-    <option name="LAST_COMMIT_MESSAGE" value="添加本地Key锁" />
+    <option name="LAST_COMMIT_MESSAGE" value="GetFieldsByList" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>
   </component>
   <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/hbuf/data_test.go</url>
-          <line>2</line>
-          <option name="timeStamp" value="36" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/hbuf/data_test.go</url>
-          <line>63</line>
-          <option name="timeStamp" value="58" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/hbuf/data_test.go</url>
-          <line>64</line>
-          <option name="timeStamp" value="59" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
     <watches-manager>
       <configuration name="GoTestRunConfiguration">
-        <watch expression="4" language="go" />
         <watch expression="nil == next" />
         <watch expression=" fmt.Sprintf(&quot;%v&quot;, value)" />
+        <watch expression="0x7F7F" language="go" />
+        <watch expression="0x7F7F" language="go" />
       </configuration>
     </watches-manager>
   </component>

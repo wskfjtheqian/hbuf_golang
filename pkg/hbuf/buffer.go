@@ -7,25 +7,45 @@ import (
 )
 
 /*
-Id 结构
-类型 Type ｜ ID长度 uint32｜ 值的长 uint64
-1111 ｜  1    ｜  111
+Field 结构
+------------------------------------------------
+当 TInt TUint TFloat 的 TAG
+类型 Type	| 值的长 uint64 	| ID长度 uint32
+	111		| 111			| 111
+TAG	| ID | VALUE
+------------------------------------------------
+当 TBytes  的 TAG
+类型 Type	| 长度值的长 uint64 	| ID长度 uint32
+	111		| 111				| 111
+TAG	| ID | LEN | VALUE
+------------------------------------------------
+当 TList  的 TAG
+类型 Type	| 数量值的长 uint64 	| ID长度 uint32
+	111		| 111				| 111
+TAG	| ID | COUNT | <VALUE | <VALUE> |...>
+------------------------------------------------
+当 TMap  的 TAG
+类型 Type	| 是否有KEY	| 数量值的长 uint64 	| ID长度 uint32
+	111		| 1			| 11				| 111
+TAG	| ID | COUNT | <<KEY> | VALUE | <<KEY> | VALUE> | ...>
+------------------------------------------------
+当 TData  的 TAG
+类型 Type	| 是否有Extend	| 数量值的长 uint64 	| ID长度 uint32
+	111		| 1				| 11				| 111
+TAG	| ID | COUNT | <EXTEND_COUNT | Extend| <> | ...> | <FIELD ...>
 
 */
 
 type Type byte
 
 const (
-	TInt = iota + 1
+	TInt = iota + 0
 	TUint
 	TFloat
-	TDouble
 	TBytes
 	TList
 	TMap
-	TSet
 	TData
-	TExtend
 )
 
 func LengthInt64(v int64) uint8 {
