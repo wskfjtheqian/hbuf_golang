@@ -4,13 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="添加本地Key锁">
-      <change beforePath="$PROJECT_DIR$/.idea/hbuf_golang.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/hbuf_golang.iml" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="完成数据结构的定义">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/hbuf/buffer.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/buffer.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/hbuf/buffer_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/buffer_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/hbuf/data_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/hbuf/data_test.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,6 +21,7 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Go File" />
+        <option value="HTML File" />
       </list>
     </option>
   </component>
@@ -76,6 +74,7 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "DefaultGoTemplateProperty": "Go File",
+    "DefaultHtmlFileTemplate": "HTML File",
     "Go Test.TestDecoderField in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
     "Go Test.TestDecoderId in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Debug",
     "Go Test.TestDecoderInt64 in github.com/wskfjtheqian/hbuf_golang/pkg/hbuf.executor": "Run",
@@ -91,7 +90,7 @@
     "git-widget-placeholder": "v2.0.0",
     "go.import.settings.migrated": "true",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "E:/dev/3.hbuf/hbuf_golang",
+    "last_opened_file_path": "E:/dev/3.hbuf/hbuf_golang/pkg/hbuf",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -104,11 +103,11 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="E:\dev\3.hbuf\hbuf_golang\pkg\hbuf" />
       <recent name="$PROJECT_DIR$/pkg/rpc" />
       <recent name="$PROJECT_DIR$/pkg/etcd" />
       <recent name="$PROJECT_DIR$/pkg/utils" />
       <recent name="$PROJECT_DIR$/pkg" />
-      <recent name="D:\dev\1.hbuf\hbuf_golang\pkg\http" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/err" />
@@ -302,7 +301,7 @@
       <workItem from="1687498180800" duration="1770000" />
       <workItem from="1697942534976" duration="638000" />
       <workItem from="1697974625148" duration="117000" />
-      <workItem from="1723516151536" duration="10776000" />
+      <workItem from="1723516151536" duration="13254000" />
     </task>
     <task id="LOCAL-00016" summary="添加Json Sever Context">
       <created>1658941553835</created>
@@ -647,7 +646,7 @@
       <option name="project" value="LOCAL" />
       <updated>1685890235235</updated>
     </task>
-    <option name="localTasksCounter" value="65" />
+    <option name="localTasksCounter" value="66" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -731,7 +730,8 @@
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="GetFieldsByList" />
-    <option name="LAST_COMMIT_MESSAGE" value="GetFieldsByList" />
+    <MESSAGE value="完成数据结构的定义" />
+    <option name="LAST_COMMIT_MESSAGE" value="完成数据结构的定义" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

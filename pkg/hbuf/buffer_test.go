@@ -94,7 +94,8 @@ type BufferTest1 struct {
 }
 
 func (b BufferTest1) Encoder(w io.Writer) (err error) {
-	WriterBytes(w,1,b.Field1)
+
+	return nil
 }
 
 func (b BufferTest1) Decoder(r io.Reader) (err error) {
@@ -103,7 +104,7 @@ func (b BufferTest1) Decoder(r io.Reader) (err error) {
 }
 
 func TestBufferTest1(t *testing.T) {
-	b:=BufferTest1{
-		Field1: "https://translate.google.com/?hl=zh-CN&tab=TT&sl=auto&tl=zh-CN&op=translate"
-	}
+	//b:=BufferTest1{
+	//	Field1: "https://translate.google.com/?hl=zh-CN&tab=TT&sl=auto&tl=zh-CN&op=translate"
+	//}
 }

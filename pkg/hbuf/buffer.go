@@ -48,26 +48,6 @@ const (
 	TData
 )
 
-func LengthInt64(v int64) uint8 {
-	if v <= 0xFF {
-		return 1
-	} else if v <= 0xFFFF {
-		return 2
-	} else if v <= 0xFFFFFF {
-		return 3
-	} else if v <= 0xFFFFFFFF {
-		return 4
-	} else if v <= 0xFFFFFFFFFF {
-		return 5
-	} else if v <= 0xFFFFFFFFFFFF {
-		return 6
-	} else if v <= 0xFFFFFFFFFFFFFF {
-		return 7
-	} else {
-		return 8
-	}
-}
-
 func WriterField(w io.Writer, typ Type, id uint16, valueLen uint8) (err error) {
 	var b []byte
 	var length uint8
