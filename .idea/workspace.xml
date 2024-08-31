@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="开始二制编码">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/cache.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/cache.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cache/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/config.go" afterDir="false" />
+    <list default="true" id="189cdb62-bf8e-4f2d-8317-c043d3a8ef4a" name="Changes" comment="修改Redis连接池配置">
+      <change beforePath="$PROJECT_DIR$/pkg/cache/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cache/config.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -303,7 +301,7 @@
       <workItem from="1697942534976" duration="638000" />
       <workItem from="1697974625148" duration="117000" />
       <workItem from="1725070481445" duration="1184000" />
-      <workItem from="1725083197222" duration="1123000" />
+      <workItem from="1725083197222" duration="1474000" />
     </task>
     <task id="LOCAL-00016" summary="添加Json Sever Context">
       <created>1658941553835</created>
@@ -648,7 +646,7 @@
       <option name="project" value="LOCAL" />
       <updated>1685890235235</updated>
     </task>
-    <option name="localTasksCounter" value="65" />
+    <option name="localTasksCounter" value="66" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -695,7 +693,7 @@
                   <entry key="branch">
                     <value>
                       <list>
-                        <option value="main" />
+                        <option value="origin/master" />
                       </list>
                     </value>
                   </entry>
@@ -732,7 +730,8 @@
     <MESSAGE value="新的ID生成方式" />
     <MESSAGE value="修改BUG" />
     <MESSAGE value="GetFieldsByList" />
-    <option name="LAST_COMMIT_MESSAGE" value="GetFieldsByList" />
+    <MESSAGE value="修改Redis连接池配置" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改Redis连接池配置" />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

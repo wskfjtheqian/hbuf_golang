@@ -12,3 +12,7 @@ max_active: 16
 idle_timeout: 100
 #数据库ID
 db: 5
+#如果 Wait 为真且池处于 MaxActive 限制，则 Get() 等待连接返回池后再返回
+wait: true
+#关闭超过此持续时间的连接。如果值为零，则池不会根据年龄关闭连接
+max_conn_life_time: 1000ms
