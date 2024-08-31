@@ -7,13 +7,15 @@ import (
 )
 
 type Config struct {
-	Network     *string `yaml:"network"`      // 网络类型
-	Address     *string `yaml:"address"`      // Redis 服务器地址
-	Password    *string `yaml:"password"`     // 密码
-	MaxIdle     *int    `yaml:"max_idle"`     // 最大空闲链接数 默认8
-	MaxActive   *int    `yaml:"max_active"`   // 表示和数据库的最大链接数， 默认0 表示没有限制
-	IdleTimeout *int    `yaml:"idle_timeout"` // 最大空闲时间  默认0100ms
-	Db          int     `yaml:"db"`           // 数据库ID
+	Network         *string `yaml:"network"`            // 网络类型
+	Address         *string `yaml:"address"`            // Redis 服务器地址
+	Password        *string `yaml:"password"`           // 密码
+	MaxIdle         *int    `yaml:"max_idle"`           // 最大空闲链接数 默认8
+	MaxActive       *int    `yaml:"max_active"`         // 表示和数据库的最大链接数， 默认0 表示没有限制
+	IdleTimeout     *int    `yaml:"idle_timeout"`       // 最大空闲时间  默认0100ms
+	Db              int     `yaml:"db"`                 // 数据库ID
+	Wait            *bool   `yaml:"wait"`               // 如果 Wait 为真且池处于 MaxActive 限制，则 Get() 等待连接返回池后再返回
+	MaxConnLifetime *int    `yaml:"max_conn_life_time"` // 关闭超过此持续时间的连接。如果值为零，则池不会根据年龄关闭连接
 }
 
 func (c *Config) Yaml() string {

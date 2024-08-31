@@ -92,13 +92,25 @@ func (c *Cache) SetConfig(config *Config) {
 		idleTimeout = time.Millisecond * time.Duration(*config.IdleTimeout)
 	}
 
+	wait := false
+	if nil != config.Wait {
+		wait = *config.Wait
+	}
+
+	maxConnLifetime := time.Duration(0)
+	if nil != config.MaxConnLifetime {
+		maxConnLifetime = time.Millisecond * time.Duration(*config.MaxConnLifetime)
+	}
+
 	if nil != c.pool {
 		c.pool.Close()
 	}
 	c.pool = &redis.Pool{
-		MaxIdle:     maxIdle,
-		MaxActive:   maxActive,
-		IdleTimeout: idleTimeout,
+		MaxIdle:         maxIdle,
+		MaxActive:       maxActive,
+		IdleTimeout:     idleTimeout,
+		Wait:            wait,
+		MaxConnLifetime: maxConnLifetime,
 		Dial: func() (redis.Conn, error) {
 			option := make([]redis.DialOption, 0)
 			if nil != config.Password && 0 < len(*config.Password) {
