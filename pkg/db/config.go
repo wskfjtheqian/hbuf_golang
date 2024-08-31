@@ -4,17 +4,17 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Type        *string `yaml:"type"`         // 数据库类型
-	URL         *string `yaml:"url"`          // 数据库链接
-	Username    *string `yaml:"username"`     // 用户名
-	Password    *string `yaml:"password"`     // 密码
-	MaxIdle     *int    `yaml:"max_idle"`     // 最大空闲链接数 默认8
-	MaxActive   *int    `yaml:"max_active"`   // 表示和数据库的最大链接数， 默认0 表示没有限制
-	IdleTimeout *int    `yaml:"idle_timeout"` // 最大空闲时间  默认0100ms
+	Type            *string `yaml:"type"`              // 数据库类型
+	URL             *string `yaml:"url"`               // 数据库链接
+	Username        *string `yaml:"username"`          // 用户名
+	Password        *string `yaml:"password"`          // 密码
+	MaxIdle         *int    `yaml:"max_idle"`          // 最大空闲链接数 默认8
+	MaxActive       *int    `yaml:"max_active"`        // 表示和数据库的最大链接数， 默认0 表示没有限制
+	IdleTimeout     *int    `yaml:"idle_timeout"`      // 最大空闲时间  默认 100ms
+	ConnMaxLifetime *int    `yaml:"conn_max_lifetime"` //设置数据库闲链接超时时间 默认 20000ms
 }
 
 func (c *Config) Yaml() string {
