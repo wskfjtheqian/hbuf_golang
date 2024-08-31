@@ -45,15 +45,15 @@ func KeyLock(key string) sync.Locker {
 
 type keyLock struct {
 	lock  sync.Mutex
-	count atomic.Uint64
+	count atomic.Int64
 }
 
 func (k *keyLock) Lock() {
 	k.count.Add(1)
-	lock.Lock()
+	k.lock.Lock()
 }
 
 func (k *keyLock) Unlock() {
-	lock.Unlock()
+	k.lock.Unlock()
 	k.count.Add(-1)
 }

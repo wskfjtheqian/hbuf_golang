@@ -6,15 +6,26 @@ import (
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
+	"net/http"
+	"net/textproto"
 	"reflect"
 	"sync"
 )
 
+type rpcType int
+
+const Request = 0
+const Response = 1
+const Broadcast = 2
+const Heartbeat = 3
+const AuthSuccess = 4
+const AuthFailure = 5
+
 type Context struct {
 	context.Context
 	done    chan struct{}
-	header  map[string]string
-	tags    map[string]any
+	header  http.Header
+	tags    map[string][]any
 	method  string
 	onClone func(ctx context.Context) (context.Context, error)
 }
@@ -23,8 +34,8 @@ func NewContext(ctx context.Context) context.Context {
 	return &Context{
 		Context: ctx,
 		done:    make(chan struct{}),
-		header:  make(map[string]string, 0),
-		tags:    make(map[string]any, 0),
+		header:  http.Header{},
+		tags:    make(map[string][]any, 0),
 	}
 }
 
@@ -37,6 +48,10 @@ func (c *Context) Value(key any) any {
 		return c
 	}
 	return c.Context.Value(key)
+}
+
+func IsContext(ctx context.Context) bool {
+	return nil != ctx.Value(contextType)
 }
 
 var contextType = reflect.TypeOf(&Context{})
@@ -68,8 +83,8 @@ func CloneContext(ctx context.Context) (context.Context, error) {
 	c = &Context{
 		Context: c.Context,
 		done:    make(chan struct{}),
-		//header:  header,
-		//tags:    tags,
+		header:  http.Header{},
+		tags:    map[string][]any{},
 		onClone: c.onClone,
 	}
 
@@ -92,7 +107,15 @@ func SetHeader(ctx context.Context, key string, value string) {
 	if nil == ret {
 		return
 	}
-	ret.(*Context).header[key] = value
+	ret.(*Context).header.Set(key, value)
+}
+
+func AddHeader(ctx context.Context, key string, value string) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return
+	}
+	ret.(*Context).header.Add(key, value)
 }
 
 func GetHeader(ctx context.Context, key string) (value string, ok bool) {
@@ -100,19 +123,40 @@ func GetHeader(ctx context.Context, key string) (value string, ok bool) {
 	if nil == ret {
 		return "", false
 	}
-	value, ok = ret.(*Context).header[key]
-	return
+	header := ret.(*Context).header
+	_, ok = header[textproto.CanonicalMIMEHeaderKey(key)]
+	return header.Get(key), ok
 }
 
-func GetHeaders(ctx context.Context) (value map[string]string) {
+func DelHeader(ctx context.Context, key string) (ok bool) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
-		return map[string]string{}
+		return false
+	}
+	header := ret.(*Context).header
+	_, ok = header[textproto.CanonicalMIMEHeaderKey(key)]
+	header.Del(key)
+	return ok
+}
+
+func ValuesHeader(ctx context.Context, key string) []string {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return nil
+	}
+	header := ret.(*Context).header
+	return header.Values(key)
+}
+
+func GetHeaders(ctx context.Context) (value http.Header) {
+	var ret = ctx.Value(contextType)
+	if nil == ret {
+		return http.Header{}
 	}
 	return ret.(*Context).header
 }
 
-func SetTag(ctx context.Context, key string, value string) {
+func SetTag(ctx context.Context, key string, value ...any) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return
@@ -120,7 +164,7 @@ func SetTag(ctx context.Context, key string, value string) {
 	ret.(*Context).tags[key] = value
 }
 
-func GetTag(ctx context.Context, key string) (value any, ok bool) {
+func GetTag(ctx context.Context, key string) (value []any, ok bool) {
 	var ret = ctx.Value(contextType)
 	if nil == ret {
 		return nil, false
@@ -317,7 +361,7 @@ type Client interface {
 }
 
 type Invoke interface {
-	Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error
+	Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

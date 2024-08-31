@@ -7,8 +7,8 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	etc "github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/manage"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/mq"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"os"
 	"sync"
@@ -44,7 +44,7 @@ func GET(ctx context.Context) *App {
 
 type App struct {
 	lock         sync.Mutex
-	manage       *manage.Manage
+	manage       *manage.BaseManage
 	db           *db.Database
 	cache        *cache.Cache
 	etcd         *etc.Etcd
@@ -53,6 +53,7 @@ type App struct {
 	workerId     int64
 	ctx          context.Context
 	config       *Config
+	nats         *mq.Nats
 }
 
 func NewApp() *App {
@@ -60,6 +61,7 @@ func NewApp() *App {
 		db:     db.NewDB(),
 		cache:  cache.NewCache(),
 		etcd:   etc.NewEtcd(),
+		nats:   mq.NewNats(),
 		manage: manage.NewManage(),
 		ext:    rpc.NewServer(),
 	}
@@ -67,14 +69,15 @@ func NewApp() *App {
 	server := app.ext
 	server.PrefixFilter(app.OnFilter)
 	server.PrefixFilter(app.etcd.OnFilter)
+	server.PrefixFilter(app.nats.OnFilter)
 	server.PrefixFilter(app.db.OnFilter)
 	server.PrefixFilter(app.manage.OnFilter)
 	server.PrefixFilter(app.cache.OnFilter)
-	server.PrefixFilter(app.onHttpFilter)
 
 	server = app.manage.RpcServer()
 	server.PrefixFilter(app.OnFilter)
 	server.PrefixFilter(app.etcd.OnFilter)
+	server.PrefixFilter(app.nats.OnFilter)
 	server.PrefixFilter(app.db.OnFilter)
 	server.PrefixFilter(app.manage.OnFilter)
 	server.PrefixFilter(app.cache.OnFilter)
@@ -103,6 +106,7 @@ func (a *App) SetConfig(config *Config) {
 		a.db.SetConfig(nil)
 		a.cache.SetConfig(nil)
 		a.etcd.SetConfig(nil)
+		a.nats.SetConfig(nil)
 		a.manage.SetConfig(nil)
 		a.config = nil
 		return
@@ -116,23 +120,12 @@ func (a *App) SetConfig(config *Config) {
 	a.db.SetConfig(config.DB)
 	a.cache.SetConfig(config.Redis)
 	a.etcd.SetConfig(config.Etcd)
+	a.nats.SetConfig(config.Nats)
 	a.manage.SetConfig(config.Server)
 	if nil != config {
 		a.dataCenterId = config.DataCenterId
 		a.workerId = config.WorkerId
 	}
-}
-
-func (a *App) onHttpFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
-	jc := rpc.GetHttp(ctx)
-	if nil != jc {
-		ip, err := ip.GetHttpIP(jc.Request)
-		if err != nil {
-			return nil, data, err
-		}
-		rpc.SetHeader(ctx, "IP", ip)
-	}
-	return in.OnNext(ctx, data, call)
 }
 
 func (a *App) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
@@ -145,7 +138,11 @@ func (a *App) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call
 	return in.OnNext(ctx, data, call)
 }
 
-func (a *App) GetManage() *manage.Manage {
+func (a *App) GetEtcd() *etc.Etcd {
+	return a.etcd
+}
+
+func (a *App) GetManage() *manage.BaseManage {
 	return a.manage
 }
 
@@ -160,7 +157,9 @@ func (a *App) GetCache() *cache.Cache {
 func (a *App) GetExt() *rpc.Server {
 	return a.ext
 }
-
+func (a *App) GetNats() *mq.Nats {
+	return a.nats
+}
 func (a *App) GetDataCenterId() int64 {
 	return a.dataCenterId
 }
@@ -180,6 +179,6 @@ func (a *App) CloneContext() context.Context {
 
 func (a *App) Init() {
 	ctx := a.CloneContext()
-	defer rpc.CloneContext(ctx)
+	defer rpc.CloseContext(ctx)
 	a.manage.Init(ctx)
 }

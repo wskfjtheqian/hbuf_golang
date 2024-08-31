@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"flag"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"html/template"
-	"log"
 )
 
 type Watch interface {
@@ -19,16 +19,15 @@ type Value interface {
 	CheckConfig() int
 }
 
+var (
+	hostname  = flag.String("h", "", "Host name")
+	path      = flag.String("c", "", "Config.yaml file path")
+	endpoints = flag.String("e", "", "Etcd endpoints")
+)
+
 func NewWatch() Watch {
-	var hostname string
-	flag.StringVar(&hostname, "h", "", "Host name")
-	var path string
-	flag.StringVar(&path, "c", "", "Config.yaml file path")
-	var endpoints string
-	flag.StringVar(&endpoints, "e", "", "Etcd endpoints")
-	flag.Parse()
-	if 0 == len(hostname) {
-		log.Fatal("请输入 Host name")
+	if 0 == len(*hostname) {
+		hlog.Exit("请输入 Host name")
 	}
 
 	keyVal := map[string]any{
@@ -36,16 +35,16 @@ func NewWatch() Watch {
 	}
 
 	var c Watch
-	if 0 != len(endpoints) {
-		log.Println("Host name:" + hostname)
-		log.Println("Etcd endpoints:" + endpoints)
-		c = NewEtcdConfig(hostname, endpoints, keyVal)
-	} else if 0 != len(path) {
-		log.Println("Host name:" + hostname)
-		log.Println("Config.yaml file path:" + path)
-		c = NewFileConfig(hostname, path, keyVal)
+	if 0 != len(*endpoints) {
+		hlog.Info("Host name:" + *hostname)
+		hlog.Info("Etcd endpoints:" + *endpoints)
+		c = NewEtcdConfig(*hostname, *endpoints, keyVal)
+	} else if 0 != len(*path) {
+		hlog.Info("Host name:" + *hostname)
+		hlog.Info("Config.yaml file path:" + *path)
+		c = NewFileConfig(*hostname, *path, keyVal)
 	} else {
-		log.Fatal("请输入 config.yaml file path or etcd endpoints")
+		hlog.Exit("请输入 config.yaml file path or etcd endpoints")
 	}
 	return c
 }

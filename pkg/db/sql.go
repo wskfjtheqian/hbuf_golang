@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
-	"log"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -64,6 +64,7 @@ type Sql struct {
 	text     strings.Builder
 	params   []any
 	cacheKey string
+	del      string
 }
 
 func NewSql() *Sql {
@@ -73,12 +74,14 @@ func NewSql() *Sql {
 	}
 }
 
+// T 添加文本
 func (s *Sql) T(query string) *Sql {
-	s.text.WriteString(strings.Trim(strings.Trim(query, " "), "\t"))
+	s.text.WriteString(s.removeStart(strings.Trim(strings.Trim(query, " "), "\t")))
 	s.text.WriteString(" ")
 	return s
 }
 
+// V 添加值得
 func (s *Sql) V(a any) *Sql {
 	s.text.WriteString("? ")
 	s.params = append(s.params, a)
@@ -92,12 +95,26 @@ func (s *Sql) P(args ...any) {
 func (s *Sql) L(question string, args ...any) *Sql {
 	for i, _ := range args {
 		if 0 != i {
-			s.text.WriteString(question)
+			s.text.WriteString(s.removeStart(question))
 		}
 		s.text.WriteString("? ")
 	}
 	s.params = append(s.params, args...)
 	return s
+}
+
+func (s *Sql) removeStart(question string) string {
+	if len(s.del) > 0 {
+		if 0 == strings.Index(question, s.del) {
+			question = question[len(s.del):]
+		}
+		s.del = ""
+	}
+	return question
+}
+
+func (s *Sql) Del(text string) {
+	s.del = text
 }
 
 func (s *Sql) ToText() string {
@@ -106,59 +123,83 @@ func (s *Sql) ToText() string {
 }
 
 func (s *Sql) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
-	var now = time.Now().UnixMilli()
+	var count int64 = 0
+	defer newPrintLog(s, &count).print()
+
 	result, err := GET(ctx).Query(s.text.String(), s.params...)
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, err
 	}
 	defer result.Close()
-	var count int64 = 0
+
 	isScan := true
 	for result.Next() {
 		count++
 		if isScan {
 			isScan, err = scan(result)
 			if err != nil {
-				printLog(now, 0, s.ToText())
 				return 0, err
 			}
 		}
 	}
-	printLog(now, count, s.ToText())
 	return count, nil
 }
 
 func (s *Sql) Exec(ctx context.Context) (int64, int64, error) {
-	var now = time.Now().UnixMilli()
+	var count int64 = 0
+	defer newPrintLog(s, &count).print()
+
 	result, err := GET(ctx).Exec(s.text.String(), s.params...)
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, 0, err
 	}
-	count, err := result.RowsAffected()
+	count, err = result.RowsAffected()
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, 0, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		printLog(now, 0, s.ToText())
 		return 0, 0, err
 	}
-	printLog(now, count, s.ToText())
 	return count, id, nil
 }
 
-func printLog(now, count int64, sql string) {
-	now = time.Now().UnixMilli() - now
+type printLog struct {
+	now   int64
+	count *int64
+	s     *Sql
+}
+
+func (p *printLog) print() {
+	if !PrintSQL {
+		return
+	}
+	now := time.Now().UnixMilli() - p.now
 	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "s]"
 	if 200 > now {
 		t = utl.Yellow(t)
 	} else {
 		t = utl.Red(t)
 	}
-	_ = log.Output(3, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(count, 10)+"] "), utl.Green(sql)))
+	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(*p.count, 10)+"] "), utl.Green(p.s.ToText())))
+}
+
+func newPrintLog(s *Sql, count *int64) *printLog {
+	ret := &printLog{
+		s:     s,
+		count: count,
+	}
+	if PrintSQL {
+		ret.now = time.Now().UnixMilli()
+	}
+	return ret
+}
+
+var LogSQL = hlog.INFO + 100
+var PrintSQL = true
+
+func init() {
+	hlog.SetLevelName(LogSQL, "SQL")
 }
 
 func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {

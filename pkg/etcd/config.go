@@ -2,8 +2,8 @@ package etc
 
 import (
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"gopkg.in/yaml.v3"
-	"log"
 	"time"
 )
 
@@ -24,7 +24,7 @@ func (con *Config) CheckConfig() int {
 	errCount := 0
 	if nil == con.Endpoints || 0 == len(con.Endpoints) {
 		errCount++
-		log.Println("未找到Etcd 连接地址")
+		hlog.Error("未找到Etcd 连接地址")
 	}
 	return errCount
 }

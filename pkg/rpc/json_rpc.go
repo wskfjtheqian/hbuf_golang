@@ -8,7 +8,6 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	ht "net/http"
-	"sync"
 )
 
 type ClientJson struct {
@@ -27,9 +26,12 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 		return nil, utl.Wrap(err)
 	}
 	b := bytes.NewBuffer(nil)
-	err = s.client.Invoke(ctx, name, bytes.NewReader(buffer), b)
+	err = s.client.Invoke(ctx, name, bytes.NewReader(buffer), b, nil == nameInvoke.ToData)
 	if err != nil {
 		return nil, err
+	}
+	if nil == nameInvoke.ToData {
+		return nil, nil
 	}
 	var res Result
 	err = json.Unmarshal(b.Bytes(), &res)
@@ -50,7 +52,6 @@ func (s *ClientJson) Invoke(ctx context.Context, param hbuf.Data, name string, n
 
 type ServerJson struct {
 	server *Server
-	lock   sync.RWMutex
 }
 
 func NewServerJson(server *Server) *ServerJson {
@@ -59,7 +60,7 @@ func NewServerJson(server *Server) *ServerJson {
 	}
 }
 
-func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	value, ok := s.server.Router()[name]
 	if !ok {
 		return &Result{Code: ht.StatusNotFound, Msg: "not found"}
@@ -92,13 +93,16 @@ func (s *ServerJson) Invoke(ctx context.Context, name string, in io.Reader, out 
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
+
+	if value.FormData != nil {
+		buffer, err = value.FormData(data)
+		if err != nil {
+			return err
+		}
+	} else {
+		buffer = nil
 	}
-	buffer, err = value.FormData(data)
-	if err != nil {
-		return err
-	}
+
 	buffer, err = json.Marshal(Result{
 		Code: 0,
 		Msg:  "Ok",

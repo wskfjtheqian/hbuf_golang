@@ -5,10 +5,10 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
-	"log"
 	"reflect"
 	"sync"
 )
@@ -19,7 +19,7 @@ type contextValue struct {
 }
 
 func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.SessionOption) (*concurrency.Session, error) {
-	if nil != v.client {
+	if nil == v.client {
 		return nil, erro.NewError("未开启Etcd 功能")
 	}
 	if nil != v.session {
@@ -35,7 +35,7 @@ func (v *contextValue) GetSession(ctx context.Context, opts ...concurrency.Sessi
 		case <-ctx.Done():
 			err := v.session.Close()
 			if err != nil {
-				log.Println(err)
+				hlog.Exit(err)
 			}
 			v.session = nil
 		}
@@ -105,7 +105,7 @@ func (d *Etcd) SetConfig(config *Config) {
 	}
 	client, err := clientv3.New(c)
 	if err != nil {
-		log.Println("Etcd服务器连接失败，请检查配置是否正确", err)
+		hlog.Exit("Etcd服务器连接失败，请检查配置是否正确", err)
 	}
 	d.client = client
 }

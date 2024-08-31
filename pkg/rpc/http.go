@@ -2,13 +2,16 @@ package rpc
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	utl "github.com/wskfjtheqian/hbuf_golang/pkg/utils"
+	"golang.org/x/net/http2"
 	"io"
 	ht "net/http"
 	"reflect"
+	"strings"
 )
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,19 +22,32 @@ type ClientHttp struct {
 }
 
 func NewClientHttp(base string) *ClientHttp {
+	transport := &ht.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	if 0 == strings.Index(base, "https://") {
+		err := http2.ConfigureTransport(transport)
+		if err != nil {
+			erro.PrintStack(err)
+		}
+	}
 	return &ClientHttp{
-		base:   base,
-		client: &ht.Client{},
+		base: base,
+		client: &ht.Client{
+			Transport: transport,
+		},
 	}
 }
 
-func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer) error {
+func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
 	request, err := ht.NewRequest("POST", utl.UrlJoin(h.base, name), in)
 	if err != nil {
 		return err
 	}
-	for key, val := range GetHeaders(ctx) {
-		request.Header.Add(key, val)
+	for key, values := range GetHeaders(ctx) {
+		for _, value := range values {
+			request.Header.Add(key, value)
+		}
 	}
 	response, err := h.client.Do(request)
 	if err != nil {
@@ -47,7 +63,7 @@ func (h *ClientHttp) Invoke(ctx context.Context, name string, in io.Reader, out 
 	return nil
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 type httpContext struct {
 	context.Context
 	value *HttpContextValue
@@ -106,7 +122,7 @@ func (s *ServerHttp) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 			Request: r,
 		},
 	}
-	err := s.invoke.Invoke(ctx, r.URL.Path[len(s.pathPrefix):], r.Body, w)
+	err := s.invoke.Invoke(ctx, r.URL.Path[len(s.pathPrefix):], r.Body, w, false)
 	if err != nil {
 		if res, ok := err.(*Result); ok {
 			marshal, err := json.Marshal(res)

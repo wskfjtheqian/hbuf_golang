@@ -1,6 +1,10 @@
 package manage
 
-import "gopkg.in/yaml.v3"
+import (
+	"crypto/tls"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"gopkg.in/yaml.v3"
+)
 
 type Config struct {
 	Server *Server `yaml:"server"` //服务配置
@@ -23,7 +27,7 @@ func (con *Config) CheckConfig() int {
 	return errCount
 }
 
-//Http 服务配置
+// Http 服务配置
 type Http struct {
 	Hostname *string `yaml:"hostname"` //主机名
 	Address  *string `yaml:"address"`  //监听地址
@@ -43,16 +47,22 @@ func (h *Http) Yaml() string {
 func (h *Http) CheckConfig() int {
 	errCount := 0
 
+	if h.Crt != nil && h.Key != nil {
+		_, err := tls.LoadX509KeyPair(*h.Crt, *h.Key)
+		if err != nil {
+			hlog.Error("HttpRpc 证书错误:", err.Error())
+			errCount++
+		}
+	}
 	return errCount
 }
 
 // Server 服务配置
 type Server struct {
-	Register  bool      `yaml:"register"`   //是否注册服务到注册中心
-	Local     bool      `yaml:"local"`      //是否开启本地服务
-	Http      *Http     `yaml:"http"`       //Http 服务配置
-	WebSocket *Http     `yaml:"web_socket"` //WebSocket 服务配置
-	List      *[]string `yaml:"list"`       //开始的服务列表
+	Register bool      `yaml:"register"` //是否注册服务到注册中心
+	Local    bool      `yaml:"local"`    //是否开启本地服务
+	Http     *Http     `yaml:"http"`     //Http 服务配置
+	List     *[]string `yaml:"list"`     //开始的服务列表
 }
 
 func (s *Server) Yaml() string {
@@ -65,6 +75,7 @@ func (s *Server) Yaml() string {
 
 func (s *Server) CheckConfig() int {
 	errCount := 0
+	errCount += s.Http.CheckConfig()
 
 	return errCount
 }
