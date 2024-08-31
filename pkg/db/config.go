@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
