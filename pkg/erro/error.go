@@ -3,7 +3,6 @@ package erro
 import (
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"os"
 	"reflect"
 	"runtime/debug"
 )
@@ -28,8 +27,8 @@ func Wrap(err error) *Error {
 }
 
 func (e *Error) PrintStack() {
-	_, _ = os.Stderr.WriteString(e.Error())
-	_, _ = os.Stderr.Write(e.stack)
+	_ = hlog.Output(2, hlog.ERROR, e.Error())
+	_ = hlog.Output(2, hlog.ERROR, string(e.stack))
 }
 
 func (e *Error) Unwrap() error { return e.error }
