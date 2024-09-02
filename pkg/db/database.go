@@ -159,7 +159,7 @@ func (d *Database) SetConfig(config *Config) {
 	db.SetConnMaxIdleTime(idleTimeout)
 
 	connMaxLifetime := time.Millisecond * 20000
-	if nil != config.IdleTimeout {
+	if nil != config.ConnMaxLifetime {
 		connMaxLifetime = time.Millisecond * time.Duration(*config.ConnMaxLifetime)
 	}
 	db.SetConnMaxLifetime(connMaxLifetime)
