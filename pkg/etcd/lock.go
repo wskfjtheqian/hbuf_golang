@@ -33,6 +33,28 @@ func Lock(ctx context.Context, pfx string) (*EtcdLock, error) {
 	return l, nil
 }
 
+func TryLock(ctx context.Context, pfx string) (*EtcdLock, error) {
+	session, err := GET(ctx).GetSession(ctx)
+	if err != nil {
+		return nil, utl.Wrap(err)
+	}
+	l := &EtcdLock{
+		ctx:   ctx,
+		mutex: concurrency.NewMutex(session, "mutex-"+pfx),
+	}
+	err = l.mutex.TryLock(ctx)
+	if err != nil {
+		return nil, utl.Wrap(err)
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			l.mutex = nil
+		}
+	}()
+	return l, nil
+}
+
 func (l *EtcdLock) Unlock() error {
 	if nil == l.mutex {
 		return nil
