@@ -21,6 +21,10 @@ const Heartbeat = 3
 const AuthSuccess = 4
 const AuthFailure = 5
 
+type ContextClone interface {
+	Clone() context.Context
+}
+
 type Context struct {
 	context.Context
 	done    chan struct{}
