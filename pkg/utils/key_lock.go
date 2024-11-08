@@ -57,3 +57,11 @@ func (k *keyLock) Unlock() {
 	k.lock.Unlock()
 	k.count.Add(-1)
 }
+
+func (k *keyLock) TryLock() bool {
+	if k.lock.TryLock() {
+		k.count.Add(-1)
+		return true
+	}
+	return false
+}
