@@ -44,11 +44,7 @@ func TestJsonService_EncInvoke(t *testing.T) {
 			encoder := base64.NewEncoder(base64.StdEncoding, writer)
 			defer encoder.Close()
 
-			err := response(ctx, encoder, decoder)
-			if err != nil {
-				return err
-			}
-			return nil
+			return response(ctx, encoder, decoder)
 		}
 	}))
 
@@ -56,16 +52,15 @@ func TestJsonService_EncInvoke(t *testing.T) {
 	go http.ListenAndServe(":8080", nil)
 
 	client := NewHttpClient("http://localhost:8080/rpc", WithRequestFilter(func(ctx context.Context, request Request) Request {
-		return func(ctx context.Context, path string, reader io.Reader) (io.ReadCloser, error) {
-			buffer := bytes.NewBuffer(nil)
-			encoder := base64.NewEncoder(base64.StdEncoding, buffer)
-			defer encoder.Close()
-			_, err := io.Copy(encoder, reader)
-			if err != nil {
-				return nil, err
-			}
+		return func(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 
-			body, err := request(ctx, path, buffer)
+			body, err := request(ctx, path, func(writer io.Writer) error {
+				encoder := base64.NewEncoder(base64.StdEncoding, writer)
+				defer encoder.Close()
+
+				return callback(encoder)
+			})
+
 			if err != nil {
 				return nil, err
 			}

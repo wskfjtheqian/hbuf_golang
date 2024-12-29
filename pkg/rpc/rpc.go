@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,7 +21,7 @@ const (
 	TypeAuthFailure
 )
 
-type Request func(ctx context.Context, path string, reader io.Reader) (io.ReadCloser, error)
+type Request func(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error)
 
 type RequestFilter func(ctx context.Context, request Request) Request
 
@@ -45,7 +44,7 @@ type Method interface {
 	DecodeRequest(decoder func(v any) error) (hbuf.Data, error)
 }
 
-// Method 是用于处理RPC请求的接口
+// MethodImpl 是用于处理RPC请求的接口
 type MethodImpl[T hbuf.Data, E hbuf.Data] struct {
 	Id      uint32
 	Name    string
@@ -83,12 +82,10 @@ type Result[T hbuf.Data] struct {
 }
 
 func (r Result[T]) Encoder(writer io.Writer) (err error) {
-	//TODO implement me
 	panic("implement me")
 }
 
 func (r Result[T]) Decoder(reader io.Reader) (err error) {
-	//TODO implement me
 	panic("implement me")
 }
 
@@ -159,17 +156,11 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return err
 	}
 
-	result := Result[hbuf.Data]{
+	return r.encode(writer)(&Result[hbuf.Data]{
 		Code: 0,
-		Msg:  "",
+		Msg:  "ok",
 		Data: response,
-	}
-	err = r.encode(writer)(&result)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	})
 }
 
 //////////////////////////////////////////////////////
@@ -198,13 +189,9 @@ type Client struct {
 func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.filter(ctx, func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-		writer := bytes.NewBuffer(nil)
-		err := c.encode(writer)(req)
-		if err != nil {
-			return nil, err
-		}
-
-		reader, err := c.request(ctx, name+method, writer)
+		reader, err := c.request(ctx, name+method, func(writer io.Writer) error {
+			return c.encode(writer)(req)
+		})
 		if err != nil {
 			return nil, err
 		}

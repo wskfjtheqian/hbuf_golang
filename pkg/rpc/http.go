@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -50,9 +51,15 @@ type HttpClient struct {
 	filter RequestFilter
 }
 
-func (h *HttpClient) Invoke(ctx context.Context, path string, reader io.Reader) (io.ReadCloser, error) {
-	return h.filter(ctx, func(ctx context.Context, path string, reader io.Reader) (io.ReadCloser, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.base+path, reader)
+func (h *HttpClient) Invoke(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	return h.filter(ctx, func(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+		buffer := bytes.NewBuffer(nil)
+		err := callback(buffer)
+		if err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.base+path, buffer)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +73,7 @@ func (h *HttpClient) Invoke(ctx context.Context, path string, reader io.Reader) 
 			return nil, errors.New(resp.Status)
 		}
 		return resp.Body, nil
-	})(ctx, path, reader)
+	})(ctx, path, callback)
 }
 
 func WithRequestFilter(filter RequestFilter) HttpClientOption {
