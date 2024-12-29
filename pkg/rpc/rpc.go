@@ -22,8 +22,13 @@ const (
 	TypeAuthFailure
 )
 
-// Invoke 是用于处理RPC请求的函数
-type Invoke func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error
+type Request func(ctx context.Context, path string, reader io.Reader) (io.ReadCloser, error)
+
+type RequestFilter func(ctx context.Context, request Request) Request
+
+type Response func(ctx context.Context, writer io.Writer, reader io.Reader) error
+
+type ResponseFilter func(ctx context.Context, response Response) Response
 
 // Handler 是用于处理RPC请求
 type Handler func(ctx context.Context, req hbuf.Data) (hbuf.Data, error)
@@ -112,9 +117,7 @@ func NewServer() *Server {
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
 		filter: func(ctx context.Context, handler Handler) Handler {
-			return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-				return handler(ctx, req)
-			}
+			return handler
 		},
 	}
 }
@@ -138,7 +141,7 @@ func (r *Server) Register(id int32, name string, methods ...Method) {
 	}
 }
 
-func (r *Server) Invoke(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+func (r *Server) Response(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 	r.lock.RLock()
 	method, ok := r.methods[path]
 	r.lock.RUnlock()
@@ -172,45 +175,43 @@ func (r *Server) Invoke(ctx context.Context, path string, writer io.Writer, read
 //////////////////////////////////////////////////////
 
 // NewClient 创建一个新的客户端
-func NewClient(invoke Invoke) *Client {
+func NewClient(request Request) *Client {
 	return &Client{
-		invoke: invoke,
-		decode: NewJsonDecode(),
-		encode: NewJsonEncode(),
+		request: request,
+		decode:  NewJsonDecode(),
+		encode:  NewJsonEncode(),
 		filter: func(ctx context.Context, handler Handler) Handler {
-			return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-				return handler(ctx, req)
-			}
+			return handler
 		},
 	}
 }
 
 // Client 是用于处理RPC请求的客户端
 type Client struct {
-	invoke Invoke
-	decode Decoder
-	encode Encoder
-	filter HandlerFilter
+	request Request
+	decode  Decoder
+	encode  Encoder
+	filter  HandlerFilter
 }
 
 // ClientCall 调用远程服务
 func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.filter(ctx, func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-		reader := bytes.NewBuffer(nil)
-		err := c.encode(reader)(req)
+		writer := bytes.NewBuffer(nil)
+		err := c.encode(writer)(req)
 		if err != nil {
 			return nil, err
 		}
 
-		writer := bytes.NewBuffer(nil)
-		err = c.invoke(ctx, name+method, writer, reader)
+		reader, err := c.request(ctx, name+method, writer)
 		if err != nil {
 			return nil, err
 		}
+		defer reader.Close()
 
 		var result Result[E]
-		err = c.decode(writer)(&result)
+		err = c.decode(reader)(&result)
 		if err != nil {
 			return nil, err
 		}

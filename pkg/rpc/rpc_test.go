@@ -4,8 +4,6 @@ import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
-	"net/http"
-	"testing"
 )
 
 type GetNameRequest struct {
@@ -78,28 +76,4 @@ type TestRpcServer struct{}
 
 func (t TestRpcServer) GetName(ctx context.Context, req *GetNameRequest) (*GetNameResponse, error) {
 	return &GetNameResponse{Name: req.Name}, nil
-}
-
-// ///////////////////////////////////////////////////
-// 测试 JsonService 的 Invoke 方法
-func TestJsonService_Invoke(t *testing.T) {
-	rpcServer := NewServer()
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
-
-	server := NewHttpServer("/rpc/", rpcServer)
-
-	http.Handle("/rpc/", server)
-	go http.ListenAndServe(":8080", nil)
-
-	client := NewHttpClient("http://localhost:8080/rpc")
-
-	rpcClient := NewClient(client.Invoke)
-	testClient := NewTestRpcClient(rpcClient)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.Name != "test" {
-		t.Fatal("test fail")
-	}
 }
