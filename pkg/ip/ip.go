@@ -23,18 +23,18 @@ type Key string
 
 type GetIpInfoCall = func(ip string) (*Info, error)
 
-var IpMap = make(map[Key]GetIpInfoCall)
+var ipMap = make(map[Key]GetIpInfoCall)
 
 var defaultCall GetIpInfoCall
 
 func init() {
-	IpMap[IpApiKey] = ipApi
+	ipMap[IpApiKey] = ipApi
 	defaultCall = ipApi
 }
 
 // SetDefault 设置默认的IP信息获取方式
 func SetDefault(key Key) error {
-	val, ok := IpMap[key]
+	val, ok := ipMap[key]
 	if !ok {
 		return erro.NewError("Setting the key to obtain IP information is invalid")
 	}
@@ -48,6 +48,11 @@ func GetIpInfo(ip string) (*Info, error) {
 		return defaultCall(ip)
 	}
 	return nil, erro.NewError("Must not find a way to get IP information")
+}
+
+// AddIpInfoGetter 添加IP信息获取方式
+func AddIpInfoGetter(key Key, call GetIpInfoCall) {
+	ipMap[key] = call
 }
 
 // GetHttpIP 从http请求中获取IP地址
