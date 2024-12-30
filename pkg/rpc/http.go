@@ -9,9 +9,44 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 )
 
+// WithHttpContext 在 context 中存储 HttpContext。
+func WithHttpContext(ctx context.Context, writer http.ResponseWriter, request *http.Request) context.Context {
+	return &HttpContext{
+		Context: ctx,
+		writer:  writer,
+		request: request,
+	}
+}
+
+// HttpContext Value 用于在 context 中存储 HttpContext。
+type HttpContext struct {
+	context.Context
+
+	writer  http.ResponseWriter
+	request *http.Request
+}
+
+var httpType = reflect.TypeOf(&HttpContext{})
+
+func (d *HttpContext) Value(key any) any {
+	if reflect.TypeOf(d) == key {
+		return d
+	}
+	return d.Context.Value(key)
+}
+
+// FromHttpContext 从 context 中获取 HttpContext。
+func FromHttpContext(ctx context.Context) *HttpContext {
+	return ctx.Value(httpType).(*HttpContext)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// HttpClientOption  HttpClient 的选项。
 type HttpClientOption func(*HttpClient)
 
 // NewHttpClient 创建一个新的 HttpClient。
@@ -76,13 +111,16 @@ func (h *HttpClient) Invoke(ctx context.Context, path string, callback func(writ
 	})(ctx, path, callback)
 }
 
+// WithRequestFilter 设置请求过滤器。
 func WithRequestFilter(filter RequestFilter) HttpClientOption {
 	return func(h *HttpClient) {
 		h.filter = filter
 	}
 }
 
-// //////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+// HttpServerOptions  HttpServer 的选项。
 type HttpServerOptions func(*HttpServer)
 
 // NewHttpServer 创建一个新的 HttpServer。
@@ -116,19 +154,21 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.filter(r.Context(), func(ctx context.Context, writer io.Writer, reader io.Reader) error {
-		err := h.server.Response(r.Context(), r.URL.Path[len(h.pathPrefix):], writer, reader)
+	ctx := WithHttpContext(r.Context(), w, r)
+	err := h.filter(ctx, func(ctx context.Context, writer io.Writer, reader io.Reader) error {
+		err := h.server.Response(ctx, r.URL.Path[len(h.pathPrefix):], writer, reader)
 		if err != nil {
 			return err
 		}
 		return nil
-	})(r.Context(), w, r.Body)
+	})(ctx, w, r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
+// WithResponseFilter 设置响应过滤器。
 func WithResponseFilter(filter ResponseFilter) HttpServerOptions {
 	return func(h *HttpServer) {
 		h.filter = filter

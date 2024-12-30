@@ -6,6 +6,8 @@ import (
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
+	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -35,7 +37,83 @@ type Handler func(ctx context.Context, req hbuf.Data) (hbuf.Data, error)
 // HandlerFilter 是用于过滤Handler
 type HandlerFilter func(ctx context.Context, handler Handler) Handler
 
-//////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// WithContext 创建一个新的Context
+func WithContext(ctx context.Context, method string) context.Context {
+	return &Context{
+		Context: ctx,
+		header:  http.Header{},
+		tags:    make(map[string][]any),
+		method:  method,
+	}
+}
+
+// Context 是用于处理RPC请求的上下文
+type Context struct {
+	context.Context
+	header http.Header
+	tags   map[string][]any
+	method string
+}
+
+var contextType = reflect.TypeOf(&HttpContext{})
+
+// Value 返回Context的value
+func (d *Context) Value(key any) any {
+	if reflect.TypeOf(d) == key {
+		return d
+	}
+	return d.Context.Value(key)
+}
+
+// FromContext 从Context中获取Context
+func FromContext(ctx context.Context) *Context {
+	return ctx.Value(contextType).(*Context)
+}
+
+// AddHeader 添加Header
+func AddHeader(ctx context.Context, key, value string) {
+	d := FromContext(ctx)
+	if d == nil {
+		return
+	}
+	d.header.Set(key, value)
+}
+
+// GetHeader 获取Header
+func GetHeader(ctx context.Context, key string) string {
+	d := FromContext(ctx)
+	if d == nil {
+		return ""
+	}
+	return d.header.Get(key)
+}
+
+// AddTag 添加Tag
+func AddTag(ctx context.Context, key string, value any) {
+	d := FromContext(ctx)
+	if d == nil {
+		return
+	}
+	d.tags[key] = append(d.tags[key], value)
+}
+
+// GetTag 获得Tag
+func GetTag(ctx context.Context, key string) []any {
+	d := FromContext(ctx)
+	if d == nil {
+		return nil
+	}
+	return d.tags[key]
+}
+
+// GetMethod 获取方法名
+func (d *Context) GetMethod() string {
+	return d.method
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type Method interface {
 	GetId() uint32
@@ -106,10 +184,20 @@ func NewJsonDecode() Decoder {
 	}
 }
 
-//////////////////////////////////////////////////////
+// ////////////////////////////////////////////////////
 
-func NewServer() *Server {
-	return &Server{
+// ServerOption 服务器选项
+type ServerOption func(*Server)
+
+// WithServerFilter 设置Handler过滤器
+func WithServerFilter(filter HandlerFilter) ServerOption {
+	return func(s *Server) {
+		s.filter = filter
+	}
+}
+
+func NewServer(options ...ServerOption) *Server {
+	ret := &Server{
 		methods: make(map[string]Method),
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
@@ -117,6 +205,10 @@ func NewServer() *Server {
 			return handler
 		},
 	}
+	for _, option := range options {
+		option(ret)
+	}
+	return ret
 }
 
 type Server struct {
@@ -151,6 +243,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return err
 	}
 
+	ctx = WithContext(ctx, method.GetName())
 	response, err := r.filter(ctx, method.GetHandler())(ctx, request)
 	if err != nil {
 		return err
@@ -165,9 +258,18 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 
 //////////////////////////////////////////////////////
 
+type ClientOption func(*Client)
+
+// WithClientFilter 设置Handler过滤器
+func WithClientFilter(filter HandlerFilter) ClientOption {
+	return func(c *Client) {
+		c.filter = filter
+	}
+}
+
 // NewClient 创建一个新的客户端
-func NewClient(request Request) *Client {
-	return &Client{
+func NewClient(request Request, options ...ClientOption) *Client {
+	ret := &Client{
 		request: request,
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
@@ -175,6 +277,11 @@ func NewClient(request Request) *Client {
 			return handler
 		},
 	}
+
+	for _, option := range options {
+		option(ret)
+	}
+	return ret
 }
 
 // Client 是用于处理RPC请求的客户端

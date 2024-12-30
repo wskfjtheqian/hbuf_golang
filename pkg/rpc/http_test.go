@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	"net/http"
 	"testing"
@@ -33,7 +34,7 @@ func TestJsonService_Invoke(t *testing.T) {
 }
 
 // 测试 JsonService
-func TestJsonService_EncInvoke(t *testing.T) {
+func TestJsonService_Encoder(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
@@ -80,10 +81,38 @@ func TestJsonService_EncInvoke(t *testing.T) {
 	}
 }
 
-func TestBase64Service_EncInvoke(t *testing.T) {
+// 测试 base64
+func TestBase64(t *testing.T) {
 	writer := bytes.NewBuffer(nil)
 	encoder := base64.NewEncoder(base64.StdEncoding, writer)
 	defer encoder.Close()
 
 	encoder.Write([]byte("adfasdfasdfasdfsa"))
+}
+
+// 测试 JsonService 的 Filter 方法
+func TestJsonService_Filter(t *testing.T) {
+	rpcServer := NewServer(WithServerFilter(func(ctx context.Context, handler Handler) Handler {
+		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			return handler(ctx, req)
+		}
+	}))
+	RegisterRpcServer(rpcServer, &TestRpcServer{})
+
+	server := NewHttpServer("/rpc/", rpcServer)
+
+	http.Handle("/rpc/", server)
+	go http.ListenAndServe(":8080", nil)
+
+	client := NewHttpClient("http://localhost:8080/rpc")
+
+	rpcClient := NewClient(client.Invoke)
+	testClient := NewTestRpcClient(rpcClient)
+	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
 }
