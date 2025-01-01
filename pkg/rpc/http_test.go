@@ -11,7 +11,7 @@ import (
 )
 
 // 测试 JsonService 的 Response 方法
-func TestJsonService_Invoke(t *testing.T) {
+func TestHttpService_Invoke(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
@@ -22,7 +22,7 @@ func TestJsonService_Invoke(t *testing.T) {
 
 	client := NewHttpClient("http://localhost:8080/rpc")
 
-	rpcClient := NewClient(client.Invoke)
+	rpcClient := NewClient(client.Request)
 	testClient := NewTestRpcClient(rpcClient)
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
 	if err != nil {
@@ -34,18 +34,18 @@ func TestJsonService_Invoke(t *testing.T) {
 }
 
 // 测试 JsonService
-func TestJsonService_Encoder(t *testing.T) {
+func TestHttpService_Encoder(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
 	server := NewHttpServer("/rpc/", rpcServer, WithResponseFilter(func(ctx context.Context, response Response) Response {
-		return func(ctx context.Context, writer io.Writer, reader io.Reader) error {
+		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
 			encoder := base64.NewEncoder(base64.StdEncoding, writer)
 			defer encoder.Close()
 
-			return response(ctx, encoder, decoder)
+			return response(ctx, path, encoder, decoder)
 		}
 	}))
 
@@ -53,9 +53,9 @@ func TestJsonService_Encoder(t *testing.T) {
 	go http.ListenAndServe(":8080", nil)
 
 	client := NewHttpClient("http://localhost:8080/rpc", WithRequestFilter(func(ctx context.Context, request Request) Request {
-		return func(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+		return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 
-			body, err := request(ctx, path, func(writer io.Writer) error {
+			body, err := request(ctx, path, notification, func(writer io.Writer) error {
 				encoder := base64.NewEncoder(base64.StdEncoding, writer)
 				defer encoder.Close()
 
@@ -70,7 +70,7 @@ func TestJsonService_Encoder(t *testing.T) {
 		}
 	}))
 
-	rpcClient := NewClient(client.Invoke)
+	rpcClient := NewClient(client.Request)
 	testClient := NewTestRpcClient(rpcClient)
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
 	if err != nil {
@@ -91,7 +91,7 @@ func TestBase64(t *testing.T) {
 }
 
 // 测试 JsonService 的 Filter 方法
-func TestJsonService_Filter(t *testing.T) {
+func TestHttpService_Filter(t *testing.T) {
 	rpcServer := NewServer(WithServerFilter(func(ctx context.Context, handler Handler) Handler {
 		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 			return handler(ctx, req)
@@ -106,7 +106,7 @@ func TestJsonService_Filter(t *testing.T) {
 
 	client := NewHttpClient("http://localhost:8080/rpc")
 
-	rpcClient := NewClient(client.Invoke)
+	rpcClient := NewClient(client.Request)
 	testClient := NewTestRpcClient(rpcClient)
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
 	if err != nil {

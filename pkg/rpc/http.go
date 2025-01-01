@@ -79,15 +79,15 @@ func NewHttpClient(base string, options ...HttpClientOption) *HttpClient {
 	return ret
 }
 
-// HttpClient 实现了 Invoke 方法，用于调用 HTTP 服务。
+// HttpClient 实现了 Request 方法，用于调用 HTTP 服务。
 type HttpClient struct {
 	base   string
 	client *http.Client
 	filter RequestFilter
 }
 
-func (h *HttpClient) Invoke(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error) {
-	return h.filter(ctx, func(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+func (h *HttpClient) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	return h.filter(ctx, func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 		buffer := bytes.NewBuffer(nil)
 		err := callback(buffer)
 		if err != nil {
@@ -108,7 +108,7 @@ func (h *HttpClient) Invoke(ctx context.Context, path string, callback func(writ
 			return nil, errors.New(resp.Status)
 		}
 		return resp.Body, nil
-	})(ctx, path, callback)
+	})(ctx, path, notification, callback)
 }
 
 // WithRequestFilter 设置请求过滤器。
@@ -155,13 +155,9 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := WithHttpContext(r.Context(), w, r)
-	err := h.filter(ctx, func(ctx context.Context, writer io.Writer, reader io.Reader) error {
-		err := h.server.Response(ctx, r.URL.Path[len(h.pathPrefix):], writer, reader)
-		if err != nil {
-			return err
-		}
-		return nil
-	})(ctx, w, r.Body)
+	err := h.filter(ctx, func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+		return h.server.Response(ctx, path, writer, reader)
+	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

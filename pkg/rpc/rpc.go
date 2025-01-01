@@ -23,11 +23,11 @@ const (
 	TypeAuthFailure
 )
 
-type Request func(ctx context.Context, path string, callback func(writer io.Writer) error) (io.ReadCloser, error)
+type Request func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error)
 
 type RequestFilter func(ctx context.Context, request Request) Request
 
-type Response func(ctx context.Context, writer io.Writer, reader io.Reader) error
+type Response func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error
 
 type ResponseFilter func(ctx context.Context, response Response) Response
 
@@ -69,7 +69,11 @@ func (d *Context) Value(key any) any {
 
 // FromContext 从Context中获取Context
 func FromContext(ctx context.Context) *Context {
-	return ctx.Value(contextType).(*Context)
+	val := ctx.Value(contextType)
+	if val == nil {
+		return nil
+	}
+	return val.(*Context)
 }
 
 // AddHeader 添加Header
@@ -88,6 +92,15 @@ func GetHeader(ctx context.Context, key string) string {
 		return ""
 	}
 	return d.header.Get(key)
+}
+
+// GetHeaders 获取Headers
+func GetHeaders(ctx context.Context) http.Header {
+	d := FromContext(ctx)
+	if d == nil {
+		return nil
+	}
+	return d.header
 }
 
 // AddTag 添加Tag
@@ -296,7 +309,7 @@ type Client struct {
 func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.filter(ctx, func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-		reader, err := c.request(ctx, name+method, func(writer io.Writer) error {
+		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
 			return c.encode(writer)(req)
 		})
 		if err != nil {
