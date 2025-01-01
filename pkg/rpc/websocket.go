@@ -65,11 +65,11 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 		responseMap: make(map[uint64]chan *WebSocketData),
 		write:       make(chan *WebSocketData, 10),
 		response:    response,
-		responseFilter: func(ctx context.Context, response Response) Response {
+		responseMiddleware: func(next Response) Response {
 			return response
 		},
-		requestFilter: func(ctx context.Context, request Request) Request {
-			return request
+		requestMiddleware: func(next Request) Request {
+			return next
 		},
 	}
 }
@@ -83,10 +83,10 @@ type webSocket struct {
 	responseMap map[uint64]chan *WebSocketData
 	write       chan *WebSocketData
 
-	requestFilter  RequestFilter
-	response       Response
-	responseFilter ResponseFilter
-	ctx            context.Context
+	requestMiddleware  RequestMiddleware
+	response           Response
+	responseMiddleware ResponseMiddleware
+	ctx                context.Context
 }
 
 func (r *webSocket) Context() context.Context {
@@ -132,7 +132,7 @@ func (ws *webSocket) run() {
 }
 
 func (ws *webSocket) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
-	return ws.requestFilter(ctx, func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	return ws.requestMiddleware(func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 		data := &WebSocketData{
 			Path:   "/" + path,
 			Header: http.Header{},
@@ -205,7 +205,7 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 	}
 
 	if notification {
-		err := ws.responseFilter(ctx, func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+		err := ws.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			return ws.response(ctx, path, writer, reader)
 		})(ctx, data.Path, response, data)
 		if err != nil {
@@ -214,7 +214,7 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return
 	}
 
-	err := ws.responseFilter(ctx, func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+	err := ws.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 		return ws.response(ctx, path, writer, reader)
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data)
 	if err != nil {
@@ -245,10 +245,10 @@ func NewWebSocketClient(base string, response Response) *WebSocketClient {
 
 // WebSocketClient WebSocket客户端
 type WebSocketClient struct {
-	filter   ResponseFilter
-	base     string
-	rpc      *webSocket
-	response Response
+	middleware ResponseMiddleware
+	base       string
+	rpc        *webSocket
+	response   Response
 }
 
 // Connect 连接客户端
@@ -271,9 +271,8 @@ func (c *WebSocketClient) Request(ctx context.Context, path string, notification
 // //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // NewWebSocketServer 创建一个WebSocket服务器
-func NewWebSocketServer(port uint16, response Response) *WebSocketServer {
+func NewWebSocketServer(response Response) *WebSocketServer {
 	return &WebSocketServer{
-		port:     port,
 		response: response,
 	}
 }
@@ -282,7 +281,6 @@ func NewWebSocketServer(port uint16, response Response) *WebSocketServer {
 type WebSocketServer struct {
 	socket   *webSocket
 	response Response
-	port     uint16
 }
 
 // Serve 启动WebSocket服务器
@@ -295,4 +293,34 @@ func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 
 	w.socket = newWebSocket(request.Context(), conn, w.response)
 	w.socket.run()
+}
+
+// ListenAndServe 监听WebSocket服务器
+func (w *WebSocketServer) ListenAndServe(ctx context.Context, addr string) error {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	go func() {
+		<-ctx.Done()
+		_ = listener.Close()
+	}()
+
+	upgrade := ws.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+		_, err = upgrade.Upgrade(conn)
+		if err != nil {
+			return err
+		}
+		w.socket = newWebSocket(ctx, conn, w.response)
+		w.socket.run()
+	}
 }

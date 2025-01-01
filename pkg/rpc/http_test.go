@@ -38,24 +38,24 @@ func TestHttpService_Encoder(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/rpc/", rpcServer, WithResponseFilter(func(ctx context.Context, response Response) Response {
+	server := NewHttpServer("/rpc/", rpcServer, WithResponseMiddleware(func(next Response) Response {
 		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
 			encoder := base64.NewEncoder(base64.StdEncoding, writer)
 			defer encoder.Close()
 
-			return response(ctx, path, encoder, decoder)
+			return next(ctx, path, encoder, decoder)
 		}
 	}))
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewHttpClient("http://localhost:8080/rpc", WithRequestFilter(func(ctx context.Context, request Request) Request {
+	client := NewHttpClient("http://localhost:8080/rpc", WithRequestMiddleware(func(next Request) Request {
 		return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 
-			body, err := request(ctx, path, notification, func(writer io.Writer) error {
+			body, err := next(ctx, path, notification, func(writer io.Writer) error {
 				encoder := base64.NewEncoder(base64.StdEncoding, writer)
 				defer encoder.Close()
 
@@ -90,11 +90,11 @@ func TestBase64(t *testing.T) {
 	encoder.Write([]byte("adfasdfasdfasdfsa"))
 }
 
-// 测试 JsonService 的 Filter 方法
-func TestHttpService_Filter(t *testing.T) {
-	rpcServer := NewServer(WithServerFilter(func(ctx context.Context, handler Handler) Handler {
+// 测试 JsonService 的 Middleware 方法
+func TestHttpService_Middleware(t *testing.T) {
+	rpcServer := NewServer(WithServerMiddleware(func(next Handler) Handler {
 		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-			return handler(ctx, req)
+			return next(ctx, req)
 		}
 	}))
 	RegisterRpcServer(rpcServer, &TestRpcServer{})

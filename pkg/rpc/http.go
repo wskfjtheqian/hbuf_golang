@@ -68,8 +68,8 @@ func NewHttpClient(base string, options ...HttpClientOption) *HttpClient {
 		client: &http.Client{
 			Transport: transport,
 		},
-		filter: func(ctx context.Context, request Request) Request {
-			return request
+		middleware: func(next Request) Request {
+			return next
 		},
 	}
 
@@ -81,13 +81,13 @@ func NewHttpClient(base string, options ...HttpClientOption) *HttpClient {
 
 // HttpClient 实现了 Request 方法，用于调用 HTTP 服务。
 type HttpClient struct {
-	base   string
-	client *http.Client
-	filter RequestFilter
+	base       string
+	client     *http.Client
+	middleware RequestMiddleware
 }
 
 func (h *HttpClient) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
-	return h.filter(ctx, func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	return h.middleware(func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 		buffer := bytes.NewBuffer(nil)
 		err := callback(buffer)
 		if err != nil {
@@ -111,10 +111,10 @@ func (h *HttpClient) Request(ctx context.Context, path string, notification bool
 	})(ctx, path, notification, callback)
 }
 
-// WithRequestFilter 设置请求过滤器。
-func WithRequestFilter(filter RequestFilter) HttpClientOption {
+// WithRequestMiddleware 设置请求中间件。
+func WithRequestMiddleware(middleware RequestMiddleware) HttpClientOption {
 	return func(h *HttpClient) {
-		h.filter = filter
+		h.middleware = middleware
 	}
 }
 
@@ -129,8 +129,8 @@ func NewHttpServer(pathPrefix string, server *Server, options ...HttpServerOptio
 	ret := &HttpServer{
 		pathPrefix: pathPrefix,
 		server:     server,
-		filter: func(ctx context.Context, response Response) Response {
-			return response
+		middleware: func(next Response) Response {
+			return next
 		},
 	}
 
@@ -144,7 +144,7 @@ func NewHttpServer(pathPrefix string, server *Server, options ...HttpServerOptio
 type HttpServer struct {
 	pathPrefix string
 	server     *Server
-	filter     ResponseFilter
+	middleware ResponseMiddleware
 }
 
 // ServeHTTP 实现 http.Handler 接口。
@@ -155,7 +155,7 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := WithHttpContext(r.Context(), w, r)
-	err := h.filter(ctx, func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+	err := h.middleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 		return h.server.Response(ctx, path, writer, reader)
 	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body)
 	if err != nil {
@@ -164,9 +164,9 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// WithResponseFilter 设置响应过滤器。
-func WithResponseFilter(filter ResponseFilter) HttpServerOptions {
+// WithResponseMiddleware 设置响应中间件。
+func WithResponseMiddleware(middleware ResponseMiddleware) HttpServerOptions {
 	return func(h *HttpServer) {
-		h.filter = filter
+		h.middleware = middleware
 	}
 }

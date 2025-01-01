@@ -23,19 +23,23 @@ const (
 	TypeAuthFailure
 )
 
+// Request 是用于处理RPC请求的函数
 type Request func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error)
 
-type RequestFilter func(ctx context.Context, request Request) Request
+// RequestMiddleware 用于对 Request 进行中间件处理。
+type RequestMiddleware func(next Request) Request
 
+// Response 是用于处理RPC响应的函数
 type Response func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error
 
-type ResponseFilter func(ctx context.Context, response Response) Response
+// ResponseMiddleware 用于对 Response 进行中间件处理。
+type ResponseMiddleware func(next Response) Response
 
 // Handler 是用于处理RPC请求
 type Handler func(ctx context.Context, req hbuf.Data) (hbuf.Data, error)
 
-// HandlerFilter 是用于过滤Handler
-type HandlerFilter func(ctx context.Context, handler Handler) Handler
+// HandlerMiddleware 用于对 Handler 进行中间件处理。
+type HandlerMiddleware func(next Handler) Handler
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -202,20 +206,21 @@ func NewJsonDecode() Decoder {
 // ServerOption 服务器选项
 type ServerOption func(*Server)
 
-// WithServerFilter 设置Handler过滤器
-func WithServerFilter(filter HandlerFilter) ServerOption {
+// WithServerMiddleware 设置Handler中间件
+func WithServerMiddleware(middleware HandlerMiddleware) ServerOption {
 	return func(s *Server) {
-		s.filter = filter
+		s.middleware = middleware
 	}
 }
 
+// NewServer 创建一个新的服务器
 func NewServer(options ...ServerOption) *Server {
 	ret := &Server{
 		methods: make(map[string]Method),
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
-		filter: func(ctx context.Context, handler Handler) Handler {
-			return handler
+		middleware: func(next Handler) Handler {
+			return next
 		},
 	}
 	for _, option := range options {
@@ -224,14 +229,16 @@ func NewServer(options ...ServerOption) *Server {
 	return ret
 }
 
+// Server 是用于处理RPC请求的服务器
 type Server struct {
-	lock    sync.RWMutex
-	methods map[string]Method
-	decode  Decoder
-	encode  Encoder
-	filter  HandlerFilter
+	lock       sync.RWMutex
+	methods    map[string]Method
+	decode     Decoder
+	encode     Encoder
+	middleware HandlerMiddleware
 }
 
+// Register 注册方法
 func (r *Server) Register(id int32, name string, methods ...Method) {
 	name = strings.Trim(name, "/") + "/"
 	r.lock.Lock()
@@ -243,6 +250,7 @@ func (r *Server) Register(id int32, name string, methods ...Method) {
 	}
 }
 
+// Response 处理RPC请求
 func (r *Server) Response(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 	r.lock.RLock()
 	method, ok := r.methods[path]
@@ -257,7 +265,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	}
 
 	ctx = WithContext(ctx, method.GetName())
-	response, err := r.filter(ctx, method.GetHandler())(ctx, request)
+	response, err := r.middleware(method.GetHandler())(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -271,12 +279,13 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 
 //////////////////////////////////////////////////////
 
+// ClientOption 客户端选项
 type ClientOption func(*Client)
 
-// WithClientFilter 设置Handler过滤器
-func WithClientFilter(filter HandlerFilter) ClientOption {
+// WithClientMiddleware 设置Handler中间件
+func WithClientMiddleware(middleware HandlerMiddleware) ClientOption {
 	return func(c *Client) {
-		c.filter = filter
+		c.middleware = middleware
 	}
 }
 
@@ -286,8 +295,8 @@ func NewClient(request Request, options ...ClientOption) *Client {
 		request: request,
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
-		filter: func(ctx context.Context, handler Handler) Handler {
-			return handler
+		middleware: func(next Handler) Handler {
+			return next
 		},
 	}
 
@@ -299,16 +308,16 @@ func NewClient(request Request, options ...ClientOption) *Client {
 
 // Client 是用于处理RPC请求的客户端
 type Client struct {
-	request Request
-	decode  Decoder
-	encode  Encoder
-	filter  HandlerFilter
+	request    Request
+	decode     Decoder
+	encode     Encoder
+	middleware HandlerMiddleware
 }
 
 // ClientCall 调用远程服务
 func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
-	data, err := c.filter(ctx, func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+	data, err := c.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
 			return c.encode(writer)(req)
 		})

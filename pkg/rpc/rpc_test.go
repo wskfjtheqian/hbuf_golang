@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
+	"time"
 )
 
 type GetNameRequest struct {
@@ -75,5 +76,6 @@ func RegisterRpcServer(r *Server, server TestRpc) {
 type TestRpcServer struct{}
 
 func (t TestRpcServer) GetName(ctx context.Context, req *GetNameRequest) (*GetNameResponse, error) {
+	<-time.After(time.Millisecond * 100)
 	return &GetNameResponse{Name: req.Name}, nil
 }
