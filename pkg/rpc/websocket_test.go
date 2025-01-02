@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"context"
+	"encoding/base64"
+	"io"
 	"net/http"
 	"sync"
 	"testing"
@@ -18,7 +20,7 @@ func TestWebsocket_RPC(t *testing.T) {
 	http.Handle("/rpc", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewWebSocketClient("ws://localhost:8080/rpc", nil)
+	client := NewWebSocketClient("ws://localhost:8080/socket", nil)
 
 	err := client.Connect(context.Background())
 	if err != nil {
@@ -43,8 +45,7 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 
 	server := NewWebSocketServer(rpcServer.Response)
 
-	http.Handle("/rpc", server)
-	go http.ListenAndServe(":8080", nil)
+	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
 
 	waitGroup := sync.WaitGroup{}
@@ -53,7 +54,7 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 		go func() {
 			t.Run("TestWebsocket_RPC", func(t *testing.T) {
 				defer waitGroup.Done()
-				client := NewWebSocketClient("ws://localhost:8080/rpc", nil)
+				client := NewWebSocketClient("ws://localhost:8080/socket", nil)
 
 				err := client.Connect(context.Background())
 				if err != nil {
@@ -84,7 +85,69 @@ func TestWebsocket_Listen(t *testing.T) {
 	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
 
-	client := NewWebSocketClient("ws://localhost:8080/rpc", nil)
+	client := NewWebSocketClient("ws://localhost:8080/socket", nil)
+
+	err := client.Connect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpcClient := NewClient(client.Request)
+	testClient := NewTestRpcClient(rpcClient)
+
+	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"}) //调用 RPC 服务
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
+
+}
+
+// 测试 TestWebsocket 加密通信
+func TestWebsocket_Encrypt(t *testing.T) {
+	rpcServer := NewServer()
+	RegisterRpcServer(rpcServer, &TestRpcServer{})
+
+	requestMiddleware := func(next Request) Request {
+		return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+			body, err := next(ctx, path, notification, func(writer io.Writer) error {
+				encoder := base64.NewEncoder(base64.StdEncoding, writer)
+				defer encoder.Close()
+
+				return callback(encoder)
+			})
+
+			if err != nil {
+				return nil, err
+			}
+			decoder := base64.NewDecoder(base64.StdEncoding, body)
+			return io.NopCloser(decoder), nil
+		}
+	}
+
+	responseMiddleware := func(next Response) Response {
+		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+			decoder := base64.NewDecoder(base64.StdEncoding, reader)
+
+			encoder := base64.NewEncoder(base64.StdEncoding, writer)
+			defer encoder.Close()
+
+			return next(ctx, path, encoder, decoder)
+		}
+	}
+
+	server := NewWebSocketServer(rpcServer.Response,
+		WithWebSocketServerRequestMiddleware(requestMiddleware),
+		WithWebSocketServerResponseMiddleware(responseMiddleware),
+	)
+	go server.ListenAndServe(context.Background(), ":8080")
+	<-time.After(time.Second)
+
+	client := NewWebSocketClient("ws://localhost:8080/socket", nil,
+		WithWebSocketClientRequestMiddleware(requestMiddleware),
+		WithWebSocketClientResponseMiddleware(responseMiddleware),
+	)
 
 	err := client.Connect(context.Background())
 	if err != nil {

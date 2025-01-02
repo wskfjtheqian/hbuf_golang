@@ -58,7 +58,7 @@ func (w *WebSocketData) Read(p []byte) (n int, err error) {
 // ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSocket {
-	return &webSocket{
+	ret := &webSocket{
 		conn:        conn,
 		encoder:     json.NewEncoder(conn),
 		decoder:     json.NewDecoder(conn),
@@ -72,6 +72,8 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 			return next
 		},
 	}
+
+	return ret
 }
 
 type webSocket struct {
@@ -131,6 +133,7 @@ func (ws *webSocket) run() {
 	}()
 }
 
+// Request 发送请求
 func (ws *webSocket) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 	return ws.requestMiddleware(func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 		data := &WebSocketData{
@@ -234,21 +237,48 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// WebSocketClientOptions WebSocket客户端选项
+type WebSocketClientOptions func(c *WebSocketClient)
+
+// WithWebSocketClientResponseMiddleware  设置WebSocket客户端响应中间件
+func WithWebSocketClientResponseMiddleware(middleware ResponseMiddleware) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.responseMiddleware = middleware
+	}
+}
+
+// WithWebSocketClientRequestMiddleware 设置WebSocket客户端请求中间件
+func WithWebSocketClientRequestMiddleware(middleware RequestMiddleware) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.requestMiddleware = middleware
+	}
+}
+
 // NewWebSocketClient 创建一个WebSocket客户端
-func NewWebSocketClient(base string, response Response) *WebSocketClient {
+func NewWebSocketClient(base string, response Response, options ...WebSocketClientOptions) *WebSocketClient {
 	ret := &WebSocketClient{
 		base:     base,
 		response: response,
+		requestMiddleware: func(next Request) Request {
+			return next
+		},
+		responseMiddleware: func(next Response) Response {
+			return next
+		},
+	}
+	for _, option := range options {
+		option(ret)
 	}
 	return ret
 }
 
 // WebSocketClient WebSocket客户端
 type WebSocketClient struct {
-	middleware ResponseMiddleware
-	base       string
-	rpc        *webSocket
-	response   Response
+	requestMiddleware  RequestMiddleware
+	responseMiddleware ResponseMiddleware
+	base               string
+	socket             *webSocket
+	response           Response
 }
 
 // Connect 连接客户端
@@ -258,29 +288,65 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 		return err
 	}
 
-	c.rpc = newWebSocket(ctx, conn, c.response)
-	c.rpc.run()
+	c.socket = newWebSocket(ctx, conn, c.response)
+	if c.responseMiddleware != nil {
+		c.socket.responseMiddleware = c.responseMiddleware
+	}
+	if c.requestMiddleware != nil {
+		c.socket.requestMiddleware = c.requestMiddleware
+	}
+	c.socket.run()
 	return nil
 }
 
 func (c *WebSocketClient) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 	path = "/" + path
-	return c.rpc.Request(ctx, path, notification, callback)
+	return c.socket.Request(ctx, path, notification, callback)
 }
 
 // //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// NewWebSocketServer 创建一个WebSocket服务器
-func NewWebSocketServer(response Response) *WebSocketServer {
-	return &WebSocketServer{
-		response: response,
+// WebSocketServerOptions WebSocket服务器选项
+type WebSocketServerOptions func(s *WebSocketServer)
+
+// WithWebSocketServerResponseMiddleware 设置WebSocket服务器响应中间件
+func WithWebSocketServerResponseMiddleware(middleware ResponseMiddleware) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.responseMiddleware = middleware
 	}
+}
+
+// WithWebSocketServerRequestMiddleware 设置WebSocket服务器请求中间件
+func WithWebSocketServerRequestMiddleware(middleware RequestMiddleware) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.requestMiddleware = middleware
+	}
+}
+
+// NewWebSocketServer 创建一个WebSocket服务器
+func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *WebSocketServer {
+	ret := &WebSocketServer{
+		response: response,
+		requestMiddleware: func(next Request) Request {
+			return next
+		},
+		responseMiddleware: func(next Response) Response {
+			return next
+		},
+	}
+
+	for _, option := range options {
+		option(ret)
+	}
+	return ret
 }
 
 // WebSocketServer WebSocket服务器
 type WebSocketServer struct {
-	socket   *webSocket
-	response Response
+	requestMiddleware  RequestMiddleware
+	responseMiddleware ResponseMiddleware
+	socket             *webSocket
+	response           Response
 }
 
 // Serve 启动WebSocket服务器
@@ -291,8 +357,7 @@ func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		return
 	}
 
-	w.socket = newWebSocket(request.Context(), conn, w.response)
-	w.socket.run()
+	w.handleConnection(request.Context(), conn)
 }
 
 // ListenAndServe 监听WebSocket服务器
@@ -320,7 +385,19 @@ func (w *WebSocketServer) ListenAndServe(ctx context.Context, addr string) error
 		if err != nil {
 			return err
 		}
-		w.socket = newWebSocket(ctx, conn, w.response)
-		w.socket.run()
+
+		w.handleConnection(ctx, conn)
 	}
+}
+
+// handleConnection 处理WebSocket连接
+func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn) {
+	w.socket = newWebSocket(ctx, conn, w.response)
+	if w.responseMiddleware != nil {
+		w.socket.responseMiddleware = w.responseMiddleware
+	}
+	if w.requestMiddleware != nil {
+		w.socket.requestMiddleware = w.requestMiddleware
+	}
+	w.socket.run()
 }

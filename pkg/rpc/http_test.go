@@ -10,12 +10,12 @@ import (
 	"testing"
 )
 
-// 测试 JsonService 的 Response 方法
+// 测试 HttpService 的 Response 方法
 func TestHttpService_Invoke(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := NewHttpServer("/socket/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
@@ -33,12 +33,12 @@ func TestHttpService_Invoke(t *testing.T) {
 	}
 }
 
-// 测试 JsonService
+// 测试 HttpService 加密通信
 func TestHttpService_Encoder(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/rpc/", rpcServer, WithResponseMiddleware(func(next Response) Response {
+	server := NewHttpServer("/socket/", rpcServer, WithResponseMiddleware(func(next Response) Response {
 		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
@@ -90,7 +90,7 @@ func TestBase64(t *testing.T) {
 	encoder.Write([]byte("adfasdfasdfasdfsa"))
 }
 
-// 测试 JsonService 的 Middleware 方法
+// 测试 HttpService 的 Middleware 方法
 func TestHttpService_Middleware(t *testing.T) {
 	rpcServer := NewServer(WithServerMiddleware(func(next Handler) Handler {
 		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
@@ -99,7 +99,7 @@ func TestHttpService_Middleware(t *testing.T) {
 	}))
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := NewHttpServer("/socket/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
