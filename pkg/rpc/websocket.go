@@ -25,7 +25,6 @@ type Data struct {
 
 // MarshalJSON 返回 m 的 JSON 编码。
 func (m Data) MarshalJSON() ([]byte, error) {
-	//return make([]byte, 0), nil
 	return m.Bytes(), nil
 }
 
