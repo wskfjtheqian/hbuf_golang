@@ -61,7 +61,7 @@ type Context struct {
 	method string
 }
 
-var contextType = reflect.TypeOf(&HttpContext{})
+var contextType = reflect.TypeOf(&Context{})
 
 // Value 返回Context的value
 func (d *Context) Value(key any) any {

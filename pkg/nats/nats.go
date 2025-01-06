@@ -6,22 +6,98 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"log"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-// NatsConfig 定义了 NATS 的配置
-func NewNats(cfg *NatsConfig, version *pkg.Version) (*Nats, error) {
+// WithContext 给上下文添加 NATS 连接
+func WithContext(ctx context.Context, n *Nats) context.Context {
+	return &Context{
+		Context: ctx,
+		nats:    n,
+	}
+}
+
+// Context 定义了 NATS 的上下文
+type Context struct {
+	context.Context
+	nats *Nats
+}
+
+var contextType = reflect.TypeOf(&Context{})
+
+// Value 返回Context的value
+func (d *Context) Value(key any) any {
+	if reflect.TypeOf(d) == key {
+		return d
+	}
+	return d.Context.Value(key)
+}
+
+// FromContext 从上下文中获取 NATS 连接
+func FromContext(ctx context.Context) (n *Nats, ok bool) {
+	val := ctx.Value(contextType)
+	if val == nil {
+		return nil, false
+	}
+	return val.(*Context).nats, true
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// NewNats 定义了 NATS 的配置
+func NewNats() *Nats {
+	ret := &Nats{
+		stream:     make(map[string]struct{}),
+		ackWait:    time.Second * 10,
+		maxDeliver: 3,
+	}
+	return ret
+}
+
+// Nats 定义了 NATS 的连接
+type Nats struct {
+	conn       atomic.Pointer[nats.Conn]
+	js         atomic.Pointer[jetstream.JetStream]
+	stream     map[string]struct{}
+	lock       sync.RWMutex
+	cfg        *Config
+	ackWait    time.Duration // 未返回ack 30秒后重发
+	maxDeliver int           //	最大重试发送次数
+	ServerName string
+	Version    string
+	config     *Config
+}
+
+// SetConfig 设置配置
+func (d *Nats) SetConfig(cfg *Config) error {
+	if d.config.Equal(cfg) {
+		return nil
+	}
+	if cfg == nil {
+		if d.conn.Load() != nil {
+			conn := d.conn.Swap(nil)
+			conn.Close()
+		}
+		d.config = nil
+		return nil
+	}
+
+	d.config = cfg
 	// 连接到 NATS 服务器
 	var options []nats.Option
 	if cfg.User != "" && cfg.Password != "" {
 		options = append(options, nats.UserInfo(cfg.User, cfg.Password))
 	}
-	if cfg.Timeout.AsDuration() > 0 {
-		options = append(options, nats.Timeout(cfg.Timeout.AsDuration()))
+	if cfg.Timeout > 0 {
+		options = append(options, nats.Timeout(cfg.Timeout))
 	}
 	if cfg.Name != "" {
 		options = append(options, nats.Name(cfg.Name))
@@ -32,8 +108,8 @@ func NewNats(cfg *NatsConfig, version *pkg.Version) (*Nats, error) {
 	if cfg.MaxReconnects > 0 {
 		options = append(options, nats.MaxReconnects(int(cfg.MaxReconnects)))
 	}
-	if cfg.PingInterval.AsDuration() > 0 {
-		options = append(options, nats.PingInterval(cfg.PingInterval.AsDuration()))
+	if cfg.PingInterval > 0 {
+		options = append(options, nats.PingInterval(cfg.PingInterval))
 	}
 
 	nc, err := nats.Connect(
@@ -41,73 +117,66 @@ func NewNats(cfg *NatsConfig, version *pkg.Version) (*Nats, error) {
 		options...,
 	)
 	if err != nil {
-		return nil, err
+		return erro.Wrap(err)
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		nc.Close()
-		return nil, err
-	}
-	ret := &Nats{
-		conn:       nc,
-		js:         js,
-		stream:     make(map[string]struct{}),
-		cfg:        cfg,
-		log:        log.NewHelper(logger),
-		ackWait:    time.Second * 10,
-		maxDeliver: 3,
-		version:    version,
+		return erro.Wrap(err)
 	}
 
-	if cfg.AckWait.AsDuration() > 0 {
-		ret.ackWait = cfg.AckWait.AsDuration()
-	}
-	if cfg.MaxDeliver > 0 {
-		ret.maxDeliver = int(cfg.MaxDeliver)
-	}
-	return ret, nil
-}
-
-// Nats 定义了 NATS 的连接
-type Nats struct {
-	conn       *nats.Conn
-	js         jetstream.JetStream
-	stream     map[string]struct{}
-	lock       sync.RWMutex
-	cfg        *NatsConfig
-	ackWait    time.Duration // 未返回ack 30秒后重发
-	maxDeliver int           //	最大重试发送次数
-	version    *pkg.Version
+	d.conn.Store(nc)
+	d.js.Store(&js)
+	return nil
 }
 
 // Close 关闭 NATS 连接
 func (n *Nats) Close() {
-	n.conn.Close()
+	conn, err := n.GetConn()
+	if err != nil {
+		return
+	}
+	conn.Close()
 }
 
 // Publish 发布消息到指定的主题
 func (n *Nats) Publish(ctx context.Context, subject string, data []byte) error {
-	err := n.conn.Publish(subject, data)
+	conn, err := n.GetConn()
 	if err != nil {
-		hlog.Error(err)
+		return err
+	}
+	err = conn.Publish(subject, data)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
 // Publish 发布消息到指定的主题
-func Publish[T any](ctx context.Context, n *Nats, subject string, msg *T) error {
+func Publish[T any](ctx context.Context, subject string, msg *T) error {
+	n, ok := FromContext(ctx)
+	if !ok {
+		return erro.NewError("nats not initialized")
+	}
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	return n.conn.Publish(subject, jsonData)
+	conn, err := n.GetConn()
+	if err != nil {
+		return err
+	}
+	return conn.Publish(subject, jsonData)
 }
 
 // Subscribe 订阅指定的主题
 func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg *nats.Msg)) error {
-	_, err := n.conn.Subscribe(subject, callback)
+	conn, err := n.GetConn()
+	if err != nil {
+		return err
+	}
+	_, err = conn.Subscribe(subject, callback)
 	if err != nil {
 		hlog.Error(err)
 		return err
@@ -116,7 +185,12 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg 
 }
 
 // Subscribe 订阅指定的主题
-func Subscribe[T any](ctx context.Context, n *Nats, subject string, callback func(msg *T) error) error {
+func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T) error) error {
+	n, ok := FromContext(ctx)
+	if !ok {
+		return erro.NewError("nats not initialized")
+	}
+
 	err := n.Subscribe(ctx, subject, func(msg *nats.Msg) {
 		var data T
 		err := json.Unmarshal(msg.Data, &data)
@@ -141,7 +215,11 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 		return err
 	}
 
-	_, err = n.js.Publish(ctx, subject, data, jetstream.WithMsgID(uuid.NewString()))
+	jetStream, err := n.GetJetStream()
+	if err != nil {
+		return err
+	}
+	_, err = jetStream.Publish(ctx, subject, data, jetstream.WithMsgID(uuid.NewString()))
 	if err != nil {
 		hlog.Error(err)
 		return err
@@ -150,7 +228,12 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 }
 
 // JetStreamPublish 发布消息到指定的主题
-func JetStreamPublish[T any](ctx context.Context, n *Nats, stream, subject string, msg *T) error {
+func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T) error {
+	n, ok := FromContext(ctx)
+	if !ok {
+		return erro.NewError("nats not initialized")
+	}
+
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -162,14 +245,31 @@ func JetStreamPublish[T any](ctx context.Context, n *Nats, stream, subject strin
 	return nil
 }
 
+func (n *Nats) GetJetStream() (jetstream.JetStream, error) {
+	if n.js.Load() == nil {
+		return nil, erro.NewError("nats not initialized")
+	}
+	return *n.js.Load(), nil
+}
+
+func (n *Nats) GetConn() (*nats.Conn, error) {
+	if n.conn.Load() == nil {
+		return nil, erro.NewError("nats not initialized")
+	}
+	return n.conn.Load(), nil
+}
+
 // JetStreamSubscribe 订阅指定的主题
 func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(msg jetstream.Msg) error) error {
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
 		return err
 	}
-
-	consumer, err := n.js.CreateOrUpdateConsumer(ctx, stream, jetstream.ConsumerConfig{
+	jetStream, err := n.GetJetStream()
+	if err != nil {
+		return err
+	}
+	consumer, err := jetStream.CreateOrUpdateConsumer(ctx, stream, jetstream.ConsumerConfig{
 		Durable:       durable,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: subject,
@@ -215,7 +315,12 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 }
 
 // JetStreamSubscribe 订阅指定的主题
-func JetStreamSubscribe[T any](ctx context.Context, n *Nats, stream, subject, durable string, callback func(msg *T) error) error {
+func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(msg *T) error) error {
+	n, ok := FromContext(ctx)
+	if !ok {
+		return erro.NewError("nats not initialized")
+	}
+
 	err := n.JetStreamSubscribe(ctx, stream, subject, durable, func(msg jetstream.Msg) error {
 		var data T
 		err := json.Unmarshal(msg.Data(), &data)
@@ -250,7 +355,12 @@ func (n *Nats) checkStream(ctx context.Context, stream string, subject string) e
 		return nil
 	}
 
-	_, err := n.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+	jetStream, err := n.GetJetStream()
+	if err != nil {
+		return err
+	}
+
+	_, err = jetStream.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      stream,
 		Subjects:  []string{subject},
 		Retention: jetstream.InterestPolicy,
@@ -288,7 +398,7 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 		MsgId:   msgId,
 		Data:    string(data),
 		Err:     errString,
-		Server:  n.version.ServerName + " " + n.version.Version,
+		Server:  n.ServerName + " " + n.Version,
 		Retry:   n.maxDeliver,
 	}
 	jsonData, err := json.Marshal(msg)
@@ -296,7 +406,13 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 		hlog.Error(err)
 		return
 	}
-	_, err = n.js.Publish(ctx, ErrorMessage_Subject, jsonData, jetstream.WithMsgID(uuid.NewString()))
+
+	jetStream, err := n.GetJetStream()
+	if err != nil {
+		hlog.Error(err)
+		return
+	}
+	_, err = jetStream.Publish(ctx, ErrorMessage_Subject, jsonData, jetstream.WithMsgID(uuid.NewString()))
 	if err != nil {
 		hlog.Error(err, string(jsonData))
 		return
@@ -309,7 +425,11 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 	if err != nil {
 		return err
 	}
-	consumer, err := n.js.CreateOrUpdateConsumer(ctx, ErrorMessage_Stream, jetstream.ConsumerConfig{
+	jetStream, err := n.GetJetStream()
+	if err != nil {
+		return err
+	}
+	consumer, err := jetStream.CreateOrUpdateConsumer(ctx, ErrorMessage_Stream, jetstream.ConsumerConfig{
 		Durable:       "store",
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: ErrorMessage_Subject,
@@ -364,4 +484,13 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 		return err
 	}
 	return nil
+}
+
+// NewMiddleware 创建中间件
+func (n *Nats) NewMiddleware() rpc.HandlerMiddleware {
+	return func(next rpc.Handler) rpc.Handler {
+		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			return next(WithContext(ctx, n), req)
+		}
+	}
 }
