@@ -4,6 +4,8 @@ import (
 	"context"
 	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync/atomic"
 )
@@ -70,44 +72,45 @@ func (r *Redis) SetConfig(cfg *Config) error {
 
 	r.config = cfg
 	options := &redis.Options{}
-	if cfg.Addr != "" {
-		options.Addr = cfg.Addr
+	if cfg.Addr != nil && len(*cfg.Addr) > 0 {
+		options.Addr = *cfg.Addr
 	}
-	if cfg.Password != "" {
-		options.Password = cfg.Password
+	if cfg.Password != nil && len(*cfg.Password) > 0 {
+		options.Password = *cfg.Password
 	}
-	if cfg.DB != 0 {
-		options.DB = cfg.DB
+
+	if cfg.DB != nil {
+		options.DB = *cfg.DB
 	}
-	if cfg.MaxRetries != 0 {
-		options.MaxRetries = cfg.MaxRetries
+	if cfg.MaxRetries != nil {
+		options.MaxRetries = *cfg.MaxRetries
 	}
-	if cfg.MinRetryBackoff != 0 {
-		options.MinRetryBackoff = cfg.MinRetryBackoff
+	if cfg.MinRetryBackoff != nil {
+		options.MinRetryBackoff = *cfg.MinRetryBackoff
 	}
-	if cfg.MaxRetryBackoff != 0 {
-		options.MaxRetryBackoff = cfg.MaxRetryBackoff
+	if cfg.MaxRetryBackoff != nil {
+		options.MaxRetryBackoff = *cfg.MaxRetryBackoff
 	}
-	if cfg.DialTimeout != 0 {
-		options.DialTimeout = cfg.DialTimeout
+	if cfg.DialTimeout != nil {
+		options.DialTimeout = *cfg.DialTimeout
 	}
-	if cfg.ReadTimeout != 0 {
-		options.ReadTimeout = cfg.ReadTimeout
+	if cfg.ReadTimeout != nil {
+		options.ReadTimeout = *cfg.ReadTimeout
 	}
-	if cfg.WriteTimeout != 0 {
-		options.WriteTimeout = cfg.WriteTimeout
+	if cfg.WriteTimeout != nil {
+		options.WriteTimeout = *cfg.WriteTimeout
 	}
-	if cfg.PoolSize != 0 {
-		options.PoolSize = cfg.PoolSize
+	if cfg.PoolSize != nil {
+		options.PoolSize = *cfg.PoolSize
 	}
-	if cfg.MinIdleConns != 0 {
-		options.MinIdleConns = cfg.MinIdleConns
+	if cfg.MinIdleConns != nil {
+		options.MinIdleConns = *cfg.MinIdleConns
 	}
-	if cfg.MaxConnAge != 0 {
-		options.MaxConnAge = cfg.MaxConnAge
+	if cfg.MaxConnAge != nil {
+		options.MaxConnAge = *cfg.MaxConnAge
 	}
-	if cfg.PoolTimeout != 0 {
-		options.PoolTimeout = cfg.PoolTimeout
+	if cfg.PoolTimeout != nil {
+		options.PoolTimeout = *cfg.PoolTimeout
 	}
 	client := redis.NewClient(options)
 	if err := client.Ping(context.Background()).Err(); err != nil {
@@ -117,4 +120,13 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	r.conn.Store(client)
 
 	return nil
+}
+
+// NewMiddleware 创建中间件
+func (r *Redis) NewMiddleware() rpc.HandlerMiddleware {
+	return func(next rpc.Handler) rpc.Handler {
+		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			return next(WithContext(ctx, r), req)
+		}
+	}
 }

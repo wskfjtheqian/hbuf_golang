@@ -1,63 +1,43 @@
 package redis
 
-import "time"
+import (
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
+	"time"
+)
 
+// Config redis配置
 type Config struct {
-	Password        string        `yaml:"password"`
-	DB              int           `yaml:"db"`
-	PoolTimeout     time.Duration `yaml:"poolTimeout"`
-	MaxConnAge      time.Duration `yaml:"maxConnAge"`
-	MinIdleConns    int           `yaml:"minIdleConns"`
-	PoolSize        int           `yaml:"poolSize"`
-	WriteTimeout    time.Duration `yaml:"writeTimeout"`
-	ReadTimeout     time.Duration `yaml:"readTimeout"`
-	DialTimeout     time.Duration `yaml:"dialTimeout"`
-	MaxRetryBackoff time.Duration `yaml:"maxRetryBackoff"`
-	MinRetryBackoff time.Duration `yaml:"minRetryBackoff"`
-	MaxRetries      int           `yaml:"maxRetries"`
-	Addr            string        `yaml:"addr"`
+	Password        *string        `yaml:"password"`
+	DB              *int           `yaml:"db"`
+	Addr            *string        `yaml:"addr"`
+	PoolTimeout     *time.Duration `yaml:"poolTimeout"`
+	MaxConnAge      *time.Duration `yaml:"maxConnAge"`
+	MinIdleConns    *int           `yaml:"minIdleConns"`
+	PoolSize        *int           `yaml:"poolSize"`
+	WriteTimeout    *time.Duration `yaml:"writeTimeout"`
+	ReadTimeout     *time.Duration `yaml:"readTimeout"`
+	DialTimeout     *time.Duration `yaml:"dialTimeout"`
+	MaxRetryBackoff *time.Duration `yaml:"maxRetryBackoff"`
+	MinRetryBackoff *time.Duration `yaml:"minRetryBackoff"`
+	MaxRetries      *int           `yaml:"maxRetries"`
 }
 
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
 	var valid bool = true
-	if c.DB < 0 {
+	if c.Password == nil || *c.Password == "" {
 		valid = false
+		hlog.Error("redis password is empty")
 	}
-	if c.PoolTimeout < 0 {
+	if c.DB == nil || *c.DB < 0 {
 		valid = false
+		hlog.Error("redis db is invalid")
 	}
-	if c.MaxConnAge < 0 {
+	if c.Addr == nil || *c.Addr == "" {
 		valid = false
+		hlog.Error("redis addr is empty")
 	}
-	if c.MinIdleConns < 0 {
-		valid = false
-	}
-	if c.PoolSize < 0 {
-		valid = false
-	}
-	if c.WriteTimeout < 0 {
-		valid = false
-	}
-	if c.ReadTimeout < 0 {
-		valid = false
-	}
-	if c.DialTimeout < 0 {
-		valid = false
-	}
-	if c.MaxRetryBackoff < 0 {
-		valid = false
-	}
-	if c.MinRetryBackoff < 0 {
-		valid = false
-	}
-	if c.MaxRetries < 0 {
-		valid = false
-	}
-	if c.Addr == "" {
-		valid = false
-	}
-
 	return valid
 }
 
@@ -70,17 +50,17 @@ func (c *Config) Equal(other *Config) bool {
 		return false
 	}
 
-	return c.Password == other.Password &&
-		c.DB == other.DB &&
-		c.PoolTimeout == other.PoolTimeout &&
-		c.MaxConnAge == other.MaxConnAge &&
-		c.MinIdleConns == other.MinIdleConns &&
-		c.PoolSize == other.PoolSize &&
-		c.WriteTimeout == other.WriteTimeout &&
-		c.ReadTimeout == other.ReadTimeout &&
-		c.DialTimeout == other.DialTimeout &&
-		c.MaxRetryBackoff == other.MaxRetryBackoff &&
-		c.MinRetryBackoff == other.MinRetryBackoff &&
-		c.MaxRetries == other.MaxRetries &&
-		c.Addr == other.Addr
+	return utl.Equal(c.Password, other.Password) &&
+		utl.Equal(c.DB, other.DB) &&
+		utl.Equal(c.Addr, other.Addr) &&
+		utl.Equal(c.PoolTimeout, other.PoolTimeout) &&
+		utl.Equal(c.MaxConnAge, other.MaxConnAge) &&
+		utl.Equal(c.MinIdleConns, other.MinIdleConns) &&
+		utl.Equal(c.PoolSize, other.PoolSize) &&
+		utl.Equal(c.WriteTimeout, other.WriteTimeout) &&
+		utl.Equal(c.ReadTimeout, other.ReadTimeout) &&
+		utl.Equal(c.DialTimeout, other.DialTimeout) &&
+		utl.Equal(c.MaxRetryBackoff, other.MaxRetryBackoff) &&
+		utl.Equal(c.MinRetryBackoff, other.MinRetryBackoff) &&
+		utl.Equal(c.MaxRetries, other.MaxRetries)
 }

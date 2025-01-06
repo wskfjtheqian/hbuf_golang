@@ -3,6 +3,8 @@ package etcd
 import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"reflect"
 	"sync/atomic"
@@ -56,20 +58,20 @@ type Etcd struct {
 }
 
 // SetConfig 设置etcd的配置
-func (d *Etcd) SetConfig(cfg *Config) error {
-	if d.config.Equal(cfg) {
+func (e *Etcd) SetConfig(cfg *Config) error {
+	if e.config.Equal(cfg) {
 		return nil
 	}
 	if cfg == nil {
-		if d.client.Load() != nil {
-			conn := d.client.Swap(nil)
+		if e.client.Load() != nil {
+			conn := e.client.Swap(nil)
 			_ = conn.Close()
 		}
-		d.config = nil
+		e.config = nil
 		return nil
 	}
 
-	d.config = cfg
+	e.config = cfg
 
 	c := clientv3.Config{
 		Endpoints: cfg.Endpoints,
@@ -82,14 +84,23 @@ func (d *Etcd) SetConfig(cfg *Config) error {
 		return erro.Wrap(err)
 	}
 
-	d.client.Store(client)
+	e.client.Store(client)
 	return err
 }
 
 // GetClient 获取etcd的客户端
-func (d *Etcd) GetClient() (*clientv3.Client, error) {
-	if d.client.Load() == nil {
+func (e *Etcd) GetClient() (*clientv3.Client, error) {
+	if e.client.Load() == nil {
 		return nil, erro.NewError("not found etcd client")
 	}
-	return d.client.Load(), nil
+	return e.client.Load(), nil
+}
+
+// NewMiddleware 创建中间件
+func (e *Etcd) NewMiddleware() rpc.HandlerMiddleware {
+	return func(next rpc.Handler) rpc.Handler {
+		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			return next(WithContext(ctx, n), req)
+		}
+	}
 }
