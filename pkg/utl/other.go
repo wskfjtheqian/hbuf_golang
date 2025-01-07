@@ -131,3 +131,8 @@ func ForEach[T any](list []T, f func(T) error) error {
 	}
 	return nil
 }
+
+// ToPointer 转为指针类型
+func ToPointer[T any](value T) *T {
+	return &value
+}
