@@ -131,3 +131,17 @@ func ForEach[T any](list []T, f func(T) error) error {
 	}
 	return nil
 }
+
+// ToPointer 转为指针类型
+func ToPointer[T any](value T) *T {
+	return &value
+}
+
+// MapToSlice 将一个 map 转换为一个切片。
+func MapToSlice[K comparable, V any, E any](m map[K]V, f func(K, V) E) []E {
+	result := make([]E, 0, len(m))
+	for k, v := range m {
+		result = append(result, f(k, v))
+	}
+	return result
+}

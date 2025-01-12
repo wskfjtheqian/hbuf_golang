@@ -127,6 +127,15 @@ func (s *Builder) ToText() string {
 	return ExplainSQL(text, nil, `'`, s.params...)
 }
 
+func ExplainSQL(text string, t interface{}, s string, params ...any) string {
+	if t != nil {
+		text = strings.Replace(text, "?", s+`+convert(varchar(max),?)+s`, -1)
+		params = append(params, t)
+	}
+	return text
+
+}
+
 func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
 	var count int64 = 0
 	defer newPrintLog(s, &count).print()

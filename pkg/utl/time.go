@@ -48,18 +48,18 @@ func EndDay(t time.Time) time.Time {
 	return time.Date(year, month, day, 23, 59, 59, 999999999, t.Location())
 }
 
-// StartWeek 返回给定时间所在周的起始日期
-// 例如：给定时间为 2021-08-15 12:30:00，则返回 2021-08-12 00:00:00
+// StartWeek 返回给定时间所在周的起始日期，周一为起始日期
+// 例如: 给定时间为 2021-08-15 12:30:00，则返回 2021-08-09 00:00:00
 func StartWeek(t time.Time) time.Time {
 	year, month, day := t.Date()
-	return time.Date(year, month, day-int(t.Weekday()), 0, 0, 0, 0, t.Location())
+	return time.Date(year, month, day-int(t.Weekday())-6, 0, 0, 0, 0, t.Location())
 }
 
-// EndWeek 返回给定时间所在周的结束日期
-// 例如：给定时间为 2021-08-15 12:30:00，则返回 2021-08-18 23:59:59
+// EndWeek 返回给定时间所在周的结束日期, 周日为结束日期
+// 例如：给定时间为 2021-08-15 12:30:00，则返回 2021-08-15 23:59:59
 func EndWeek(t time.Time) time.Time {
 	year, month, day := t.Date()
-	return time.Date(year, month, day-int(t.Weekday())+6, 23, 59, 59, 999999999, t.Location())
+	return time.Date(year, month, day-int(t.Weekday()), 23, 59, 59, 999999999, t.Location())
 }
 
 // StartMonth 返回给定时间所在月的起始日期
@@ -73,7 +73,7 @@ func StartMonth(t time.Time) time.Time {
 // 例如：给定时间为 2021-08-15 12:30:00，则返回 2021-08-31 23:59:59
 func EndMonth(t time.Time) time.Time {
 	year, month, _ := t.Date()
-	return time.Date(year, month+1, 1, 0, 0, 0, 0, t.Location()).AddDate(0, 0, -1)
+	return time.Date(year, month+1, 0, 23, 59, 59, 999999999, t.Location())
 }
 
 // StartYear 返回给定时间所在年的起始日期
@@ -87,7 +87,7 @@ func StartYear(t time.Time) time.Time {
 // 例如：给定时间为 2021-08-15 12:30:00，则返回 2021-12-31 23:59:59
 func EndYear(t time.Time) time.Time {
 	year, _, _ := t.Date()
-	return time.Date(year+1, 1, 1, 0, 0, 0, 0, t.Location()).AddDate(-1, 0, 0)
+	return time.Date(year+1, 1, 0, 23, 59, 59, 999999999, t.Location())
 }
 
 // StartQuarter 返回给定时间所在季度的起始日期
@@ -103,7 +103,7 @@ func StartQuarter(t time.Time) time.Time {
 func EndQuarter(t time.Time) time.Time {
 	year, month, _ := t.Date()
 	quarter := (month-1)/3 + 1
-	return time.Date(year, quarter*3, 1, 0, 0, 0, 0, t.Location()).AddDate(0, 3, -1)
+	return time.Date(year, quarter*3+1, 0, 23, 59, 59, 999999999, t.Location())
 }
 
 // StartHalfYear 返回给定时间所在半年的起始日期
@@ -114,7 +114,7 @@ func StartHalfYear(t time.Time) time.Time {
 	if month > 6 {
 		halfYear = 2
 	}
-	return time.Date(year, time.Month(halfYear*6-6), 1, 0, 0, 0, 0, t.Location())
+	return time.Date(year, time.Month(halfYear*6-5), 1, 0, 0, 0, 0, t.Location())
 }
 
 // EndHalfYear 返回给定时间所在半年的结束日期
@@ -125,7 +125,7 @@ func EndHalfYear(t time.Time) time.Time {
 	if month > 6 {
 		halfYear = 2
 	}
-	return time.Date(year, time.Month(halfYear*6), 1, 0, 0, 0, 0, t.Location()).AddDate(0, 6, -1)
+	return time.Date(year, time.Month(halfYear*6)+1, 0, 23, 59, 59, 999999999, t.Location())
 }
 
 // IsSameDay 判官是否是同一天
@@ -135,7 +135,9 @@ func IsSameDay(t1, t2 time.Time) bool {
 
 // IsSameWeek 判官是否是同一周
 func IsSameWeek(t1, t2 time.Time) bool {
-	return t1.Year() == t2.Year() && t1.Weekday() == t2.Weekday()
+	year1, week1 := t1.ISOWeek()
+	year2, week2 := t2.ISOWeek()
+	return year1 == year2 && week1 == week2
 }
 
 // IsSameMonth 判官是否是同一月
