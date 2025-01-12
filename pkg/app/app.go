@@ -22,7 +22,7 @@ type App struct {
 	nats  *nats.Nats
 	etcd  *etcd.Etcd
 	redis *redis.Redis
-	sqlDb *sql.Sql
+	sqlDb *sql.DB
 }
 
 // SetConfig 设置配置

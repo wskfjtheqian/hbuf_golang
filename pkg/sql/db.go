@@ -10,7 +10,7 @@ import (
 )
 
 // WithContext 给上下文添加 Builder 连接
-func WithContext(ctx context.Context, n *Sql) context.Context {
+func WithContext(ctx context.Context, n *DB) context.Context {
 	return &Context{
 		Context: ctx,
 		db:      n,
@@ -20,7 +20,7 @@ func WithContext(ctx context.Context, n *Sql) context.Context {
 // Context 定义了 Builder 的上下文
 type Context struct {
 	context.Context
-	db *Sql
+	db *DB
 }
 
 var contextType = reflect.TypeOf(&Context{})
@@ -34,7 +34,7 @@ func (d *Context) Value(key any) any {
 }
 
 // FromContext 从上下文中获取 Builder 连接
-func FromContext(ctx context.Context) (n *Sql, ok bool) {
+func FromContext(ctx context.Context) (n *DB, ok bool) {
 	val := ctx.Value(contextType)
 	if val == nil {
 		return nil, false
@@ -44,16 +44,16 @@ func FromContext(ctx context.Context) (n *Sql, ok bool) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func NewDB() *Sql {
-	return &Sql{}
+func NewDB() *DB {
+	return &DB{}
 }
 
-type Sql struct {
+type DB struct {
 	config *Config
 	db     atomic.Pointer[sql.DB]
 }
 
-func (d *Sql) SetConfig(cfg *Config) error {
+func (d *DB) SetConfig(cfg *Config) error {
 	if d.config.Equal(cfg) {
 		return nil
 	}
@@ -96,7 +96,7 @@ func (d *Sql) SetConfig(cfg *Config) error {
 	return nil
 }
 
-func (d *Sql) GetDB() (*sql.DB, error) {
+func (d *DB) GetDB() (*sql.DB, error) {
 	db := d.db.Load()
 	if db == nil {
 		return nil, erro.NewError("database not initialized")
