@@ -79,6 +79,22 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 	if cfg.DialTimeout > 0 {
 		c.DialTimeout = cfg.DialTimeout
 	}
+	if cfg.AutoSyncInterval > 0 {
+		c.AutoSyncInterval = cfg.AutoSyncInterval
+	}
+	if cfg.DialKeepAliveTime > 0 {
+		c.DialKeepAliveTime = cfg.DialKeepAliveTime
+	}
+	if cfg.DialKeepAliveTimeout > 0 {
+		c.DialKeepAliveTimeout = cfg.DialKeepAliveTimeout
+	}
+	if cfg.Username != "" {
+		c.Username = cfg.Username
+	}
+	if cfg.Password != "" {
+		c.Password = cfg.Password
+	}
+
 	client, err := clientv3.New(c)
 	if err != nil {
 		return erro.Wrap(err)
@@ -90,10 +106,11 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 
 // GetClient 获取etcd的客户端
 func (e *Etcd) GetClient() (*clientv3.Client, error) {
-	if e.client.Load() == nil {
+	client := e.client.Load()
+	if client == nil {
 		return nil, erro.NewError("not found etcd client")
 	}
-	return e.client.Load(), nil
+	return client, nil
 }
 
 // NewMiddleware 创建中间件

@@ -240,9 +240,14 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 type WebSocketClientOptions func(c *WebSocketClient)
 
 // WithWebSocketClientResponseMiddleware  设置WebSocket客户端响应中间件
-func WithWebSocketClientResponseMiddleware(middleware ResponseMiddleware) WebSocketClientOptions {
+func WithWebSocketClientResponseMiddleware(middleware ...ResponseMiddleware) WebSocketClientOptions {
 	return func(c *WebSocketClient) {
-		c.responseMiddleware = middleware
+		c.responseMiddleware = func(next Response) Response {
+			for _, m := range middleware {
+				next = m(next)
+			}
+			return next
+		}
 	}
 }
 
@@ -309,16 +314,26 @@ func (c *WebSocketClient) Request(ctx context.Context, path string, notification
 type WebSocketServerOptions func(s *WebSocketServer)
 
 // WithWebSocketServerResponseMiddleware 设置WebSocket服务器响应中间件
-func WithWebSocketServerResponseMiddleware(middleware ResponseMiddleware) WebSocketServerOptions {
+func WithWebSocketServerResponseMiddleware(middleware ...ResponseMiddleware) WebSocketServerOptions {
 	return func(s *WebSocketServer) {
-		s.responseMiddleware = middleware
+		s.responseMiddleware = func(next Response) Response {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
 	}
 }
 
 // WithWebSocketServerRequestMiddleware 设置WebSocket服务器请求中间件
-func WithWebSocketServerRequestMiddleware(middleware RequestMiddleware) WebSocketServerOptions {
+func WithWebSocketServerRequestMiddleware(middleware ...RequestMiddleware) WebSocketServerOptions {
 	return func(s *WebSocketServer) {
-		s.requestMiddleware = middleware
+		s.requestMiddleware = func(next Request) Request {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
 	}
 }
 

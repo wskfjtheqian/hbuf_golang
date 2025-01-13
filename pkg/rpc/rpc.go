@@ -207,9 +207,14 @@ func NewJsonDecode() Decoder {
 type ServerOption func(*Server)
 
 // WithServerMiddleware 设置Handler中间件
-func WithServerMiddleware(middleware HandlerMiddleware) ServerOption {
+func WithServerMiddleware(middleware ...HandlerMiddleware) ServerOption {
 	return func(s *Server) {
-		s.middleware = middleware
+		s.middleware = func(next Handler) Handler {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
 	}
 }
 
@@ -283,9 +288,14 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 type ClientOption func(*Client)
 
 // WithClientMiddleware 设置Handler中间件
-func WithClientMiddleware(middleware HandlerMiddleware) ClientOption {
+func WithClientMiddleware(middleware ...HandlerMiddleware) ClientOption {
 	return func(c *Client) {
-		c.middleware = middleware
+		c.middleware = func(next Handler) Handler {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
 	}
 }
 

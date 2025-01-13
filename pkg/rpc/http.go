@@ -112,9 +112,14 @@ func (h *HttpClient) Request(ctx context.Context, path string, notification bool
 }
 
 // WithRequestMiddleware 设置请求中间件。
-func WithRequestMiddleware(middleware RequestMiddleware) HttpClientOption {
+func WithRequestMiddleware(middleware ...RequestMiddleware) HttpClientOption {
 	return func(h *HttpClient) {
-		h.middleware = middleware
+		h.middleware = func(next Request) Request {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
 	}
 }
 
@@ -165,8 +170,13 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // WithResponseMiddleware 设置响应中间件。
-func WithResponseMiddleware(middleware ResponseMiddleware) HttpServerOptions {
+func WithResponseMiddleware(middleware ...ResponseMiddleware) HttpServerOptions {
 	return func(h *HttpServer) {
-		h.middleware = middleware
+		h.middleware = func(next Response) Response {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
 	}
 }

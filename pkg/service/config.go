@@ -63,7 +63,7 @@ func (h *Http) Validate() bool {
 	if h.Crt != nil && *h.Crt != "" && h.Key != nil && *h.Key != "" {
 		_, err := tls.LoadX509KeyPair(*h.Crt, *h.Key)
 		if err != nil {
-			hlog.Error("load x509 key pair error: %v", err)
+			hlog.Error("load x509 key pair error: ", err.Error())
 			valid = false
 		}
 	}
@@ -91,10 +91,11 @@ func (h *Http) Equal(other *Http) bool {
 
 // Server 服务配置
 type Server struct {
-	Register bool      `yaml:"register"` //是否注册服务到注册中心
-	Local    bool      `yaml:"local"`    //是否开启本地服务
-	Http     *Http     `yaml:"http"`     //Http 服务配置
-	List     *[]string `yaml:"list"`     //开始的服务列表
+	Register  bool      `yaml:"register"`  //是否注册服务到注册中心
+	Local     bool      `yaml:"local"`     //是否开启本地服务
+	Http      *Http     `yaml:"http"`      //Http 服务配置
+	List      *[]string `yaml:"list"`      //开始的服务列表
+	LeaseTime int64     `yaml:"leaseTime"` //租约时间
 }
 
 // Validate 检查配置是否有效

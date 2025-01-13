@@ -17,7 +17,14 @@ func NewApp() *App {
 		sqlDb: sql.NewDB(),
 	}
 
-	ret.rpc = rpc.NewServer(rpc.WithServerMiddleware(ret.nats.NewMiddleware()))
+	ret.rpc = rpc.NewServer(
+		rpc.WithServerMiddleware(
+			ret.nats.NewMiddleware(),
+			ret.etcd.NewMiddleware(),
+			ret.redis.NewMiddleware(),
+			ret.sqlDb.NewMiddleware(),
+		),
+	)
 	return ret
 }
 

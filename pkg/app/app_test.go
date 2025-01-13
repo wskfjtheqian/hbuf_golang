@@ -16,10 +16,11 @@ type DD struct {
 
 func NewDD(middleware ...HandlerMiddleware) *DD {
 	ret := &DD{}
-	for _, m := range middleware {
-		ret.middleware = func(next Handler) Handler {
-			return m(next)
+	ret.middleware = func(next Handler) Handler {
+		for i := len(middleware) - 1; i >= 0; i-- {
+			next = middleware[i](next)
 		}
+		return next
 	}
 	return ret
 }

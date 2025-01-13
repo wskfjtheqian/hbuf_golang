@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync/atomic"
 )
@@ -102,4 +104,12 @@ func (d *DB) GetDB() (*sql.DB, error) {
 		return nil, erro.NewError("database not initialized")
 	}
 	return db, nil
+}
+
+func (d *DB) NewMiddleware() rpc.HandlerMiddleware {
+	return func(next rpc.Handler) rpc.Handler {
+		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			return next(WithContext(ctx, d), req)
+		}
+	}
 }
