@@ -4,17 +4,21 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/nats"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/redis"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/sql"
 )
 
 // NewApp 新建一个App
 func NewApp() *App {
-	return &App{
+	ret := &App{
 		nats:  nats.NewNats(),
 		etcd:  etcd.NewEtcd(),
 		redis: redis.NewRedis(),
 		sqlDb: sql.NewDB(),
 	}
+
+	ret.rpc = rpc.NewServer(rpc.WithServerMiddleware(ret.nats.NewMiddleware()))
+	return ret
 }
 
 // App 应用
@@ -23,6 +27,7 @@ type App struct {
 	etcd  *etcd.Etcd
 	redis *redis.Redis
 	sqlDb *sql.DB
+	rpc   *rpc.Server
 }
 
 // SetConfig 设置配置

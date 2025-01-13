@@ -127,15 +127,6 @@ func (s *Builder) ToText() string {
 	return ExplainSQL(text, nil, `'`, s.params...)
 }
 
-func ExplainSQL(text string, t interface{}, s string, params ...any) string {
-	if t != nil {
-		text = strings.Replace(text, "?", s+`+convert(varchar(max),?)+s`, -1)
-		params = append(params, t)
-	}
-	return text
-
-}
-
 func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
 	var count int64 = 0
 	defer newPrintLog(s, &count).print()
@@ -323,11 +314,11 @@ func (p *printLog) print() {
 	now := time.Now().UnixMilli() - p.now
 	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "s]"
 	if 200 > now {
-		t = utl.(t)
+		t = utl.Yellow(t)
 	} else {
 		t = utl.Red(t)
 	}
-	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(*p.count, 10)+"] "), utl.Green(p.s.ToText())))
+	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, utl.Blue("[Rows:"+strconv.FormatInt(*p.count, 10)+"] "), utl.Green(p.builder.ToText())))
 }
 
 func newPrintLog(builder *Builder, count *int64) *printLog {

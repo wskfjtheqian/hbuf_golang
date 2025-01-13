@@ -100,7 +100,7 @@ func (e *Etcd) GetClient() (*clientv3.Client, error) {
 func (e *Etcd) NewMiddleware() rpc.HandlerMiddleware {
 	return func(next rpc.Handler) rpc.Handler {
 		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-			return next(WithContext(ctx, n), req)
+			return next(WithContext(ctx, e), req)
 		}
 	}
 }
