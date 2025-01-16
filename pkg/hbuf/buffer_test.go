@@ -1,12 +1,22 @@
-package hbuf
+package hbuf_test
+
+import (
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"strconv"
+	"testing"
+)
+
+func TestDecoderUnt64(t *testing.T) {
+	for i := uint64(0); i < 0xFFFFFFFF; i++ {
+		b := hbuf.EncoderUint64(i)
+		value := hbuf.DecoderUint64(b)
+		if value != i {
+			t.Fatal("Decoder int64 error type = " + strconv.Itoa(int(value)))
+		}
+	}
+}
 
 //
-//import (
-//	"bytes"
-//	"io"
-//	"strconv"
-//	"testing"
-//)
 //
 //func TestDecoderId(t *testing.T) {
 //	for i := uint16(0); i < 0xFFFF; i++ {

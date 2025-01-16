@@ -212,7 +212,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 					hlog.Error("add client failed: ", err)
 				}
 			} else if ev.Type == clientv3.EventTypeDelete {
-				hlog.Info("service deregister: ", ev.Kv.Key)
+				hlog.Info("service deregister: ", string(ev.Kv.Key))
 			}
 		}
 	}
