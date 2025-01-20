@@ -33,6 +33,7 @@ TAG	| ID | COUNT | <<KEY> | VALUE | <<KEY> | VALUE> | ...>
 类型 Type	| 是否有Extend	| 数量值的长 uint64 	| ID长度 uint32
 	111		| 1				| 11				| 11
 TAG	| ID | COUNT | <EXTEND_COUNT | Extend| <> | ...> | <FIELD ...>
+------------------------------------------------
 
 */
 
@@ -483,6 +484,19 @@ func ReaderBool(v any) (bool, error) {
 	}
 }
 
+func ReaderData[E Data](v any) (*E, error) {
+	ret := new(E)
+	r, ok := v.(io.Reader)
+	if !ok {
+		return ret, errors.New("invalid Type")
+	}
+	err := (*ret).Decoder(r)
+	if err != nil {
+		return ret, err
+	}
+	return ret, nil
+}
+
 func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) error {
 	for {
 		typ, _, id, valueLen, err := ReaderField(r)
@@ -543,9 +557,33 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) error
 		case TMap:
 
 		case TData:
-
+			err = call(TData, id, NewEndReader(r, uint64(valueLen)))
+			if err != nil {
+				return err
+			}
 		default:
 			return nil
 		}
 	}
+}
+
+func NewEndReader(r io.Reader, end uint64) *EndReader {
+	return &EndReader{end: end, Reader: r}
+}
+
+type EndReader struct {
+	io.Reader
+	end uint64
+}
+
+func (r *EndReader) Read(p []byte) (n int, err error) {
+	if r.end <= 0 {
+		return 0, io.EOF
+	}
+	if uint64(len(p)) > r.end {
+		p = p[:r.end]
+	}
+	n, err = r.Reader.Read(p)
+	r.end -= uint64(n)
+	return
 }

@@ -151,9 +151,10 @@ func (t *testStruct) Decoder(r io.Reader) error {
 			t.ValueString, err = hbuf.ReaderBytes[string](value)
 		case 14:
 			t.ValueBytes, err = hbuf.ReaderBytes[[]byte](value)
-		default:
 		case 15:
 			t.ValueBool, err = hbuf.ReaderBool(value)
+		case 16:
+			t.ValueData, err = hbuf.ReaderData[subStruct](value)
 		}
 		return
 	})
