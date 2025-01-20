@@ -13,8 +13,8 @@ type subStruct struct {
 	ValueInt int `json:"ValueInt,omitempty"`
 }
 
-func (t *subStruct) Encoder(w io.Writer) error {
-	err := hbuf.WriterInt64(w, 1, int64(t.ValueInt))
+func (s *subStruct) Encoder(w io.Writer) error {
+	err := hbuf.WriterInt64(w, 1, int64(s.ValueInt))
 	if err != nil {
 		return err
 	}
@@ -22,17 +22,24 @@ func (t *subStruct) Encoder(w io.Writer) error {
 }
 
 func (s *subStruct) Decoder(r io.Reader) error {
-	//TODO implement me
-	panic("implement me")
+	return hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) (err error) {
+		switch id {
+		case 1:
+			s.ValueInt, err = hbuf.ReaderNumber[int](value)
+		}
+		return nil
+	})
 }
 
 func (s *subStruct) Size() int {
-	//TODO implement me
-	panic("implement me")
+	length := 0
+	if s.ValueInt != 0 {
+		length += 1 + int(hbuf.LengthUint64(uint64(s.ValueInt))) + int(hbuf.LengthUint64(1))
+	}
+	return length
 }
 
 type testStruct struct {
-	String       `json:"Name,omitempty"`
 	ValueInt     int       `json:"ValueInt,omitempty"`
 	ValueInt8    int8      `json:"ValueInt8,omitempty"`
 	ValueInt16   int16     `json:"ValueInt16,omitempty"`
@@ -53,6 +60,10 @@ type testStruct struct {
 
 func (t *testStruct) Encoder(w io.Writer) error {
 	err := hbuf.WriterInt64(w, 1, int64(t.ValueInt))
+	if err != nil {
+		return err
+	}
+	err = hbuf.WriterData(w, 16, &t.ValueData)
 	if err != nil {
 		return err
 	}
@@ -112,10 +123,6 @@ func (t *testStruct) Encoder(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	err = hbuf.WriterData(w, 16, &t.ValueData)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -146,7 +153,6 @@ func (t *testStruct) Decoder(r io.Reader) error {
 			t.ValueFloat32, err = hbuf.ReaderNumber[float32](value)
 		case 12:
 			t.ValueFloat64, err = hbuf.ReaderNumber[float64](value)
-
 		case 13:
 			t.ValueString, err = hbuf.ReaderBytes[string](value)
 		case 14:
@@ -154,8 +160,9 @@ func (t *testStruct) Decoder(r io.Reader) error {
 		case 15:
 			t.ValueBool, err = hbuf.ReaderBool(value)
 		case 16:
-			t.ValueData, err = hbuf.ReaderData[subStruct](value)
+			err = hbuf.ReaderData(value, &t.ValueData)
 		}
+
 		return
 	})
 	if err != nil {
@@ -167,19 +174,19 @@ func (t *testStruct) Decoder(r io.Reader) error {
 func (t *testStruct) Size() int {
 	length := 0
 	if t.ValueInt != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt))) + int(hbuf.LengthInt64(1))
+		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt))) + int(hbuf.LengthUint64(1))
 	}
 	if t.ValueInt8 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt8))) + int(hbuf.LengthInt64(2))
+		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt8))) + int(hbuf.LengthUint64(2))
 	}
 	if t.ValueInt16 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt16))) + int(hbuf.LengthInt64(3))
+		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt16))) + int(hbuf.LengthUint64(3))
 	}
 	if t.ValueInt32 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt32))) + int(hbuf.LengthInt64(4))
+		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt32))) + int(hbuf.LengthUint64(4))
 	}
 	if t.ValueInt64 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt64))) + int(hbuf.LengthInt64(5))
+		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt64))) + int(hbuf.LengthUint64(5))
 	}
 	if t.ValueUint != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint))) + int(hbuf.LengthUint64(6))
@@ -197,20 +204,22 @@ func (t *testStruct) Size() int {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint64))) + int(hbuf.LengthUint64(10))
 	}
 	if t.ValueFloat32 != 0 {
-		length += 1 + int(hbuf.LengthFloat(t.ValueFloat32)) + int(hbuf.LengthInt64(11))
+		length += 1 + int(hbuf.LengthFloat(t.ValueFloat32)) + int(hbuf.LengthUint64(11))
 	}
 	if t.ValueFloat64 != 0 {
-		length += 1 + int(hbuf.LengthDouble(t.ValueFloat64)) + int(hbuf.LengthInt64(12))
+		length += 1 + int(hbuf.LengthDouble(t.ValueFloat64)) + int(hbuf.LengthUint64(12))
 	}
 	if t.ValueString != "" {
-		length += 1 + int(hbuf.LengthBytes([]byte(t.ValueString))) + int(hbuf.LengthInt64(13))
+		length += 1 + int(hbuf.LengthBytes([]byte(t.ValueString))) + int(hbuf.LengthUint64(13))
 	}
 	if len(t.ValueBytes) != 0 {
-		length += 1 + int(hbuf.LengthBytes(t.ValueBytes)) + int(hbuf.LengthInt64(14))
+		length += 1 + int(hbuf.LengthBytes(t.ValueBytes)) + int(hbuf.LengthUint64(14))
 	}
 	if t.ValueBool {
-		length += 1 + int(hbuf.LengthInt64(15))
+		length += 1 + int(hbuf.LengthUint64(15))
 	}
+	temp := t.ValueData.Size()
+	length += 1 + temp + int(hbuf.LengthUint64(16)) + int(hbuf.LengthUint64(uint64(temp)))
 	return length
 }
 
@@ -218,7 +227,6 @@ type String string
 
 func TestEncoderDecoder(t *testing.T) {
 	t1 := testStruct{
-		String:       "string",
 		ValueInt:     -2118888625,
 		ValueInt8:    int8(rand.Int63()),
 		ValueInt16:   int16(rand.Int63()),
@@ -234,6 +242,9 @@ func TestEncoderDecoder(t *testing.T) {
 		ValueString:  "最佳答案：uint16是无符号的16位整型数据类型。最佳答案：uint16是无符号的16位整型数据类型。最佳答案：uint16是无符号的16位整型数据类型。最佳答案：uint16是无符号的16位整型数据类型。",
 		ValueBytes:   []byte("length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint64))) + int(hbuf.LengthUint64(10))"),
 		ValueBool:    true,
+		ValueData: subStruct{
+			ValueInt: 123,
+		},
 	}
 
 	length := t1.Size()
@@ -310,6 +321,9 @@ func TestEncoderDecoder(t *testing.T) {
 	if t1.ValueBool != t2.ValueBool {
 		t.Error("not equal ValueBool")
 	}
+	if t1.ValueData.ValueInt != t2.ValueData.ValueInt {
+		t.Error("not equal ValueData.ValueInt")
+	}
 }
 
 func BenchmarkEncoder(b *testing.B) {
@@ -329,6 +343,9 @@ func BenchmarkEncoder(b *testing.B) {
 		ValueString:  "最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...",
 		ValueBytes:   []byte("ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),"),
 		ValueBool:    true,
+		ValueData: subStruct{
+			ValueInt: 123,
+		},
 	}
 	b.Run("Encoder", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {

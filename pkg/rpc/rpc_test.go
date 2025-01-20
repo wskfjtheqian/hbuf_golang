@@ -23,6 +23,10 @@ func (g GetNameRequest) Decoder(r io.Reader) (err error) {
 	return nil
 }
 
+func (g GetNameRequest) Size() int {
+	return 0
+}
+
 type GetNameResponse struct {
 	Name string `json:"name"`
 }
@@ -36,6 +40,10 @@ func (g GetNameResponse) Encoder(w io.Writer) (err error) {
 
 func (g GetNameResponse) Decoder(r io.Reader) (err error) {
 	return nil
+}
+
+func (g GetNameResponse) Size() int {
+	return 0
 }
 
 type TestRpc interface {

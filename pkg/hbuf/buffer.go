@@ -111,28 +111,6 @@ func ReaderField(r io.Reader) (typ Type, isNull bool, id uint16, valueLen uint8,
 	return
 }
 
-// LengthInt64 计算 int64 类型长度
-func LengthInt64(v int64) (length uint8) {
-	if v >= -0x80 && v <= 0x7F {
-		length = 1
-	} else if v >= -0x8000 && v <= 0x7FFF {
-		length = 2
-	} else if v >= -0x800000 && v <= 0x7FFFFF {
-		length = 3
-	} else if v >= -0x80000000 && v <= 0x7FFFFFFF {
-		length = 4
-	} else if v >= -0x8000000000 && v <= 0x7FFFFFFFFF {
-		length = 5
-	} else if v >= -0x800000000000 && v <= 0x7FFFFFFFFFFF {
-		length = 6
-	} else if v >= -0x80000000000000 && v <= 0x7FFFFFFFFFFFFF {
-		length = 7
-	} else {
-		length = 8
-	}
-	return
-}
-
 // EncoderUint64 编码 uint64 类型
 func EncoderUint64(v uint64) (b []byte) {
 	if v <= 0xFF {
@@ -484,22 +462,26 @@ func ReaderBool(v any) (bool, error) {
 	}
 }
 
-func ReaderData[E Data](v any) (*E, error) {
-	ret := new(E)
+func ReaderData(v any, out Data) error {
 	r, ok := v.(io.Reader)
 	if !ok {
-		return ret, errors.New("invalid Type")
+		return errors.New("invalid Type")
 	}
-	err := (*ret).Decoder(r)
+	err := out.Decoder(r)
 	if err != nil {
-		return ret, err
+		return err
 	}
-	return ret, nil
+	return nil
 }
 
-func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) error {
+func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err error) {
 	for {
-		typ, _, id, valueLen, err := ReaderField(r)
+		var count int
+		var typ Type
+		var id uint16
+		var valueLen uint8
+
+		typ, _, id, valueLen, err = ReaderField(r)
 		if err != nil {
 			return nil
 		}
@@ -511,7 +493,7 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) error
 			continue
 		}
 		b := make([]byte, valueLen)
-		count, err := r.Read(b)
+		count, err = r.Read(b)
 		if err != nil {
 			return err
 		}
@@ -552,15 +534,15 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) error
 			if err != nil {
 				return err
 			}
+		case TData:
+			err = call(TData, id, NewEndReader(r, DecoderUint64(b)))
+			if err != nil {
+				return err
+			}
 		case TList:
 
 		case TMap:
 
-		case TData:
-			err = call(TData, id, NewEndReader(r, uint64(valueLen)))
-			if err != nil {
-				return err
-			}
 		default:
 			return nil
 		}
@@ -584,6 +566,9 @@ func (r *EndReader) Read(p []byte) (n int, err error) {
 		p = p[:r.end]
 	}
 	n, err = r.Reader.Read(p)
+	if err != nil {
+		return n, err
+	}
 	r.end -= uint64(n)
 	return
 }
