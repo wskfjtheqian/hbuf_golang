@@ -10,11 +10,16 @@ import (
 )
 
 type subStruct struct {
-	ValueInt int `json:"ValueInt,omitempty"`
+	ValueInt  int  `json:"ValueInt,omitempty"`
+	ValueInt8 int8 `json:"ValueInt8,omitempty"`
 }
 
 func (s *subStruct) Encoder(w io.Writer) error {
 	err := hbuf.WriterInt64(w, 1, int64(s.ValueInt))
+	if err != nil {
+		return err
+	}
+	err = hbuf.WriterInt64(w, 2, int64(s.ValueInt8))
 	if err != nil {
 		return err
 	}
@@ -26,6 +31,8 @@ func (s *subStruct) Decoder(r io.Reader) error {
 		switch id {
 		case 1:
 			s.ValueInt, err = hbuf.ReaderNumber[int](value)
+		case 2:
+			s.ValueInt8, err = hbuf.ReaderNumber[int8](value)
 		}
 		return nil
 	})
@@ -35,6 +42,9 @@ func (s *subStruct) Size() int {
 	length := 0
 	if s.ValueInt != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(s.ValueInt))) + int(hbuf.LengthUint64(1))
+	}
+	if s.ValueInt8 != 0 {
+		length += 1 + int(hbuf.LengthUint64(uint64(s.ValueInt8))) + int(hbuf.LengthUint64(2))
 	}
 	return length
 }
@@ -243,7 +253,8 @@ func TestEncoderDecoder(t *testing.T) {
 		ValueBytes:   []byte("length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint64))) + int(hbuf.LengthUint64(10))"),
 		ValueBool:    true,
 		ValueData: subStruct{
-			ValueInt: 123,
+			ValueInt:  123,
+			ValueInt8: int8(rand.Int63()),
 		},
 	}
 
@@ -323,6 +334,9 @@ func TestEncoderDecoder(t *testing.T) {
 	}
 	if t1.ValueData.ValueInt != t2.ValueData.ValueInt {
 		t.Error("not equal ValueData.ValueInt")
+	}
+	if t1.ValueData.ValueInt8 != t2.ValueData.ValueInt8 {
+		t.Error("not equal ValueData.ValueInt8")
 	}
 }
 

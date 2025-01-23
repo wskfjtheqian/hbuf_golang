@@ -15,7 +15,7 @@ func TestHttpService_Invoke(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/socket/", rpcServer)
+	server := NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
@@ -23,6 +23,29 @@ func TestHttpService_Invoke(t *testing.T) {
 	client := NewHttpClient("http://localhost:8080/rpc")
 
 	rpcClient := NewClient(client.Request)
+	testClient := NewTestRpcClient(rpcClient)
+	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
+}
+
+// 测试 HttpService 的 Response 方法
+func TestHttpService_InvokeHBuf(t *testing.T) {
+	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
+	RegisterRpcServer(rpcServer, &TestRpcServer{})
+
+	server := NewHttpServer("/rpc/", rpcServer)
+
+	http.Handle("/rpc/", server)
+	go http.ListenAndServe(":8080", nil)
+
+	client := NewHttpClient("http://localhost:8080/rpc")
+
+	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
 	testClient := NewTestRpcClient(rpcClient)
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
 	if err != nil {

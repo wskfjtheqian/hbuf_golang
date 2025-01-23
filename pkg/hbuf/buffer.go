@@ -483,7 +483,10 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 
 		typ, _, id, valueLen, err = ReaderField(r)
 		if err != nil {
-			return nil
+			if err == io.EOF {
+				return nil
+			}
+			return err
 		}
 		if typ == TBool {
 			err = call(typ, id, valueLen != 0)
@@ -495,6 +498,9 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 		b := make([]byte, valueLen)
 		count, err = r.Read(b)
 		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			return err
 		}
 		if uint8(count) != valueLen {
@@ -521,13 +527,13 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 				return errors.New("invalid float length")
 			}
 		case TBytes:
-			bytesLength := DecoderUint64(b)
-			data := make([]byte, bytesLength)
+			byteslength := DecoderUint64(b)
+			data := make([]byte, byteslength)
 			count, err = r.Read(data)
-			if err != nil {
+			if err != nil && err != io.EOF {
 				return err
 			}
-			if count != int(bytesLength) {
+			if count != int(byteslength) {
 				err = errors.New("read Bytes error")
 			}
 			err = call(typ, id, data)

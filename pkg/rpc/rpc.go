@@ -136,7 +136,7 @@ type Method interface {
 	GetId() uint32
 	GetName() string
 	GetHandler() Handler
-	DecodeRequest(decoder func(v any) error) (hbuf.Data, error)
+	DecodeRequest(decoder func(v hbuf.Data) error) (hbuf.Data, error)
 }
 
 // MethodImpl 是用于处理RPC请求的接口
@@ -154,9 +154,9 @@ func (m *MethodImpl[T, E]) GetName() string {
 	return m.Name
 }
 
-func (m *MethodImpl[T, E]) DecodeRequest(decoder func(v any) error) (hbuf.Data, error) {
-	var request any = new(T)
-	err := decoder(request)
+func (m *MethodImpl[T, E]) DecodeRequest(decoder func(v hbuf.Data) error) (hbuf.Data, error) {
+	var request any = *new(T)
+	err := decoder(request.(T))
 	if err != nil {
 		return nil, nil
 	}
@@ -176,28 +176,87 @@ type Result[T hbuf.Data] struct {
 	Data T      `json:"data"`
 }
 
-func (r Result[T]) Encoder(writer io.Writer) (err error) {
-	panic("implement me")
+func (t *Result[T]) Encoder(w io.Writer) error {
+	err := hbuf.WriterInt64(w, 1, int64(t.Code))
+	if err != nil {
+		return err
+	}
+	err = hbuf.WriterBytes(w, 2, []byte(t.Msg))
+	if err != nil {
+		return err
+	}
+	err = hbuf.WriterData(w, 3, t.Data)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (r Result[T]) Decoder(reader io.Reader) (err error) {
-	panic("implement me")
+func (t *Result[T]) Decoder(r io.Reader) error {
+	return hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) (err error) {
+		switch id {
+		case 1:
+			t.Code, err = hbuf.ReaderNumber[int](value)
+		case 2:
+			t.Msg, err = hbuf.ReaderBytes[string](value)
+		case 3:
+			err = hbuf.ReaderData(value, t.Data)
+		}
+		return nil
+	})
 }
 
-type Encoder func(writer io.Writer) func(v any) error
-type Decoder func(reader io.Reader) func(v any) error
+func (t *Result[T]) Size() int {
+	length := 0
+	if t.Code != 0 {
+		length += 1 + int(hbuf.LengthUint64(uint64(t.Code))) + int(hbuf.LengthUint64(1))
+	}
+	if t.Msg != "" {
+		length += 1 + int(hbuf.LengthBytes([]byte(t.Msg))) + int(hbuf.LengthUint64(2))
+	}
+	if any(t.Data) != nil {
+		temp := t.Data.Size()
+		length += 1 + temp + int(hbuf.LengthUint64(3)) + int(hbuf.LengthUint64(uint64(temp)))
+	}
+	return length
+}
+
+type Encoder func(writer io.Writer) func(v hbuf.Data) error
+type Decoder func(reader io.Reader) func(v hbuf.Data) error
 
 // NewJsonEncode 编码器接口。
 func NewJsonEncode() Encoder {
-	return func(writer io.Writer) func(v any) error {
-		return json.NewEncoder(writer).Encode
+	return func(writer io.Writer) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			return json.NewEncoder(writer).Encode(v)
+		}
 	}
 }
 
 // NewJsonDecode 解码器接口。
 func NewJsonDecode() Decoder {
-	return func(reader io.Reader) func(v any) error {
-		return json.NewDecoder(reader).Decode
+	return func(reader io.Reader) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			return json.NewDecoder(reader).Decode(v)
+		}
+	}
+}
+
+// NewHBufEncode 编码器接口。
+func NewHBufEncode() Encoder {
+	return func(writer io.Writer) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			return v.Encoder(writer)
+		}
+	}
+}
+
+// NewHBufDecode 解码器接口。
+func NewHBufDecode() Decoder {
+	return func(reader io.Reader) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			return v.Decoder(reader)
+		}
 	}
 }
 
@@ -215,6 +274,20 @@ func WithServerMiddleware(middleware ...HandlerMiddleware) ServerOption {
 			}
 			return next
 		}
+	}
+}
+
+// WithServerDecode 设置解码器
+func WithServerDecode(decoder Decoder) ServerOption {
+	return func(s *Server) {
+		s.decode = decoder
+	}
+}
+
+// WithServerEncoder 设置编码器
+func WithServerEncoder(encoder Encoder) ServerOption {
+	return func(s *Server) {
+		s.encode = encoder
 	}
 }
 
@@ -296,6 +369,20 @@ func WithClientMiddleware(middleware ...HandlerMiddleware) ClientOption {
 			}
 			return next
 		}
+	}
+}
+
+// WithClientDecode 设置解码器
+func WithClientDecode(decoder Decoder) ClientOption {
+	return func(c *Client) {
+		c.decode = decoder
+	}
+}
+
+// WithClientEncoder 设置编码器
+func WithClientEncoder(encoder Encoder) ClientOption {
+	return func(c *Client) {
+		c.encode = encoder
 	}
 }
 
