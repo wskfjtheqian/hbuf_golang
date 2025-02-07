@@ -140,7 +140,7 @@ type Method interface {
 }
 
 // MethodImpl 是用于处理RPC请求的接口
-type MethodImpl[T hbuf.Data, E hbuf.Data] struct {
+type MethodImpl[T any, E any] struct {
 	Id      uint32
 	Name    string
 	Handler Handler
@@ -156,7 +156,7 @@ func (m *MethodImpl[T, E]) GetName() string {
 
 func (m *MethodImpl[T, E]) DecodeRequest(decoder func(v hbuf.Data) error) (hbuf.Data, error) {
 	var request any = *new(T)
-	err := decoder(request.(T))
+	err := decoder(request.(hbuf.Data))
 	if err != nil {
 		return nil, nil
 	}
@@ -170,7 +170,7 @@ func (m *MethodImpl[T, E]) GetHandler() Handler {
 
 //////////////////////////////////////////////////////
 
-type Result[T hbuf.Data] struct {
+type Result[T any] struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 	Data T      `json:"data"`
@@ -200,7 +200,7 @@ func (t *Result[T]) Decoder(r io.Reader) error {
 		case 2:
 			t.Msg, err = hbuf.ReaderBytes[string](value)
 		case 3:
-			err = hbuf.ReaderData(value, t.Data)
+			err = hbuf.ReaderData(value, t.Data.(hbuf.Data))
 		}
 		return nil
 	})
@@ -412,7 +412,7 @@ type Client struct {
 }
 
 // ClientCall 调用远程服务
-func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
+func ClientCall[T any, E any](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
@@ -433,7 +433,8 @@ func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uin
 			return nil, errors.New(result.Msg)
 		}
 
-		return result.Data, nil
+		var data any = result.Data
+		return data.(hbuf.Data), nil
 	})(ctx, *request)
 	if err != nil {
 		var v E

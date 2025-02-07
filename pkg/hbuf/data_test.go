@@ -184,19 +184,19 @@ func (t *testStruct) Decoder(r io.Reader) error {
 func (t *testStruct) Size() int {
 	length := 0
 	if t.ValueInt != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt))) + int(hbuf.LengthUint64(1))
+		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt))) + int(hbuf.LengthUint64(1))
 	}
 	if t.ValueInt8 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt8))) + int(hbuf.LengthUint64(2))
+		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt8))) + int(hbuf.LengthUint64(2))
 	}
 	if t.ValueInt16 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt16))) + int(hbuf.LengthUint64(3))
+		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt16))) + int(hbuf.LengthUint64(3))
 	}
 	if t.ValueInt32 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt32))) + int(hbuf.LengthUint64(4))
+		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt32))) + int(hbuf.LengthUint64(4))
 	}
 	if t.ValueInt64 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueInt64))) + int(hbuf.LengthUint64(5))
+		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt64))) + int(hbuf.LengthUint64(5))
 	}
 	if t.ValueUint != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint))) + int(hbuf.LengthUint64(6))
@@ -249,8 +249,8 @@ func TestEncoderDecoder(t *testing.T) {
 		ValueUint64:  uint64(rand.Uint64()),
 		ValueFloat32: float32(rand.Float32()),
 		ValueFloat64: float64(rand.Float64()),
-		ValueString:  "最佳答案：uint16是无符号的16位整型数据类型。最佳答案：uint16是无符号的16位整型数据类型。最佳答案：uint16是无符号的16位整型数据类型。最佳答案：uint16是无符号的16位整型数据类型。",
-		ValueBytes:   []byte("length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint64))) + int(hbuf.LengthUint64(10))"),
+		ValueString:  "最佳答案：",
+		ValueBytes:   []byte("length += 1"),
 		ValueBool:    true,
 		ValueData: subStruct{
 			ValueInt:  123,
@@ -288,55 +288,55 @@ func TestEncoderDecoder(t *testing.T) {
 	})
 
 	if t1.ValueInt != t2.ValueInt {
-		t.Error("not equal ValueInt")
+		t.Error("not equal ValueInt", t1.ValueInt, t2.ValueInt)
 	}
 	if t1.ValueInt8 != t2.ValueInt8 {
-		t.Error("not equal ValueInt8")
+		t.Error("not equal ValueInt8", t1.ValueInt8, t2.ValueInt8)
 	}
 	if t1.ValueInt16 != t2.ValueInt16 {
-		t.Error("not equal ValueInt16")
+		t.Error("not equal ValueInt16", t1.ValueInt16, t2.ValueInt16)
 	}
 	if t1.ValueInt32 != t2.ValueInt32 {
-		t.Error("not equal ValueInt32")
+		t.Error("not equal ValueInt32", t1.ValueInt32, t2.ValueInt32)
 	}
 	if t1.ValueInt64 != t2.ValueInt64 {
-		t.Error("not equal ValueInt64")
+		t.Error("not equal ValueInt64", t1.ValueInt64, t2.ValueInt64)
 	}
 	if t1.ValueUint != t2.ValueUint {
-		t.Error("not equal ValueUint")
+		t.Error("not equal ValueUint", t1.ValueUint, t2.ValueUint)
 	}
 	if t1.ValueUint8 != t2.ValueUint8 {
-		t.Error("not equal ValueUint8")
+		t.Error("not equal ValueUint8", t1.ValueUint8, t2.ValueUint8)
 	}
 	if t1.ValueUint16 != t2.ValueUint16 {
-		t.Error("not equal ValueUint16")
+		t.Error("not equal ValueUint16", t1.ValueUint16, t2.ValueUint16)
 	}
 	if t1.ValueUint32 != t2.ValueUint32 {
-		t.Error("not equal ValueUint32")
+		t.Error("not equal ValueUint32", t1.ValueUint32, t2.ValueUint32)
 	}
 	if t1.ValueUint64 != t2.ValueUint64 {
-		t.Error("not equal ValueUint64")
+		t.Error("not equal ValueUint64", t1.ValueUint64, t2.ValueUint64)
 	}
 	if t1.ValueFloat32 != t2.ValueFloat32 {
-		t.Error("not equal ValueFloat32")
+		t.Error("not equal ValueFloat32", t1.ValueFloat32, t2.ValueFloat32)
 	}
 	if t1.ValueFloat64 != t2.ValueFloat64 {
-		t.Error("not equal ValueFloat64")
+		t.Error("not equal ValueFloat64", t1.ValueFloat64, t2.ValueFloat64)
 	}
 	if t1.ValueString != t2.ValueString {
-		t.Error("not equal ValueString")
+		t.Error("not equal ValueString", t1.ValueString, t2.ValueString)
 	}
 	if bytes.Compare(t1.ValueBytes, t2.ValueBytes) != 0 {
-		t.Error("not equal ValueBytes")
+		t.Error("not equal ValueBytes", t1.ValueBytes, t2.ValueBytes)
 	}
 	if t1.ValueBool != t2.ValueBool {
-		t.Error("not equal ValueBool")
+		t.Error("not equal ValueBool", t1.ValueBool, t2.ValueBool)
 	}
 	if t1.ValueData.ValueInt != t2.ValueData.ValueInt {
-		t.Error("not equal ValueData.ValueInt")
+		t.Error("not equal ValueData.ValueInt", t1.ValueData.ValueInt, t2.ValueData.ValueInt)
 	}
 	if t1.ValueData.ValueInt8 != t2.ValueData.ValueInt8 {
-		t.Error("not equal ValueData.ValueInt8")
+		t.Error("not equal ValueData.ValueInt8", t1.ValueData.ValueInt8, t2.ValueData.ValueInt8)
 	}
 }
 

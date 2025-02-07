@@ -15,7 +15,7 @@ func (r *GetNameRequest) Data() hbuf.Data {
 	return hbuf.Data(r)
 }
 
-func (g GetNameRequest) Encoder(w io.Writer) (err error) {
+func (g *GetNameRequest) Encoder(w io.Writer) (err error) {
 	err = hbuf.WriterBytes(w, 1, []byte(g.Name))
 	if err != nil {
 		return
@@ -23,7 +23,7 @@ func (g GetNameRequest) Encoder(w io.Writer) (err error) {
 	return nil
 }
 
-func (g GetNameRequest) Decoder(r io.Reader) (err error) {
+func (g *GetNameRequest) Decoder(r io.Reader) (err error) {
 	return hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) error {
 		switch id {
 		case 1:
@@ -33,7 +33,7 @@ func (g GetNameRequest) Decoder(r io.Reader) (err error) {
 	})
 }
 
-func (g GetNameRequest) Size() int {
+func (g *GetNameRequest) Size() int {
 	length := 0
 	if g.Name != "" {
 		length += 1 + int(hbuf.LengthBytes([]byte(g.Name))) + int(hbuf.LengthUint64(1))
@@ -48,7 +48,7 @@ type GetNameResponse struct {
 func (r *GetNameResponse) Data() hbuf.Data {
 	return hbuf.Data(r)
 }
-func (g GetNameResponse) Encoder(w io.Writer) (err error) {
+func (g *GetNameResponse) Encoder(w io.Writer) (err error) {
 	err = hbuf.WriterBytes(w, 1, []byte(g.Name))
 	if err != nil {
 		return
@@ -56,7 +56,7 @@ func (g GetNameResponse) Encoder(w io.Writer) (err error) {
 	return nil
 }
 
-func (g GetNameResponse) Decoder(r io.Reader) (err error) {
+func (g *GetNameResponse) Decoder(r io.Reader) (err error) {
 	return hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) error {
 		switch id {
 		case 1:
@@ -66,7 +66,7 @@ func (g GetNameResponse) Decoder(r io.Reader) (err error) {
 	})
 }
 
-func (g GetNameResponse) Size() int {
+func (g *GetNameResponse) Size() int {
 	length := 0
 	if g.Name != "" {
 		length += 1 + int(hbuf.LengthBytes([]byte(g.Name))) + int(hbuf.LengthUint64(1))

@@ -111,6 +111,108 @@ func ReaderField(r io.Reader) (typ Type, isNull bool, id uint16, valueLen uint8,
 	return
 }
 
+// EncoderInt64 编码 int64 类型
+func EncoderInt64(v int64) (b []byte) {
+	if v >= -0x80 && v < 0x80 {
+		b = make([]byte, 1)
+		b[0] = byte(v)
+	} else if v >= -0x8000 && v < 0x8000 {
+		b = make([]byte, 2)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+	} else if v >= -0x800000 && v < 0x800000 {
+		b = make([]byte, 3)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+		b[2] = byte(v >> 16)
+	} else if v >= -0x80000000 && v < 0x80000000 {
+		b = make([]byte, 4)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+		b[2] = byte(v >> 16)
+		b[3] = byte(v >> 24)
+	} else if v >= -0x8000000000 && v < 0x8000000000 {
+		b = make([]byte, 5)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+		b[2] = byte(v >> 16)
+		b[3] = byte(v >> 24)
+		b[4] = byte(v >> 32)
+	} else if v >= -0x800000000000 && v < 0x800000000000 {
+		b = make([]byte, 6)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+		b[2] = byte(v >> 16)
+		b[3] = byte(v >> 24)
+		b[4] = byte(v >> 32)
+		b[5] = byte(v >> 40)
+	} else if v >= -0x80000000000000 && v < 0x80000000000000 {
+		b = make([]byte, 7)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+		b[2] = byte(v >> 16)
+		b[3] = byte(v >> 24)
+		b[4] = byte(v >> 32)
+		b[5] = byte(v >> 40)
+		b[6] = byte(v >> 48)
+	} else {
+		b = make([]byte, 8)
+		b[0] = byte(v)
+		b[1] = byte(v >> 8)
+		b[2] = byte(v >> 16)
+		b[3] = byte(v >> 24)
+		b[4] = byte(v >> 32)
+		b[5] = byte(v >> 40)
+		b[6] = byte(v >> 48)
+		b[7] = byte(v >> 56)
+	}
+	return
+}
+
+// DecoderInt64 解码 int64 类型
+func DecoderInt64(b []byte) int64 {
+	length := len(b)
+	if length == 1 {
+		return int64(int8(b[0]))
+	} else if length == 2 {
+		return int64(b[0]) | int64(int8(b[1]))<<8
+	} else if length == 3 {
+		return int64(b[0]) | int64(b[1])<<8 | int64(int8(b[2]))<<16
+	} else if length == 4 {
+		return int64(b[0]) | int64(b[1])<<8 | int64(b[2])<<16 | int64(int8(b[3]))<<24
+	} else if length == 5 {
+		return int64(b[0]) | int64(b[1])<<8 | int64(b[2])<<16 | int64(b[3])<<24 | int64(int8(b[4]))<<32
+	} else if length == 6 {
+		return int64(b[0]) | int64(b[1])<<8 | int64(b[2])<<16 | int64(b[3])<<24 | int64(b[4])<<32 | int64(int8(b[5]))<<40
+	} else if length == 7 {
+		return int64(b[0]) | int64(b[1])<<8 | int64(b[2])<<16 | int64(b[3])<<24 | int64(b[4])<<32 | int64(b[5])<<40 | int64(int8(b[6]))<<48
+	} else if length == 8 {
+		return int64(b[0]) | int64(b[1])<<8 | int64(b[2])<<16 | int64(b[3])<<24 | int64(b[4])<<32 | int64(b[5])<<40 | int64(b[6])<<48 | int64(int8(b[7]))<<56
+	}
+	return 0
+}
+
+// LengthInt64 计算 int64 类型长度
+func LengthInt64(v int64) (length uint8) {
+	if v >= -0x80 && v < 0x80 {
+		return 1
+	} else if v >= -0x8000 && v < 0x8000 {
+		return 2
+	} else if v >= -0x800000 && v < 0x800000 {
+		return 3
+	} else if v >= -0x80000000 && v < 0x80000000 {
+		return 4
+	} else if v >= -0x8000000000 && v < 0x8000000000 {
+		return 5
+	} else if v >= -0x800000000000 && v < 0x800000000000 {
+		return 6
+	} else if v >= -0x80000000000000 && v < 0x80000000000000 {
+		return 7
+	} else {
+		return 8
+	}
+}
+
 // EncoderUint64 编码 uint64 类型
 func EncoderUint64(v uint64) (b []byte) {
 	if v <= 0xFF {
@@ -298,7 +400,7 @@ func WriterInt64(w io.Writer, id uint16, v int64) (err error) {
 	if 0 == v {
 		return
 	}
-	data := EncoderUint64(uint64(v))
+	data := EncoderInt64(v)
 	err = WriterField(w, TInt, true, id, uint8(len(data)))
 	if err != nil {
 		return err
@@ -509,7 +611,7 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 
 		switch typ {
 		case TInt:
-			err = call(typ, id, int64(DecoderUint64(b)))
+			err = call(typ, id, int64(DecoderInt64(b)))
 			if err != nil {
 				return err
 			}
