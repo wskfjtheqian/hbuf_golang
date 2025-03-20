@@ -135,7 +135,7 @@ func (l *Logger) Exit(v ...any) {
 	_ = l.output(0, 2, EXIT, func(b []byte) []byte {
 		return fmt.Append(b, v...)
 	})
-	os.Exit(-1)
+	panic(fmt.Sprint(v...))
 }
 
 func (l *Logger) Output(calldepth int, level Level, s string) error {
