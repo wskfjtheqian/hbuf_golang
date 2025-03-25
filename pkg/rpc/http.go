@@ -7,10 +7,12 @@ import (
 	"errors"
 	"golang.org/x/net/http2"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
+	"time"
 )
 
 // WithHttpContext 在 context 中存储 HttpContext。
@@ -54,7 +56,10 @@ func NewHttpClient(base string, options ...HttpClientOption) *HttpClient {
 	base = strings.TrimRight(base, "/") + "/"
 
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:        100,
+		IdleConnTimeout:     30 * time.Second,
+		MaxIdleConnsPerHost: 100,
 	}
 	if strings.HasPrefix(base, "https://") {
 		err := http2.ConfigureTransport(transport)
@@ -120,6 +125,51 @@ func WithRequestMiddleware(middleware ...RequestMiddleware) HttpClientOption {
 			}
 			return next
 		}
+	}
+}
+
+// WithTimeout 设置HttpClient的超时时间
+func WithTimeout(timeout time.Duration) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Timeout = timeout
+	}
+}
+
+// WithMaxConns 设置HttpClient的最大连接数
+func WithMaxConns(maxConns int) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport.(*http.Transport).MaxConnsPerHost = maxConns
+	}
+}
+
+// WithConnTimeout 设置HttpClient的连接超时时间
+func WithConnTimeout(connTimeout time.Duration) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport.(*http.Transport).DialContext = (&net.Dialer{
+			Timeout:   connTimeout,
+			KeepAlive: 30 * time.Second,
+		}).DialContext
+	}
+}
+
+// WithMaxIdleConns 设置HttpClient的连接保持时间
+func WithMaxIdleConns(maxIdleConns int) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport.(*http.Transport).MaxIdleConns = maxIdleConns
+	}
+}
+
+// WithIdleConnTimeout 设置HttpClient的每个主机的最大连接数
+func WithIdleConnTimeout(idleConnTimeout time.Duration) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport.(*http.Transport).IdleConnTimeout = idleConnTimeout
+	}
+}
+
+// WithTLSConfig 设置HttpClient的TLS配置
+func WithTLSConfig(tlsConfig *tls.Config) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport.(*http.Transport).TLSClientConfig = tlsConfig
 	}
 }
 

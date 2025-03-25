@@ -396,6 +396,47 @@ func WriterData(w io.Writer, id uint16, v Data) (err error) {
 	return
 }
 
+func WriterList[E any](w io.Writer, id uint16, v []E, length func(v E) uint32, writer func(w io.Writer, v E) error) (err error) {
+	if 0 == len(v) {
+		return
+	}
+	size := uint32(0)
+	for _, item := range v {
+		size += length(item)
+	}
+
+	count := len(v)
+	countData := EncoderUint64(uint64(count))
+	size += 1 + uint32(len(countData))
+
+	data := EncoderUint64(uint64(size))
+	err = WriterField(w, TData, true, id, uint8(len(data)))
+	if err != nil {
+		return
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return err
+	}
+
+	err = WriterField(w, TUint, true, 0, uint8(len(countData)))
+	if err != nil {
+		return
+	}
+	_, err = w.Write(countData)
+	if err != nil {
+		return err
+	}
+
+	for _, item := range v {
+		err = writer(w, item)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func WriterInt64(w io.Writer, id uint16, v int64) (err error) {
 	if 0 == v {
 		return
@@ -459,50 +500,6 @@ func WriterDouble(w io.Writer, id uint32, v float64) (err error) {
 	}
 	return
 }
-
-//
-//func WriterList[E any](w io.Writer, id uint32, v []E, length func(v E) uint32, writer func(w io.Writer) error) (err error) {
-//	if 0 == len(v) {
-//		return
-//	}
-//	temp := uint32(0)
-//	for _, item := range v {
-//		temp += length(item)
-//	}
-//
-//	data := EncoderUint64(uint64(len(v)))
-//	temp += uint32(len(data))
-//
-//	buffer := EncoderUint64(uint64(temp))
-//	err = WriterField(w, TBytes, uint16(id), uint8(len(buffer)))
-//	if err != nil {
-//		return
-//	}
-//
-//	_, err = w.Write(buffer)
-//	if err != nil {
-//		return
-//	}
-//
-//	return
-//}
-//
-//func ReaderFloat(typ Type, v any) (float32, error) {
-//	if typ == TFloat {
-//		return v.(float32), nil
-//	}
-//	if typ == TDouble {
-//		return float32(v.(float64)), nil
-//	}
-//	if typ == TInt {
-//		return float32(v.(int64)), nil
-//	}
-//	if typ == TUint {
-//		return float32(v.(uint64)), nil
-//	}
-//	return 0, errors.New("invalid Type")
-//}
-//
 
 type Number interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
@@ -629,13 +626,13 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 				return errors.New("invalid float length")
 			}
 		case TBytes:
-			byteslength := DecoderUint64(b)
-			data := make([]byte, byteslength)
+			bytesLength := DecoderUint64(b)
+			data := make([]byte, bytesLength)
 			count, err = r.Read(data)
 			if err != nil && err != io.EOF {
 				return err
 			}
-			if count != int(byteslength) {
+			if count != int(bytesLength) {
 				err = errors.New("read Bytes error")
 			}
 			err = call(typ, id, data)

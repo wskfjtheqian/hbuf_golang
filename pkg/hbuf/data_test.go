@@ -66,6 +66,7 @@ type testStruct struct {
 	ValueBytes   []byte    `json:"ValueBytes,omitempty"`
 	ValueBool    bool      `json:"ValueBool,omitempty"`
 	ValueData    subStruct `json:"ValueData,omitempty"`
+	ValueListInt []int     `json:"ValueListInt,omitempty"`
 }
 
 func (t *testStruct) Encoder(w io.Writer) error {
@@ -130,6 +131,14 @@ func (t *testStruct) Encoder(w io.Writer) error {
 		return err
 	}
 	err = hbuf.WriterBool(w, 15, t.ValueBool)
+	if err != nil {
+		return err
+	}
+	err = hbuf.WriterList(w, 16, t.ValueListInt, func(v int) uint32 {
+		return 1 + uint32(hbuf.LengthInt64(int64(v)))
+	}, func(w io.Writer, v int) error {
+		return hbuf.WriterInt64(w, 0, int64(v))
+	})
 	if err != nil {
 		return err
 	}
