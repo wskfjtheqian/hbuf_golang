@@ -71,6 +71,7 @@ type testStruct struct {
 	ValueBool    bool      `json:"ValueBool,omitempty"`
 	ValueData    subStruct `json:"ValueData,omitempty"`
 	ValueListInt []int     `json:"ValueListInt,omitempty"`
+	ValueListStr []string  `json:"ValueListStr,omitempty"`
 }
 
 func (t *testStruct) Encoder(w io.Writer) error {
@@ -161,6 +162,15 @@ func (t *testStruct) Encoder(w io.Writer) error {
 		return err
 	}
 
+	err = hbuf.WriterList(w, 18, t.ValueListStr, func(v string) uint32 {
+		return 2 + uint32(hbuf.LengthBytes([]byte(v)))
+	}, func(w io.Writer, v string) error {
+		return hbuf.WriterBytes(w, 0, []byte(v))
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -202,6 +212,10 @@ func (t *testStruct) Decoder(r io.Reader) error {
 		case 17:
 			t.ValueListInt, err = hbuf.ReaderList[int](value, func(v any) (int, error) {
 				return hbuf.ReaderNumber[int](v)
+			})
+		case 18:
+			t.ValueListStr, err = hbuf.ReaderList[string](value, func(v any) (string, error) {
+				return hbuf.ReaderBytes[string](v.([]byte))
 			})
 		}
 		return
@@ -288,6 +302,17 @@ func (t *testStruct) Size() int {
 
 		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(17))
 	}
+	if len(t.ValueListStr) != 0 {
+		temp = 0
+		for _, v := range t.ValueListStr {
+			temp += 2 + int(hbuf.LengthBytes([]byte(v)))
+		}
+
+		countData := hbuf.EncoderUint64(uint64(len(t.ValueListStr)))
+		temp += 2 + len(countData)
+
+		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(17))
+	}
 
 	return length
 }
@@ -316,6 +341,7 @@ func TestEncoderDecoder(t *testing.T) {
 			ValueInt8: int8(rand.Int63()),
 		},
 		ValueListInt: []int{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
 	}
 
 	length := t1.Size()
@@ -398,6 +424,24 @@ func TestEncoderDecoder(t *testing.T) {
 	if t1.ValueData.ValueInt8 != t2.ValueData.ValueInt8 {
 		t.Error("not equal ValueData.ValueInt8", t1.ValueData.ValueInt8, t2.ValueData.ValueInt8)
 	}
+	if len(t1.ValueListInt) != len(t2.ValueListInt) {
+		t.Error("not equal ValueListInt", t1.ValueListInt, t2.ValueListInt)
+	}
+	if len(t1.ValueListStr) != len(t2.ValueListStr) {
+		t.Error("not equal ValueListStr", t1.ValueListStr, t2.ValueListStr)
+	}
+	for i := 0; i < len(t1.ValueListInt); i++ {
+		if t1.ValueListInt[i] != t2.ValueListInt[i] {
+			t.Error("not equal ValueListInt", t1.ValueListInt, t2.ValueListInt)
+			break
+		}
+	}
+	for i := 0; i < len(t1.ValueListStr); i++ {
+		if t1.ValueListStr[i] != t2.ValueListStr[i] {
+			t.Error("not equal ValueListStr", t1.ValueListStr, t2.ValueListStr)
+			break
+		}
+	}
 }
 
 func BenchmarkEncoder(b *testing.B) {
@@ -421,6 +465,7 @@ func BenchmarkEncoder(b *testing.B) {
 			ValueInt: 123,
 		},
 		ValueListInt: []int{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
 	}
 	b.Run("Encoder", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {

@@ -597,7 +597,7 @@ func ReaderList[E any](v any, reader func(v any) (E, error)) ([]E, error) {
 	count := DecoderInt64(b)
 	list := make([]E, count)
 	for i := 0; i < int(count); i++ {
-		_, _, id, valueLen, err = ReaderField(r)
+		typ, _, id, valueLen, err = ReaderField(r)
 		if err != nil {
 			return nil, err
 		}
@@ -667,11 +667,6 @@ func ReaderList[E any](v any, reader func(v any) (E, error)) ([]E, error) {
 		default:
 			return nil, errors.New("invalid Type")
 		}
-		item, err := reader(DecoderInt64(b))
-		if err != nil {
-			return nil, err
-		}
-		list[i] = item
 	}
 	return list, nil
 }
