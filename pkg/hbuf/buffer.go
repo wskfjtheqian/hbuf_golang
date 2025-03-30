@@ -407,10 +407,10 @@ func WriterList[E any](w io.Writer, id uint16, v []E, length func(v E) uint32, w
 
 	count := len(v)
 	countData := EncoderUint64(uint64(count))
-	size += 1 + uint32(len(countData))
+	size += 2 + uint32(len(countData))
 
 	data := EncoderUint64(uint64(size))
-	err = WriterField(w, TData, true, id, uint8(len(data)))
+	err = WriterField(w, TList, true, id, uint8(len(data)))
 	if err != nil {
 		return
 	}
@@ -573,9 +573,112 @@ func ReaderData(v any, out Data) error {
 	return nil
 }
 
+func ReaderList[E any](v any, reader func(v any) (E, error)) ([]E, error) {
+	r, ok := v.(io.Reader)
+	if !ok {
+		return nil, errors.New("invalid Type")
+	}
+	typ, _, id, valueLen, err := ReaderField(r)
+	if err != nil {
+		return nil, err
+	}
+	if id != 0 {
+		return nil, errors.New("invalid id")
+	}
+	b := make([]byte, valueLen)
+	size, err := r.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	if uint8(size) != valueLen {
+		return nil, errors.New("read fail, length error")
+	}
+
+	count := DecoderInt64(b)
+	list := make([]E, count)
+	for i := 0; i < int(count); i++ {
+		_, _, id, valueLen, err = ReaderField(r)
+		if err != nil {
+			return nil, err
+		}
+		if id != 0 {
+			return nil, errors.New("invalid id")
+		}
+
+		b := make([]byte, valueLen)
+		size, err = r.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		if uint8(size) != valueLen {
+			return nil, errors.New("read fail, length error")
+		}
+		switch typ {
+		case TInt:
+			list[i], err = reader(DecoderInt64(b))
+			if err != nil {
+				return nil, err
+			}
+		case TUint:
+			list[i], err = reader(DecoderUint64(b))
+			if err != nil {
+				return nil, err
+			}
+		case TFloat:
+			if len(b) == 4 {
+				list[i], err = reader(DecoderFloat(b))
+				if err != nil {
+					return nil, err
+				}
+			} else if len(b) == 8 {
+				list[i], err = reader(DecoderDouble(b))
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, errors.New("invalid float length")
+			}
+		case TBytes:
+			bytesLength := DecoderUint64(b)
+			data := make([]byte, bytesLength)
+			size, err = r.Read(data)
+			if err != nil && err != io.EOF {
+				return nil, err
+			}
+			if size != int(bytesLength) {
+				err = errors.New("read Bytes error")
+			}
+			list[i], err = reader(data)
+			if err != nil {
+				return nil, err
+			}
+		case TData:
+			list[i], err = reader(NewEndReader(r, DecoderUint64(b)))
+			if err != nil {
+				return nil, err
+			}
+		case TList:
+			list[i], err = reader(NewEndReader(r, DecoderUint64(b)))
+			if err != nil {
+				return nil, err
+			}
+		case TMap:
+
+		default:
+			return nil, errors.New("invalid Type")
+		}
+		item, err := reader(DecoderInt64(b))
+		if err != nil {
+			return nil, err
+		}
+		list[i] = item
+	}
+	return list, nil
+}
+
 func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err error) {
 	for {
-		var count int
+		var size int
 		var typ Type
 		var id uint16
 		var valueLen uint8
@@ -595,20 +698,17 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 			continue
 		}
 		b := make([]byte, valueLen)
-		count, err = r.Read(b)
+		size, err = r.Read(b)
 		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
 			return err
 		}
-		if uint8(count) != valueLen {
+		if uint8(size) != valueLen {
 			return errors.New("read fail, length error")
 		}
 
 		switch typ {
 		case TInt:
-			err = call(typ, id, int64(DecoderInt64(b)))
+			err = call(typ, id, DecoderInt64(b))
 			if err != nil {
 				return err
 			}
@@ -628,11 +728,11 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 		case TBytes:
 			bytesLength := DecoderUint64(b)
 			data := make([]byte, bytesLength)
-			count, err = r.Read(data)
+			size, err = r.Read(data)
 			if err != nil && err != io.EOF {
 				return err
 			}
-			if count != int(bytesLength) {
+			if size != int(bytesLength) {
 				err = errors.New("read Bytes error")
 			}
 			err = call(typ, id, data)
@@ -645,11 +745,14 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 				return err
 			}
 		case TList:
-
+			err = call(TList, id, NewEndReader(r, DecoderUint64(b)))
+			if err != nil {
+				return err
+			}
 		case TMap:
 
 		default:
-			return nil
+			return errors.New("invalid Type")
 		}
 	}
 }

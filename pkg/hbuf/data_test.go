@@ -19,10 +19,12 @@ func (s *subStruct) Encoder(w io.Writer) error {
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterInt64(w, 2, int64(s.ValueInt8))
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -43,9 +45,11 @@ func (s *subStruct) Size() int {
 	if s.ValueInt != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(s.ValueInt))) + int(hbuf.LengthUint64(1))
 	}
+
 	if s.ValueInt8 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(s.ValueInt8))) + int(hbuf.LengthUint64(2))
+		length += 1 + int(hbuf.LengthInt64(int64(s.ValueInt8))) + int(hbuf.LengthUint64(2))
 	}
+
 	return length
 }
 
@@ -74,34 +78,37 @@ func (t *testStruct) Encoder(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	err = hbuf.WriterData(w, 16, &t.ValueData)
-	if err != nil {
-		return err
-	}
+
 	err = hbuf.WriterInt64(w, 2, int64(t.ValueInt8))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterInt64(w, 3, int64(t.ValueInt16))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterInt64(w, 4, int64(t.ValueInt32))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterInt64(w, 5, int64(t.ValueInt64))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterUint64(w, 6, uint64(t.ValueUint))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterUint64(w, 7, uint64(t.ValueUint8))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterUint64(w, 8, uint64(t.ValueUint16))
 	if err != nil {
 		return err
@@ -114,34 +121,46 @@ func (t *testStruct) Encoder(w io.Writer) error {
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterFloat(w, 11, t.ValueFloat32)
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterDouble(w, 12, t.ValueFloat64)
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterBytes(w, 13, []byte(t.ValueString))
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterBytes(w, 14, t.ValueBytes)
 	if err != nil {
 		return err
 	}
+
 	err = hbuf.WriterBool(w, 15, t.ValueBool)
 	if err != nil {
 		return err
 	}
-	err = hbuf.WriterList(w, 16, t.ValueListInt, func(v int) uint32 {
-		return 1 + uint32(hbuf.LengthInt64(int64(v)))
+
+	err = hbuf.WriterData(w, 16, &t.ValueData)
+	if err != nil {
+		return err
+	}
+
+	err = hbuf.WriterList(w, 17, t.ValueListInt, func(v int) uint32 {
+		return 2 + uint32(hbuf.LengthInt64(int64(v)))
 	}, func(w io.Writer, v int) error {
 		return hbuf.WriterInt64(w, 0, int64(v))
 	})
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -180,8 +199,11 @@ func (t *testStruct) Decoder(r io.Reader) error {
 			t.ValueBool, err = hbuf.ReaderBool(value)
 		case 16:
 			err = hbuf.ReaderData(value, &t.ValueData)
+		case 17:
+			t.ValueListInt, err = hbuf.ReaderList[int](value, func(v any) (int, error) {
+				return hbuf.ReaderNumber[int](v)
+			})
 		}
-
 		return
 	})
 	if err != nil {
@@ -195,50 +217,78 @@ func (t *testStruct) Size() int {
 	if t.ValueInt != 0 {
 		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt))) + int(hbuf.LengthUint64(1))
 	}
+
 	if t.ValueInt8 != 0 {
 		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt8))) + int(hbuf.LengthUint64(2))
 	}
+
 	if t.ValueInt16 != 0 {
 		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt16))) + int(hbuf.LengthUint64(3))
 	}
+
 	if t.ValueInt32 != 0 {
 		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt32))) + int(hbuf.LengthUint64(4))
 	}
+
 	if t.ValueInt64 != 0 {
 		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt64))) + int(hbuf.LengthUint64(5))
 	}
+
 	if t.ValueUint != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint))) + int(hbuf.LengthUint64(6))
 	}
+
 	if t.ValueUint8 != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint8))) + int(hbuf.LengthUint64(7))
 	}
+
 	if t.ValueUint16 != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint16))) + int(hbuf.LengthUint64(8))
 	}
+
 	if t.ValueUint32 != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint32))) + int(hbuf.LengthUint64(9))
 	}
+
 	if t.ValueUint64 != 0 {
 		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint64))) + int(hbuf.LengthUint64(10))
 	}
+
 	if t.ValueFloat32 != 0 {
 		length += 1 + int(hbuf.LengthFloat(t.ValueFloat32)) + int(hbuf.LengthUint64(11))
 	}
+
 	if t.ValueFloat64 != 0 {
 		length += 1 + int(hbuf.LengthDouble(t.ValueFloat64)) + int(hbuf.LengthUint64(12))
 	}
+
 	if t.ValueString != "" {
 		length += 1 + int(hbuf.LengthBytes([]byte(t.ValueString))) + int(hbuf.LengthUint64(13))
 	}
+
 	if len(t.ValueBytes) != 0 {
 		length += 1 + int(hbuf.LengthBytes(t.ValueBytes)) + int(hbuf.LengthUint64(14))
 	}
+
 	if t.ValueBool {
 		length += 1 + int(hbuf.LengthUint64(15))
 	}
+
 	temp := t.ValueData.Size()
-	length += 1 + temp + int(hbuf.LengthUint64(16)) + int(hbuf.LengthUint64(uint64(temp)))
+	length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(16))
+
+	if len(t.ValueListInt) != 0 {
+		temp = 0
+		for _, v := range t.ValueListInt {
+			temp += 2 + int(hbuf.LengthInt64(int64(v)))
+		}
+
+		countData := hbuf.EncoderUint64(uint64(len(t.ValueListInt)))
+		temp += 2 + len(countData)
+
+		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(17))
+	}
+
 	return length
 }
 
@@ -265,6 +315,7 @@ func TestEncoderDecoder(t *testing.T) {
 			ValueInt:  123,
 			ValueInt8: int8(rand.Int63()),
 		},
+		ValueListInt: []int{11, 22, 33, 44, 55},
 	}
 
 	length := t1.Size()
@@ -369,6 +420,7 @@ func BenchmarkEncoder(b *testing.B) {
 		ValueData: subStruct{
 			ValueInt: 123,
 		},
+		ValueListInt: []int{11, 22, 33, 44, 55},
 	}
 	b.Run("Encoder", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -397,7 +449,7 @@ func BenchmarkEncoder(b *testing.B) {
 		b.Error(err)
 		return
 	}
-	b.Run("EncoderHbuf", func(b *testing.B) {
+	b.Run("DecoderHbuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			t2 := testStruct{}
 			err := t2.Decoder(bytes.NewReader(out.Bytes()))
@@ -414,7 +466,7 @@ func BenchmarkEncoder(b *testing.B) {
 		b.Error(err)
 		return
 	}
-	b.Run("EncoderHbufJSON", func(b *testing.B) {
+	b.Run("DecoderHbufJSON", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			t2 := testStruct{}
 			err := json.NewDecoder(bytes.NewReader(out.Bytes())).Decode(&t2)
