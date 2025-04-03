@@ -396,7 +396,7 @@ func WriterData(w io.Writer, id uint16, v Data) (err error) {
 	return
 }
 
-func WriterList[E any](w io.Writer, id uint16, v []E, length func(v E) uint32, writer func(w io.Writer, v E) error) (err error) {
+func WriterList[V any](w io.Writer, id uint16, v []V, length func(v V) uint32, writer func(w io.Writer, v V) error) (err error) {
 	if 0 == len(v) {
 		return
 	}
@@ -430,6 +430,47 @@ func WriterList[E any](w io.Writer, id uint16, v []E, length func(v E) uint32, w
 
 	for _, item := range v {
 		err = writer(w, item)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func WriterMap[K comparable, V any](w io.Writer, id uint16, v map[K]V, length func(k K, v V) uint32, writer func(w io.Writer, k K, v V) error) (err error) {
+	if 0 == len(v) {
+		return
+	}
+	size := uint32(0)
+	for key, value := range v {
+		size += length(key, value)
+	}
+
+	count := len(v)
+	countData := EncoderUint64(uint64(count))
+	size += 2 + uint32(len(countData))
+
+	data := EncoderUint64(uint64(size))
+	err = WriterField(w, TMap, true, id, uint8(len(data)))
+	if err != nil {
+		return
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return err
+	}
+
+	err = WriterField(w, TUint, true, 0, uint8(len(countData)))
+	if err != nil {
+		return
+	}
+	_, err = w.Write(countData)
+	if err != nil {
+		return err
+	}
+
+	for key, value := range v {
+		err = writer(w, key, value)
 		if err != nil {
 			return err
 		}
@@ -663,12 +704,151 @@ func ReaderList[E any](v any, reader func(v any) (E, error)) ([]E, error) {
 				return nil, err
 			}
 		case TMap:
-
+			list[i], err = reader(NewEndReader(r, DecoderUint64(b)))
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, errors.New("invalid Type")
 		}
 	}
 	return list, nil
+}
+
+func ReaderMap[K comparable, V any](v any, reader func(k any, v any) (K, V, error)) (map[K]V, error) {
+	r, ok := v.(io.Reader)
+	if !ok {
+		return nil, errors.New("invalid Type")
+	}
+	typ, _, id, valueLen, err := ReaderField(r)
+	if err != nil {
+		return nil, err
+	}
+	if id != 0 {
+		return nil, errors.New("invalid id")
+	}
+	b := make([]byte, valueLen)
+	size, err := r.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	if uint8(size) != valueLen {
+		return nil, errors.New("read fail, length error")
+	}
+
+	count := DecoderInt64(b)
+	maps := make(map[K]V, count)
+	for i := 0; i < int(count); i++ {
+		typ, _, id, valueLen, err = ReaderField(r)
+		if err != nil {
+			return nil, err
+		}
+		if id != 0 {
+			return nil, errors.New("invalid id")
+		}
+
+		b := make([]byte, valueLen)
+		size, err = r.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		if uint8(size) != valueLen {
+			return nil, errors.New("read fail, length error")
+		}
+
+		var key, value any
+		switch typ {
+		case TInt:
+			key = DecoderInt64(b)
+		case TUint:
+			key = DecoderUint64(b)
+		case TFloat:
+			if len(b) == 4 {
+				key = DecoderFloat(b)
+			} else if len(b) == 8 {
+				key = DecoderDouble(b)
+			} else {
+				return nil, errors.New("invalid float length")
+			}
+		case TBytes:
+			bytesLength := DecoderUint64(b)
+			data := make([]byte, bytesLength)
+			size, err = r.Read(data)
+			if err != nil && err != io.EOF {
+				return nil, err
+			}
+			if size != int(bytesLength) {
+				err = errors.New("read Bytes error")
+			}
+			key = data
+		case TData:
+			key = NewEndReader(r, DecoderUint64(b))
+		case TList:
+			key = NewEndReader(r, DecoderUint64(b))
+		case TMap:
+			key = NewEndReader(r, DecoderUint64(b))
+		default:
+			return nil, errors.New("invalid Type")
+		}
+
+		typ, _, id, valueLen, err = ReaderField(r)
+		if err != nil {
+			return nil, err
+		}
+		if id != 0 {
+			return nil, errors.New("invalid id")
+		}
+
+		b = make([]byte, valueLen)
+		size, err = r.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		if uint8(size) != valueLen {
+			return nil, errors.New("read fail, length error")
+		}
+
+		switch typ {
+		case TInt:
+			value = DecoderInt64(b)
+		case TUint:
+			value = DecoderUint64(b)
+		case TFloat:
+			if len(b) == 4 {
+				value = DecoderFloat(b)
+			} else if len(b) == 8 {
+				value = DecoderDouble(b)
+			} else {
+				return nil, errors.New("invalid float length")
+			}
+		case TBytes:
+			bytesLength := DecoderUint64(b)
+			data := make([]byte, bytesLength)
+			size, err = r.Read(data)
+			if err != nil && err != io.EOF {
+				return nil, err
+			}
+			if size != int(bytesLength) {
+				err = errors.New("read Bytes error")
+			}
+			value = data
+		case TData:
+			value = NewEndReader(r, DecoderUint64(b))
+		case TList:
+			value = NewEndReader(r, DecoderUint64(b))
+		case TMap:
+			value = NewEndReader(r, DecoderUint64(b))
+		default:
+			return nil, errors.New("invalid Type")
+		}
+
+		retKey, retValue, err := reader(key, value)
+		if err != nil {
+			return nil, err
+		}
+		maps[retKey] = retValue
+	}
+	return maps, nil
 }
 
 func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err error) {
@@ -745,7 +925,10 @@ func Decoder(r io.Reader, call func(typ Type, id uint16, value any) error) (err 
 				return err
 			}
 		case TMap:
-
+			err = call(TMap, id, NewEndReader(r, DecoderUint64(b)))
+			if err != nil {
+				return err
+			}
 		default:
 			return errors.New("invalid Type")
 		}

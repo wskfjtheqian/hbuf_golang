@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package hbuf.test;
+option go_package = ".;hbuf_test";
+
+
+message subStruct {
+  int32 ValueInt = 1;
+  int32 ValueInt8 = 2;
+}
+
+message testStruct {
+  int32 ValueInt = 1;
+  int32 ValueInt8 = 2;
+  int32 ValueInt16 = 3;
+  int32 ValueInt32 = 4;
+  int64 ValueInt64 = 5;
+  uint32 ValueUint = 6;
+  uint32 ValueUint8 = 7;
+  uint32 ValueUint16 = 8;
+  uint32 ValueUint32 = 9;
+  uint64 ValueUint64 = 10;
+  float ValueFloat32 = 11;
+  double ValueFloat64 = 12;
+  string ValueString = 13;
+  bytes ValueBytes = 14;
+  bool ValueBool = 15;
+  subStruct ValueData = 16;
+
+  repeated int32 ValueListInt = 17;
+  repeated string ValueListStr = 18;
+
+  map<int32, int32> ValueMapInt = 19;
+  map<string, string> ValueMapStr = 20;
+}

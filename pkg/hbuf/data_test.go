@@ -3,6 +3,7 @@ package hbuf_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/golang/protobuf/proto"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	"math/rand"
@@ -72,6 +73,9 @@ type testStruct struct {
 	ValueData    subStruct `json:"ValueData,omitempty"`
 	ValueListInt []int     `json:"ValueListInt,omitempty"`
 	ValueListStr []string  `json:"ValueListStr,omitempty"`
+
+	ValueMapInt map[int]int       `json:"ValueMapInt,omitempty"`
+	ValueMapStr map[string]string `json:"ValueMapStr,omitempty"`
 }
 
 func (t *testStruct) Encoder(w io.Writer) error {
@@ -171,6 +175,32 @@ func (t *testStruct) Encoder(w io.Writer) error {
 		return err
 	}
 
+	err = hbuf.WriterMap(w, 19, t.ValueMapInt, func(k int, v int) uint32 {
+		return 2 + uint32(hbuf.LengthInt64(int64(k))) + 2 + uint32(hbuf.LengthInt64(int64(v)))
+	}, func(w io.Writer, k int, v int) error {
+		err := hbuf.WriterInt64(w, 0, int64(k))
+		if err != nil {
+			return err
+		}
+		return hbuf.WriterInt64(w, 0, int64(v))
+	})
+	if err != nil {
+		return err
+	}
+
+	err = hbuf.WriterMap(w, 20, t.ValueMapStr, func(k string, v string) uint32 {
+		return 2 + uint32(hbuf.LengthBytes([]byte(k))) + 2 + uint32(hbuf.LengthBytes([]byte(v)))
+	}, func(w io.Writer, k string, v string) error {
+		err := hbuf.WriterBytes(w, 0, []byte(k))
+		if err != nil {
+			return err
+		}
+		return hbuf.WriterBytes(w, 0, []byte(v))
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -216,6 +246,30 @@ func (t *testStruct) Decoder(r io.Reader) error {
 		case 18:
 			t.ValueListStr, err = hbuf.ReaderList[string](value, func(v any) (string, error) {
 				return hbuf.ReaderBytes[string](v.([]byte))
+			})
+		case 19:
+			t.ValueMapInt, err = hbuf.ReaderMap[int](value, func(k any, v any) (int, int, error) {
+				key, err := hbuf.ReaderNumber[int](k)
+				if err != nil {
+					return 0, 0, err
+				}
+				value, err := hbuf.ReaderNumber[int](v)
+				if err != nil {
+					return 0, 0, err
+				}
+				return key, value, nil
+			})
+		case 20:
+			t.ValueMapStr, err = hbuf.ReaderMap[string](value, func(k any, v any) (string, string, error) {
+				key, err := hbuf.ReaderBytes[string](k.([]byte))
+				if err != nil {
+					return "", "", err
+				}
+				value, err := hbuf.ReaderBytes[string](v.([]byte))
+				if err != nil {
+					return "", "", err
+				}
+				return key, value, nil
 			})
 		}
 		return
@@ -313,6 +367,28 @@ func (t *testStruct) Size() int {
 
 		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(17))
 	}
+	if len(t.ValueMapInt) != 0 {
+		temp = 0
+		for k, v := range t.ValueMapInt {
+			temp += 2 + int(hbuf.LengthInt64(int64(k))) + 2 + int(hbuf.LengthInt64(int64(v)))
+		}
+
+		countData := hbuf.EncoderUint64(uint64(len(t.ValueMapInt)))
+		temp += 2 + len(countData)
+
+		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(19))
+	}
+	if len(t.ValueMapStr) != 0 {
+		temp = 0
+		for k, v := range t.ValueMapStr {
+			temp += 2 + int(hbuf.LengthBytes([]byte(k))) + 2 + int(hbuf.LengthBytes([]byte(v)))
+		}
+
+		countData := hbuf.EncoderUint64(uint64(len(t.ValueMapStr)))
+		temp += 2 + len(countData)
+
+		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(20))
+	}
 
 	return length
 }
@@ -320,6 +396,32 @@ func (t *testStruct) Size() int {
 type String string
 
 func TestEncoderDecoder(t *testing.T) {
+	p1 := TestStruct{
+		ValueInt:     -2118888625,
+		ValueInt8:    int32(int8(rand.Int63())),
+		ValueInt16:   int32(int16(rand.Int63())),
+		ValueInt32:   int32(rand.Int63()),
+		ValueInt64:   int64(rand.Int63()),
+		ValueUint:    uint32(uint(rand.Uint64())),
+		ValueUint8:   uint32(uint8(rand.Uint64())),
+		ValueUint16:  uint32(uint16(rand.Uint64())),
+		ValueUint32:  uint32(rand.Uint64()),
+		ValueUint64:  uint64(rand.Uint64()),
+		ValueFloat32: float32(rand.Float32()),
+		ValueFloat64: float64(rand.Float64()),
+		ValueString:  "最佳答案：",
+		ValueBytes:   []byte("length += 1"),
+		ValueBool:    true,
+		ValueData: &SubStruct{
+			ValueInt:  123,
+			ValueInt8: int32(int8(rand.Int63())),
+		},
+		ValueListInt: []int32{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int32]int32{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
+	}
+
 	t1 := testStruct{
 		ValueInt:     -2118888625,
 		ValueInt8:    int8(rand.Int63()),
@@ -342,6 +444,8 @@ func TestEncoderDecoder(t *testing.T) {
 		},
 		ValueListInt: []int{11, 22, 33, 44, 55},
 		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int]int{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 	}
 
 	length := t1.Size()
@@ -361,6 +465,12 @@ func TestEncoderDecoder(t *testing.T) {
 		}
 		t.Log(len(marshal))
 		t.Log(string(marshal))
+
+		data, err := proto.Marshal(&p1)
+		if err != nil {
+			return
+		}
+		t.Log(len(data))
 	})
 
 	t2 := testStruct{}
@@ -442,9 +552,46 @@ func TestEncoderDecoder(t *testing.T) {
 			break
 		}
 	}
+	for k, v := range t1.ValueMapInt {
+		if t2.ValueMapInt[k] != v {
+			t.Error("not equal ValueMapInt", t1.ValueMapInt, t2.ValueMapInt)
+			break
+		}
+	}
+	for k, v := range t1.ValueMapStr {
+		if t2.ValueMapStr[k] != v {
+			t.Error("not equal ValueMapStr", t1.ValueMapStr, t2.ValueMapStr)
+			break
+		}
+	}
 }
 
 func BenchmarkEncoder(b *testing.B) {
+	p1 := TestStruct{
+		ValueInt:     0,
+		ValueInt8:    int32(int8(rand.Int63())),
+		ValueInt16:   int32(int16(rand.Int63())),
+		ValueInt32:   int32(rand.Int63()),
+		ValueInt64:   int64(rand.Int63()),
+		ValueUint:    uint32(uint(rand.Uint64())),
+		ValueUint8:   uint32(uint8(rand.Uint64())),
+		ValueUint16:  uint32(uint16(rand.Uint64())),
+		ValueUint32:  uint32(rand.Uint64()),
+		ValueUint64:  uint64(rand.Uint64()),
+		ValueFloat32: float32(rand.Float32()),
+		ValueFloat64: float64(rand.Float64()),
+		ValueString:  "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
+		ValueBytes:   []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
+		ValueBool:    true,
+		ValueData: &SubStruct{
+			ValueInt: 123,
+		},
+		ValueListInt: []int32{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int32]int32{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
+	}
+
 	t1 := testStruct{
 		ValueInt:     0,
 		ValueInt8:    int8(rand.Int63()),
@@ -458,14 +605,16 @@ func BenchmarkEncoder(b *testing.B) {
 		ValueUint64:  uint64(rand.Uint64()),
 		ValueFloat32: float32(rand.Float32()),
 		ValueFloat64: float64(rand.Float64()),
-		ValueString:  "最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...最佳答案：uint16是无符号的16位整型数据类型。详细解释如下：1. 数据类型定义...",
-		ValueBytes:   []byte("ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),ValueFloat64: float64(rand.Float64()),"),
+		ValueString:  "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
+		ValueBytes:   []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
 		ValueBool:    true,
 		ValueData: subStruct{
 			ValueInt: 123,
 		},
 		ValueListInt: []int{11, 22, 33, 44, 55},
 		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int]int{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 	}
 	b.Run("Encoder", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -481,6 +630,15 @@ func BenchmarkEncoder(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			out := bytes.NewBuffer(nil)
 			err := json.NewEncoder(out).Encode(t1)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+		}
+	})
+	b.Run("EncoderProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, err := proto.Marshal(&p1)
 			if err != nil {
 				b.Error(err)
 				return
@@ -515,6 +673,22 @@ func BenchmarkEncoder(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			t2 := testStruct{}
 			err := json.NewDecoder(bytes.NewReader(out.Bytes())).Decode(&t2)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+		}
+	})
+
+	data, err := proto.Marshal(&p1)
+	if err != nil {
+		b.Error(err)
+		return
+	}
+	b.Run("DecoderHbufProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			t2 := TestStruct{}
+			err := proto.Unmarshal(data, &t2)
 			if err != nil {
 				b.Error(err)
 				return
