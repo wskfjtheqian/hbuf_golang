@@ -2,697 +2,85 @@ package hbuf_test
 
 import (
 	"bytes"
-	"encoding/json"
-	"github.com/golang/protobuf/proto"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"io"
-	"math/rand"
+	"google.golang.org/genproto/googleapis/type/decimal"
 	"testing"
 )
 
-type subStruct struct {
-	ValueInt  int  `json:"ValueInt,omitempty"`
-	ValueInt8 int8 `json:"ValueInt8,omitempty"`
+var testDataHBufStruct = map[uint16]*hbuf.Description{
+	11: hbuf.NewFieldDescription[int8](hbuf.WriterInt8, hbuf.ReaderInt8, hbuf.LengthInt8),
+	12: hbuf.NewFieldDescription[int16](hbuf.WriterInt16, hbuf.ReaderInt16, hbuf.LengthInt16),
+	13: hbuf.NewFieldDescription[int16](hbuf.WriterInt32, hbuf.ReaderInt32, hbuf.LengthInt32),
+	14: hbuf.NewFieldDescription[hbuf.Int64](hbuf.WriterInt64, hbuf.ReaderInt64, hbuf.LengthInt64),
+	15: hbuf.NewFieldDescription[uint8](hbuf.WriterUint8, hbuf.ReaderUint8, hbuf.LengthUint8),
+	16: hbuf.NewFieldDescription[uint16](hbuf.WriterUint16, hbuf.ReaderUint16, hbuf.LengthUint16),
+	17: hbuf.NewFieldDescription[uint32](hbuf.WriterUint32, hbuf.ReaderUint32, hbuf.LengthUint32),
+	18: hbuf.NewFieldDescription[hbuf.Uint64](hbuf.WriterUint64, hbuf.ReaderUint64, hbuf.LengthUint64),
+	19: hbuf.NewFieldDescription[[]byte](hbuf.WriterBytes, hbuf.ReaderBytes, hbuf.LengthBytes),
+	20: hbuf.NewFieldDescription[string](hbuf.WriterString, hbuf.ReaderString, hbuf.LengthString),
+	21: hbuf.NewFieldDescription[hbuf.Time](hbuf.WriterTime, hbuf.ReaderTime, hbuf.LengthTime),
+	22: hbuf.NewFieldDescription[decimal.Decimal](hbuf.WriterDecimal, hbuf.ReaderDecimal, hbuf.LengthDecimal),
+	23: hbuf.NewFieldDescription[bool](hbuf.WriterBool, hbuf.ReaderBool, hbuf.LengthBool),
+
+	31: hbuf.NewListDescription[int8](hbuf.WriterInt8, hbuf.ReaderInt8, hbuf.LengthInt8),
+	32: hbuf.NewListDescription[int16](hbuf.WriterInt16, hbuf.ReaderInt16, hbuf.LengthInt16),
+	33: hbuf.NewListDescription[int16](hbuf.WriterInt32, hbuf.ReaderInt32, hbuf.LengthInt32),
+	34: hbuf.NewListDescription[hbuf.Int64](hbuf.WriterInt64, hbuf.ReaderInt64, hbuf.LengthInt64),
+	35: hbuf.NewListDescription[uint8](hbuf.WriterUint8, hbuf.ReaderUint8, hbuf.LengthUint8),
+	36: hbuf.NewListDescription[uint16](hbuf.WriterUint16, hbuf.ReaderUint16, hbuf.LengthUint16),
+	37: hbuf.NewListDescription[uint32](hbuf.WriterUint32, hbuf.ReaderUint32, hbuf.LengthUint32),
+	38: hbuf.NewListDescription[hbuf.Uint64](hbuf.WriterUint64, hbuf.ReaderUint64, hbuf.LengthUint64),
+	39: hbuf.NewListDescription[[]byte](hbuf.WriterBytes, hbuf.ReaderBytes, hbuf.LengthBytes),
+	40: hbuf.NewListDescription[string](hbuf.WriterString, hbuf.ReaderString, hbuf.LengthString),
+	41: hbuf.NewListDescription[hbuf.Time](hbuf.WriterTime, hbuf.ReaderTime, hbuf.LengthTime),
+	42: hbuf.NewListDescription[decimal.Decimal](hbuf.WriterDecimal, hbuf.ReaderDecimal, hbuf.LengthDecimal),
+	43: hbuf.NewListDescription[bool](hbuf.WriterBool, hbuf.ReaderBool, hbuf.LengthBool),
 }
 
-func (s *subStruct) Encoder(w io.Writer) error {
-	err := hbuf.WriterInt64(w, 1, int64(s.ValueInt))
-	if err != nil {
-		return err
-	}
+type TestData struct {
+	V11 int8            `json:"v1,omitempty" hbuf:"11"`
+	V12 int16           `json:"v1,omitempty" hbuf:"12"`
+	V13 int32           `json:"v1,omitempty" hbuf:"13"`
+	V14 hbuf.Int64      `json:"v1,omitempty" hbuf:"14"`
+	V15 uint8           `json:"v1,omitempty" hbuf:"15"`
+	V16 uint16          `json:"v1,omitempty" hbuf:"16"`
+	V17 uint32          `json:"v1,omitempty" hbuf:"17"`
+	V18 uint64          `json:"v1,omitempty" hbuf:"18"`
+	V19 []byte          `json:"v1,omitempty" hbuf:"19"`
+	V20 string          `json:"v1,omitempty" hbuf:"20"`
+	V21 hbuf.Time       `json:"v1,omitempty" hbuf:"21"`
+	V22 decimal.Decimal `json:"v1,omitempty" hbuf:"22"`
+	V23 bool            `json:"v1,omitempty" hbuf:"23"`
 
-	err = hbuf.WriterInt64(w, 2, int64(s.ValueInt8))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	V31 []int8            `json:"v1,omitempty" hbuf:"31"`
+	V32 []int16           `json:"v1,omitempty" hbuf:"32"`
+	V33 []int32           `json:"v1,omitempty" hbuf:"33"`
+	V34 []hbuf.Int64      `json:"v1,omitempty" hbuf:"34"`
+	V35 []uint8           `json:"v1,omitempty" hbuf:"35"`
+	V36 []uint16          `json:"v1,omitempty" hbuf:"36"`
+	V37 []uint32          `json:"v1,omitempty" hbuf:"37"`
+	V38 []uint64          `json:"v1,omitempty" hbuf:"38"`
+	V39 [][]byte          `json:"v1,omitempty" hbuf:"39"`
+	V40 []string          `json:"v1,omitempty" hbuf:"40"`
+	V41 []hbuf.Time       `json:"v1,omitempty" hbuf:"41"`
+	V42 []decimal.Decimal `json:"v1,omitempty" hbuf:"42"`
+	V43 []bool            `json:"v1,omitempty" hbuf:"43"`
 }
 
-func (s *subStruct) Decoder(r io.Reader) error {
-	return hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) (err error) {
-		switch id {
-		case 1:
-			s.ValueInt, err = hbuf.ReaderNumber[int](value)
-		case 2:
-			s.ValueInt8, err = hbuf.ReaderNumber[int8](value)
-		}
-		return nil
-	})
+func (d *TestData) Description() map[uint16]*hbuf.Description {
+	return testDataHBufStruct
 }
 
-func (s *subStruct) Size() int {
-	length := 0
-	if s.ValueInt != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(s.ValueInt))) + int(hbuf.LengthUint64(1))
+func Test_EncodeData(t *testing.T) {
+	d := TestData{
+		V1: 02,
 	}
 
-	if s.ValueInt8 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(s.ValueInt8))) + int(hbuf.LengthUint64(2))
-	}
-
-	return length
-}
-
-type testStruct struct {
-	ValueInt     int       `json:"ValueInt,omitempty"`
-	ValueInt8    int8      `json:"ValueInt8,omitempty"`
-	ValueInt16   int16     `json:"ValueInt16,omitempty"`
-	ValueInt32   int32     `json:"ValueInt32,omitempty"`
-	ValueInt64   int64     `json:"ValueInt64,omitempty"`
-	ValueUint    uint      `json:"ValueUint,omitempty"`
-	ValueUint8   uint8     `json:"ValueUint8,omitempty"`
-	ValueUint16  uint16    `json:"ValueUint16,omitempty"`
-	ValueUint32  uint32    `json:"ValueUint32,omitempty"`
-	ValueUint64  uint64    `json:"ValueUint64,omitempty"`
-	ValueFloat32 float32   `json:"ValueFloat32,omitempty"`
-	ValueFloat64 float64   `json:"ValueFloat64,omitempty"`
-	ValueString  string    `json:"ValueString,omitempty"`
-	ValueBytes   []byte    `json:"ValueBytes,omitempty"`
-	ValueBool    bool      `json:"ValueBool,omitempty"`
-	ValueData    subStruct `json:"ValueData,omitempty"`
-	ValueListInt []int     `json:"ValueListInt,omitempty"`
-	ValueListStr []string  `json:"ValueListStr,omitempty"`
-
-	ValueMapInt map[int]int       `json:"ValueMapInt,omitempty"`
-	ValueMapStr map[string]string `json:"ValueMapStr,omitempty"`
-}
-
-func (t *testStruct) Encoder(w io.Writer) error {
-	err := hbuf.WriterInt64(w, 1, int64(t.ValueInt))
+	err := hbuf.NewEncoder(bytes.NewBuffer(nil)).Encode(&d)
 	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterInt64(w, 2, int64(t.ValueInt8))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterInt64(w, 3, int64(t.ValueInt16))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterInt64(w, 4, int64(t.ValueInt32))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterInt64(w, 5, int64(t.ValueInt64))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterUint64(w, 6, uint64(t.ValueUint))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterUint64(w, 7, uint64(t.ValueUint8))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterUint64(w, 8, uint64(t.ValueUint16))
-	if err != nil {
-		return err
-	}
-	err = hbuf.WriterUint64(w, 9, uint64(t.ValueUint32))
-	if err != nil {
-		return err
-	}
-	err = hbuf.WriterUint64(w, 10, uint64(t.ValueUint64))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterFloat(w, 11, t.ValueFloat32)
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterDouble(w, 12, t.ValueFloat64)
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterBytes(w, 13, []byte(t.ValueString))
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterBytes(w, 14, t.ValueBytes)
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterBool(w, 15, t.ValueBool)
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterData(w, 16, &t.ValueData)
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterList(w, 17, t.ValueListInt, func(v int) uint32 {
-		return 2 + uint32(hbuf.LengthInt64(int64(v)))
-	}, func(w io.Writer, v int) error {
-		return hbuf.WriterInt64(w, 0, int64(v))
-	})
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterList(w, 18, t.ValueListStr, func(v string) uint32 {
-		return 2 + uint32(hbuf.LengthBytes([]byte(v)))
-	}, func(w io.Writer, v string) error {
-		return hbuf.WriterBytes(w, 0, []byte(v))
-	})
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterMap(w, 19, t.ValueMapInt, func(k int, v int) uint32 {
-		return 2 + uint32(hbuf.LengthInt64(int64(k))) + 2 + uint32(hbuf.LengthInt64(int64(v)))
-	}, func(w io.Writer, k int, v int) error {
-		err := hbuf.WriterInt64(w, 0, int64(k))
-		if err != nil {
-			return err
-		}
-		return hbuf.WriterInt64(w, 0, int64(v))
-	})
-	if err != nil {
-		return err
-	}
-
-	err = hbuf.WriterMap(w, 20, t.ValueMapStr, func(k string, v string) uint32 {
-		return 2 + uint32(hbuf.LengthBytes([]byte(k))) + 2 + uint32(hbuf.LengthBytes([]byte(v)))
-	}, func(w io.Writer, k string, v string) error {
-		err := hbuf.WriterBytes(w, 0, []byte(k))
-		if err != nil {
-			return err
-		}
-		return hbuf.WriterBytes(w, 0, []byte(v))
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (t *testStruct) Decoder(r io.Reader) error {
-	err := hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) (err error) {
-		switch id {
-		case 1:
-			t.ValueInt, err = hbuf.ReaderNumber[int](value)
-		case 2:
-			t.ValueInt8, err = hbuf.ReaderNumber[int8](value)
-		case 3:
-			t.ValueInt16, err = hbuf.ReaderNumber[int16](value)
-		case 4:
-			t.ValueInt32, err = hbuf.ReaderNumber[int32](value)
-		case 5:
-			t.ValueInt64, err = hbuf.ReaderNumber[int64](value)
-		case 6:
-			t.ValueUint, err = hbuf.ReaderNumber[uint](value)
-		case 7:
-			t.ValueUint8, err = hbuf.ReaderNumber[uint8](value)
-		case 8:
-			t.ValueUint16, err = hbuf.ReaderNumber[uint16](value)
-		case 9:
-			t.ValueUint32, err = hbuf.ReaderNumber[uint32](value)
-		case 10:
-			t.ValueUint64, err = hbuf.ReaderNumber[uint64](value)
-		case 11:
-			t.ValueFloat32, err = hbuf.ReaderNumber[float32](value)
-		case 12:
-			t.ValueFloat64, err = hbuf.ReaderNumber[float64](value)
-		case 13:
-			t.ValueString, err = hbuf.ReaderBytes[string](value)
-		case 14:
-			t.ValueBytes, err = hbuf.ReaderBytes[[]byte](value)
-		case 15:
-			t.ValueBool, err = hbuf.ReaderBool(value)
-		case 16:
-			err = hbuf.ReaderData(value, &t.ValueData)
-		case 17:
-			t.ValueListInt, err = hbuf.ReaderList[int](value, func(v any) (int, error) {
-				return hbuf.ReaderNumber[int](v)
-			})
-		case 18:
-			t.ValueListStr, err = hbuf.ReaderList[string](value, func(v any) (string, error) {
-				return hbuf.ReaderBytes[string](v.([]byte))
-			})
-		case 19:
-			t.ValueMapInt, err = hbuf.ReaderMap[int](value, func(k any, v any) (int, int, error) {
-				key, err := hbuf.ReaderNumber[int](k)
-				if err != nil {
-					return 0, 0, err
-				}
-				value, err := hbuf.ReaderNumber[int](v)
-				if err != nil {
-					return 0, 0, err
-				}
-				return key, value, nil
-			})
-		case 20:
-			t.ValueMapStr, err = hbuf.ReaderMap[string](value, func(k any, v any) (string, string, error) {
-				key, err := hbuf.ReaderBytes[string](k.([]byte))
-				if err != nil {
-					return "", "", err
-				}
-				value, err := hbuf.ReaderBytes[string](v.([]byte))
-				if err != nil {
-					return "", "", err
-				}
-				return key, value, nil
-			})
-		}
-		return
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *testStruct) Size() int {
-	length := 0
-	if t.ValueInt != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt))) + int(hbuf.LengthUint64(1))
-	}
-
-	if t.ValueInt8 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt8))) + int(hbuf.LengthUint64(2))
-	}
-
-	if t.ValueInt16 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt16))) + int(hbuf.LengthUint64(3))
-	}
-
-	if t.ValueInt32 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt32))) + int(hbuf.LengthUint64(4))
-	}
-
-	if t.ValueInt64 != 0 {
-		length += 1 + int(hbuf.LengthInt64(int64(t.ValueInt64))) + int(hbuf.LengthUint64(5))
-	}
-
-	if t.ValueUint != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint))) + int(hbuf.LengthUint64(6))
-	}
-
-	if t.ValueUint8 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint8))) + int(hbuf.LengthUint64(7))
-	}
-
-	if t.ValueUint16 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint16))) + int(hbuf.LengthUint64(8))
-	}
-
-	if t.ValueUint32 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint32))) + int(hbuf.LengthUint64(9))
-	}
-
-	if t.ValueUint64 != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.ValueUint64))) + int(hbuf.LengthUint64(10))
-	}
-
-	if t.ValueFloat32 != 0 {
-		length += 1 + int(hbuf.LengthFloat(t.ValueFloat32)) + int(hbuf.LengthUint64(11))
-	}
-
-	if t.ValueFloat64 != 0 {
-		length += 1 + int(hbuf.LengthDouble(t.ValueFloat64)) + int(hbuf.LengthUint64(12))
-	}
-
-	if t.ValueString != "" {
-		length += 1 + int(hbuf.LengthBytes([]byte(t.ValueString))) + int(hbuf.LengthUint64(13))
-	}
-
-	if len(t.ValueBytes) != 0 {
-		length += 1 + int(hbuf.LengthBytes(t.ValueBytes)) + int(hbuf.LengthUint64(14))
-	}
-
-	if t.ValueBool {
-		length += 1 + int(hbuf.LengthUint64(15))
-	}
-
-	temp := t.ValueData.Size()
-	length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(16))
-
-	if len(t.ValueListInt) != 0 {
-		temp = 0
-		for _, v := range t.ValueListInt {
-			temp += 2 + int(hbuf.LengthInt64(int64(v)))
-		}
-
-		countData := hbuf.EncoderUint64(uint64(len(t.ValueListInt)))
-		temp += 2 + len(countData)
-
-		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(17))
-	}
-	if len(t.ValueListStr) != 0 {
-		temp = 0
-		for _, v := range t.ValueListStr {
-			temp += 2 + int(hbuf.LengthBytes([]byte(v)))
-		}
-
-		countData := hbuf.EncoderUint64(uint64(len(t.ValueListStr)))
-		temp += 2 + len(countData)
-
-		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(17))
-	}
-	if len(t.ValueMapInt) != 0 {
-		temp = 0
-		for k, v := range t.ValueMapInt {
-			temp += 2 + int(hbuf.LengthInt64(int64(k))) + 2 + int(hbuf.LengthInt64(int64(v)))
-		}
-
-		countData := hbuf.EncoderUint64(uint64(len(t.ValueMapInt)))
-		temp += 2 + len(countData)
-
-		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(19))
-	}
-	if len(t.ValueMapStr) != 0 {
-		temp = 0
-		for k, v := range t.ValueMapStr {
-			temp += 2 + int(hbuf.LengthBytes([]byte(k))) + 2 + int(hbuf.LengthBytes([]byte(v)))
-		}
-
-		countData := hbuf.EncoderUint64(uint64(len(t.ValueMapStr)))
-		temp += 2 + len(countData)
-
-		length += 1 + int(hbuf.LengthUint64(uint64(temp))) + temp + int(hbuf.LengthUint64(20))
-	}
-
-	return length
-}
-
-type String string
-
-func TestEncoderDecoder(t *testing.T) {
-	p1 := TestStruct{
-		ValueInt:     -2118888625,
-		ValueInt8:    int32(int8(rand.Int63())),
-		ValueInt16:   int32(int16(rand.Int63())),
-		ValueInt32:   int32(rand.Int63()),
-		ValueInt64:   int64(rand.Int63()),
-		ValueUint:    uint32(uint(rand.Uint64())),
-		ValueUint8:   uint32(uint8(rand.Uint64())),
-		ValueUint16:  uint32(uint16(rand.Uint64())),
-		ValueUint32:  uint32(rand.Uint64()),
-		ValueUint64:  uint64(rand.Uint64()),
-		ValueFloat32: float32(rand.Float32()),
-		ValueFloat64: float64(rand.Float64()),
-		ValueString:  "最佳答案：",
-		ValueBytes:   []byte("length += 1"),
-		ValueBool:    true,
-		ValueData: &SubStruct{
-			ValueInt:  123,
-			ValueInt8: int32(int8(rand.Int63())),
-		},
-		ValueListInt: []int32{11, 22, 33, 44, 55},
-		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
-		ValueMapInt:  map[int32]int32{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
-		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
-	}
-
-	t1 := testStruct{
-		ValueInt:     -2118888625,
-		ValueInt8:    int8(rand.Int63()),
-		ValueInt16:   int16(rand.Int63()),
-		ValueInt32:   int32(rand.Int63()),
-		ValueInt64:   int64(rand.Int63()),
-		ValueUint:    uint(rand.Uint64()),
-		ValueUint8:   uint8(rand.Uint64()),
-		ValueUint16:  uint16(rand.Uint64()),
-		ValueUint32:  uint32(rand.Uint64()),
-		ValueUint64:  uint64(rand.Uint64()),
-		ValueFloat32: float32(rand.Float32()),
-		ValueFloat64: float64(rand.Float64()),
-		ValueString:  "最佳答案：",
-		ValueBytes:   []byte("length += 1"),
-		ValueBool:    true,
-		ValueData: subStruct{
-			ValueInt:  123,
-			ValueInt8: int8(rand.Int63()),
-		},
-		ValueListInt: []int{11, 22, 33, 44, 55},
-		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
-		ValueMapInt:  map[int]int{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
-		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
-	}
-
-	length := t1.Size()
-	out := bytes.NewBuffer(make([]byte, 0, length))
-	t.Run("Encoder", func(t *testing.T) {
-		err := t1.Encoder(out)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		t.Log(length)
-		t.Log(out.Bytes())
-
-		marshal, err := json.Marshal(&t1)
-		if err != nil {
-			return
-		}
-		t.Log(len(marshal))
-		t.Log(string(marshal))
-
-		data, err := proto.Marshal(&p1)
-		if err != nil {
-			return
-		}
-		t.Log(len(data))
-	})
-
-	t2 := testStruct{}
-	t.Run("Decoder", func(t *testing.T) {
-		err := t2.Decoder(bytes.NewReader(out.Bytes()))
-		if err != nil {
-			t.Error(err)
-			return
-		}
-
-	})
-
-	if t1.ValueInt != t2.ValueInt {
-		t.Error("not equal ValueInt", t1.ValueInt, t2.ValueInt)
-	}
-	if t1.ValueInt8 != t2.ValueInt8 {
-		t.Error("not equal ValueInt8", t1.ValueInt8, t2.ValueInt8)
-	}
-	if t1.ValueInt16 != t2.ValueInt16 {
-		t.Error("not equal ValueInt16", t1.ValueInt16, t2.ValueInt16)
-	}
-	if t1.ValueInt32 != t2.ValueInt32 {
-		t.Error("not equal ValueInt32", t1.ValueInt32, t2.ValueInt32)
-	}
-	if t1.ValueInt64 != t2.ValueInt64 {
-		t.Error("not equal ValueInt64", t1.ValueInt64, t2.ValueInt64)
-	}
-	if t1.ValueUint != t2.ValueUint {
-		t.Error("not equal ValueUint", t1.ValueUint, t2.ValueUint)
-	}
-	if t1.ValueUint8 != t2.ValueUint8 {
-		t.Error("not equal ValueUint8", t1.ValueUint8, t2.ValueUint8)
-	}
-	if t1.ValueUint16 != t2.ValueUint16 {
-		t.Error("not equal ValueUint16", t1.ValueUint16, t2.ValueUint16)
-	}
-	if t1.ValueUint32 != t2.ValueUint32 {
-		t.Error("not equal ValueUint32", t1.ValueUint32, t2.ValueUint32)
-	}
-	if t1.ValueUint64 != t2.ValueUint64 {
-		t.Error("not equal ValueUint64", t1.ValueUint64, t2.ValueUint64)
-	}
-	if t1.ValueFloat32 != t2.ValueFloat32 {
-		t.Error("not equal ValueFloat32", t1.ValueFloat32, t2.ValueFloat32)
-	}
-	if t1.ValueFloat64 != t2.ValueFloat64 {
-		t.Error("not equal ValueFloat64", t1.ValueFloat64, t2.ValueFloat64)
-	}
-	if t1.ValueString != t2.ValueString {
-		t.Error("not equal ValueString", t1.ValueString, t2.ValueString)
-	}
-	if bytes.Compare(t1.ValueBytes, t2.ValueBytes) != 0 {
-		t.Error("not equal ValueBytes", t1.ValueBytes, t2.ValueBytes)
-	}
-	if t1.ValueBool != t2.ValueBool {
-		t.Error("not equal ValueBool", t1.ValueBool, t2.ValueBool)
-	}
-	if t1.ValueData.ValueInt != t2.ValueData.ValueInt {
-		t.Error("not equal ValueData.ValueInt", t1.ValueData.ValueInt, t2.ValueData.ValueInt)
-	}
-	if t1.ValueData.ValueInt8 != t2.ValueData.ValueInt8 {
-		t.Error("not equal ValueData.ValueInt8", t1.ValueData.ValueInt8, t2.ValueData.ValueInt8)
-	}
-	if len(t1.ValueListInt) != len(t2.ValueListInt) {
-		t.Error("not equal ValueListInt", t1.ValueListInt, t2.ValueListInt)
-	}
-	if len(t1.ValueListStr) != len(t2.ValueListStr) {
-		t.Error("not equal ValueListStr", t1.ValueListStr, t2.ValueListStr)
-	}
-	for i := 0; i < len(t1.ValueListInt); i++ {
-		if t1.ValueListInt[i] != t2.ValueListInt[i] {
-			t.Error("not equal ValueListInt", t1.ValueListInt, t2.ValueListInt)
-			break
-		}
-	}
-	for i := 0; i < len(t1.ValueListStr); i++ {
-		if t1.ValueListStr[i] != t2.ValueListStr[i] {
-			t.Error("not equal ValueListStr", t1.ValueListStr, t2.ValueListStr)
-			break
-		}
-	}
-	for k, v := range t1.ValueMapInt {
-		if t2.ValueMapInt[k] != v {
-			t.Error("not equal ValueMapInt", t1.ValueMapInt, t2.ValueMapInt)
-			break
-		}
-	}
-	for k, v := range t1.ValueMapStr {
-		if t2.ValueMapStr[k] != v {
-			t.Error("not equal ValueMapStr", t1.ValueMapStr, t2.ValueMapStr)
-			break
-		}
-	}
-}
-
-func BenchmarkEncoder(b *testing.B) {
-	p1 := TestStruct{
-		ValueInt:     0,
-		ValueInt8:    int32(int8(rand.Int63())),
-		ValueInt16:   int32(int16(rand.Int63())),
-		ValueInt32:   int32(rand.Int63()),
-		ValueInt64:   int64(rand.Int63()),
-		ValueUint:    uint32(uint(rand.Uint64())),
-		ValueUint8:   uint32(uint8(rand.Uint64())),
-		ValueUint16:  uint32(uint16(rand.Uint64())),
-		ValueUint32:  uint32(rand.Uint64()),
-		ValueUint64:  uint64(rand.Uint64()),
-		ValueFloat32: float32(rand.Float32()),
-		ValueFloat64: float64(rand.Float64()),
-		ValueString:  "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
-		ValueBytes:   []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
-		ValueBool:    true,
-		ValueData: &SubStruct{
-			ValueInt: 123,
-		},
-		ValueListInt: []int32{11, 22, 33, 44, 55},
-		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
-		ValueMapInt:  map[int32]int32{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
-		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
-	}
-
-	t1 := testStruct{
-		ValueInt:     0,
-		ValueInt8:    int8(rand.Int63()),
-		ValueInt16:   int16(rand.Int63()),
-		ValueInt32:   int32(rand.Int63()),
-		ValueInt64:   int64(rand.Int63()),
-		ValueUint:    uint(rand.Uint64()),
-		ValueUint8:   uint8(rand.Uint64()),
-		ValueUint16:  uint16(rand.Uint64()),
-		ValueUint32:  uint32(rand.Uint64()),
-		ValueUint64:  uint64(rand.Uint64()),
-		ValueFloat32: float32(rand.Float32()),
-		ValueFloat64: float64(rand.Float64()),
-		ValueString:  "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
-		ValueBytes:   []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
-		ValueBool:    true,
-		ValueData: subStruct{
-			ValueInt: 123,
-		},
-		ValueListInt: []int{11, 22, 33, 44, 55},
-		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
-		ValueMapInt:  map[int]int{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
-		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
-	}
-	b.Run("Encoder", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			out := bytes.NewBuffer(make([]byte, 0, t1.Size()))
-			err := t1.Encoder(out)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-	b.Run("EncoderJSON", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			out := bytes.NewBuffer(nil)
-			err := json.NewEncoder(out).Encode(t1)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-	b.Run("EncoderProto", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			_, err := proto.Marshal(&p1)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-
-	out := bytes.NewBuffer(make([]byte, 0, t1.Size()))
-	err := t1.Encoder(out)
-	if err != nil {
-		b.Error(err)
+		t.Error(err)
 		return
 	}
-	b.Run("DecoderHbuf", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			t2 := testStruct{}
-			err := t2.Decoder(bytes.NewReader(out.Bytes()))
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
 
-	out = bytes.NewBuffer(nil)
-	err = json.NewEncoder(out).Encode(t1)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	b.Run("DecoderHbufJSON", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			t2 := testStruct{}
-			err := json.NewDecoder(bytes.NewReader(out.Bytes())).Decode(&t2)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-
-	data, err := proto.Marshal(&p1)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	b.Run("DecoderHbufProto", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			t2 := TestStruct{}
-			err := proto.Unmarshal(data, &t2)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
+	return
 }

@@ -1,0 +1,87 @@
+package go = "data_hbuf_test"
+package java = "com.parser"
+
+//12
+enum Status {
+    //启用
+    Enable = 0
+
+    //禁用
+    Disabled = 1
+}
+
+data GetInfoReq {
+    int64 user_id = 1
+
+    string name = 0
+
+    int32 age = 2
+}
+
+
+data GetInfoResp {
+    int8 v1 = 0
+
+    int16 v2 = 1
+
+    int32 v3 = 2
+
+    int64 v4 = 3
+
+    uint8 v5 = 4
+
+    uint16 v6 = 5
+
+    uint32 v7 = 6
+
+    uint64 v8 = 7
+
+    bool v9 = 8
+
+    float v10 = 9
+
+    double v11 = 10
+
+    string v12 = 11
+
+    date v13 = 12
+
+    decimal v14 = 13
+
+    Status v15 = 14
+
+    GetInfoReq v16 = 15
+
+    int8[] v17 = 16
+
+    int16[] v18 = 17
+
+    int32[] v19 = 18
+
+    int64[] v20 = 19
+
+    uint8[] v21 = 20
+
+    uint16[] v22 = 21
+
+    uint32[] v23 = 22
+
+    uint64[] v24 = 23
+
+    bool[] v25 = 24
+
+    float[] v26 = 25
+
+    double[] v27 = 26
+
+    string[] v28 = 27
+
+    date[] v29 = 28
+
+    decimal[] v30 = 29
+
+    Status[] v31 = 30
+
+    GetInfoReq[] v32 = 31
+}
+
