@@ -177,7 +177,7 @@ type Result[T any] struct {
 }
 
 func (t *Result[T]) Encoder(w io.Writer) error {
-	err := hbuf.WriterInt64(w, 1, int64(t.Code))
+	err := hbuf.EncodeInt64(w, 1, int64(t.Code))
 	if err != nil {
 		return err
 	}
