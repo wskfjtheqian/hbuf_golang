@@ -338,7 +338,7 @@ func Benchmark_EncodeData(b *testing.B) {
 	b.Run("Benchmark_DecodeBuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			s := TestData{}
-			err = hbuf.NewDecoder(buf).Decode(&s)
+			err = hbuf.NewDecoder(bytes.NewReader(buf.Bytes())).Decode(&s)
 			if err != nil {
 				b.Error(err)
 				return
@@ -355,7 +355,7 @@ func Benchmark_EncodeData(b *testing.B) {
 	b.Run("Benchmark_DecodeJson", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			s := TestData{}
-			err = hbuf.NewDecoder(buf).Decode(&s)
+			err = hbuf.NewDecoder(bytes.NewReader(buf.Bytes())).Decode(&s)
 			if err != nil {
 				b.Error(err)
 				return
