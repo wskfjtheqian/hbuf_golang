@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"google.golang.org/genproto/googleapis/type/decimal"
+	"math/rand"
 	"testing"
+	"time"
 )
 
 var TestSubDataFields = map[uint16]hbuf.Descriptor{
@@ -35,6 +37,51 @@ var TestDataFields = map[uint16]hbuf.Descriptor{
 	}, func(d any, v int64) {
 		d.(*TestData).V12 = int16(v)
 	}),
+	13: hbuf.NewInt64Descriptor(func(d any) int64 {
+		return int64(d.(*TestData).V13)
+	}, func(d any, v int64) {
+		d.(*TestData).V13 = int32(v)
+	}),
+	14: hbuf.NewInt64Descriptor(func(d any) int64 {
+		return int64(d.(*TestData).V14)
+	}, func(d any, v int64) {
+		d.(*TestData).V14 = hbuf.Int64(v)
+	}),
+	15: hbuf.NewUint64Descriptor(func(d any) uint64 {
+		return uint64(d.(*TestData).V15)
+	}, func(d any, v uint64) {
+		d.(*TestData).V15 = uint8(v)
+	}),
+	16: hbuf.NewUint64Descriptor(func(d any) uint64 {
+		return uint64(d.(*TestData).V16)
+	}, func(d any, v uint64) {
+		d.(*TestData).V16 = uint16(v)
+	}),
+	17: hbuf.NewUint64Descriptor(func(d any) uint64 {
+		return uint64(d.(*TestData).V17)
+	}, func(d any, v uint64) {
+		d.(*TestData).V17 = uint32(v)
+	}),
+	18: hbuf.NewUint64Descriptor(func(d any) uint64 {
+		return uint64(d.(*TestData).V18)
+	}, func(d any, v uint64) {
+		d.(*TestData).V18 = hbuf.Uint64(v)
+	}),
+	19: hbuf.NewBytesDescriptor(func(d any) []byte {
+		return d.(*TestData).V19
+	}, func(d any, v []byte) {
+		d.(*TestData).V19 = v
+	}),
+	20: hbuf.NewBytesDescriptor(func(d any) []byte {
+		return []byte(d.(*TestData).V20)
+	}, func(d any, v []byte) {
+		d.(*TestData).V20 = string(v)
+	}),
+	21: hbuf.NewUint64Descriptor(func(d any) uint64 {
+		return uint64(time.Time(d.(*TestData).V21).UnixMilli())
+	}, func(d any, v uint64) {
+		d.(*TestData).V21 = hbuf.Time(time.UnixMilli(int64(v)))
+	}),
 	31: hbuf.NewListDescriptor[int8](func(d any) any {
 		return d.(*TestData).V31
 	}, func(d any, v any) {
@@ -43,6 +90,15 @@ var TestDataFields = map[uint16]hbuf.Descriptor{
 		return int64(d.(int8))
 	}, func(d any, v int64) {
 		*d.(*int8) = int8(v)
+	})),
+	40: hbuf.NewListDescriptor[string](func(d any) any {
+		return d.(*TestData).V40
+	}, func(d any, v any) {
+		d.(*TestData).V40 = v.([]string)
+	}, hbuf.NewBytesDescriptor(func(d any) []byte {
+		return []byte(d.(string))
+	}, func(d any, v []byte) {
+		*d.(*string) = string(v)
 	})),
 	51: hbuf.NewMapDescriptor[string, int8](func(d any) any {
 		return d.(*TestData).V51
@@ -57,15 +113,23 @@ var TestDataFields = map[uint16]hbuf.Descriptor{
 	}, func(d any, v int64) {
 		*d.(*int8) = int8(v)
 	})),
+	60: hbuf.NewMapDescriptor[string, string](func(d any) any {
+		return d.(*TestData).V60
+	}, func(d any, v any) {
+		d.(*TestData).V60 = v.(map[string]string)
+	}, hbuf.NewBytesDescriptor(func(d any) []byte {
+		return []byte(d.(string))
+	}, func(d any, v []byte) {
+		*d.(*string) = string(v)
+	}), hbuf.NewBytesDescriptor(func(d any) []byte {
+		return []byte(d.(string))
+	}, func(d any, v []byte) {
+		*d.(*string) = string(v)
+	})),
 	26: hbuf.NewStructDescriptor(func(d any) any {
 		return &d.(*TestData).V26
 	}, func(d any, v any) {
 		d.(*TestData).V26 = *v.(*TestSubData)
-	}),
-	20: hbuf.NewBytesDescriptor(func(d any) []byte {
-		return []byte(d.(*TestData).V20)
-	}, func(d any, v []byte) {
-		d.(*TestData).V20 = string(v)
 	}),
 }
 
@@ -77,7 +141,7 @@ type TestData struct {
 	V15 uint8           `json:"v15,omitempty" hbuf:"15"`
 	V16 uint16          `json:"v16,omitempty" hbuf:"16"`
 	V17 uint32          `json:"v17,omitempty" hbuf:"17"`
-	V18 uint64          `json:"v18,omitempty" hbuf:"18"`
+	V18 hbuf.Uint64     `json:"v18,omitempty" hbuf:"18"`
 	V19 []byte          `json:"v19,omitempty" hbuf:"19"`
 	V20 string          `json:"v20,omitempty" hbuf:"20"`
 	V21 hbuf.Time       `json:"v21,omitempty" hbuf:"21"`
@@ -142,12 +206,22 @@ func (t *TestData) Descriptor() map[uint16]hbuf.Descriptor {
 
 func Test_EncodeData(t *testing.T) {
 	d := TestData{
-		V11: 11,
-		V12: 12,
-		V31: []int8{11, 12, 13},
-		V51: map[string]int8{"a": 11, "b": 12},
+		V11: int8(rand.Int63()),
+		V12: int16(rand.Int63()),
+		V13: int32(rand.Int63()),
+		V14: hbuf.Int64(rand.Int63()),
+		V15: uint8(rand.Uint64()),
+		V16: uint16(rand.Uint64()),
+		V17: uint32(rand.Uint64()),
+		V18: hbuf.Uint64(rand.Uint64()),
+		V19: []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
+		V20: "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
+		V21: hbuf.Time(time.Now()),
+		V31: []int8{11, 22, 33, 44, 55},
+		V40: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		V51: map[string]int8{"11": 111, "22": 22, "33": 33, "44": 44, "55": 55},
+		V60: map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 		V26: TestSubData{V11: 880011},
-		V20: "b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)",
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -214,12 +288,22 @@ func Test_EncodeData(t *testing.T) {
 
 func Benchmark_EncodeData(b *testing.B) {
 	d := TestData{
-		V11: 11,
-		V12: 12,
-		V31: []int8{11, 12, 13},
-		V51: map[string]int8{"a": 11, "b": 12},
+		V11: int8(rand.Int63()),
+		V12: int16(rand.Int63()),
+		V13: int32(rand.Int63()),
+		V14: hbuf.Int64(rand.Int63()),
+		V15: uint8(rand.Uint64()),
+		V16: uint16(rand.Uint64()),
+		V17: uint32(rand.Uint64()),
+		V18: hbuf.Uint64(rand.Uint64()),
+		V19: []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
+		V20: "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
+		V21: hbuf.Time(time.Now()),
+		V31: []int8{11, 22, 33, 44, 55},
+		V40: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		V51: map[string]int8{"11": 111, "22": 22, "33": 33, "44": 44, "55": 55},
+		V60: map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 		V26: TestSubData{V11: 880011},
-		V20: "b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)",
 	}
 
 	b.Run("Benchmark_EncodeBuf", func(b *testing.B) {

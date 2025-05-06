@@ -58,6 +58,28 @@ func (i Int64Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) 
 	return EncodeInt64(writer, id, i.get(d))
 }
 
+type Uint64Descriptor struct {
+	get func(d any) uint64
+	set func(d any, v uint64)
+}
+
+func NewUint64Descriptor(get func(d any) uint64, set func(d any, v uint64)) Descriptor {
+	return &Uint64Descriptor{get: get, set: set}
+}
+
+func (u Uint64Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+	value, err := DecodeUint64(reader, typ, valueLen)
+	if err != nil {
+		return err
+	}
+	u.set(d, value)
+	return
+}
+
+func (u Uint64Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+	return EncodeUint64(writer, id, u.get(d))
+}
+
 type FloatDescriptor struct {
 	get func(d any) float32
 	set func(d any, v float32)
@@ -193,7 +215,7 @@ func (l ListDescriptor[T]) Encode(writer io.Writer, d any, id uint16) (err error
 		return
 	}
 
-	err = Writer(writer, TMap, id, LengthUint(count))
+	err = Writer(writer, TList, id, LengthUint(count))
 	if err != nil {
 		return
 	}
