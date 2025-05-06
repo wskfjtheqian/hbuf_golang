@@ -27,7 +27,7 @@ type Time time.Time
 
 type Decimal decimal.Decimal
 
-type GetDescriptor interface {
+type Data interface {
 	Descriptor() map[uint16]Descriptor
 }
 
@@ -328,7 +328,7 @@ func NewStructDescriptor(get func(d any) any, set func(d any, v any)) Descriptor
 
 func (s StructDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
 	data := s.get(d)
-	descMap := data.(GetDescriptor).Descriptor()
+	descMap := data.(Data).Descriptor()
 	if descMap == nil {
 		return
 	}
@@ -360,7 +360,7 @@ func (s StructDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 
 func (s StructDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
 	data := s.get(d)
-	descMap := data.(GetDescriptor).Descriptor()
+	descMap := data.(Data).Descriptor()
 	if descMap == nil {
 		return
 	}
