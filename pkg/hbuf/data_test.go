@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"google.golang.org/genproto/googleapis/type/decimal"
+	"google.golang.org/protobuf/proto"
+	"math/rand"
 	"testing"
 )
 
 var TestSubDataFields = map[uint16]hbuf.Descriptor{
-	11: hbuf.NewInt64Descriptor(func(d any) int64 {
-		return int64(d.(*TestSubData).V11)
-	}, func(d any, v int64) {
-		d.(*TestSubData).V11 = int32(v)
+	11: hbuf.NewInt32Descriptor(func(d any) *int32 {
+		return &d.(*TestSubData).V11
+	}, func(d any, v int32) {
+		d.(*TestSubData).V11 = v
 	}),
 }
 
@@ -25,23 +27,24 @@ func (t TestSubData) Descriptor() map[uint16]hbuf.Descriptor {
 }
 
 var TestDataFields = map[uint16]hbuf.Descriptor{
-	11: hbuf.NewInt64Descriptor(func(d any) int64 {
-		return int64(d.(*TestData).V11)
-	}, func(d any, v int64) {
-		d.(*TestData).V11 = int8(v)
+	11: hbuf.NewInt8Descriptor(func(d any) *int8 {
+		return &d.(*TestData).V11
+	}, func(d any, v int8) {
+		d.(*TestData).V11 = v
 	}),
-	12: hbuf.NewInt64Descriptor(func(d any) int64 {
-		return int64(d.(*TestData).V12)
-	}, func(d any, v int64) {
-		d.(*TestData).V12 = int16(v)
+	12: hbuf.NewInt16Descriptor(func(d any) *int16 {
+		return &d.(*TestData).V12
+	}, func(d any, v int16) {
+		d.(*TestData).V12 = v
 	}),
 	31: hbuf.NewListDescriptor[int8](func(d any) any {
 		return d.(*TestData).V31
 	}, func(d any, v any) {
 		d.(*TestData).V31 = v.([]int8)
-	}, hbuf.NewInt64Descriptor(func(d any) int64 {
-		return int64(d.(int8))
-	}, func(d any, v int64) {
+	}, hbuf.NewInt8Descriptor(func(d any) *int8 {
+		temp := d.(int8)
+		return &temp
+	}, func(d any, v int8) {
 		*d.(*int8) = int8(v)
 	})),
 	51: hbuf.NewMapDescriptor[string, int8](func(d any) any {
@@ -52,15 +55,16 @@ var TestDataFields = map[uint16]hbuf.Descriptor{
 		return []byte(d.(string))
 	}, func(d any, v []byte) {
 		*d.(*string) = string(v)
-	}), hbuf.NewInt64Descriptor(func(d any) int64 {
-		return int64(d.(int8))
-	}, func(d any, v int64) {
+	}), hbuf.NewInt8Descriptor(func(d any) *int8 {
+		temp := d.(int8)
+		return &temp
+	}, func(d any, v int8) {
 		*d.(*int8) = int8(v)
 	})),
-	26: hbuf.NewStructDescriptor(func(d any) any {
+	26: hbuf.NewDataDescriptor[*TestSubData](func(d any) *TestSubData {
 		return &d.(*TestData).V26
-	}, func(d any, v any) {
-		d.(*TestData).V26 = *v.(*TestSubData)
+	}, func(d any, v *TestSubData) {
+		d.(*TestData).V26 = *v
 	}),
 	20: hbuf.NewBytesDescriptor(func(d any) []byte {
 		return []byte(d.(*TestData).V20)
@@ -140,92 +144,248 @@ func (t *TestData) Descriptor() map[uint16]hbuf.Descriptor {
 	return TestDataFields
 }
 
-func Test_EncodeData(t *testing.T) {
-	d := TestData{
-		V11: 11,
-		V12: 12,
-		V31: []int8{11, 12, 13},
-		V51: map[string]int8{"a": 11, "b": 12},
-		V26: TestSubData{V11: 880011},
-		V20: "b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)",
+func TestEncoderDecoder(t *testing.T) {
+	p1 := TestStruct{
+		ValueInt:     -2118888625,
+		ValueInt8:    int32(int8(rand.Int63())),
+		ValueInt16:   int32(int16(rand.Int63())),
+		ValueInt32:   int32(rand.Int63()),
+		ValueInt64:   int64(rand.Int63()),
+		ValueUint:    uint32(uint(rand.Uint64())),
+		ValueUint8:   uint32(uint8(rand.Uint64())),
+		ValueUint16:  uint32(uint16(rand.Uint64())),
+		ValueUint32:  uint32(rand.Uint64()),
+		ValueUint64:  uint64(rand.Uint64()),
+		ValueFloat32: float32(rand.Float32()),
+		ValueFloat64: float64(rand.Float64()),
+		ValueString:  "最佳答案：",
+		ValueBytes:   []byte("length += 1"),
+		ValueBool:    true,
+		ValueData: &SubStruct{
+			ValueInt:  123,
+			ValueInt8: int32(int8(rand.Int63())),
+		},
+		ValueListInt: []int32{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int32]int32{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 	}
 
-	buf := bytes.NewBuffer(nil)
-	err := hbuf.NewEncoder(buf).Encode(&d)
-	if err != nil {
-		t.Error(err)
-		return
+	t1 := TestData{
+		V11:       int8(rand.Int63()),
+		V12:       int16(rand.Int63()),
+		V13:       int32(rand.Int63()),
+		V14:       int64(rand.Int63()),
+		V15:       uint8(rand.Uint64()),
+		V16:       uint16(rand.Uint64()),
+		V17:       uint32(rand.Uint64()),
+		V18:       uint64(rand.Uint64()),
+		V24:       float32(rand.Float32()),
+		V25:       float64(rand.Float64()),
+		V18:       "最佳答案：",
+		V19:       []byte("length += 1"),
+		ValueBool: true,
+		ValueData: subStruct{
+			ValueInt:  123,
+			ValueInt8: int8(rand.Int63()),
+		},
+		ValueListInt: []int{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int]int{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 	}
 
-	t.Log("buf size:", buf.Len())
-	t.Log(buf.Bytes())
-
-	marshal, err := json.Marshal(&d)
-	if err != nil {
-		return
-	}
-	t.Log("marshal size:", len(marshal))
-	t.Log(string(marshal))
-
-	s := TestData{}
-	err = hbuf.NewDecoder(buf).Decode(&s)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if d.V11 != s.V11 {
-		t.Errorf("got %d, want %d", d.V11, 11)
-		return
-	}
-	if d.V12 != s.V12 {
-		t.Errorf("got %d, want %d", d.V12, 12)
-		return
-	}
-
-	if len(d.V31) != len(s.V31) {
-		t.Error("list length not equal")
-		return
-	}
-
-	for k, v := range d.V31 {
-		if s.V31[k] != v {
-			t.Error("list value not equal")
+	length := t1.Size()
+	out := bytes.NewBuffer(make([]byte, 0, length))
+	t.Run("Encoder", func(t *testing.T) {
+		err := t1.Encoder(out)
+		if err != nil {
+			t.Error(err)
 			return
 		}
-	}
+		t.Log(length)
+		t.Log(out.Bytes())
 
-	if len(d.V51) != len(s.V51) {
-		t.Error("map length not equal")
-		return
-	}
-
-	for k, v := range d.V51 {
-		if s.V51[k] != v {
-			t.Error("map value not equal")
+		marshal, err := json.Marshal(&t1)
+		if err != nil {
 			return
 		}
+		t.Log(len(marshal))
+		t.Log(string(marshal))
+
+		data, err := proto.Marshal(&p1)
+		if err != nil {
+			return
+		}
+		t.Log(len(data))
+	})
+
+	t2 := TestData{}
+	t.Run("Decoder", func(t *testing.T) {
+		err := t2.Decoder(bytes.NewReader(out.Bytes()))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+	})
+
+	if t1.ValueInt != t2.ValueInt {
+		t.Error("not equal ValueInt", t1.ValueInt, t2.ValueInt)
 	}
-	if len(d.V62) != len(s.V62) {
-		t.Error("map length not equal")
+	if t1.ValueInt8 != t2.ValueInt8 {
+		t.Error("not equal ValueInt8", t1.ValueInt8, t2.ValueInt8)
 	}
-	return
+	if t1.ValueInt16 != t2.ValueInt16 {
+		t.Error("not equal ValueInt16", t1.ValueInt16, t2.ValueInt16)
+	}
+	if t1.ValueInt32 != t2.ValueInt32 {
+		t.Error("not equal ValueInt32", t1.ValueInt32, t2.ValueInt32)
+	}
+	if t1.ValueInt64 != t2.ValueInt64 {
+		t.Error("not equal ValueInt64", t1.ValueInt64, t2.ValueInt64)
+	}
+	if t1.ValueUint != t2.ValueUint {
+		t.Error("not equal ValueUint", t1.ValueUint, t2.ValueUint)
+	}
+	if t1.ValueUint8 != t2.ValueUint8 {
+		t.Error("not equal ValueUint8", t1.ValueUint8, t2.ValueUint8)
+	}
+	if t1.ValueUint16 != t2.ValueUint16 {
+		t.Error("not equal ValueUint16", t1.ValueUint16, t2.ValueUint16)
+	}
+	if t1.ValueUint32 != t2.ValueUint32 {
+		t.Error("not equal ValueUint32", t1.ValueUint32, t2.ValueUint32)
+	}
+	if t1.ValueUint64 != t2.ValueUint64 {
+		t.Error("not equal ValueUint64", t1.ValueUint64, t2.ValueUint64)
+	}
+	if t1.ValueFloat32 != t2.ValueFloat32 {
+		t.Error("not equal ValueFloat32", t1.ValueFloat32, t2.ValueFloat32)
+	}
+	if t1.ValueFloat64 != t2.ValueFloat64 {
+		t.Error("not equal ValueFloat64", t1.ValueFloat64, t2.ValueFloat64)
+	}
+	if t1.ValueString != t2.ValueString {
+		t.Error("not equal ValueString", t1.ValueString, t2.ValueString)
+	}
+	if bytes.Compare(t1.ValueBytes, t2.ValueBytes) != 0 {
+		t.Error("not equal ValueBytes", t1.ValueBytes, t2.ValueBytes)
+	}
+	if t1.ValueBool != t2.ValueBool {
+		t.Error("not equal ValueBool", t1.ValueBool, t2.ValueBool)
+	}
+	if t1.ValueData.ValueInt != t2.ValueData.ValueInt {
+		t.Error("not equal ValueData.ValueInt", t1.ValueData.ValueInt, t2.ValueData.ValueInt)
+	}
+	if t1.ValueData.ValueInt8 != t2.ValueData.ValueInt8 {
+		t.Error("not equal ValueData.ValueInt8", t1.ValueData.ValueInt8, t2.ValueData.ValueInt8)
+	}
+	if len(t1.ValueListInt) != len(t2.ValueListInt) {
+		t.Error("not equal ValueListInt", t1.ValueListInt, t2.ValueListInt)
+	}
+	if len(t1.ValueListStr) != len(t2.ValueListStr) {
+		t.Error("not equal ValueListStr", t1.ValueListStr, t2.ValueListStr)
+	}
+	for i := 0; i < len(t1.ValueListInt); i++ {
+		if t1.ValueListInt[i] != t2.ValueListInt[i] {
+			t.Error("not equal ValueListInt", t1.ValueListInt, t2.ValueListInt)
+			break
+		}
+	}
+	for i := 0; i < len(t1.ValueListStr); i++ {
+		if t1.ValueListStr[i] != t2.ValueListStr[i] {
+			t.Error("not equal ValueListStr", t1.ValueListStr, t2.ValueListStr)
+			break
+		}
+	}
+	for k, v := range t1.ValueMapInt {
+		if t2.ValueMapInt[k] != v {
+			t.Error("not equal ValueMapInt", t1.ValueMapInt, t2.ValueMapInt)
+			break
+		}
+	}
+	for k, v := range t1.ValueMapStr {
+		if t2.ValueMapStr[k] != v {
+			t.Error("not equal ValueMapStr", t1.ValueMapStr, t2.ValueMapStr)
+			break
+		}
+	}
 }
 
-func Benchmark_EncodeData(b *testing.B) {
-	d := TestData{
-		V11: 11,
-		V12: 12,
-		V31: []int8{11, 12, 13},
-		V51: map[string]int8{"a": 11, "b": 12},
-		V26: TestSubData{V11: 880011},
-		V20: "b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)b.Run(\"Benchmark_EncodeBuf\", func(b *testing.B)",
+func BenchmarkEncoder(b *testing.B) {
+	p1 := TestStruct{
+		ValueInt:     0,
+		ValueInt8:    int32(int8(rand.Int63())),
+		ValueInt16:   int32(int16(rand.Int63())),
+		ValueInt32:   int32(rand.Int63()),
+		ValueInt64:   int64(rand.Int63()),
+		ValueUint:    uint32(uint(rand.Uint64())),
+		ValueUint8:   uint32(uint8(rand.Uint64())),
+		ValueUint16:  uint32(uint16(rand.Uint64())),
+		ValueUint32:  uint32(rand.Uint64()),
+		ValueUint64:  uint64(rand.Uint64()),
+		ValueFloat32: float32(rand.Float32()),
+		ValueFloat64: float64(rand.Float64()),
+		ValueString:  "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
+		ValueBytes:   []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
+		ValueBool:    true,
+		ValueData: &SubStruct{
+			ValueInt: 123,
+		},
+		ValueListInt: []int32{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int32]int32{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
 	}
 
-	b.Run("Benchmark_EncodeBuf", func(b *testing.B) {
+	t1 := testStruct{
+		ValueInt:     0,
+		ValueInt8:    int8(rand.Int63()),
+		ValueInt16:   int16(rand.Int63()),
+		ValueInt32:   int32(rand.Int63()),
+		ValueInt64:   int64(rand.Int63()),
+		ValueUint:    uint(rand.Uint64()),
+		ValueUint8:   uint8(rand.Uint64()),
+		ValueUint16:  uint16(rand.Uint64()),
+		ValueUint32:  uint32(rand.Uint64()),
+		ValueUint64:  uint64(rand.Uint64()),
+		ValueFloat32: float32(rand.Float32()),
+		ValueFloat64: float64(rand.Float64()),
+		ValueString:  "最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案最佳答案",
+		ValueBytes:   []byte("ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:ValueFloat64:"),
+		ValueBool:    true,
+		ValueData: subStruct{
+			ValueInt: 123,
+		},
+		ValueListInt: []int{11, 22, 33, 44, 55},
+		ValueListStr: []string{"11", "22", "uint16是无符号的16位整型数据类型", "44", "55"},
+		ValueMapInt:  map[int]int{11: 111, 22: 222, 33: 333, 44: 444, 55: 555},
+		ValueMapStr:  map[string]string{"11": "111", "22": "222", "33": "333", "44": "444", "55": "555"},
+	}
+	b.Run("Encoder", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			buf := bytes.NewBuffer(nil)
-			err := hbuf.NewEncoder(buf).Encode(&d)
+			out := bytes.NewBuffer(make([]byte, 0, t1.Size()))
+			err := t1.Encoder(out)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+		}
+	})
+	b.Run("EncoderJSON", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			out := bytes.NewBuffer(nil)
+			err := json.NewEncoder(out).Encode(t1)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+		}
+	})
+	b.Run("EncoderProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, err := proto.Marshal(&p1)
 			if err != nil {
 				b.Error(err)
 				return
@@ -233,28 +393,16 @@ func Benchmark_EncodeData(b *testing.B) {
 		}
 	})
 
-	b.Run("Benchmark_EncodeJson", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			buf := bytes.NewBuffer(nil)
-			err := hbuf.NewEncoder(buf).Encode(&d)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-
-	buf := bytes.NewBuffer(nil)
-	err := hbuf.NewEncoder(buf).Encode(&d)
+	out := bytes.NewBuffer(make([]byte, 0, t1.Size()))
+	err := t1.Encoder(out)
 	if err != nil {
 		b.Error(err)
 		return
 	}
-
-	b.Run("Benchmark_DecodeBuf", func(b *testing.B) {
+	b.Run("DecoderHbuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			s := TestData{}
-			err = hbuf.NewDecoder(buf).Decode(&s)
+			t2 := testStruct{}
+			err := t2.Decoder(bytes.NewReader(out.Bytes()))
 			if err != nil {
 				b.Error(err)
 				return
@@ -262,16 +410,32 @@ func Benchmark_EncodeData(b *testing.B) {
 		}
 	})
 
-	buf = bytes.NewBuffer(nil)
-	err = hbuf.NewEncoder(buf).Encode(&d)
+	out = bytes.NewBuffer(nil)
+	err = json.NewEncoder(out).Encode(t1)
 	if err != nil {
 		b.Error(err)
 		return
 	}
-	b.Run("Benchmark_DecodeJson", func(b *testing.B) {
+	b.Run("DecoderHbufJSON", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			s := TestData{}
-			err = hbuf.NewDecoder(buf).Decode(&s)
+			t2 := testStruct{}
+			err := json.NewDecoder(bytes.NewReader(out.Bytes())).Decode(&t2)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+		}
+	})
+
+	data, err := proto.Marshal(&p1)
+	if err != nil {
+		b.Error(err)
+		return
+	}
+	b.Run("DecoderHbufProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			t2 := TestStruct{}
+			err := proto.Unmarshal(data, &t2)
 			if err != nil {
 				b.Error(err)
 				return

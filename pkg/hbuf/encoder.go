@@ -209,9 +209,9 @@ func (e *Encoder) Encode(v any) (err error) {
 		return nil
 	}
 
-	if _, ok := v.(GetDescriptor); ok {
-		return NewStructDescriptor(func(d any) any {
-			return d
+	if _, ok := v.(Data); ok {
+		return NewDataDescriptor(func(d any) Data {
+			return d.(Data)
 		}, nil).Encode(e.w, v, 0)
 	}
 

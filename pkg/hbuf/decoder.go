@@ -163,12 +163,12 @@ func (d *Decoder) Decode(v any) (err error) {
 		return errors.New("decode fail, not a pointer")
 	}
 
-	if _, ok := v.(GetDescriptor); ok {
+	if _, ok := v.(Data); ok {
 		typ, _, valueLen, err = Reader(d)
 
-		return NewStructDescriptor(func(d any) any {
-			return d
-		}, func(d any, v any) {
+		return NewDataDescriptor(func(d any) Data {
+			return d.(Data)
+		}, func(d any, v Data) {
 			d = v
 		}).Decode(d.Reader, v, typ, valueLen)
 	}
