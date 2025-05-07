@@ -171,7 +171,7 @@ func EncodeBytes(writer io.Writer, id uint16, s []byte) (err error) {
 		return
 	}
 
-	err = Writer(writer, TFloat, id, LengthUint(uint64(length)))
+	err = Writer(writer, TBytes, id, LengthUint(uint64(length)))
 	if err != nil {
 		return
 	}
@@ -210,8 +210,8 @@ func (e *Encoder) Encode(v any) (err error) {
 	}
 
 	if _, ok := v.(Data); ok {
-		return NewDataDescriptor(func(d any) Data {
-			return d.(Data)
+		return NewStructDescriptor(func(d any) any {
+			return d
 		}, nil).Encode(e.w, v, 0)
 	}
 
