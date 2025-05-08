@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"unsafe"
 )
 
 func Reader(r io.Reader) (typ Type, id uint16, valueLen uint8, err error) {
@@ -163,14 +164,14 @@ func (d *Decoder) Decode(v any) (err error) {
 		return errors.New("decode fail, not a pointer")
 	}
 
-	if _, ok := v.(Data); ok {
+	if val, ok := (v).(Data); ok {
 		typ, _, valueLen, err = Reader(d)
 
-		return NewDataDescriptor(func(d any) Data {
-			return d.(Data)
-		}, func(d any, v Data) {
+		return NewDataDescriptor(func(d unsafe.Pointer) unsafe.Pointer {
+			return d
+		}, func(d unsafe.Pointer, v unsafe.Pointer) {
 			d = v
-		}).Decode(d.Reader, v, typ, valueLen)
+		}, val.Descriptor()).Decode(d.Reader, unsafe.Pointer(reflect.ValueOf(v).Pointer()), typ, valueLen)
 	}
 	return
 	//

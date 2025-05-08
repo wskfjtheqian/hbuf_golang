@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"unsafe"
 )
 
 func Writer(w io.Writer, typ Type, id uint16, valueLen uint8) (err error) {
@@ -209,10 +210,10 @@ func (e *Encoder) Encode(v any) (err error) {
 		return nil
 	}
 
-	if _, ok := v.(Data); ok {
-		return NewStructDescriptor(func(d any) any {
-			return d
-		}, nil).Encode(e.w, v, 0)
+	if val, ok := v.(Data); ok {
+		return NewDataDescriptor(func(v unsafe.Pointer) unsafe.Pointer {
+			return v
+		}, nil, val.Descriptor()).Encode(e.w, unsafe.Pointer(reflect.ValueOf(v).Pointer()), 0)
 	}
 
 	kind := reflect.TypeOf(v).Kind()

@@ -4,6 +4,7 @@ import (
 	"github.com/shopspring/decimal"
 	"io"
 	"time"
+	"unsafe"
 )
 
 type Type byte
@@ -30,20 +31,20 @@ type Data interface {
 }
 
 type Descriptor interface {
-	Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error)
-	Encode(writer io.Writer, d any, id uint16) (err error)
+	Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error)
+	Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error)
 }
 
 type Int8Descriptor struct {
-	get func(d any) *int8
-	set func(d any, v int8)
+	get func(d unsafe.Pointer) *int8
+	set func(d unsafe.Pointer, v int8)
 }
 
-func NewInt8Descriptor(get func(d any) *int8, set func(d any, v int8)) Descriptor {
+func NewInt8Descriptor(get func(d unsafe.Pointer) *int8, set func(d unsafe.Pointer, v int8)) Descriptor {
 	return &Int8Descriptor{get: get, set: set}
 }
 
-func (i *Int8Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (i *Int8Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeInt64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -52,7 +53,7 @@ func (i *Int8Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint
 	return
 }
 
-func (i *Int8Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (i *Int8Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := i.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -61,15 +62,15 @@ func (i *Int8Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) 
 }
 
 type Int16Descriptor struct {
-	get func(d any) *int16
-	set func(d any, v int16)
+	get func(d unsafe.Pointer) *int16
+	set func(d unsafe.Pointer, v int16)
 }
 
-func NewInt16Descriptor(get func(d any) *int16, set func(d any, v int16)) Descriptor {
+func NewInt16Descriptor(get func(d unsafe.Pointer) *int16, set func(d unsafe.Pointer, v int16)) Descriptor {
 	return &Int16Descriptor{get: get, set: set}
 }
 
-func (i *Int16Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (i *Int16Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeInt64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -78,7 +79,7 @@ func (i *Int16Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 	return
 }
 
-func (i *Int16Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (i *Int16Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := i.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -87,15 +88,15 @@ func (i *Int16Descriptor) Encode(writer io.Writer, d any, id uint16) (err error)
 }
 
 type Int32Descriptor struct {
-	get func(d any) *int32
-	set func(d any, v int32)
+	get func(d unsafe.Pointer) *int32
+	set func(d unsafe.Pointer, v int32)
 }
 
-func NewInt32Descriptor(get func(d any) *int32, set func(d any, v int32)) Descriptor {
+func NewInt32Descriptor(get func(d unsafe.Pointer) *int32, set func(d unsafe.Pointer, v int32)) Descriptor {
 	return &Int32Descriptor{get: get, set: set}
 }
 
-func (i *Int32Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (i *Int32Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeInt64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -104,7 +105,7 @@ func (i *Int32Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 	return
 }
 
-func (i *Int32Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (i *Int32Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := i.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -113,15 +114,15 @@ func (i *Int32Descriptor) Encode(writer io.Writer, d any, id uint16) (err error)
 }
 
 type Int64Descriptor struct {
-	get func(d any) *Int64
-	set func(d any, v Int64)
+	get func(d unsafe.Pointer) *Int64
+	set func(d unsafe.Pointer, v Int64)
 }
 
-func NewInt64Descriptor(get func(d any) *Int64, set func(d any, v Int64)) Descriptor {
+func NewInt64Descriptor(get func(d unsafe.Pointer) *Int64, set func(d unsafe.Pointer, v Int64)) Descriptor {
 	return &Int64Descriptor{get: get, set: set}
 }
 
-func (i *Int64Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (i *Int64Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeInt64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -130,7 +131,7 @@ func (i *Int64Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 	return
 }
 
-func (i *Int64Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (i *Int64Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := i.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -139,15 +140,15 @@ func (i *Int64Descriptor) Encode(writer io.Writer, d any, id uint16) (err error)
 }
 
 type Uint8Descriptor struct {
-	get func(d any) *uint8
-	set func(d any, v uint8)
+	get func(d unsafe.Pointer) *uint8
+	set func(d unsafe.Pointer, v uint8)
 }
 
-func NewUint8Descriptor(get func(d any) *uint8, set func(d any, v uint8)) Descriptor {
+func NewUint8Descriptor(get func(d unsafe.Pointer) *uint8, set func(d unsafe.Pointer, v uint8)) Descriptor {
 	return &Uint8Descriptor{get: get, set: set}
 }
 
-func (u *Uint8Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (u *Uint8Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -156,7 +157,7 @@ func (u *Uint8Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 	return
 }
 
-func (u *Uint8Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (u *Uint8Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := u.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -165,15 +166,15 @@ func (u *Uint8Descriptor) Encode(writer io.Writer, d any, id uint16) (err error)
 }
 
 type Uint16Descriptor struct {
-	get func(d any) *uint16
-	set func(d any, v uint16)
+	get func(d unsafe.Pointer) *uint16
+	set func(d unsafe.Pointer, v uint16)
 }
 
-func NewUint16Descriptor(get func(d any) *uint16, set func(d any, v uint16)) Descriptor {
+func NewUint16Descriptor(get func(d unsafe.Pointer) *uint16, set func(d unsafe.Pointer, v uint16)) Descriptor {
 	return &Uint16Descriptor{get: get, set: set}
 }
 
-func (u *Uint16Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (u *Uint16Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -182,7 +183,7 @@ func (u *Uint16Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen ui
 	return
 }
 
-func (u *Uint16Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (u *Uint16Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := u.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -191,15 +192,15 @@ func (u *Uint16Descriptor) Encode(writer io.Writer, d any, id uint16) (err error
 }
 
 type Uint32Descriptor struct {
-	get func(d any) *uint32
-	set func(d any, v uint32)
+	get func(d unsafe.Pointer) *uint32
+	set func(d unsafe.Pointer, v uint32)
 }
 
-func NewUint32Descriptor(get func(d any) *uint32, set func(d any, v uint32)) Descriptor {
+func NewUint32Descriptor(get func(d unsafe.Pointer) *uint32, set func(d unsafe.Pointer, v uint32)) Descriptor {
 	return &Uint32Descriptor{get: get, set: set}
 }
 
-func (u *Uint32Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (u *Uint32Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -208,7 +209,7 @@ func (u *Uint32Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen ui
 	return
 }
 
-func (u *Uint32Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (u *Uint32Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := u.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -217,15 +218,15 @@ func (u *Uint32Descriptor) Encode(writer io.Writer, d any, id uint16) (err error
 }
 
 type Uint64Descriptor struct {
-	get func(d any) *Uint64
-	set func(d any, v Uint64)
+	get func(d unsafe.Pointer) *Uint64
+	set func(d unsafe.Pointer, v Uint64)
 }
 
-func NewUint64Descriptor(get func(d any) *Uint64, set func(d any, v Uint64)) Descriptor {
+func NewUint64Descriptor(get func(d unsafe.Pointer) *Uint64, set func(d unsafe.Pointer, v Uint64)) Descriptor {
 	return &Uint64Descriptor{get: get, set: set}
 }
 
-func (u *Uint64Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (u *Uint64Descriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -234,7 +235,7 @@ func (u *Uint64Descriptor) Decode(reader io.Reader, d any, typ Type, valueLen ui
 	return
 }
 
-func (u *Uint64Descriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (u *Uint64Descriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := u.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -243,15 +244,15 @@ func (u *Uint64Descriptor) Encode(writer io.Writer, d any, id uint16) (err error
 }
 
 type FloatDescriptor struct {
-	get func(d any) *float32
-	set func(d any, v float32)
+	get func(d unsafe.Pointer) *float32
+	set func(d unsafe.Pointer, v float32)
 }
 
-func NewFloatDescriptor(get func(d any) *float32, set func(d any, v float32)) Descriptor {
+func NewFloatDescriptor(get func(d unsafe.Pointer) *float32, set func(d unsafe.Pointer, v float32)) Descriptor {
 	return &FloatDescriptor{get: get, set: set}
 }
 
-func (f *FloatDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (f *FloatDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeFloat(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -260,7 +261,7 @@ func (f *FloatDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 	return
 }
 
-func (f *FloatDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (f *FloatDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := f.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -269,15 +270,15 @@ func (f *FloatDescriptor) Encode(writer io.Writer, d any, id uint16) (err error)
 }
 
 type DoubleDescriptor struct {
-	get func(d any) *float64
-	set func(d any, v float64)
+	get func(d unsafe.Pointer) *float64
+	set func(d unsafe.Pointer, v float64)
 }
 
-func NewDoubleDescriptor(get func(d any) *float64, set func(d any, v float64)) Descriptor {
+func NewDoubleDescriptor(get func(d unsafe.Pointer) *float64, set func(d unsafe.Pointer, v float64)) Descriptor {
 	return &DoubleDescriptor{get: get, set: set}
 }
 
-func (f *DoubleDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (f *DoubleDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeDouble(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -286,7 +287,7 @@ func (f *DoubleDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen ui
 	return
 }
 
-func (f *DoubleDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (f *DoubleDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := f.get(d)
 	if val == nil || *val == 0 {
 		return nil
@@ -295,15 +296,15 @@ func (f *DoubleDescriptor) Encode(writer io.Writer, d any, id uint16) (err error
 }
 
 type BytesDescriptor struct {
-	get func(d any) []byte
-	set func(d any, v []byte)
+	get func(d unsafe.Pointer) []byte
+	set func(d unsafe.Pointer, v []byte)
 }
 
-func NewBytesDescriptor(get func(d any) []byte, set func(d any, v []byte)) Descriptor {
+func NewBytesDescriptor(get func(d unsafe.Pointer) []byte, set func(d unsafe.Pointer, v []byte)) Descriptor {
 	return &BytesDescriptor{get: get, set: set}
 }
 
-func (b *BytesDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (b *BytesDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeBytes(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -312,7 +313,7 @@ func (b *BytesDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uin
 	return
 }
 
-func (b *BytesDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (b *BytesDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := b.get(d)
 	if val == nil || len(val) == 0 {
 		return nil
@@ -321,15 +322,15 @@ func (b *BytesDescriptor) Encode(writer io.Writer, d any, id uint16) (err error)
 }
 
 type BoolDescriptor struct {
-	get func(d any) *bool
-	set func(d any, v bool)
+	get func(d unsafe.Pointer) *bool
+	set func(d unsafe.Pointer, v bool)
 }
 
-func NewBoolDescriptor(get func(d any) *bool, set func(d any, v bool)) Descriptor {
+func NewBoolDescriptor(get func(d unsafe.Pointer) *bool, set func(d unsafe.Pointer, v bool)) Descriptor {
 	return &BoolDescriptor{get: get, set: set}
 }
 
-func (b *BoolDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (b *BoolDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeBool(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -338,7 +339,7 @@ func (b *BoolDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint
 	return
 }
 
-func (b *BoolDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (b *BoolDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	val := b.get(d)
 	if val == nil || !*val {
 		return nil
@@ -347,170 +348,171 @@ func (b *BoolDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) 
 }
 
 type ListDescriptor[T any] struct {
-	get  func(d any) any
-	set  func(d any, v any)
+	get  func(d unsafe.Pointer) unsafe.Pointer
+	set  func(d unsafe.Pointer, v unsafe.Pointer)
 	desc Descriptor
 }
 
-func NewListDescriptor[T any](
-	get func(d any) any,
-	set func(d any, v any),
-	desc Descriptor,
+//
+//func NewListDescriptor[T any](
+//	get func(d unsafe.Pointer) unsafe.Pointer,
+//	set func(d unsafe.Pointer, v unsafe.Pointer),
+//	desc Descriptor,
+//) Descriptor {
+//	return &ListDescriptor[T]{
+//		get:  get,
+//		set:  set,
+//		desc: desc,
+//	}
+//}
+//
+//func (l *ListDescriptor[T]) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
+//	var count uint64
+//	count, err = DecodeUint64(reader, typ, valueLen)
+//	if err != nil {
+//		return
+//	}
+//
+//	list := make([]T, count)
+//	for i := uint64(0); i < count; i++ {
+//		typ, _, valueLen, err = Reader(reader)
+//		if err != nil {
+//			return
+//		}
+//		err = l.desc.Decode(reader, unsafe.Pointer(&list[i]), typ, valueLen)
+//		if err != nil {
+//			return
+//		}
+//	}
+//	l.set(d, unsafe.Pointer(&list))
+//	return nil
+//}
+//
+//func (l *ListDescriptor[T]) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
+//	list := (l.get(d))
+//	count := uint64(len(list))
+//	if count == 0 {
+//		return
+//	}
+//
+//	err = Writer(writer, TMap, id, LengthUint(count))
+//	if err != nil {
+//		return
+//	}
+//
+//	err = WriterUint64(writer, count)
+//	if err != nil {
+//		return
+//	}
+//	for _, v := range list {
+//		err = l.desc.Encode(writer, v, 0)
+//		if err != nil {
+//			return
+//		}
+//	}
+//	return nil
+//}
+//
+//type MapDescriptor[K comparable, V any] struct {
+//	get func(d unsafe.Pointer) any
+//	set func(d unsafe.Pointer, v any)
+//	key Descriptor
+//	val Descriptor
+//}
+//
+//func NewMapDescriptor[K comparable, V any](
+//	get func(d unsafe.Pointer) any,
+//	set func(d unsafe.Pointer, v any),
+//	key Descriptor,
+//	val Descriptor,
+//) Descriptor {
+//	return &MapDescriptor[K, V]{
+//		get: get,
+//		set: set,
+//		key: key,
+//		val: val,
+//	}
+//}
+//
+//func (m *MapDescriptor[K, V]) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
+//	var count uint64
+//	count, err = DecodeUint64(reader, typ, valueLen)
+//	if err != nil {
+//		return
+//	}
+//
+//	maps := make(map[K]V, count)
+//	for i := uint64(0); i < count; i++ {
+//		typ, _, valueLen, err = Reader(reader)
+//		if err != nil {
+//			return
+//		}
+//		var key K
+//		err = m.key.Decode(reader, &key, typ, valueLen)
+//		if err != nil {
+//			return
+//		}
+//
+//		typ, _, valueLen, err = Reader(reader)
+//		if err != nil {
+//			return
+//		}
+//		var value V
+//		err = m.val.Decode(reader, &value, typ, valueLen)
+//		if err != nil {
+//			return
+//		}
+//		maps[key] = value
+//	}
+//	m.set(d, maps)
+//	return nil
+//}
+//
+//func (m *MapDescriptor[K, V]) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
+//	maps := m.get(d).(map[K]V)
+//	count := uint64(len(maps))
+//	if count == 0 {
+//		return
+//	}
+//
+//	err = Writer(writer, TMap, id, LengthUint(count))
+//	if err != nil {
+//		return
+//	}
+//
+//	err = WriterUint64(writer, count)
+//	if err != nil {
+//		return
+//	}
+//	for key, val := range maps {
+//		err = m.key.Encode(writer, key, 0)
+//		if err != nil {
+//			return
+//		}
+//		err = m.val.Encode(writer, val, 0)
+//		if err != nil {
+//			return
+//		}
+//	}
+//	return nil
+//}
+
+type StructDescriptor struct {
+	get  func(d unsafe.Pointer) unsafe.Pointer
+	set  func(d unsafe.Pointer, v unsafe.Pointer)
+	desc map[uint16]Descriptor
+}
+
+func NewDataDescriptor(
+	get func(d unsafe.Pointer) unsafe.Pointer,
+	set func(d unsafe.Pointer, v unsafe.Pointer),
+	desc map[uint16]Descriptor,
 ) Descriptor {
-	return &ListDescriptor[T]{
-		get:  get,
-		set:  set,
-		desc: desc,
-	}
+	return &StructDescriptor{get: get, set: set, desc: desc}
 }
 
-func (l *ListDescriptor[T]) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
-	var count uint64
-	count, err = DecodeUint64(reader, typ, valueLen)
-	if err != nil {
-		return
-	}
-
-	list := make([]T, count)
-	for i := uint64(0); i < count; i++ {
-		typ, _, valueLen, err = Reader(reader)
-		if err != nil {
-			return
-		}
-		err = l.desc.Decode(reader, &list[i], typ, valueLen)
-		if err != nil {
-			return
-		}
-	}
-	l.set(d, list)
-	return nil
-}
-
-func (l *ListDescriptor[T]) Encode(writer io.Writer, d any, id uint16) (err error) {
-	list := l.get(d).([]T)
-	count := uint64(len(list))
-	if count == 0 {
-		return
-	}
-
-	err = Writer(writer, TMap, id, LengthUint(count))
-	if err != nil {
-		return
-	}
-
-	err = WriterUint64(writer, count)
-	if err != nil {
-		return
-	}
-	for _, v := range list {
-		err = l.desc.Encode(writer, v, 0)
-		if err != nil {
-			return
-		}
-	}
-	return nil
-}
-
-type MapDescriptor[K comparable, V any] struct {
-	get func(d any) any
-	set func(d any, v any)
-	key Descriptor
-	val Descriptor
-}
-
-func NewMapDescriptor[K comparable, V any](
-	get func(d any) any,
-	set func(d any, v any),
-	key Descriptor,
-	val Descriptor,
-) Descriptor {
-	return &MapDescriptor[K, V]{
-		get: get,
-		set: set,
-		key: key,
-		val: val,
-	}
-}
-
-func (m *MapDescriptor[K, V]) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
-	var count uint64
-	count, err = DecodeUint64(reader, typ, valueLen)
-	if err != nil {
-		return
-	}
-
-	maps := make(map[K]V, count)
-	for i := uint64(0); i < count; i++ {
-		typ, _, valueLen, err = Reader(reader)
-		if err != nil {
-			return
-		}
-		var key K
-		err = m.key.Decode(reader, &key, typ, valueLen)
-		if err != nil {
-			return
-		}
-
-		typ, _, valueLen, err = Reader(reader)
-		if err != nil {
-			return
-		}
-		var value V
-		err = m.val.Decode(reader, &value, typ, valueLen)
-		if err != nil {
-			return
-		}
-		maps[key] = value
-	}
-	m.set(d, maps)
-	return nil
-}
-
-func (m *MapDescriptor[K, V]) Encode(writer io.Writer, d any, id uint16) (err error) {
-	maps := m.get(d).(map[K]V)
-	count := uint64(len(maps))
-	if count == 0 {
-		return
-	}
-
-	err = Writer(writer, TMap, id, LengthUint(count))
-	if err != nil {
-		return
-	}
-
-	err = WriterUint64(writer, count)
-	if err != nil {
-		return
-	}
-	for key, val := range maps {
-		err = m.key.Encode(writer, key, 0)
-		if err != nil {
-			return
-		}
-		err = m.val.Encode(writer, val, 0)
-		if err != nil {
-			return
-		}
-	}
-	return nil
-}
-
-type StructDescriptor[T Data] struct {
-	get func(d any) T
-	set func(d any, v T)
-}
-
-func NewDataDescriptor[T Data](get func(d any) T, set func(d any, v T)) Descriptor {
-	return &StructDescriptor[T]{get: get, set: set}
-}
-
-func (s *StructDescriptor[T]) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (s *StructDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	data := s.get(d)
-	descMap := data.Descriptor()
-	if descMap == nil {
-		return
-	}
-
 	count, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return
@@ -525,7 +527,7 @@ func (s *StructDescriptor[T]) Decode(reader io.Reader, d any, typ Type, valueLen
 			}
 			return
 		}
-		if desc, ok := descMap[id]; ok {
+		if desc, ok := s.desc[id]; ok {
 			err = desc.Decode(reader, data, typ, valueLen)
 			if err != nil {
 				return
@@ -536,17 +538,13 @@ func (s *StructDescriptor[T]) Decode(reader io.Reader, d any, typ Type, valueLen
 	return
 }
 
-func (s *StructDescriptor[T]) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (s *StructDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	data := s.get(d)
-	if any(data) == nil {
-		return
-	}
-	descMap := data.Descriptor()
-	if descMap == nil {
+	if data == nil {
 		return
 	}
 
-	count := uint64(len(descMap))
+	count := uint64(len(s.desc))
 	err = Writer(writer, TData, id, LengthUint(count))
 	if err != nil {
 		return
@@ -557,7 +555,7 @@ func (s *StructDescriptor[T]) Encode(writer io.Writer, d any, id uint16) (err er
 		return err
 	}
 
-	for i, field := range descMap {
+	for i, field := range s.desc {
 		err = field.Encode(writer, data, i)
 		if err != nil {
 			return
@@ -567,15 +565,15 @@ func (s *StructDescriptor[T]) Encode(writer io.Writer, d any, id uint16) (err er
 }
 
 type StringDescriptor struct {
-	get func(d any) *string
-	set func(d any, v string)
+	get func(d unsafe.Pointer) *string
+	set func(d unsafe.Pointer, v string)
 }
 
-func NewStringDescriptor(get func(d any) *string, set func(d any, v string)) Descriptor {
+func NewStringDescriptor(get func(d unsafe.Pointer) *string, set func(d unsafe.Pointer, v string)) Descriptor {
 	return &StringDescriptor{get: get, set: set}
 }
 
-func (s *StringDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (s *StringDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeBytes(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -584,7 +582,7 @@ func (s *StringDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen ui
 	return
 }
 
-func (s *StringDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (s *StringDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	value := s.get(d)
 	if value == nil || len(*value) == 0 {
 		return nil
@@ -593,15 +591,15 @@ func (s *StringDescriptor) Encode(writer io.Writer, d any, id uint16) (err error
 }
 
 type TimeDescriptor struct {
-	get func(d any) *Time
-	set func(d any, v Time)
+	get func(d unsafe.Pointer) *Time
+	set func(d unsafe.Pointer, v Time)
 }
 
-func NewTimeDescriptor(get func(d any) *Time, set func(d any, v Time)) Descriptor {
+func NewTimeDescriptor(get func(d unsafe.Pointer) *Time, set func(d unsafe.Pointer, v Time)) Descriptor {
 	return &TimeDescriptor{get: get, set: set}
 }
 
-func (t *TimeDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (t *TimeDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -610,7 +608,7 @@ func (t *TimeDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint
 	return
 }
 
-func (t *TimeDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (t *TimeDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	value := t.get(d)
 	if value == nil || time.Time(*value).IsZero() {
 		return nil
@@ -619,15 +617,15 @@ func (t *TimeDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) 
 }
 
 type DecimalDescriptor struct {
-	get func(d any) *decimal.Decimal
-	set func(d any, v decimal.Decimal)
+	get func(d unsafe.Pointer) *decimal.Decimal
+	set func(d unsafe.Pointer, v decimal.Decimal)
 }
 
-func NewDecimalDescriptor(get func(d any) *decimal.Decimal, set func(d any, v decimal.Decimal)) Descriptor {
+func NewDecimalDescriptor(get func(d unsafe.Pointer) *decimal.Decimal, set func(d unsafe.Pointer, v decimal.Decimal)) Descriptor {
 	return &DecimalDescriptor{get: get, set: set}
 }
 
-func (s *DecimalDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (s *DecimalDescriptor) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeBytes(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -640,7 +638,7 @@ func (s *DecimalDescriptor) Decode(reader io.Reader, d any, typ Type, valueLen u
 	return
 }
 
-func (s *DecimalDescriptor) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (s *DecimalDescriptor) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	value := s.get(d)
 	if value == nil || value.IsZero() {
 		return nil
@@ -654,15 +652,15 @@ type IntE interface {
 }
 
 type EnumDescriptor[T any] struct {
-	get func(d any) *T
-	set func(d any, v T)
+	get func(d unsafe.Pointer) *T
+	set func(d unsafe.Pointer, v T)
 }
 
-func NewEnumDescriptor[T any](get func(d any) *T, set func(d any, v T)) Descriptor {
+func NewEnumDescriptor[T any](get func(d unsafe.Pointer) *T, set func(d unsafe.Pointer, v T)) Descriptor {
 	return &EnumDescriptor[T]{get: get, set: set}
 }
 
-func (e *EnumDescriptor[T]) Decode(reader io.Reader, d any, typ Type, valueLen uint8) (err error) {
+func (e *EnumDescriptor[T]) Decode(reader io.Reader, d unsafe.Pointer, typ Type, valueLen uint8) (err error) {
 	value, err := DecodeUint64(reader, typ, valueLen)
 	if err != nil {
 		return err
@@ -671,7 +669,7 @@ func (e *EnumDescriptor[T]) Decode(reader io.Reader, d any, typ Type, valueLen u
 	return
 }
 
-func (e *EnumDescriptor[T]) Encode(writer io.Writer, d any, id uint16) (err error) {
+func (e *EnumDescriptor[T]) Encode(writer io.Writer, d unsafe.Pointer, id uint16) (err error) {
 	value := e.get(d)
 	if value == nil {
 		return nil
