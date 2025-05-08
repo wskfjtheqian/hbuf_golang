@@ -3,33 +3,73 @@ syntax = "proto3";
 package hbuf.test;
 option go_package = ".;hbuf_test";
 
+message GetInfoReq {
+  int64 user_id = 1;
 
-message subStruct {
-  int32 ValueInt = 1;
-  int32 ValueInt8 = 2;
+  string name = 3;
+
+  int32 age = 2;
 }
 
-message testStruct {
-  int32 ValueInt = 1;
-  int32 ValueInt8 = 2;
-  int32 ValueInt16 = 3;
-  int32 ValueInt32 = 4;
-  int64 ValueInt64 = 5;
-  uint32 ValueUint = 6;
-  uint32 ValueUint8 = 7;
-  uint32 ValueUint16 = 8;
-  uint32 ValueUint32 = 9;
-  uint64 ValueUint64 = 10;
-  float ValueFloat32 = 11;
-  double ValueFloat64 = 12;
-  string ValueString = 13;
-  bytes ValueBytes = 14;
-  bool ValueBool = 15;
-  subStruct ValueData = 16;
 
-  repeated int32 ValueListInt = 17;
-  repeated string ValueListStr = 18;
+message GetInfoResp {
+  int32 v1 = 50;
 
-  map<int32, int32> ValueMapInt = 19;
-  map<string, string> ValueMapStr = 20;
+  int32 v2 = 1;
+
+  int32 v3 = 2;
+
+  int64 v4 = 3;
+
+  uint32 v5 = 4;
+
+  uint64 v6 = 5;
+
+  uint32 v7 = 6;
+
+  uint64 v8 = 7;
+
+  bool v9 = 8;
+
+  float v10 = 9;
+
+  double v11 = 10;
+
+  string v12 = 11;
+
+  uint32 v13 = 12;
+
+  string v14 = 13;
+
+  GetInfoReq v16 = 15;
+
+  repeated  int32 v17 = 16;
+
+  repeated int32 v18 = 17;
+
+  repeated int32 v19 = 18;
+
+  int64 v20 = 19;
+
+  uint32 v21 = 20;
+
+  uint32 v22 = 21;
+
+  uint32 v23 = 22;
+
+  uint64 v24 = 23;
+
+  bool v25 = 24;
+
+  float v26 = 25;
+
+  double v27 = 26;
+
+  string v28 = 27;
+
+  uint32 v29 = 28;
+
+  string v30 = 29;
+
+  GetInfoReq v32 = 31;
 }
