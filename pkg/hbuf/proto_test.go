@@ -21,29 +21,27 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type ProtoBuffReq struct {
+type ProtoBuffSub struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Age           int32                  `protobuf:"varint,2,opt,name=age,proto3" json:"age,omitempty"`
+	V1            int64                  `protobuf:"varint,1,opt,name=v1,proto3" json:"v1,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ProtoBuffReq) Reset() {
-	*x = ProtoBuffReq{}
+func (x *ProtoBuffSub) Reset() {
+	*x = ProtoBuffSub{}
 	mi := &file_proto_test_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProtoBuffReq) String() string {
+func (x *ProtoBuffSub) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProtoBuffReq) ProtoMessage() {}
+func (*ProtoBuffSub) ProtoMessage() {}
 
-func (x *ProtoBuffReq) ProtoReflect() protoreflect.Message {
+func (x *ProtoBuffSub) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_test_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -55,184 +53,122 @@ func (x *ProtoBuffReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProtoBuffReq.ProtoReflect.Descriptor instead.
-func (*ProtoBuffReq) Descriptor() ([]byte, []int) {
+// Deprecated: Use ProtoBuffSub.ProtoReflect.Descriptor instead.
+func (*ProtoBuffSub) Descriptor() ([]byte, []int) {
 	return file_proto_test_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *ProtoBuffReq) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
-func (x *ProtoBuffReq) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *ProtoBuffReq) GetAge() int32 {
-	if x != nil {
-		return x.Age
-	}
-	return 0
-}
-
-type ProtoBuffResp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	V1            int32                  `protobuf:"varint,50,opt,name=v1,proto3" json:"v1,omitempty"`
-	V2            int32                  `protobuf:"varint,1,opt,name=v2,proto3" json:"v2,omitempty"`
-	V3            int32                  `protobuf:"varint,2,opt,name=v3,proto3" json:"v3,omitempty"`
-	V4            int64                  `protobuf:"varint,3,opt,name=v4,proto3" json:"v4,omitempty"`
-	V5            uint32                 `protobuf:"varint,4,opt,name=v5,proto3" json:"v5,omitempty"`
-	V6            uint64                 `protobuf:"varint,5,opt,name=v6,proto3" json:"v6,omitempty"`
-	V7            uint32                 `protobuf:"varint,6,opt,name=v7,proto3" json:"v7,omitempty"`
-	V8            uint64                 `protobuf:"varint,7,opt,name=v8,proto3" json:"v8,omitempty"`
-	V9            bool                   `protobuf:"varint,8,opt,name=v9,proto3" json:"v9,omitempty"`
-	V10           float32                `protobuf:"fixed32,9,opt,name=v10,proto3" json:"v10,omitempty"`
-	V11           float64                `protobuf:"fixed64,10,opt,name=v11,proto3" json:"v11,omitempty"`
-	V12           string                 `protobuf:"bytes,11,opt,name=v12,proto3" json:"v12,omitempty"`
-	V13           uint32                 `protobuf:"varint,12,opt,name=v13,proto3" json:"v13,omitempty"`
-	V14           []byte                 `protobuf:"bytes,13,opt,name=v14,proto3" json:"v14,omitempty"`
-	V16           *ProtoBuffReq          `protobuf:"bytes,15,opt,name=v16,proto3" json:"v16,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoBuffResp) Reset() {
-	*x = ProtoBuffResp{}
-	mi := &file_proto_test_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoBuffResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoBuffResp) ProtoMessage() {}
-
-func (x *ProtoBuffResp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_test_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoBuffResp.ProtoReflect.Descriptor instead.
-func (*ProtoBuffResp) Descriptor() ([]byte, []int) {
-	return file_proto_test_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *ProtoBuffResp) GetV1() int32 {
+func (x *ProtoBuffSub) GetV1() int64 {
 	if x != nil {
 		return x.V1
 	}
 	return 0
 }
 
-func (x *ProtoBuffResp) GetV2() int32 {
+type ProtoBuffTest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	V1            int32                  `protobuf:"varint,1,opt,name=v1,proto3" json:"v1,omitempty"`
+	V2            uint32                 `protobuf:"varint,2,opt,name=v2,proto3" json:"v2,omitempty"`
+	V3            int64                  `protobuf:"varint,3,opt,name=v3,proto3" json:"v3,omitempty"`
+	V4            uint64                 `protobuf:"varint,4,opt,name=v4,proto3" json:"v4,omitempty"`
+	V5            int32                  `protobuf:"zigzag32,5,opt,name=v5,proto3" json:"v5,omitempty"`
+	V6            int64                  `protobuf:"zigzag64,6,opt,name=v6,proto3" json:"v6,omitempty"`
+	V7            []int64                `protobuf:"varint,7,rep,packed,name=v7,proto3" json:"v7,omitempty"`
+	V8            map[string]int64       `protobuf:"bytes,8,rep,name=v8,proto3" json:"v8,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V9            *ProtoBuffSub          `protobuf:"bytes,9,opt,name=v9,proto3" json:"v9,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProtoBuffTest) Reset() {
+	*x = ProtoBuffTest{}
+	mi := &file_proto_test_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProtoBuffTest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProtoBuffTest) ProtoMessage() {}
+
+func (x *ProtoBuffTest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_test_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProtoBuffTest.ProtoReflect.Descriptor instead.
+func (*ProtoBuffTest) Descriptor() ([]byte, []int) {
+	return file_proto_test_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProtoBuffTest) GetV1() int32 {
+	if x != nil {
+		return x.V1
+	}
+	return 0
+}
+
+func (x *ProtoBuffTest) GetV2() uint32 {
 	if x != nil {
 		return x.V2
 	}
 	return 0
 }
 
-func (x *ProtoBuffResp) GetV3() int32 {
+func (x *ProtoBuffTest) GetV3() int64 {
 	if x != nil {
 		return x.V3
 	}
 	return 0
 }
 
-func (x *ProtoBuffResp) GetV4() int64 {
+func (x *ProtoBuffTest) GetV4() uint64 {
 	if x != nil {
 		return x.V4
 	}
 	return 0
 }
 
-func (x *ProtoBuffResp) GetV5() uint32 {
+func (x *ProtoBuffTest) GetV5() int32 {
 	if x != nil {
 		return x.V5
 	}
 	return 0
 }
 
-func (x *ProtoBuffResp) GetV6() uint64 {
+func (x *ProtoBuffTest) GetV6() int64 {
 	if x != nil {
 		return x.V6
 	}
 	return 0
 }
 
-func (x *ProtoBuffResp) GetV7() uint32 {
+func (x *ProtoBuffTest) GetV7() []int64 {
 	if x != nil {
 		return x.V7
-	}
-	return 0
-}
-
-func (x *ProtoBuffResp) GetV8() uint64 {
-	if x != nil {
-		return x.V8
-	}
-	return 0
-}
-
-func (x *ProtoBuffResp) GetV9() bool {
-	if x != nil {
-		return x.V9
-	}
-	return false
-}
-
-func (x *ProtoBuffResp) GetV10() float32 {
-	if x != nil {
-		return x.V10
-	}
-	return 0
-}
-
-func (x *ProtoBuffResp) GetV11() float64 {
-	if x != nil {
-		return x.V11
-	}
-	return 0
-}
-
-func (x *ProtoBuffResp) GetV12() string {
-	if x != nil {
-		return x.V12
-	}
-	return ""
-}
-
-func (x *ProtoBuffResp) GetV13() uint32 {
-	if x != nil {
-		return x.V13
-	}
-	return 0
-}
-
-func (x *ProtoBuffResp) GetV14() []byte {
-	if x != nil {
-		return x.V14
 	}
 	return nil
 }
 
-func (x *ProtoBuffResp) GetV16() *ProtoBuffReq {
+func (x *ProtoBuffTest) GetV8() map[string]int64 {
 	if x != nil {
-		return x.V16
+		return x.V8
+	}
+	return nil
+}
+
+func (x *ProtoBuffTest) GetV9() *ProtoBuffSub {
+	if x != nil {
+		return x.V9
 	}
 	return nil
 }
@@ -241,28 +177,22 @@ var File_proto_test_proto protoreflect.FileDescriptor
 
 const file_proto_test_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto_test.proto\x12\thbuf.test\"M\n" +
-	"\fProtoBuffReq\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12\x10\n" +
-	"\x03age\x18\x02 \x01(\x05R\x03age\"\xa4\x02\n" +
-	"\rProtoBuffResp\x12\x0e\n" +
-	"\x02v1\x182 \x01(\x05R\x02v1\x12\x0e\n" +
-	"\x02v2\x18\x01 \x01(\x05R\x02v2\x12\x0e\n" +
-	"\x02v3\x18\x02 \x01(\x05R\x02v3\x12\x0e\n" +
-	"\x02v4\x18\x03 \x01(\x03R\x02v4\x12\x0e\n" +
-	"\x02v5\x18\x04 \x01(\rR\x02v5\x12\x0e\n" +
-	"\x02v6\x18\x05 \x01(\x04R\x02v6\x12\x0e\n" +
-	"\x02v7\x18\x06 \x01(\rR\x02v7\x12\x0e\n" +
-	"\x02v8\x18\a \x01(\x04R\x02v8\x12\x0e\n" +
-	"\x02v9\x18\b \x01(\bR\x02v9\x12\x10\n" +
-	"\x03v10\x18\t \x01(\x02R\x03v10\x12\x10\n" +
-	"\x03v11\x18\n" +
-	" \x01(\x01R\x03v11\x12\x10\n" +
-	"\x03v12\x18\v \x01(\tR\x03v12\x12\x10\n" +
-	"\x03v13\x18\f \x01(\rR\x03v13\x12\x10\n" +
-	"\x03v14\x18\r \x01(\fR\x03v14\x12)\n" +
-	"\x03v16\x18\x0f \x01(\v2\x17.hbuf.test.ProtoBuffReqR\x03v16B\rZ\v.;hbuf_testb\x06proto3"
+	"\x10proto_test.proto\x12\thbuf.test\"\x1e\n" +
+	"\fProtoBuffSub\x12\x0e\n" +
+	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\x91\x02\n" +
+	"\rProtoBuffTest\x12\x0e\n" +
+	"\x02v1\x18\x01 \x01(\x05R\x02v1\x12\x0e\n" +
+	"\x02v2\x18\x02 \x01(\rR\x02v2\x12\x0e\n" +
+	"\x02v3\x18\x03 \x01(\x03R\x02v3\x12\x0e\n" +
+	"\x02v4\x18\x04 \x01(\x04R\x02v4\x12\x0e\n" +
+	"\x02v5\x18\x05 \x01(\x11R\x02v5\x12\x0e\n" +
+	"\x02v6\x18\x06 \x01(\x12R\x02v6\x12\x0e\n" +
+	"\x02v7\x18\a \x03(\x03R\x02v7\x120\n" +
+	"\x02v8\x18\b \x03(\v2 .hbuf.test.ProtoBuffTest.V8EntryR\x02v8\x12'\n" +
+	"\x02v9\x18\t \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x02v9\x1a5\n" +
+	"\aV8Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01B\rZ\v.;hbuf_testb\x06proto3"
 
 var (
 	file_proto_test_proto_rawDescOnce sync.Once
@@ -276,18 +206,20 @@ func file_proto_test_proto_rawDescGZIP() []byte {
 	return file_proto_test_proto_rawDescData
 }
 
-var file_proto_test_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_test_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_test_proto_goTypes = []any{
-	(*ProtoBuffReq)(nil),  // 0: hbuf.test.ProtoBuffReq
-	(*ProtoBuffResp)(nil), // 1: hbuf.test.ProtoBuffResp
+	(*ProtoBuffSub)(nil),  // 0: hbuf.test.ProtoBuffSub
+	(*ProtoBuffTest)(nil), // 1: hbuf.test.ProtoBuffTest
+	nil,                   // 2: hbuf.test.ProtoBuffTest.V8Entry
 }
 var file_proto_test_proto_depIdxs = []int32{
-	0, // 0: hbuf.test.ProtoBuffResp.v16:type_name -> hbuf.test.ProtoBuffReq
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 0: hbuf.test.ProtoBuffTest.v8:type_name -> hbuf.test.ProtoBuffTest.V8Entry
+	0, // 1: hbuf.test.ProtoBuffTest.v9:type_name -> hbuf.test.ProtoBuffSub
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_test_proto_init() }
@@ -301,7 +233,7 @@ func file_proto_test_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_test_proto_rawDesc), len(file_proto_test_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

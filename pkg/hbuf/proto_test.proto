@@ -3,73 +3,18 @@ syntax = "proto3";
 package hbuf.test;
 option go_package = ".;hbuf_test";
 
-message ProtoBuffReq {
-  int64 user_id = 1;
-
-  string name = 3;
-
-  int32 age = 2;
+message ProtoBuffSub {
+  int64 v1 = 1;
 }
 
-
-message ProtoBuffResp {
-  int32 v1 = 50;
-
-  int32 v2 = 1;
-
-  int32 v3 = 2;
-
-  int64 v4 = 3;
-
-  uint32 v5 = 4;
-
-  uint64 v6 = 5;
-
-  uint32 v7 = 6;
-
-  uint64 v8 = 7;
-
-  bool v9 = 8;
-
-  float v10 = 9;
-
-  double v11 = 10;
-
-  string v12 = 11;
-
-  uint32 v13 = 12;
-
-  bytes v14 = 13;
-
-  ProtoBuffReq v16 = 15;
-
-  //  repeated  int32 v17 = 16;
-  //
-  //  repeated int32 v18 = 17;
-  //
-  //  repeated int32 v19 = 18;
-  //
-  //  repeated int64 v20 = 19;
-  //
-  //  repeated uint32 v21 = 20;
-  //
-  //  repeated uint32 v22 = 21;
-  //
-  //  repeated uint32 v23 = 22;
-  //
-  //  repeated  uint64 v24 = 23;
-  //
-  //  repeated bool v25 = 24;
-  //
-  //  repeated float v26 = 25;
-  //
-  //  repeated double v27 = 26;
-  //
-  //  repeated string v28 = 27;
-  //
-  //  repeated uint32 v29 = 28;
-  //
-  //  repeated bytes v30 = 29;
-  //
-  //  repeated ProtoBuffReq v32 = 31;
+message ProtoBuffTest {
+  int32 v1 = 1;
+  uint32 v2 = 2;
+  int64 v3 = 3;
+  uint64 v4 = 4;
+  sint32 v5 = 5;
+  sint64 v6 = 6;
+  repeated int64 v7 = 7;
+  map<string, int64> v8 = 8;
+  ProtoBuffSub v9 = 9;
 }

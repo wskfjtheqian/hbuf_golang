@@ -3,183 +3,185 @@ package hbuf_test
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/shopspring/decimal"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"google.golang.org/protobuf/proto"
-	"math/rand"
 	"testing"
-	"time"
 )
 
-var p = ProtoBuffResp{
-	V1:  rand.Int31(),
-	V2:  rand.Int31(),
-	V3:  rand.Int31(),
-	V4:  rand.Int63(),
-	V5:  rand.Uint32(),
-	V6:  rand.Uint64(),
-	V7:  rand.Uint32(),
-	V8:  rand.Uint64(),
-	V9:  false,
-	V10: rand.Float32(),
-	V11: rand.Float64(),
-	V12: "option go_package = \"github.com/chenmingyong0423/blog/tutorial-code/go/protobuf/proto/user\"",
-	V13: rand.Uint32(),
-	V14: []byte("option go_package = \"github.com/chenmingyong0423/blog/tutorial-code/go/protobuf/proto/user\""),
-	V16: &ProtoBuffReq{
-		UserId: rand.Int63(),
-		Name:   "option go_package = \"github.com/chenmingyong0423/blog/tutorial-code/go/protobuf/proto/user\"",
-		Age:    rand.Int31(),
+var src = ProtoBuffTest{
+	//V1: -0xFE,
+	//V2: 0xFE,
+	V3: 0xFF88,
+	//V4: 0xFF,
+	//V5: -0xFF,
+	//V6: -0xFF,
+	V7: []int64{0x01, 0x02, 0, 0x04, 0x05FF},
+	V8: map[string]int64{"a": 0x01, "b": 0x02, "c": 0x03, "d": 0x04, "e": 0x05FF},
+	V9: &ProtoBuffSub{
+		V1: -0x055,
 	},
-	//V17: []int32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V18: []int32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V19: []int32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V20: []int64{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V21: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V22: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V23: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V24: []uint64{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V25: []bool{false, true, false, true, false, true, false, false},
-	//V26: []float32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V27: []float64{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V28: []string{"11", "12", "13", "14", "15", "16", "17", "18", "19", "20"},
-	//V29: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V30: [][]byte{[]byte("11"), []byte("12"), []byte("13"), []byte("14"), []byte("15"), []byte("16")},
-	//V32: []*ProtoBuffReq{{UserId: 11, Name: "111", Age: 111}, {UserId: 22, Name: "222", Age: 222}, {UserId: 33, Name: "333", Age: 333}, {UserId: 44, Name: "444", Age: 444}, {UserId: 55, Name: "555", Age: 555}},
 }
 
-var d = GetInfoResp{
-	V1:  int8(rand.Int31()),
-	V2:  int16(rand.Int31()),
-	V3:  rand.Int31(),
-	V4:  hbuf.Int64(rand.Int63()),
-	V5:  uint8(rand.Uint32()),
-	V6:  uint16(rand.Uint64()),
-	V7:  rand.Uint32(),
-	V8:  hbuf.Uint64(rand.Uint64()),
-	V9:  false,
-	V10: rand.Float32(),
-	V11: rand.Float64(),
-	V12: "option go_package = \"github.com/chenmingyong0423/blog/tutorial-code/go/protobuf/proto/user\"",
-	V13: hbuf.Time(time.Now()),
-	V14: decimal.NewFromInt(rand.Int63()),
-	//V16: GetInfoReq{
-	//	UserId: hbuf.Int64(rand.Int63()),
-	//	Name:   "option go_package = \"github.com/chenmingyong0423/blog/tutorial-code/go/protobuf/proto/user\"",
-	//	Age:    rand.Int31(),
-	//},
-	//V17: []int32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V18: []int32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V19: []int32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V20: []int64{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V21: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V22: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V23: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V24: []uint64{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V25: []bool{false, true, false, true, false, true, false, false},
-	//V26: []float32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V27: []float64{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V28: []string{"11", "12", "13", "14", "15", "16", "17", "18", "19", "20"},
-	//V29: []uint32{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
-	//V30: [][]byte{[]byte("11"), []byte("12"), []byte("13"), []byte("14"), []byte("15"), []byte("16")},
-	//V32: []*ProtoBuffReq{{UserId: 11, Name: "111", Age: 111}, {UserId: 22, Name: "222", Age: 222}, {UserId: 33, Name: "333", Age: 333}, {UserId: 44, Name: "444", Age: 444}, {UserId: 55, Name: "555", Age: 555}},
+var protoBuffSubDescriptor = hbuf.NewDataDescriptor[*ProtoBuffSub](func(v any) *ProtoBuffSub {
+	return v.(*ProtoBuffSub)
+}, func(v any, value *ProtoBuffSub) {
+	*(v.(*ProtoBuffSub)) = *value
+}, func() *ProtoBuffSub {
+	return &ProtoBuffSub{}
+}).AddField(1, hbuf.NewInt64Descriptor(func(v any) *int64 {
+	return &v.(*ProtoBuffSub).V1
+}, func(v any, value int64) {
+	v.(*ProtoBuffSub).V1 = value
+}))
+
+func (p *ProtoBuffSub) Descriptors() hbuf.Descriptor {
+	return protoBuffSubDescriptor
 }
 
-func Test_EncodeData(t *testing.T) {
-	buf := bytes.NewBuffer(nil)
-	err := hbuf.NewEncoder(buf).Encode(&d)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+var protoBuffTestDescriptor = hbuf.NewDataDescriptor[*ProtoBuffTest](func(v any) *ProtoBuffTest {
+	return v.(*ProtoBuffTest)
+}, func(v any, value *ProtoBuffTest) {
+	*(v.(*ProtoBuffTest)) = *value
+}, func() *ProtoBuffTest {
+	return &ProtoBuffTest{}
+}).AddField(3, hbuf.NewInt64Descriptor(func(v any) *int64 {
+	return &v.(*ProtoBuffTest).V3
+}, func(v any, value int64) {
+	v.(*ProtoBuffTest).V3 = value
+})).AddField(7, hbuf.NewListDescriptor[int64](func(v any) []int64 {
+	return v.(*ProtoBuffTest).V7
+}, func(v any, value []int64) {
+	v.(*ProtoBuffTest).V7 = value
+}, hbuf.NewInt64Descriptor(func(v any) *int64 {
+	val := v.(int64)
+	return &val
+}, func(v any, value int64) {
+	*v.(*int64) = value
+}))).AddField(8, hbuf.NewMapDescriptor[string, int64](func(v any) map[string]int64 {
+	return v.(*ProtoBuffTest).V8
+}, func(v any, value map[string]int64) {
+	v.(*ProtoBuffTest).V8 = value
+}, hbuf.NewStringDescriptor(func(v any) *string {
+	val := v.(string)
+	return &val
+}, func(v any, value string) {
+	*v.(*string) = value
+}), hbuf.NewInt64Descriptor(func(v any) *int64 {
+	val := v.(int64)
+	return &val
+}, func(v any, value int64) {
+	*v.(*int64) = value
+}))).AddField(9, hbuf.CloneDataDescriptor[*ProtoBuffSub](func(v any) *ProtoBuffSub {
+	return v.(*ProtoBuffTest).V9
+}, func(v any, value *ProtoBuffSub) {
+	v.(*ProtoBuffTest).V9 = value
+}, protoBuffSubDescriptor,
+))
 
-	resp := GetInfoResp{}
-	err = hbuf.NewDecoder(buf).Decode(&resp)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	return
+func (x *ProtoBuffTest) Descriptors() hbuf.Descriptor {
+	return protoBuffTestDescriptor
 }
 
-func Benchmark_EncodeData(b *testing.B) {
+func TestName(t *testing.T) {
+	t.Run("EncoderProto", func(t *testing.T) {
+		buf, err := proto.Marshal(&src)
+		if err != nil {
+			t.Error(err.Error() + "\n" + string(buf))
+			return
+		}
+		t.Log("len:", len(buf))
+	})
+	t.Run("EncoderJson", func(t *testing.T) {
+		buf, err := json.Marshal(&src)
+		if err != nil {
+			t.Error(err.Error() + "\n" + string(buf))
+			return
+		}
+		t.Log("len:", len(buf))
+	})
 
-	b.Run("Benchmark_EncodeProtoBuf", func(b *testing.B) {
+	hBuf := bytes.NewBuffer(nil)
+	t.Run("EncoderHBuf", func(t *testing.T) {
+		err := hbuf.NewEncoder(hBuf).Encode(&src)
+		if err != nil {
+			t.Error(err.Error() + "\n" + string(hBuf.String()))
+			return
+		}
+		t.Log("len:", len(hBuf.String()))
+	})
+	t.Run("DecoderHBuf", func(t *testing.T) {
+		des := ProtoBuffTest{}
+		err := hbuf.NewDecoder(bytes.NewReader(hBuf.Bytes())).Decode(&des)
+		if err != nil {
+			return
+		}
+		t.Log(src)
+	})
+}
+
+func BenchmarkName(b *testing.B) {
+	var pBuf []byte
+	b.Run("EncoderProto", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, err := proto.Marshal(&p)
+			var err error
+			pBuf, err = proto.Marshal(&src)
 			if err != nil {
-				b.Error(err)
+				b.Error(err.Error() + "\n" + string(pBuf))
+				return
+			}
+		}
+	})
+	b.Run("DecoderProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			des := ProtoBuffTest{}
+			err := proto.Unmarshal(pBuf, &des)
+			if err != nil {
+				b.Error(err.Error() + "\n" + string(pBuf))
 				return
 			}
 		}
 	})
 
-	b.Run("Benchmark_EncodeJson", func(b *testing.B) {
+	var jBuf *bytes.Buffer
+	b.Run("EncoderJson", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			buf := bytes.NewBuffer(nil)
-			err := json.NewEncoder(buf).Encode(&p)
+			jBuf = bytes.NewBuffer(nil)
+			err := json.NewEncoder(jBuf).Encode(&src)
 			if err != nil {
-				b.Error(err)
+				b.Error(err.Error() + "\n" + jBuf.String())
 				return
 			}
+		}
+	})
+	b.Run("DecoderJson", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			des := ProtoBuffTest{}
+			err := json.NewDecoder(bytes.NewReader(jBuf.Bytes())).Decode(&des)
+			if err != nil {
+				b.Error(err.Error())
+				return
+			}
+
 		}
 	})
 
-	b.Run("Benchmark_EncodeHbuf", func(b *testing.B) {
+	var hBuf *bytes.Buffer
+	b.Run("EncoderHBuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			buf := bytes.NewBuffer(nil)
-			err := hbuf.NewEncoder(buf).Encode(&d)
+			hBuf = bytes.NewBuffer(nil)
+			err := hbuf.NewEncoder(hBuf).Encode(&src)
 			if err != nil {
-				b.Error(err)
+				b.Error(err.Error() + "\n" + hBuf.String())
 				return
 			}
 		}
 	})
-	buffer, err := proto.Marshal(&p)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	b.Run("Benchmark_DecodeProtoBuf", func(b *testing.B) {
+	b.Run("DecoderHBuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			s := ProtoBuffReq{}
-			err = proto.Unmarshal(buffer, &s)
+			des := ProtoBuffTest{}
+			err := hbuf.NewDecoder(bytes.NewReader(hBuf.Bytes())).Decode(&des)
 			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-
-	buf := bytes.NewBuffer(nil)
-	err = json.NewEncoder(buf).Encode(&p)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	b.Run("Benchmark_DecodeJson", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			s := ProtoBuffReq{}
-			err = json.NewDecoder(bytes.NewReader(buf.Bytes())).Decode(&s)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-		}
-	})
-
-	buf = bytes.NewBuffer(nil)
-	err = hbuf.NewEncoder(buf).Encode(&d)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	b.Run("Benchmark_DecodeHbuf", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			s := GetInfoResp{}
-			err = hbuf.NewDecoder(bytes.NewReader(buf.Bytes())).Decode(&s)
-			if err != nil {
-				b.Error(err)
+				b.Error(err.Error())
 				return
 			}
 		}
