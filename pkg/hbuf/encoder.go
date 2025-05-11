@@ -4,27 +4,23 @@ import (
 	"io"
 )
 
-func Writer(writer io.Writer, typ Type, id uint16, valueLen uint8) (err error) {
-	var b []byte
-	var idLen uint8
+func WriterTypeId(writer io.Writer, typ Type, id uint16, valueLen uint8) (err error) {
 	if id == 0 {
-		b = make([]byte, 1)
+		_, err = writer.Write([]byte{
+			byte(typ&0b111)<<5 | byte(int(valueLen-1)&0b111)<<2, //|byte(0) & 0b11
+		})
 	} else if id <= 0xFF {
-		idLen = 1
-		b = make([]byte, 2)
-		b[1] = byte(id)
+		_, err = writer.Write([]byte{
+			byte(typ&0b111)<<5 | byte(int(valueLen-1)&0b111)<<2 | byte(1)&0b11,
+			byte(id),
+		})
 	} else {
-		idLen = 2
-		b = make([]byte, 3)
-		b[1] = byte(id)
-		b[2] = byte(id >> 8)
+		_, err = writer.Write([]byte{
+			byte(typ&0b111)<<5 | byte(int(valueLen-1)&0b111)<<2 | byte(2)&0b11,
+			byte(id),
+			byte(id >> 8),
+		})
 	}
-
-	b[0] = byte(typ&0b111) << 5
-	b[0] |= byte(int(valueLen-1)&0b111) << 2
-	b[0] |= byte(idLen) & 0b11
-
-	_, err = writer.Write(b)
 	return
 }
 

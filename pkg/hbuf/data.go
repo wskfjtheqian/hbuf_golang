@@ -2,6 +2,7 @@ package hbuf
 
 import (
 	"io"
+	"reflect"
 )
 
 type Type byte
@@ -46,5 +47,14 @@ func (d *Decoder) Decode(data Data) error {
 	if err != nil {
 		return err
 	}
-	return data.Descriptors().Decode(d.reader, data, typ, valueLen)
+	singlePtrType := reflect.TypeOf(data)
+	doublePtr := reflect.New(singlePtrType)
+
+	err = data.Descriptors().Decode(d.reader, doublePtr.Interface(), typ, valueLen)
+	if err != nil {
+		return err
+	}
+	// 通过反射将解码后的结果赋值给data
+	reflect.ValueOf(data).Elem().Set(doublePtr.Elem().Elem())
+	return nil
 }

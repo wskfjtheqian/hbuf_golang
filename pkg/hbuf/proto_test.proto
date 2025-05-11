@@ -17,4 +17,5 @@ message ProtoBuffTest {
   repeated int64 v7 = 7;
   map<string, int64> v8 = 8;
   ProtoBuffSub v9 = 9;
+  repeated ProtoBuffSub v10 = 10;
 }

@@ -3,6 +3,7 @@ package hbuf
 import (
 	"errors"
 	"io"
+	"reflect"
 )
 
 type Descriptor interface {
@@ -43,8 +44,7 @@ func CloneDataDescriptor[T Data](get func(v any) T, set func(v any, value T), de
 }
 
 func (d *DataDescriptor[T]) IsEmpty(v any) bool {
-	//return d.get(v) == nil
-	return false
+	return reflect.ValueOf(d.get(v)).IsNil()
 }
 
 func (d *DataDescriptor[T]) AddField(id uint16, field Descriptor) *DataDescriptor[T] {
@@ -56,6 +56,9 @@ func (d *DataDescriptor[T]) AddField(id uint16, field Descriptor) *DataDescripto
 
 func (d *DataDescriptor[T]) Encode(writer io.Writer, v any, id uint16) error {
 	val := d.get(v)
+	if reflect.ValueOf(val).IsNil() {
+		return nil
+	}
 	count := 0
 	for _, field := range d.fields {
 		if !field.IsEmpty(val) {
@@ -64,7 +67,7 @@ func (d *DataDescriptor[T]) Encode(writer io.Writer, v any, id uint16) error {
 	}
 
 	length := LengthUint(uint64(count))
-	err := Writer(writer, TData, id, length)
+	err := WriterTypeId(writer, TData, id, length)
 	if err != nil {
 		return err
 	}
@@ -131,7 +134,10 @@ func (l *ListDescriptor[T]) Encode(writer io.Writer, v any, id uint16) error {
 	val := l.get(v)
 
 	count := len(val)
-	err := Writer(writer, TList, id, LengthUint(uint64(count)))
+	if count == 0 {
+		return nil
+	}
+	err := WriterTypeId(writer, TList, id, LengthUint(uint64(count)))
 	if err != nil {
 		return err
 	}
@@ -190,7 +196,10 @@ func (m *MapDescriptor[K, V]) Encode(writer io.Writer, v any, id uint16) error {
 	val := m.get(v)
 
 	count := len(val)
-	err := Writer(writer, TMap, id, LengthUint(uint64(count)))
+	if count == 0 {
+		return nil
+	}
+	err := WriterTypeId(writer, TMap, id, LengthUint(uint64(count)))
 	if err != nil {
 		return err
 	}
@@ -262,12 +271,14 @@ func (i *Int64Descriptor) IsEmpty(v any) bool {
 
 func (i *Int64Descriptor) Encode(writer io.Writer, v any, id uint16) error {
 	val := i.get(v)
-
-	err := Writer(writer, TInt, id, LengthInt(*val))
+	if val == nil || *val == 0 {
+		return nil
+	}
+	err := WriterTypeId(writer, TInt, id, LengthInt(*val))
 	if err != nil {
 		return err
 	}
-	return WriterInt64(writer, int64(*val))
+	return WriterInt64(writer, *val)
 }
 
 func (i *Int64Descriptor) Decode(reader io.Reader, v any, typ Type, valueLen uint8) (err error) {
@@ -298,7 +309,7 @@ func (s *StringDescriptor) Encode(writer io.Writer, v any, id uint16) (err error
 	val := s.get(v)
 
 	size := uint64(len(*val))
-	err = Writer(writer, TBytes, id, LengthUint(size))
+	err = WriterTypeId(writer, TBytes, id, LengthUint(size))
 	if err != nil {
 		return
 	}
