@@ -112,7 +112,7 @@ func (d *DataDescriptor[T]) Decode(reader io.Reader, v any, typ Type, valueLen u
 			}
 		}
 	}
-	d.set(v, value)
+	//d.set(v, value)
 	return
 }
 
@@ -173,7 +173,7 @@ func (l *ListDescriptor[T]) Decode(reader io.Reader, v any, typ Type, valueLen u
 			return err
 		}
 	}
-	l.set(v, list)
+	//l.set(v, list)
 	return
 }
 
@@ -251,7 +251,7 @@ func (m *MapDescriptor[K, V]) Decode(reader io.Reader, v any, typ Type, valueLen
 		}
 		mapVal[key] = val
 	}
-	m.set(v, mapVal)
+	//m.set(v, mapVal)
 	return nil
 }
 
@@ -282,12 +282,13 @@ func (i *Int64Descriptor) Encode(writer io.Writer, v any, id uint16) error {
 }
 
 func (i *Int64Descriptor) Decode(reader io.Reader, v any, typ Type, valueLen uint8) (err error) {
-	var value int64
-	value, err = DecodeInt64(reader, typ, valueLen)
+	//var value int64
+	_, err = DecodeInt64(reader, typ, valueLen)
 	if err != nil {
 		return
 	}
-	i.set(v, value)
+
+	//i.set(v, value)
 	return nil
 }
 
@@ -333,6 +334,6 @@ func (s *StringDescriptor) Decode(reader io.Reader, v any, typ Type, valueLen ui
 	if err != nil {
 		return
 	}
-	s.set(v, string(msg))
+	//s.set(v, string(msg))
 	return nil
 }

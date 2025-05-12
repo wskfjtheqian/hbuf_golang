@@ -66,17 +66,18 @@ func (x *ProtoBuffSub) GetV1() int64 {
 }
 
 type ProtoBuffTest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	V1            int32                  `protobuf:"varint,1,opt,name=v1,proto3" json:"v1,omitempty"`
-	V2            uint32                 `protobuf:"varint,2,opt,name=v2,proto3" json:"v2,omitempty"`
-	V3            int64                  `protobuf:"varint,3,opt,name=v3,proto3" json:"v3,omitempty"`
-	V4            uint64                 `protobuf:"varint,4,opt,name=v4,proto3" json:"v4,omitempty"`
-	V5            int32                  `protobuf:"zigzag32,5,opt,name=v5,proto3" json:"v5,omitempty"`
-	V6            int64                  `protobuf:"zigzag64,6,opt,name=v6,proto3" json:"v6,omitempty"`
-	V7            []int64                `protobuf:"varint,7,rep,packed,name=v7,proto3" json:"v7,omitempty"`
-	V8            map[string]int64       `protobuf:"bytes,8,rep,name=v8,proto3" json:"v8,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V9            *ProtoBuffSub          `protobuf:"bytes,9,opt,name=v9,proto3" json:"v9,omitempty"`
-	V10           []*ProtoBuffSub        `protobuf:"bytes,10,rep,name=v10,proto3" json:"v10,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// int32 v1 = 1;
+	// uint32 v2 = 2;
+	V3 int64 `protobuf:"varint,3,opt,name=v3,proto3" json:"v3,omitempty"`
+	// uint64 v4 = 4;
+	// sint32 v5 = 5;
+	// sint64 v6 = 6;
+	V7            []int64         `protobuf:"varint,7,rep,packed,name=v7,proto3" json:"v7,omitempty"`
+	V8            map[int64]int64 `protobuf:"bytes,8,rep,name=v8,proto3" json:"v8,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V9            *ProtoBuffSub   `protobuf:"bytes,9,opt,name=v9,proto3" json:"v9,omitempty"`
+	V10           []*ProtoBuffSub `protobuf:"bytes,10,rep,name=v10,proto3" json:"v10,omitempty"`
+	V11           string          `protobuf:"bytes,11,opt,name=v11,proto3" json:"v11,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -111,44 +112,9 @@ func (*ProtoBuffTest) Descriptor() ([]byte, []int) {
 	return file_proto_test_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ProtoBuffTest) GetV1() int32 {
-	if x != nil {
-		return x.V1
-	}
-	return 0
-}
-
-func (x *ProtoBuffTest) GetV2() uint32 {
-	if x != nil {
-		return x.V2
-	}
-	return 0
-}
-
 func (x *ProtoBuffTest) GetV3() int64 {
 	if x != nil {
 		return x.V3
-	}
-	return 0
-}
-
-func (x *ProtoBuffTest) GetV4() uint64 {
-	if x != nil {
-		return x.V4
-	}
-	return 0
-}
-
-func (x *ProtoBuffTest) GetV5() int32 {
-	if x != nil {
-		return x.V5
-	}
-	return 0
-}
-
-func (x *ProtoBuffTest) GetV6() int64 {
-	if x != nil {
-		return x.V6
 	}
 	return 0
 }
@@ -160,7 +126,7 @@ func (x *ProtoBuffTest) GetV7() []int64 {
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV8() map[string]int64 {
+func (x *ProtoBuffTest) GetV8() map[int64]int64 {
 	if x != nil {
 		return x.V8
 	}
@@ -181,27 +147,30 @@ func (x *ProtoBuffTest) GetV10() []*ProtoBuffSub {
 	return nil
 }
 
+func (x *ProtoBuffTest) GetV11() string {
+	if x != nil {
+		return x.V11
+	}
+	return ""
+}
+
 var File_proto_test_proto protoreflect.FileDescriptor
 
 const file_proto_test_proto_rawDesc = "" +
 	"\n" +
 	"\x10proto_test.proto\x12\thbuf.test\"\x1e\n" +
 	"\fProtoBuffSub\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xbc\x02\n" +
+	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xfe\x01\n" +
 	"\rProtoBuffTest\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x05R\x02v1\x12\x0e\n" +
-	"\x02v2\x18\x02 \x01(\rR\x02v2\x12\x0e\n" +
 	"\x02v3\x18\x03 \x01(\x03R\x02v3\x12\x0e\n" +
-	"\x02v4\x18\x04 \x01(\x04R\x02v4\x12\x0e\n" +
-	"\x02v5\x18\x05 \x01(\x11R\x02v5\x12\x0e\n" +
-	"\x02v6\x18\x06 \x01(\x12R\x02v6\x12\x0e\n" +
 	"\x02v7\x18\a \x03(\x03R\x02v7\x120\n" +
 	"\x02v8\x18\b \x03(\v2 .hbuf.test.ProtoBuffTest.V8EntryR\x02v8\x12'\n" +
 	"\x02v9\x18\t \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x02v9\x12)\n" +
 	"\x03v10\x18\n" +
-	" \x03(\v2\x17.hbuf.test.ProtoBuffSubR\x03v10\x1a5\n" +
+	" \x03(\v2\x17.hbuf.test.ProtoBuffSubR\x03v10\x12\x10\n" +
+	"\x03v11\x18\v \x01(\tR\x03v11\x1a5\n" +
 	"\aV8Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01B\rZ\v.;hbuf_testb\x06proto3"
 
 var (

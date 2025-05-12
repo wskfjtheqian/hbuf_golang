@@ -16,10 +16,10 @@ var src = ProtoBuffTest{
 	//V5: -0xFF,
 	//V6: -0xFF,
 	V7: []int64{0x01, 0x02, 1, 0x04, 0x05FF},
-	V8: map[string]int64{"a": 0x01, "b": 0x02, "c": 0x03, "d": 0x04, "e": 0x05FF},
-	//V9: &ProtoBuffSub{
-	//	V1: -0x055,
-	//},
+	V8: map[string]int64{"ad": 0x01, "ba": 0x02, "c": 0x03, "d": 0x04, "e": 0x05FF},
+	V9: &ProtoBuffSub{
+		V1: -0x055,
+	},
 	V10: []*ProtoBuffSub{{V1: 0x01}, {V1: 0x02}, {V1: 0x03}, {V1: 0x04}, {V1: 0x05FF}},
 }
 
@@ -92,13 +92,24 @@ func (x *ProtoBuffTest) Descriptors() hbuf.Descriptor {
 }
 
 func TestName(t *testing.T) {
+	var pBuf []byte
+	var err error
 	t.Run("EncoderProto", func(t *testing.T) {
-		buf, err := proto.Marshal(&src)
+		pBuf, err = proto.Marshal(&src)
 		if err != nil {
-			t.Error(err.Error() + "\n" + string(buf))
+			t.Error(err.Error() + "\n" + string(pBuf))
 			return
 		}
-		t.Log("len:", len(buf))
+		t.Log("len:", len(pBuf))
+	})
+	t.Run("DecoderProto", func(t *testing.T) {
+		des := ProtoBuffTest{}
+		err := proto.Unmarshal(pBuf, &des)
+		if err != nil {
+			t.Error(err.Error() + "\n" + string(pBuf))
+			return
+		}
+		t.Log(des)
 	})
 	t.Run("EncoderJson", func(t *testing.T) {
 		buf, err := json.Marshal(&src)
