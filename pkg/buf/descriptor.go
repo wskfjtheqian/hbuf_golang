@@ -2,6 +2,8 @@ package hbuf
 
 import (
 	"errors"
+	"reflect"
+	"sort"
 	"unsafe"
 )
 
@@ -11,12 +13,15 @@ type Descriptor interface {
 	Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8) ([]byte, error)
 }
 
-func NewDataDescriptor(offset uintptr, isPtr bool, fieldMap map[uint16]Descriptor) Descriptor {
+func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, fieldMap map[uint16]Descriptor) Descriptor {
 	var fields []Descriptor
 	var ids []uint16
-	for id, desc := range fieldMap {
-		fields = append(fields, desc)
+	for id, _ := range fieldMap {
 		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	for _, id := range ids {
+		fields = append(fields, fieldMap[id])
 	}
 	return &DataDescriptor{
 		offset:   offset,
@@ -24,6 +29,7 @@ func NewDataDescriptor(offset uintptr, isPtr bool, fieldMap map[uint16]Descripto
 		fields:   fields,
 		ids:      ids,
 		isPtr:    isPtr,
+		typ:      typ,
 	}
 }
 
@@ -33,6 +39,7 @@ type DataDescriptor struct {
 	fields   []Descriptor
 	ids      []uint16
 	isPtr    bool
+	typ      reflect.Type
 }
 
 func (d *DataDescriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -78,59 +85,77 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen
 	if typ != TData {
 		return nil, errors.New("invalid data type")
 	}
-
-	count, buf := DecodeUint64(buf, valueLen)
-
 	var err error
 	var id uint16
 
+	data := reflect.New(d.typ)
+	pp := data.UnsafePointer()
+
+	count, buf := DecodeUint64(buf, valueLen)
 	for i := uint64(0); i < count; i++ {
 		typ, id, valueLen, buf = Reader(buf)
 
 		if field, ok := d.fieldMap[id]; ok {
-			buf, err = field.Decode(buf, p, typ, valueLen)
+			buf, err = field.Decode(buf, pp, typ, valueLen)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-
+	t := data.Interface()
+	print("pp:", t)
+	*(*unsafe.Pointer)(unsafe.Add(p, d.offset)) = pp
 	return buf, nil
 }
 
-func NewInt64Descriptor(offset uintptr) Descriptor {
-	return &Int64Descriptor{offset: offset}
+func (d *DataDescriptor) Fields() map[uint16]Descriptor {
+	return d.fieldMap
+}
+
+func NewInt64Descriptor(offset uintptr, isPrt bool) Descriptor {
+	return &Int64Descriptor{offset: offset, isPrt: isPrt}
 }
 
 type Int64Descriptor struct {
 	offset uintptr
+	isPrt  bool
 }
 
 func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8) ([]byte, error) {
 	val, buf := DecodeInt64(buf, valueLen)
 	var data = unsafe.Add(p, d.offset)
-	*(*int64)(data) = val
+	if d.isPrt {
+		*(**int64)(data) = &val
+	} else {
+		*(*int64)(data) = val
+	}
 	return buf, nil
 }
 
 func (d *Int64Descriptor) IsEmpty(p unsafe.Pointer) bool {
-	var data = unsafe.Add(p, d.offset)
-	v := *(*int64)(data)
-	if v == 0 {
-		return true
+	if d.isPrt {
+		return *(**int64)(unsafe.Add(p, d.offset)) == nil
+	} else {
+		return *(*int64)(unsafe.Add(p, d.offset)) == 0
 	}
-	return false
 }
 
 func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id uint16) []byte {
-	var data = unsafe.Add(p, d.offset)
-
-	v := *(*int64)(data)
-	if v == 0 {
+	var val int64
+	if d.isPrt {
+		ptr := *(**int64)(unsafe.Add(p, d.offset))
+		if ptr == nil {
+			return buf
+		}
+		val = *ptr
+	} else {
+		val = *(*int64)(unsafe.Add(p, d.offset))
+	}
+	if val == 0 {
 		return buf
 	}
-	buf = WriterTypeId(buf, TInt, id, LengthInt(v))
-	return WriterInt64(buf, v)
+	buf = WriterTypeId(buf, TInt, id, LengthInt(val))
+	return WriterInt64(buf, val)
 }
 
 type ListDescriptor[T any] struct {

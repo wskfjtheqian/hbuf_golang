@@ -69,7 +69,8 @@ type ProtoBuffTest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// int32 v1 = 1;
 	// uint32 v2 = 2;
-	V3 int64 `protobuf:"varint,3,opt,name=v3,proto3" json:"v3,omitempty"`
+	V2 *int64 `protobuf:"varint,2,opt,name=v2,proto3,oneof" json:"v2,omitempty"`
+	V3 int64  `protobuf:"varint,3,opt,name=v3,proto3" json:"v3,omitempty"`
 	// uint64 v4 = 4;
 	// sint32 v5 = 5;
 	// sint64 v6 = 6;
@@ -110,6 +111,13 @@ func (x *ProtoBuffTest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ProtoBuffTest.ProtoReflect.Descriptor instead.
 func (*ProtoBuffTest) Descriptor() ([]byte, []int) {
 	return file_proto_test_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProtoBuffTest) GetV2() int64 {
+	if x != nil && x.V2 != nil {
+		return *x.V2
+	}
+	return 0
 }
 
 func (x *ProtoBuffTest) GetV3() int64 {
@@ -160,8 +168,9 @@ const file_proto_test_proto_rawDesc = "" +
 	"\n" +
 	"\x10proto_test.proto\x12\thbuf.test\"\x1e\n" +
 	"\fProtoBuffSub\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xfe\x01\n" +
-	"\rProtoBuffTest\x12\x0e\n" +
+	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\x9a\x02\n" +
+	"\rProtoBuffTest\x12\x13\n" +
+	"\x02v2\x18\x02 \x01(\x03H\x00R\x02v2\x88\x01\x01\x12\x0e\n" +
 	"\x02v3\x18\x03 \x01(\x03R\x02v3\x12\x0e\n" +
 	"\x02v7\x18\a \x03(\x03R\x02v7\x120\n" +
 	"\x02v8\x18\b \x03(\v2 .hbuf.test.ProtoBuffTest.V8EntryR\x02v8\x12'\n" +
@@ -171,7 +180,8 @@ const file_proto_test_proto_rawDesc = "" +
 	"\x03v11\x18\v \x01(\tR\x03v11\x1a5\n" +
 	"\aV8Entry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01B\rZ\v.;hbuf_testb\x06proto3"
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01B\x05\n" +
+	"\x03_v2B\rZ\v.;hbuf_testb\x06proto3"
 
 var (
 	file_proto_test_proto_rawDescOnce sync.Once
@@ -207,6 +217,7 @@ func file_proto_test_proto_init() {
 	if File_proto_test_proto != nil {
 		return
 	}
+	file_proto_test_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

@@ -5,28 +5,32 @@ import (
 	"encoding/json"
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
 	"google.golang.org/protobuf/proto"
+	"reflect"
 	"testing"
 	"unsafe"
 )
 
+func TP[T any](v T) *T {
+	return &v
+}
+
 var src = ProtoBuffTest{
 	//V1: -0xFE,
-	//V2: 0xFE,
+	//V2: TP[int64](122),
 	//V3: 0xFF88,
 	//V4: 0xFF,
 	//V5: -0xFF,
 	//V6: -0xFF,
 	//V7: []int64{0x01, 0x02, 1, 0x04, 0x05FF},
 	//V8: map[int64]int64{0x01: 0x01, 0x02: 0x02, 0x03: 0x03, 0x04: 0x04, 0x05FF: 0x05FF},
-	////V8: map[string]int64{"ad": 0x01, "ba": 0x02, "c": 0x03, "d": 0x04, "e": 0x05FF},
-	//V9: &ProtoBuffSub{V1: 55},
+	V9: &ProtoBuffSub{V1: 55},
 	//V10: []*ProtoBuffSub{{V1: 0x01}, {V1: 0x02}, {V1: 0x03}, {V1: 0x04}, {V1: 0x05FF}},
 	//V11: "hello world this is a test",
 }
 
 var protoBuffSub ProtoBuffSub
-var protoBuffSubDescriptor = hbuf.NewDataDescriptor(0, false, map[uint16]hbuf.Descriptor{
-	1: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffSub.V1)),
+var protoBuffSubDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(protoBuffSub), map[uint16]hbuf.Descriptor{
+	1: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffSub.V1), false),
 })
 
 func (p *ProtoBuffSub) Descriptors() hbuf.Descriptor {
@@ -34,13 +38,12 @@ func (p *ProtoBuffSub) Descriptors() hbuf.Descriptor {
 }
 
 var protoBuffTest ProtoBuffTest
-var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, map[uint16]hbuf.Descriptor{
-	3: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V3)),
-	7: hbuf.NewListDescriptor[int64](unsafe.Offsetof(protoBuffTest.V7), hbuf.NewInt64Descriptor(0)),
-	8: hbuf.NewMapDescriptor[int64, int64](unsafe.Offsetof(protoBuffTest.V8), hbuf.NewInt64Descriptor(0), hbuf.NewInt64Descriptor(0)),
-	9: hbuf.NewDataDescriptor(unsafe.Offsetof(protoBuffTest.V9), true, map[uint16]hbuf.Descriptor{
-		1: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffSub.V1)),
-	}),
+var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(protoBuffTest), map[uint16]hbuf.Descriptor{
+	2:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V2), true),
+	3:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V3), false),
+	7:  hbuf.NewListDescriptor[int64](unsafe.Offsetof(protoBuffTest.V7), hbuf.NewInt64Descriptor(0, false)),
+	8:  hbuf.NewMapDescriptor[int64, int64](unsafe.Offsetof(protoBuffTest.V8), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, false)),
+	9:  hbuf.NewDataDescriptor(unsafe.Offsetof(protoBuffTest.V9), true, reflect.TypeOf(protoBuffSub), (&ProtoBuffSub{}).Descriptors().(*hbuf.DataDescriptor).Fields()),
 	10: hbuf.NewListDescriptor[*ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V10), (&ProtoBuffSub{}).Descriptors()),
 	11: hbuf.NewStringDescriptor(unsafe.Offsetof(protoBuffTest.V11)),
 })
@@ -51,14 +54,24 @@ func (x *ProtoBuffTest) Descriptors() hbuf.Descriptor {
 
 func TestName(t *testing.T) {
 	var err error
+	var pBuf []byte
 	t.Run("EncoderProto", func(t *testing.T) {
-		buf, err := proto.Marshal(&src)
+		pBuf, err = proto.Marshal(&src)
 		if err != nil {
-			t.Error(err.Error() + "\n" + string(buf))
+			t.Error(err.Error())
 			return
 		}
-		t.Log("len:", len(buf))
+		t.Log("len:", len(pBuf))
 	})
+	t.Run("DecoderProto", func(t *testing.T) {
+		des := ProtoBuffTest{}
+		err = proto.Unmarshal(pBuf, &des)
+		if err != nil {
+			t.Error(err.Error() + "\n" + string(pBuf))
+			return
+		}
+	})
+
 	t.Run("EncoderJson", func(t *testing.T) {
 		buf, err := json.Marshal(&src)
 		if err != nil {
@@ -82,10 +95,12 @@ func TestName(t *testing.T) {
 		des := ProtoBuffTest{}
 		err := hbuf.Unmarshal(hBuf, &des)
 		if err != nil {
+			t.Error(err.Error() + "\n")
 			return
 		}
 		buf, err := json.Marshal(&des)
 		t.Log("DecoderHBuf:", string(buf))
+		t.Log("hBuf:", hBuf)
 	})
 	//	t.Log(src)
 	//	if des.V3 != src.V3 {
