@@ -13,7 +13,7 @@ type Descriptor interface {
 	Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8) ([]byte, error)
 }
 
-func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, fieldMap map[uint16]Descriptor) Descriptor {
+func NewDataDescriptor(offset uintptr, isPtr bool, typ any, fieldMap map[uint16]Descriptor) Descriptor {
 	var fields []Descriptor
 	var ids []uint16
 	for id, _ := range fieldMap {
@@ -29,7 +29,19 @@ func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, fieldMap ma
 		fields:   fields,
 		ids:      ids,
 		isPtr:    isPtr,
-		typ:      typ,
+		typ:      reflect.TypeOf(typ),
+	}
+}
+
+func CloneDataDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
+	var desc = d.Descriptors().(*DataDescriptor)
+	return &DataDescriptor{
+		offset:   offset,
+		fieldMap: desc.fieldMap,
+		fields:   desc.fields,
+		ids:      desc.ids,
+		isPtr:    isPtr,
+		typ:      desc.typ,
 	}
 }
 
@@ -89,22 +101,20 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen
 	var id uint16
 
 	data := reflect.New(d.typ)
-	pp := data.UnsafePointer()
+	ptr := data.UnsafePointer()
 
 	count, buf := DecodeUint64(buf, valueLen)
 	for i := uint64(0); i < count; i++ {
 		typ, id, valueLen, buf = Reader(buf)
 
 		if field, ok := d.fieldMap[id]; ok {
-			buf, err = field.Decode(buf, pp, typ, valueLen)
+			buf, err = field.Decode(buf, ptr, typ, valueLen)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	t := data.Interface()
-	print("pp:", t)
-	*(*unsafe.Pointer)(unsafe.Add(p, d.offset)) = pp
+	*(*unsafe.Pointer)(unsafe.Add(p, d.offset)) = ptr
 	return buf, nil
 }
 
@@ -256,7 +266,6 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 	var err error
 
 	count, buf = DecodeUint64(buf, valueLen)
-	var data = unsafe.Add(p, d.offset)
 	m := make(map[K]V, count)
 	for i := uint64(0); i < count; i++ {
 		var k K
@@ -273,7 +282,7 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 		}
 		m[k] = v
 	}
-	*(*map[K]V)(data) = m
+	*(*map[K]V)(unsafe.Add(p, d.offset)) = m
 	return buf, nil
 }
 
@@ -313,5 +322,5 @@ func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueL
 
 	size, buf := DecodeUint64(buf, valueLen)
 	*((*string)(unsafe.Add(p, d.offset))) = string(buf[:size])
-	return buf, nil
+	return buf[size:], nil
 }

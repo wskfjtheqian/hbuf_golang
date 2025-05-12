@@ -74,11 +74,12 @@ type ProtoBuffTest struct {
 	// uint64 v4 = 4;
 	// sint32 v5 = 5;
 	// sint64 v6 = 6;
-	V7            []int64         `protobuf:"varint,7,rep,packed,name=v7,proto3" json:"v7,omitempty"`
-	V8            map[int64]int64 `protobuf:"bytes,8,rep,name=v8,proto3" json:"v8,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V9            *ProtoBuffSub   `protobuf:"bytes,9,opt,name=v9,proto3" json:"v9,omitempty"`
-	V10           []*ProtoBuffSub `protobuf:"bytes,10,rep,name=v10,proto3" json:"v10,omitempty"`
-	V11           string          `protobuf:"bytes,11,opt,name=v11,proto3" json:"v11,omitempty"`
+	V7            []int64                  `protobuf:"varint,7,rep,packed,name=v7,proto3" json:"v7,omitempty"`
+	V8            map[int64]int64          `protobuf:"bytes,8,rep,name=v8,proto3" json:"v8,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V9            *ProtoBuffSub            `protobuf:"bytes,9,opt,name=v9,proto3" json:"v9,omitempty"`
+	V10           []*ProtoBuffSub          `protobuf:"bytes,10,rep,name=v10,proto3" json:"v10,omitempty"`
+	V11           string                   `protobuf:"bytes,11,opt,name=v11,proto3" json:"v11,omitempty"`
+	V12           map[string]*ProtoBuffSub `protobuf:"bytes,12,rep,name=v12,proto3" json:"v12,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -162,13 +163,20 @@ func (x *ProtoBuffTest) GetV11() string {
 	return ""
 }
 
+func (x *ProtoBuffTest) GetV12() map[string]*ProtoBuffSub {
+	if x != nil {
+		return x.V12
+	}
+	return nil
+}
+
 var File_proto_test_proto protoreflect.FileDescriptor
 
 const file_proto_test_proto_rawDesc = "" +
 	"\n" +
 	"\x10proto_test.proto\x12\thbuf.test\"\x1e\n" +
 	"\fProtoBuffSub\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\x9a\x02\n" +
+	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xa0\x03\n" +
 	"\rProtoBuffTest\x12\x13\n" +
 	"\x02v2\x18\x02 \x01(\x03H\x00R\x02v2\x88\x01\x01\x12\x0e\n" +
 	"\x02v3\x18\x03 \x01(\x03R\x02v3\x12\x0e\n" +
@@ -177,10 +185,14 @@ const file_proto_test_proto_rawDesc = "" +
 	"\x02v9\x18\t \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x02v9\x12)\n" +
 	"\x03v10\x18\n" +
 	" \x03(\v2\x17.hbuf.test.ProtoBuffSubR\x03v10\x12\x10\n" +
-	"\x03v11\x18\v \x01(\tR\x03v11\x1a5\n" +
+	"\x03v11\x18\v \x01(\tR\x03v11\x123\n" +
+	"\x03v12\x18\f \x03(\v2!.hbuf.test.ProtoBuffTest.V12EntryR\x03v12\x1a5\n" +
 	"\aV8Entry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01B\x05\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aO\n" +
+	"\bV12Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12-\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x05value:\x028\x01B\x05\n" +
 	"\x03_v2B\rZ\v.;hbuf_testb\x06proto3"
 
 var (
@@ -195,21 +207,24 @@ func file_proto_test_proto_rawDescGZIP() []byte {
 	return file_proto_test_proto_rawDescData
 }
 
-var file_proto_test_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_test_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_test_proto_goTypes = []any{
 	(*ProtoBuffSub)(nil),  // 0: hbuf.test.ProtoBuffSub
 	(*ProtoBuffTest)(nil), // 1: hbuf.test.ProtoBuffTest
 	nil,                   // 2: hbuf.test.ProtoBuffTest.V8Entry
+	nil,                   // 3: hbuf.test.ProtoBuffTest.V12Entry
 }
 var file_proto_test_proto_depIdxs = []int32{
 	2, // 0: hbuf.test.ProtoBuffTest.v8:type_name -> hbuf.test.ProtoBuffTest.V8Entry
 	0, // 1: hbuf.test.ProtoBuffTest.v9:type_name -> hbuf.test.ProtoBuffSub
 	0, // 2: hbuf.test.ProtoBuffTest.v10:type_name -> hbuf.test.ProtoBuffSub
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 3: hbuf.test.ProtoBuffTest.v12:type_name -> hbuf.test.ProtoBuffTest.V12Entry
+	0, // 4: hbuf.test.ProtoBuffTest.V12Entry.value:type_name -> hbuf.test.ProtoBuffSub
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_test_proto_init() }
@@ -224,7 +239,7 @@ func file_proto_test_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_test_proto_rawDesc), len(file_proto_test_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

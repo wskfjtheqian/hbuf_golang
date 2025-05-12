@@ -20,4 +20,5 @@ message ProtoBuffTest {
   ProtoBuffSub v9 = 9;
   repeated ProtoBuffSub v10 = 10;
   string v11 = 11;
+  map<string, ProtoBuffSub> v12 = 12;
 }

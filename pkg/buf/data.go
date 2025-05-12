@@ -32,9 +32,12 @@ func Unmarshal(buf []byte, data Data) error {
 	}
 	typ, _, valueLen, buf := Reader(buf)
 
-	_, err := data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, valueLen)
+	doublePtr := reflect.New(reflect.TypeOf(data))
+	_, err := data.Descriptors().Decode(buf, doublePtr.UnsafePointer(), typ, valueLen)
 	if err != nil {
 		return err
 	}
+
+	reflect.ValueOf(data).Elem().Set(doublePtr.Elem().Elem())
 	return nil
 }
