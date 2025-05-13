@@ -21,19 +21,24 @@ type Data interface {
 	Descriptors() Descriptor
 }
 
-func Marshal(data Data) ([]byte, error) {
+func Marshal(data Data, tag string) ([]byte, error) {
 	buf := make([]byte, 0)
-	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), 0), nil
+	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), 0, false, tag), nil
 }
 
-func Unmarshal(buf []byte, data Data) error {
+func Unmarshal(buf []byte, data Data) (err error) {
 	if len(buf) == 0 {
 		return nil
 	}
+	//defer func() {
+	//	if r := recover(); r!= nil {
+	//		err = r.(error)
+	//	}
+	//}()
 	typ, _, valueLen, buf := Reader(buf)
 
 	doublePtr := reflect.New(reflect.TypeOf(data))
-	_, err := data.Descriptors().Decode(buf, doublePtr.UnsafePointer(), typ, valueLen)
+	_, err = data.Descriptors().Decode(buf, doublePtr.UnsafePointer(), typ, valueLen)
 	if err != nil {
 		return err
 	}

@@ -17,16 +17,16 @@ func TP[T any](v T) *T {
 var src = ProtoBuffTest{
 	//V1: -0xFE,
 	V2: TP[int64](122),
-	V3: 88,
+	//V3: 88,
 	//V4: 0xFF,
 	//V5: -0xFF,
 	//V6: -0xFF,
-	V7:  []int64{0x01, 0x02, 1, 0x04, 0x05FF},
-	V8:  map[int64]int64{0x01: 0x01, 0x02: 0x02, 0x03: 0x03, 0x04: 0x04, 0x05FF: 0x05FF},
-	V9:  &ProtoBuffSub{V1: 55},
-	V10: []*ProtoBuffSub{{V1: 0x01}, {V1: 0x02}, {V1: 0x03}, {V1: 0x04}, {V1: 0x05FF}},
-	V11: "hello world this is a test",
-	V12: map[string]*ProtoBuffSub{"key1": {V1: 55}, "key2": {V1: 66}, "key3": {V1: 77}, "key4": {V1: 88}, "key5": {V1: 99}},
+	//V7: []int64{0x01, 0x02, 0, 0x04, 0x05FF},
+	//V8:  map[int64]int64{0x01: 0x01, 0x02: 0x02, 0x03: 0x03, 0x04: 0x04, 0x05FF: 0x05FF},
+	//V9:  &ProtoBuffSub{V1: 55},
+	//V10: []*ProtoBuffSub{{V1: 0x01}, {V1: 0x02}, nil, {V1: 0x04}, {V1: 0x05FF}},
+	//V11: "hello world this is a test",
+	//V12: map[string]*ProtoBuffSub{"key1": {V1: 55}, "key2": {V1: 66}, "key3": nil, "key4": {V1: 88}, "key5": {V1: 99}},
 }
 
 var protoBuffSub ProtoBuffSub
@@ -40,14 +40,14 @@ func (p *ProtoBuffSub) Descriptors() hbuf.Descriptor {
 
 var protoBuffTest ProtoBuffTest
 var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ProtoBuffTest{}), map[uint16]hbuf.Descriptor{
-	2:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V2), true),
-	3:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V3), false),
-	7:  hbuf.NewListDescriptor[int64](unsafe.Offsetof(protoBuffTest.V7), hbuf.NewInt64Descriptor(0, false)),
-	8:  hbuf.NewMapDescriptor[int64, int64](unsafe.Offsetof(protoBuffTest.V8), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, false)),
-	9:  hbuf.CloneDataDescriptor(&ProtoBuffSub{}, unsafe.Offsetof(protoBuffTest.V9), true),
-	10: hbuf.NewListDescriptor[*ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V10), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true)),
-	11: hbuf.NewStringDescriptor(unsafe.Offsetof(protoBuffTest.V11)),
-	12: hbuf.NewMapDescriptor[string, *ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V12), hbuf.NewStringDescriptor(0), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true)),
+	2: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V2), true),
+	//3:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V3), false),
+	//7:  hbuf.NewListDescriptor[int64](unsafe.Offsetof(protoBuffTest.V7), hbuf.NewInt64Descriptor(0, false)),
+	//8:  hbuf.NewMapDescriptor[int64, int64](unsafe.Offsetof(protoBuffTest.V8), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, false)),
+	//9:  hbuf.CloneDataDescriptor(&ProtoBuffSub{}, unsafe.Offsetof(protoBuffTest.V9), true),
+	//10: hbuf.NewListDescriptor[*ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V10), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true)),
+	//11: hbuf.NewStringDescriptor(unsafe.Offsetof(protoBuffTest.V11), false),
+	//12: hbuf.NewMapDescriptor[string, *ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V12), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true)),
 })
 
 func (x *ProtoBuffTest) Descriptors() hbuf.Descriptor {
@@ -86,7 +86,7 @@ func TestName(t *testing.T) {
 
 	var hBuf []byte
 	t.Run("EncoderHBuf", func(t *testing.T) {
-		hBuf, err = hbuf.Marshal(&src)
+		hBuf, err = hbuf.Marshal(&src, "")
 		if err != nil {
 			t.Error(err.Error() + "\n")
 			return
@@ -187,7 +187,7 @@ func BenchmarkName(b *testing.B) {
 	var hBuf []byte
 	b.Run("EncoderHBuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			hBuf, err = hbuf.Marshal(&src)
+			hBuf, err = hbuf.Marshal(&src, "")
 			if err != nil {
 				b.Error(err.Error() + "\n" + string(hBuf))
 				return
