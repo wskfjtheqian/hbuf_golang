@@ -11,6 +11,7 @@ type Descriptor interface {
 	Value(p unsafe.Pointer, tag string) unsafe.Pointer
 	Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte
 	Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8) ([]byte, error)
+	SetTag(tags map[string]struct{})
 }
 
 func listToSet(list []string) map[string]struct{} {
@@ -42,7 +43,7 @@ func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, fieldMap ma
 	}
 }
 
-func CloneDataDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
+func CloneDataDescriptor(d Data, offset uintptr, isPtr bool, tags ...string) Descriptor {
 	var desc = d.Descriptors().(*DataDescriptor)
 	return &DataDescriptor{
 		offset:   offset,
@@ -51,6 +52,7 @@ func CloneDataDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
 		ids:      desc.ids,
 		isPtr:    isPtr,
 		typ:      desc.typ,
+		tags:     listToSet(tags),
 	}
 }
 
@@ -62,6 +64,10 @@ type DataDescriptor struct {
 	isPtr    bool
 	typ      reflect.Type
 	tags     map[string]struct{}
+}
+
+func (d *DataDescriptor) SetTag(tags map[string]struct{}) {
+	d.tags = tags
 }
 
 func (d *DataDescriptor) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
@@ -91,9 +97,6 @@ func (d *DataDescriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bo
 		if desc.Value(p, tag) != nil {
 			count++
 		}
-	}
-	if count == 0 {
-		return buf
 	}
 	buf = WriterTypeId(buf, TData, id, LengthUint(count))
 	buf = WriterUint64(buf, count)
@@ -150,6 +153,10 @@ type Int64Descriptor struct {
 	tags   map[string]struct{}
 }
 
+func (d *Int64Descriptor) SetTag(tags map[string]struct{}) {
+	d.tags = tags
+}
+
 func (d *Int64Descriptor) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
 	if len(tag) > 0 {
 		if _, ok := d.tags[tag]; !ok {
@@ -171,13 +178,15 @@ func (d *Int64Descriptor) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
 }
 
 func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte {
+	var val int64
 	if p == nil {
 		if !null {
 			return buf
 		}
+	} else {
+		val = *(*int64)(p)
 	}
 
-	val := *(*int64)(p)
 	buf = WriterTypeId(buf, TInt, id, LengthInt(val))
 	return WriterInt64(buf, val)
 }
@@ -194,10 +203,12 @@ func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLe
 }
 
 func NewListDescriptor[T any](offset uintptr, desc Descriptor, tags ...string) Descriptor {
+	tagMap := listToSet(tags)
+	desc.SetTag(tagMap)
 	return &ListDescriptor[T]{
 		offset: offset,
 		desc:   desc,
-		tags:   listToSet(tags),
+		tags:   tagMap,
 	}
 }
 
@@ -205,6 +216,10 @@ type ListDescriptor[T any] struct {
 	offset uintptr
 	desc   Descriptor
 	tags   map[string]struct{}
+}
+
+func (d *ListDescriptor[T]) SetTag(tags map[string]struct{}) {
+	d.tags = tags
 }
 
 func (d *ListDescriptor[T]) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
@@ -232,7 +247,7 @@ func (d *ListDescriptor[T]) Encode(buf []byte, p unsafe.Pointer, id uint16, null
 	buf = WriterUint64(buf, uint64(count))
 
 	for i := 0; i < count; i++ {
-		buf = d.desc.Encode(buf, unsafe.Pointer(&list[i]), 0, true, tag)
+		buf = d.desc.Encode(buf, d.desc.Value(unsafe.Pointer(&list[i]), tag), 0, true, tag)
 	}
 	return buf
 }
@@ -259,11 +274,15 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, value
 }
 
 func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, tags ...string) Descriptor {
+	tagMap := listToSet(tags)
+	keyDesc.SetTag(tagMap)
+	valueDesc.SetTag(tagMap)
+
 	return &MapDescriptor[K, V]{
 		offset:    offset,
 		keyDesc:   keyDesc,
 		valueDesc: valueDesc,
-		tags:      listToSet(tags),
+		tags:      tagMap,
 	}
 }
 
@@ -272,6 +291,10 @@ type MapDescriptor[K comparable, V any] struct {
 	keyDesc   Descriptor
 	valueDesc Descriptor
 	tags      map[string]struct{}
+}
+
+func (d *MapDescriptor[K, V]) SetTag(tags map[string]struct{}) {
+	d.tags = tags
 }
 
 func (d *MapDescriptor[K, V]) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
@@ -301,8 +324,8 @@ func (d *MapDescriptor[K, V]) Encode(buf []byte, p unsafe.Pointer, id uint16, nu
 	buf = WriterUint64(buf, uint64(count))
 
 	for k, v := range m {
-		buf = d.keyDesc.Encode(buf, unsafe.Pointer(&k), 0, true, tag)
-		buf = d.valueDesc.Encode(buf, unsafe.Pointer(&v), 0, true, tag)
+		buf = d.keyDesc.Encode(buf, d.keyDesc.Value(unsafe.Pointer(&k), tag), 0, true, tag)
+		buf = d.valueDesc.Encode(buf, d.valueDesc.Value(unsafe.Pointer(&v), tag), 0, true, tag)
 	}
 	return buf
 }
@@ -349,6 +372,10 @@ type StringDescriptor struct {
 	isPrt  bool
 }
 
+func (d *StringDescriptor) SetTag(tags map[string]struct{}) {
+	d.tags = tags
+}
+
 func (d *StringDescriptor) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
 	if len(tag) > 0 {
 		if _, ok := d.tags[tag]; !ok {
@@ -370,13 +397,14 @@ func (d *StringDescriptor) Value(p unsafe.Pointer, tag string) unsafe.Pointer {
 }
 
 func (d *StringDescriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte {
+	var val string
 	if p == nil {
 		if !null {
 			return buf
 		}
+	} else {
+		val = *(*string)(p)
 	}
-
-	val := *(*string)(p)
 	size := len(val)
 
 	buf = WriterTypeId(buf, TBytes, id, LengthUint(uint64(size)))

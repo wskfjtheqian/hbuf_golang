@@ -43,6 +43,9 @@ func Unmarshal(buf []byte, data Data) (err error) {
 		return err
 	}
 
+	if doublePtr.Elem().UnsafePointer() == nil {
+		return nil
+	}
 	reflect.ValueOf(data).Elem().Set(doublePtr.Elem().Elem())
 	return nil
 }
