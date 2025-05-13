@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
 	"io"
 	"net/http"
 	"reflect"
@@ -140,7 +140,7 @@ type Method interface {
 }
 
 // MethodImpl 是用于处理RPC请求的接口
-type MethodImpl[T any, E any] struct {
+type MethodImpl[T hbuf.Data, E hbuf.Data] struct {
 	Id      uint32
 	Name    string
 	Handler Handler
@@ -176,49 +176,9 @@ type Result[T any] struct {
 	Data T      `json:"data"`
 }
 
-func (t *Result[T]) Encoder(w io.Writer) error {
-	err := hbuf.EncodeInt64(w, 1, int64(t.Code))
-	if err != nil {
-		return err
-	}
-	err = hbuf.WriterBytes(w, 2, []byte(t.Msg))
-	if err != nil {
-		return err
-	}
-	err = hbuf.WriterData(w, 3, t.Data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *Result[T]) Decoder(r io.Reader) error {
-	return hbuf.Decoder(r, func(typ hbuf.Type, id uint16, value any) (err error) {
-		switch id {
-		case 1:
-			t.Code, err = hbuf.ReaderNumber[int](value)
-		case 2:
-			t.Msg, err = hbuf.ReaderBytes[string](value)
-		case 3:
-			err = hbuf.ReaderData(value, t.Data.(hbuf.Data))
-		}
-		return nil
-	})
-}
-
-func (t *Result[T]) Size() int {
-	length := 0
-	if t.Code != 0 {
-		length += 1 + int(hbuf.LengthUint64(uint64(t.Code))) + int(hbuf.LengthUint64(1))
-	}
-	if t.Msg != "" {
-		length += 1 + int(hbuf.LengthBytes([]byte(t.Msg))) + int(hbuf.LengthUint64(2))
-	}
-	if any(t.Data) != nil {
-		temp := t.Data.Size()
-		length += 1 + temp + int(hbuf.LengthUint64(3)) + int(hbuf.LengthUint64(uint64(temp)))
-	}
-	return length
+func (r Result[T]) Descriptors() hbuf.Descriptor {
+	//TODO implement me
+	panic("implement me")
 }
 
 type Encoder func(writer io.Writer) func(v hbuf.Data) error
@@ -246,7 +206,15 @@ func NewJsonDecode() Decoder {
 func NewHBufEncode() Encoder {
 	return func(writer io.Writer) func(v hbuf.Data) error {
 		return func(v hbuf.Data) error {
-			return v.Encoder(writer)
+			buffer, err := hbuf.Marshal(v)
+			if err != nil {
+				return err
+			}
+			_, err = writer.Write(buffer)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 	}
 }
@@ -255,7 +223,15 @@ func NewHBufEncode() Encoder {
 func NewHBufDecode() Decoder {
 	return func(reader io.Reader) func(v hbuf.Data) error {
 		return func(v hbuf.Data) error {
-			return v.Decoder(reader)
+			buffer, err := io.ReadAll(reader)
+			if err != nil {
+				return err
+			}
+			err = hbuf.Unmarshal(buffer, v)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 	}
 }
@@ -412,7 +388,7 @@ type Client struct {
 }
 
 // ClientCall 调用远程服务
-func ClientCall[T any, E any](ctx context.Context, c *Client, id uint32, name string, method string, request *T) (E, error) {
+func ClientCall[T Data, E Data](ctx context.Context, c *Client, id uint32, name string, method string, request T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
@@ -435,7 +411,7 @@ func ClientCall[T any, E any](ctx context.Context, c *Client, id uint32, name st
 
 		var data any = result.Data
 		return data.(hbuf.Data), nil
-	})(ctx, *request)
+	})(ctx, request)
 	if err != nil {
 		var v E
 		return v, err
