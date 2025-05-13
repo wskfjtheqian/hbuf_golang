@@ -24,7 +24,7 @@ var src = ProtoBuffTest{
 	////V5: -0xFF,
 	////V6: -0xFF,
 	V7:  []int64{0x01, 0x02, 0, 0x04, 0x05FF},
-	V8:  map[int64]int64{0x01: 0x01, 0x02: 0x02, 0x03: 0x03, 0x04: 0x04, 0x05FF: 0x05FF},
+	V8:  map[int64]int64{0x01: 0x01, 0x02: 0x02, 0x03: 0, 0x04: 0x04, 0x05FF: 0x05FF},
 	V9:  &ProtoBuffSub{V1: 55},
 	V10: []*ProtoBuffSub{{V1: 0x01}, {V1: 0x02}, nil, {V1: 0x04}, {V1: 0x05FF}},
 	V11: "hello world this is a test",
@@ -49,7 +49,7 @@ var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(Pr
 	9:  hbuf.CloneDataDescriptor(&ProtoBuffSub{}, unsafe.Offsetof(protoBuffTest.V9), true, "v"),
 	10: hbuf.NewListDescriptor[*ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V10), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true), "v"),
 	11: hbuf.NewStringDescriptor(unsafe.Offsetof(protoBuffTest.V11), false, "v"),
-	12: hbuf.NewMapDescriptor[string, *ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V12), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true), "v"),
+	12: hbuf.NewMapDescriptor[string, *ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V12), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true), " v"),
 })
 
 func (x *ProtoBuffTest) Descriptors() hbuf.Descriptor {
@@ -88,20 +88,20 @@ func TestName(t *testing.T) {
 	})
 
 	var hBuf []byte
-	//t.Run("EncoderHBuf", func(t *testing.T) {
-	//	hBuf, err = hbuf.Marshal(&src, "v")
-	//	if err != nil {
-	//		t.Error(err.Error() + "\n")
-	//		return
-	//	}
-	//	t.Log("len:", len(hBuf))
-	//	t.Log("EncoderHBuf:", hBuf)
-	//	err = os.WriteFile(filepath.Join(os.TempDir(), "test.bin"), hBuf, 0666)
-	//	if err != nil {
-	//		t.Error(err.Error() + "\n")
-	//		return
-	//	}
-	//})
+	t.Run("EncoderHBuf", func(t *testing.T) {
+		hBuf, err = hbuf.Marshal(&src, "v")
+		if err != nil {
+			t.Error(err.Error() + "\n")
+			return
+		}
+		t.Log("len:", len(hBuf))
+		t.Log("EncoderHBuf:", hBuf)
+		err = os.WriteFile(filepath.Join(os.TempDir(), "test.bin"), hBuf, 0666)
+		if err != nil {
+			t.Error(err.Error() + "\n")
+			return
+		}
+	})
 	t.Run("DecoderHBuf", func(t *testing.T) {
 		hBuf, err = os.ReadFile(filepath.Join(os.TempDir(), "test.bin"))
 		if err != nil {
