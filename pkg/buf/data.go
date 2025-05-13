@@ -26,7 +26,7 @@ func Marshal(data Data, tag string) ([]byte, error) {
 	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), 0, false, tag), nil
 }
 
-func Unmarshal(buf []byte, data Data) (err error) {
+func Unmarshal(buf []byte, data Data, tag string) (err error) {
 	if len(buf) == 0 {
 		return nil
 	}
@@ -38,7 +38,7 @@ func Unmarshal(buf []byte, data Data) (err error) {
 	typ, _, valueLen, buf := Reader(buf)
 
 	doublePtr := reflect.New(reflect.TypeOf(data))
-	_, err = data.Descriptors().Decode(buf, doublePtr.UnsafePointer(), typ, valueLen)
+	_, err = data.Descriptors().Decode(buf, doublePtr.UnsafePointer(), typ, valueLen, tag)
 	if err != nil {
 		return err
 	}

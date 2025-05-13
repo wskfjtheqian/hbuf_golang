@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
 	"google.golang.org/protobuf/proto"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -86,23 +88,33 @@ func TestName(t *testing.T) {
 	})
 
 	var hBuf []byte
-	t.Run("EncoderHBuf", func(t *testing.T) {
-		hBuf, err = hbuf.Marshal(&src, "v")
-		if err != nil {
-			t.Error(err.Error() + "\n")
-			return
-		}
-		t.Log("len:", len(hBuf))
-		t.Log("EncoderHBuf:", hBuf)
-	})
+	//t.Run("EncoderHBuf", func(t *testing.T) {
+	//	hBuf, err = hbuf.Marshal(&src, "v")
+	//	if err != nil {
+	//		t.Error(err.Error() + "\n")
+	//		return
+	//	}
+	//	t.Log("len:", len(hBuf))
+	//	t.Log("EncoderHBuf:", hBuf)
+	//	err = os.WriteFile(filepath.Join(os.TempDir(), "test.bin"), hBuf, 0666)
+	//	if err != nil {
+	//		t.Error(err.Error() + "\n")
+	//		return
+	//	}
+	//})
 	t.Run("DecoderHBuf", func(t *testing.T) {
-		des := ProtoBuffTest{}
-		err := hbuf.Unmarshal(hBuf, &des)
+		hBuf, err = os.ReadFile(filepath.Join(os.TempDir(), "test.bin"))
 		if err != nil {
 			t.Error(err.Error() + "\n")
 			return
 		}
-		buf, err := json.Marshal(&des)
+		des := ProtoBuffTest{}
+		err = hbuf.Unmarshal(hBuf, &des, "v")
+		if err != nil {
+			t.Error(err.Error() + "\n")
+			return
+		}
+		buf, _ := json.Marshal(&des)
 		t.Log("DecoderHBuf:", string(buf))
 
 	})
@@ -199,7 +211,7 @@ func BenchmarkName(b *testing.B) {
 	b.Run("DecoderHBuf", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			des := ProtoBuffTest{}
-			err = hbuf.Unmarshal(hBuf, &des)
+			err = hbuf.Unmarshal(hBuf, &des, "v")
 			if err != nil {
 				b.Error(err.Error())
 				return
