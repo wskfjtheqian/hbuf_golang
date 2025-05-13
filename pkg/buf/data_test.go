@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
 	"google.golang.org/protobuf/proto"
+	"reflect"
 	"testing"
 	"unsafe"
 )
@@ -29,7 +30,7 @@ var src = ProtoBuffTest{
 }
 
 var protoBuffSub ProtoBuffSub
-var protoBuffSubDescriptor = hbuf.NewDataDescriptor(0, false, ProtoBuffSub{}, map[uint16]hbuf.Descriptor{
+var protoBuffSubDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ProtoBuffSub{}), map[uint16]hbuf.Descriptor{
 	1: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffSub.V1), false),
 })
 
@@ -38,7 +39,7 @@ func (p *ProtoBuffSub) Descriptors() hbuf.Descriptor {
 }
 
 var protoBuffTest ProtoBuffTest
-var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, ProtoBuffTest{}, map[uint16]hbuf.Descriptor{
+var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ProtoBuffTest{}), map[uint16]hbuf.Descriptor{
 	2:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V2), true),
 	3:  hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffTest.V3), false),
 	7:  hbuf.NewListDescriptor[int64](unsafe.Offsetof(protoBuffTest.V7), hbuf.NewInt64Descriptor(0, false)),

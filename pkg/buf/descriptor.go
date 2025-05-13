@@ -13,7 +13,7 @@ type Descriptor interface {
 	Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8) ([]byte, error)
 }
 
-func NewDataDescriptor(offset uintptr, isPtr bool, typ any, fieldMap map[uint16]Descriptor) Descriptor {
+func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, fieldMap map[uint16]Descriptor) Descriptor {
 	var fields []Descriptor
 	var ids []uint16
 	for id, _ := range fieldMap {
@@ -29,7 +29,7 @@ func NewDataDescriptor(offset uintptr, isPtr bool, typ any, fieldMap map[uint16]
 		fields:   fields,
 		ids:      ids,
 		isPtr:    isPtr,
-		typ:      reflect.TypeOf(typ),
+		typ:      typ,
 	}
 }
 
