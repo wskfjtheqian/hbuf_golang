@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 type Type int8
@@ -155,7 +157,8 @@ func (m *MethodImpl[T, E]) GetName() string {
 }
 
 func (m *MethodImpl[T, E]) DecodeRequest(decoder func(v hbuf.Data) error) (hbuf.Data, error) {
-	var request any = *new(T)
+	request := reflect.New(reflect.TypeOf(*new(T)).Elem()).Interface()
+
 	err := decoder(request.(hbuf.Data))
 	if err != nil {
 		return nil, nil
@@ -170,15 +173,21 @@ func (m *MethodImpl[T, E]) GetHandler() Handler {
 
 //////////////////////////////////////////////////////
 
-type Result[T any] struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data T      `json:"data"`
+var result Result
+var resultDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(Result{}), map[uint16]hbuf.Descriptor{
+	1: hbuf.NewInt32Descriptor(unsafe.Offsetof(result.Code), false),
+	2: hbuf.NewStringDescriptor(unsafe.Offsetof(result.Msg), false),
+	3: hbuf.NewBytesDescriptor(unsafe.Offsetof(result.Data), false),
+})
+
+type Result struct {
+	Code int32           `json:"code"`
+	Msg  string          `json:"msg"`
+	Data json.RawMessage `json:"data"`
 }
 
-func (r Result[T]) Descriptors() hbuf.Descriptor {
-	//TODO implement me
-	panic("implement me")
+func (r *Result) Descriptors() hbuf.Descriptor {
+	return resultDescriptor
 }
 
 type Encoder func(writer io.Writer) func(v hbuf.Data) error
@@ -206,7 +215,7 @@ func NewJsonDecode() Decoder {
 func NewHBufEncode() Encoder {
 	return func(writer io.Writer) func(v hbuf.Data) error {
 		return func(v hbuf.Data) error {
-			buffer, err := hbuf.Marshal(v)
+			buffer, err := hbuf.Marshal(v, "")
 			if err != nil {
 				return err
 			}
@@ -227,7 +236,7 @@ func NewHBufDecode() Decoder {
 			if err != nil {
 				return err
 			}
-			err = hbuf.Unmarshal(buffer, v)
+			err = hbuf.Unmarshal(buffer, v, "")
 			if err != nil {
 				return err
 			}
@@ -324,10 +333,16 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return err
 	}
 
-	return r.encode(writer)(&Result[hbuf.Data]{
+	buffer := bytes.NewBuffer(nil)
+	err = r.encode(buffer)(response)
+	if err != nil {
+		return err
+	}
+
+	return r.encode(writer)(&Result{
 		Code: 0,
 		Msg:  "ok",
-		Data: response,
+		Data: buffer.Bytes(),
 	})
 }
 
@@ -388,7 +403,7 @@ type Client struct {
 }
 
 // ClientCall 调用远程服务
-func ClientCall[T Data, E Data](ctx context.Context, c *Client, id uint32, name string, method string, request T) (E, error) {
+func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request T) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
@@ -399,7 +414,7 @@ func ClientCall[T Data, E Data](ctx context.Context, c *Client, id uint32, name 
 		}
 		defer reader.Close()
 
-		var result Result[E]
+		var result Result
 		err = c.decode(reader)(&result)
 		if err != nil {
 			return nil, err
@@ -409,9 +424,14 @@ func ClientCall[T Data, E Data](ctx context.Context, c *Client, id uint32, name 
 			return nil, errors.New(result.Msg)
 		}
 
-		var data any = result.Data
-		return data.(hbuf.Data), nil
-	})(ctx, request)
+		var data T
+		err = c.decode(bytes.NewReader(result.Data))(data)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	})(ctx, any(request).(hbuf.Data))
 	if err != nil {
 		var v E
 		return v, err

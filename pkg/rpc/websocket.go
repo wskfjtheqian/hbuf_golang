@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,39 +18,23 @@ import (
 
 const WebSocketConnectId = "WebSocketConnectId"
 
-type Data struct {
-	bytes.Buffer `json:"-"`
-}
-
-// MarshalJSON 返回 m 的 JSON 编码。
-func (m Data) MarshalJSON() ([]byte, error) {
-	return m.Bytes(), nil
-}
-
-// UnmarshalJSON 将 JSON 编码的数据解码到 m 中。
-func (m *Data) UnmarshalJSON(data []byte) error {
-	if m == nil {
-		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
-	}
-	_, err := m.Write(data)
-	return err
-}
-
 type WebSocketData struct {
 	Type   Type        `json:"type,omitempty"`
 	Header http.Header `json:"header,omitempty"`
-	Data   Data        `json:"data,omitempty"`
+	Data   hbuf.Data   `json:"data,omitempty"`
 	Id     uint64      `json:"id,omitempty"`
 	Path   string      `json:"path,omitempty"`
 	Status int         `json:"status,omitempty"`
 }
 
 func (w *WebSocketData) Write(p []byte) (n int, err error) {
-	return w.Data.Write(p)
+	//return w.Data.Write(p)
+	return 0, nil
 }
 
 func (w *WebSocketData) Read(p []byte) (n int, err error) {
-	return w.Data.Read(p)
+	//return w.Data.Read(p)
+	return 0, nil
 }
 
 // ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -220,7 +203,7 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return ws.response(ctx, path, writer, reader)
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data)
 	if err != nil {
-		err = json.NewEncoder(response).Encode(&Result[hbuf.Data]{
+		err = json.NewEncoder(response).Encode(&Result{
 			Code: http.StatusInternalServerError,
 			Msg:  "Server error",
 		})

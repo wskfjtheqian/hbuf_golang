@@ -3,33 +3,35 @@ package rpc
 import (
 	"context"
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
+	"reflect"
 	"time"
+	"unsafe"
 )
+
+var getNameRequest GetNameRequest
+var getNameRequestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(GetNameRequest{}), map[uint16]hbuf.Descriptor{
+	1: hbuf.NewStringDescriptor(unsafe.Offsetof(getNameRequest.Name), false),
+})
 
 type GetNameRequest struct {
 	Name string `json:"name"`
 }
 
 func (r *GetNameRequest) Descriptors() hbuf.Descriptor {
-	//TODO implement me
-	panic("implement me")
+	return getNameRequestDescriptor
 }
 
-func (r *GetNameRequest) Data() hbuf.Data {
-	return r
-}
+var getNameResponse GetNameResponse
+var getNameResponseDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(GetNameResponse{}), map[uint16]hbuf.Descriptor{
+	1: hbuf.NewStringDescriptor(unsafe.Offsetof(getNameResponse.Name), false),
+})
 
 type GetNameResponse struct {
 	Name string `json:"name"`
 }
 
 func (r *GetNameResponse) Descriptors() hbuf.Descriptor {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r *GetNameResponse) Data() hbuf.Data {
-	return r
+	return getNameResponseDescriptor
 }
 
 type TestRpc interface {
@@ -47,11 +49,11 @@ type TestRpcClient struct {
 }
 
 func (t TestRpcClient) GetName(ctx context.Context, req *GetNameRequest) (*GetNameResponse, error) {
-	response, err := ClientCall[GetNameRequest, GetNameResponse](ctx, t.client, 0, "TestRpc", "GetName", req)
+	response, err := ClientCall[*GetNameRequest, *GetNameResponse](ctx, t.client, 0, "TestRpc", "GetName", req)
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	return response, nil
 }
 
 func RegisterRpcServer(r *Server, server TestRpc) {
