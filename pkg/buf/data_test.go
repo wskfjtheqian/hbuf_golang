@@ -29,6 +29,7 @@ var src = ProtoBuffTest{
 	V10: []*ProtoBuffSub{{V1: 0x01}, {V1: 0x02}, nil, {V1: 0x04}, {V1: 0x05FF}},
 	V11: "hello world this is a test",
 	V12: map[string]*ProtoBuffSub{"key1": {V1: 55}, "key2": {V1: 66}, "key3": nil, "key4": {V1: 88}, "key5": {V1: 99}},
+	V13: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10},
 }
 
 var protoBuffSub ProtoBuffSub
@@ -49,7 +50,8 @@ var protoBuffTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(Pr
 	9:  hbuf.CloneDataDescriptor(&ProtoBuffSub{}, unsafe.Offsetof(protoBuffTest.V9), true, "v"),
 	10: hbuf.NewListDescriptor[*ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V10), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true), "v"),
 	11: hbuf.NewStringDescriptor(unsafe.Offsetof(protoBuffTest.V11), false, "v"),
-	12: hbuf.NewMapDescriptor[string, *ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V12), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true), " v"),
+	12: hbuf.NewMapDescriptor[string, *ProtoBuffSub](unsafe.Offsetof(protoBuffTest.V12), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&ProtoBuffSub{}, 0, true), "v"),
+	13: hbuf.NewBytesDescriptor(unsafe.Offsetof(protoBuffTest.V13), false, "v"),
 })
 
 func (x *ProtoBuffTest) Descriptors() hbuf.Descriptor {

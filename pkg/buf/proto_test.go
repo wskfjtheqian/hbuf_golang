@@ -80,6 +80,7 @@ type ProtoBuffTest struct {
 	V10           []*ProtoBuffSub          `protobuf:"bytes,10,rep,name=v10,proto3" json:"v10,omitempty"`
 	V11           string                   `protobuf:"bytes,11,opt,name=v11,proto3" json:"v11,omitempty"`
 	V12           map[string]*ProtoBuffSub `protobuf:"bytes,12,rep,name=v12,proto3" json:"v12,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V13           []byte                   `protobuf:"bytes,13,opt,name=v13,proto3" json:"v13,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -170,13 +171,20 @@ func (x *ProtoBuffTest) GetV12() map[string]*ProtoBuffSub {
 	return nil
 }
 
+func (x *ProtoBuffTest) GetV13() []byte {
+	if x != nil {
+		return x.V13
+	}
+	return nil
+}
+
 var File_proto_test_proto protoreflect.FileDescriptor
 
 const file_proto_test_proto_rawDesc = "" +
 	"\n" +
 	"\x10proto_test.proto\x12\thbuf.test\"\x1e\n" +
 	"\fProtoBuffSub\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xa0\x03\n" +
+	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xb2\x03\n" +
 	"\rProtoBuffTest\x12\x13\n" +
 	"\x02v2\x18\x02 \x01(\x03H\x00R\x02v2\x88\x01\x01\x12\x0e\n" +
 	"\x02v3\x18\x03 \x01(\x03R\x02v3\x12\x0e\n" +
@@ -186,7 +194,8 @@ const file_proto_test_proto_rawDesc = "" +
 	"\x03v10\x18\n" +
 	" \x03(\v2\x17.hbuf.test.ProtoBuffSubR\x03v10\x12\x10\n" +
 	"\x03v11\x18\v \x01(\tR\x03v11\x123\n" +
-	"\x03v12\x18\f \x03(\v2!.hbuf.test.ProtoBuffTest.V12EntryR\x03v12\x1a5\n" +
+	"\x03v12\x18\f \x03(\v2!.hbuf.test.ProtoBuffTest.V12EntryR\x03v12\x12\x10\n" +
+	"\x03v13\x18\r \x01(\fR\x03v13\x1a5\n" +
 	"\aV8Entry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aO\n" +

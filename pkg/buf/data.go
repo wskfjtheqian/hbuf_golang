@@ -2,6 +2,7 @@ package hbuf
 
 import (
 	"reflect"
+	"time"
 )
 
 type Type byte
@@ -16,6 +17,12 @@ const (
 	TMap
 	TData
 )
+
+type Int64 int64
+
+type Uint64 uint64
+
+type Time time.Time
 
 type Data interface {
 	Descriptors() Descriptor
