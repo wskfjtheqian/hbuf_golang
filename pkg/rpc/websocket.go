@@ -203,7 +203,7 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return ws.response(ctx, path, writer, reader)
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data)
 	if err != nil {
-		err = json.NewEncoder(response).Encode(&Result{
+		err = json.NewEncoder(response).Encode(&Result[hbuf.Data]{
 			Code: http.StatusInternalServerError,
 			Msg:  "Server error",
 		})
@@ -350,7 +350,7 @@ type WebSocketServer struct {
 func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	conn, _, _, err := ws.UpgradeHTTP(request, writer)
 	if err != nil {
-		http.Error(writer, "Upgrade failed", http.StatusInternalServerError)
+		http.Error(writer, http.StatusText(http.StatusUpgradeRequired), http.StatusUpgradeRequired)
 		return
 	}
 

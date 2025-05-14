@@ -22,7 +22,7 @@ type Data interface {
 }
 
 func Marshal(data Data, tag string) ([]byte, error) {
-	buf := make([]byte, 0)
+	buf := make([]byte, 0, 128)
 	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), 0, false, tag), nil
 }
 

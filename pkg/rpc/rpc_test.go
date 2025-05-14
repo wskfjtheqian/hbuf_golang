@@ -48,7 +48,7 @@ type TestRpcClient struct {
 	client *Client
 }
 
-func (t TestRpcClient) GetName(ctx context.Context, req *GetNameRequest) (*GetNameResponse, error) {
+func (t *TestRpcClient) GetName(ctx context.Context, req *GetNameRequest) (*GetNameResponse, error) {
 	response, err := ClientCall[*GetNameRequest, *GetNameResponse](ctx, t.client, 0, "TestRpc", "GetName", req)
 	if err != nil {
 		return nil, err

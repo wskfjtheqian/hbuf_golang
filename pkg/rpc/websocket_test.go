@@ -17,7 +17,7 @@ func TestWebsocket_RPC(t *testing.T) {
 
 	server := NewWebSocketServer(rpcServer.Response)
 
-	http.Handle("/rpc", server)
+	http.Handle("/socket", server)
 	go http.ListenAndServe(":8080", nil)
 
 	client := NewWebSocketClient("ws://localhost:8080/socket", nil)

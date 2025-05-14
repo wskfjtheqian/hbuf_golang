@@ -205,7 +205,7 @@ type HttpServer struct {
 // ServeHTTP 实现 http.Handler 接口。
 func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -214,8 +214,12 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return h.server.Response(ctx, path, writer, reader)
 	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		var e *httpError
+		if errors.As(err, &e) {
+			http.Error(w, e.msg, e.code)
+		} else {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -228,5 +232,21 @@ func WithResponseMiddleware(middleware ...ResponseMiddleware) HttpServerOptions 
 			}
 			return next
 		}
+	}
+}
+
+type httpError struct {
+	code int
+	msg  string
+}
+
+func (e *httpError) Error() string {
+	return e.msg
+}
+
+func newHttpError(code int) error {
+	return &httpError{
+		code: code,
+		msg:  http.StatusText(code),
 	}
 }

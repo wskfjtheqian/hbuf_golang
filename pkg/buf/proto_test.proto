@@ -21,4 +21,5 @@ message ProtoBuffTest {
   repeated ProtoBuffSub v10 = 10;
   string v11 = 11;
   map<string, ProtoBuffSub> v12 = 12;
+  bytes v13 = 13;
 }

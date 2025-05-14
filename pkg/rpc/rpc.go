@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -173,21 +172,43 @@ func (m *MethodImpl[T, E]) GetHandler() Handler {
 
 //////////////////////////////////////////////////////
 
-var result Result
-var resultDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(Result{}), map[uint16]hbuf.Descriptor{
-	1: hbuf.NewInt32Descriptor(unsafe.Offsetof(result.Code), false),
-	2: hbuf.NewStringDescriptor(unsafe.Offsetof(result.Msg), false),
-	3: hbuf.NewBytesDescriptor(unsafe.Offsetof(result.Data), false),
-})
-
-type Result struct {
-	Code int32           `json:"code"`
-	Msg  string          `json:"msg"`
-	Data json.RawMessage `json:"data"`
+type Result[T hbuf.Data] struct {
+	Code       int32  `json:"code"`
+	Msg        string `json:"msg"`
+	Data       T      `json:"data"`
+	descriptor hbuf.Descriptor
 }
 
-func (r *Result) Descriptors() hbuf.Descriptor {
-	return resultDescriptor
+func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
+	ret := &Result[T]{
+		Code: code,
+		Msg:  msg,
+		Data: data,
+	}
+	descriptor := map[uint16]hbuf.Descriptor{
+		1: hbuf.NewInt32Descriptor(unsafe.Offsetof(ret.Code), false),
+		2: hbuf.NewStringDescriptor(unsafe.Offsetof(ret.Msg), false),
+	}
+	if any(data) != nil {
+		descriptor[3] = hbuf.CloneDataDescriptor(data, unsafe.Offsetof(ret.Data)+unsafe.Sizeof(&ret.Data), true)
+	}
+	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), descriptor)
+	return ret
+}
+
+func NewResultResponse[T hbuf.Data]() *Result[T] {
+	ret := &Result[T]{}
+	descriptor := map[uint16]hbuf.Descriptor{
+		1: hbuf.NewInt32Descriptor(unsafe.Offsetof(ret.Code), false),
+		2: hbuf.NewStringDescriptor(unsafe.Offsetof(ret.Msg), false),
+		3: hbuf.CloneDataDescriptor(reflect.New(reflect.TypeOf(ret.Data).Elem()).Interface().(hbuf.Data), unsafe.Offsetof(ret.Data), true),
+	}
+	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), descriptor)
+	return ret
+}
+
+func (r *Result[T]) Descriptors() hbuf.Descriptor {
+	return r.descriptor
 }
 
 type Encoder func(writer io.Writer) func(v hbuf.Data) error
@@ -320,7 +341,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	r.lock.RUnlock()
 
 	if !ok {
-		return errors.New("method not found")
+		return newHttpError(http.StatusNotFound)
 	}
 	request, err := method.DecodeRequest(r.decode(reader))
 	if err != nil {
@@ -333,17 +354,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return err
 	}
 
-	buffer := bytes.NewBuffer(nil)
-	err = r.encode(buffer)(response)
-	if err != nil {
-		return err
-	}
-
-	return r.encode(writer)(&Result{
-		Code: 0,
-		Msg:  "ok",
-		Data: buffer.Bytes(),
-	})
+	return r.encode(writer)(NewResult(0, "ok", response))
 }
 
 //////////////////////////////////////////////////////
@@ -414,8 +425,8 @@ func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uin
 		}
 		defer reader.Close()
 
-		var result Result
-		err = c.decode(reader)(&result)
+		result := NewResultResponse[E]()
+		err = c.decode(reader)(result)
 		if err != nil {
 			return nil, err
 		}
@@ -424,17 +435,11 @@ func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uin
 			return nil, errors.New(result.Msg)
 		}
 
-		var data T
-		err = c.decode(bytes.NewReader(result.Data))(data)
-		if err != nil {
-			return nil, err
-		}
-
-		return data, nil
+		return result.Data, nil
 	})(ctx, any(request).(hbuf.Data))
 	if err != nil {
-		var v E
-		return v, err
+		var r E
+		return r, err
 	}
 	return data.(E), nil
 }

@@ -58,10 +58,10 @@ func TestHttpService_InvokeHBuf(t *testing.T) {
 
 // 测试 HttpService 加密通信
 func TestHttpService_Encoder(t *testing.T) {
-	rpcServer := NewServer()
+	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/socket/", rpcServer, WithResponseMiddleware(func(next Response) Response {
+	server := NewHttpServer("/rpc/", rpcServer, WithResponseMiddleware(func(next Response) Response {
 		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
@@ -77,7 +77,6 @@ func TestHttpService_Encoder(t *testing.T) {
 
 	client := NewHttpClient("http://localhost:8080/rpc", WithRequestMiddleware(func(next Request) Request {
 		return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
-
 			body, err := next(ctx, path, notification, func(writer io.Writer) error {
 				encoder := base64.NewEncoder(base64.StdEncoding, writer)
 				defer encoder.Close()
@@ -93,7 +92,7 @@ func TestHttpService_Encoder(t *testing.T) {
 		}
 	}))
 
-	rpcClient := NewClient(client.Request)
+	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
 	testClient := NewTestRpcClient(rpcClient)
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
 	if err != nil {
@@ -122,7 +121,7 @@ func TestHttpService_Middleware(t *testing.T) {
 	}))
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
-	server := NewHttpServer("/socket/", rpcServer)
+	server := NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
