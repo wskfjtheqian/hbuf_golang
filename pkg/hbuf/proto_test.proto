@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package hbuf.test;
+option go_package = ".;hbuf_test";
+
+message ProtoBuffSub {
+  int64 v1 = 1;
+}
+
+message ProtoBuffTest {
+  int32 v1 = 1;
+  optional int32 v2 = 2;
+  int64 v3 = 3;
+  optional uint64 v4 = 4;
+  uint32 v5 = 5;
+  optional uint32 v6 = 6;
+  uint64 v7 = 7;
+  optional uint64 v8 = 8;
+  string v9 = 9;
+  optional string v10 = 10;
+  bytes v11 = 11;
+  optional bytes v12 = 12;
+  float v13 = 13;
+  optional float v14 = 14;
+  double v15 = 15;
+  optional double v16 = 16;
+  bool v17 = 17;
+  optional bool v18 = 18;
+  ProtoBuffSub v19 = 19;
+  optional ProtoBuffSub v20 = 20;
+  repeated int32 v21 = 21;
+  repeated int64 v22 = 22;
+  repeated uint32 v23 = 23;
+  repeated uint64 v24 = 24;
+  repeated float v25 = 25;
+  repeated double v26 = 26;
+  repeated bool v27 = 27;
+  repeated string v28 = 28;
+  repeated bytes v29 = 29;
+  repeated ProtoBuffSub v30 = 30;
+
+  map<int32, int32> v31 = 31;
+  map<int32, int64> v32 = 32;
+  map<int32, uint32> v33 = 33;
+  map<int32, uint64> v34 = 34;
+  map<int32, float> v35 = 35;
+  map<int32, double> v36 = 36;
+  map<int32, bool> v37 = 37;
+  map<int32, string> v38 = 38;
+  map<int32, bytes> v39 = 39;
+  map<int32, ProtoBuffSub> v40 = 40;
+
+  map<int64, int32> v41 = 41;
+  map<int64, int64> v42 = 42;
+  map<int64, uint32> v43 = 43;
+  map<int64, uint64> v44 = 44;
+  map<int64, float> v45 = 45;
+  map<int64, double> v46 = 46;
+  map<int64, bool> v47 = 47;
+  map<int64, string> v48 = 48;
+  map<int64, bytes> v49 = 49;
+  map<int64, ProtoBuffSub> v50 = 50;
+
+  map<uint32, int32> v51 = 51;
+  map<uint32, int64> v52 = 52;
+  map<uint32, uint32> v53 = 53;
+  map<uint32, uint64> v54 = 54;
+  map<uint32, float> v55 = 55;
+  map<uint32, double> v56 = 56;
+  map<uint32, bool> v57 = 57;
+  map<uint32, string> v58 = 58;
+  map<uint32, bytes> v59 = 59;
+  map<uint32, ProtoBuffSub> v60 = 60;
+
+  map<uint64, int32> v61 = 61;
+  map<uint64, int64> v62 = 62;
+  map<uint64, uint32> v63 = 63;
+  map<uint64, uint64> v64 = 64;
+  map<uint64, float> v65 = 65;
+  map<uint64, double> v66 = 66;
+  map<uint64, bool> v67 = 67;
+  map<uint64, string> v68 = 68;
+  map<uint64, bytes> v69 = 69;
+  map<uint64, ProtoBuffSub> v70 = 70;
+
+  map<string, int32> v71 = 71;
+  map<string, int64> v72 = 72;
+  map<string, uint32> v73 = 73;
+  map<string, uint64> v74 = 74;
+  map<string, float> v75 = 75;
+  map<string, double> v76 = 76;
+  map<string, bool> v77 = 77;
+  map<string, string> v78 = 78;
+  map<string, bytes> v79 = 79;
+  map<string, ProtoBuffSub> v80 = 80;
+
+}

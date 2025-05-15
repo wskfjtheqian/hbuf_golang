@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
+	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	"net/http"
 	"testing"

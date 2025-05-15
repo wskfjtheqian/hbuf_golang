@@ -1,0 +1,124 @@
+package go = "hbuf"
+
+data ProtoBufSubTest {
+    int8 V1 = 1
+
+    int8? V2 = 2
+}
+
+data ProtoBufTest {
+    int8 V1 = 1
+
+    int8? V2 = 2
+
+    int16 V3 = 3
+
+    int16? V4 = 4
+
+    int32 V5 = 5
+
+    int32? V6 = 6
+
+    int64 V7 = 7
+
+    int64? V8 = 8
+
+    uint8 V9 = 9
+
+    uint8? V10 = 10
+
+    uint16 V11 = 11
+
+    uint16? V12 = 12
+
+    uint32 V13 = 13
+
+    uint32? V14 = 14
+
+    uint64 V15 = 15
+
+    uint64? V16 = 16
+
+    bool V17 = 17
+
+    bool? V18 = 18
+
+    string V19 = 19
+
+    string? V20 = 20
+
+    //    bytes V21 = 21
+    //
+    //    bytes? V22 = 22
+
+    float V23 = 23
+
+    float? V24 = 24
+
+    double V25 = 25
+
+    double? V26 = 26
+
+    int8[] v27 = 27
+
+    int8[]? v28 = 28
+
+    int16[] v29 = 29
+
+    int16[]? v30 = 30
+
+    int32[] v31 = 31
+
+    int32[]? v32 = 32
+
+    int64[] v33 = 33
+
+    int64[]? v34 = 34
+
+    uint8[] v35 = 35
+
+    uint8[]? v36 = 36
+
+    uint16[] v37 = 37
+
+    uint16[]? v38 = 38
+
+    uint32[] v39 = 39
+
+    uint32[]? v40 = 40
+
+    uint64[] v41 = 41
+
+    uint64[]? v42 = 42
+
+    bool[] v43 = 43
+
+    bool[]? v44 = 44
+
+    string[] v45 = 45
+
+    string[]? v46 = 46
+
+    //    bytes[] v47 = 47
+    //
+    //    bytes[]? v48 = 48
+
+    float[] v49 = 49
+
+    float[]? v50 = 50
+
+    double[] v51 = 51
+
+    double[]? v52 = 52
+
+    ProtoBufSubTest V53 = 53
+
+    ProtoBufSubTest? V54 = 54
+
+    ProtoBufSubTest[] v55 = 55
+
+    ProtoBufSubTest[]? v56 = 56
+
+    ProtoBufSubTest v57 = 57
+
+}

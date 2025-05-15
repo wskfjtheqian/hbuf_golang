@@ -2,7 +2,7 @@ package rpc
 
 import (
 	"context"
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
+	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"reflect"
 	"time"
 	"unsafe"

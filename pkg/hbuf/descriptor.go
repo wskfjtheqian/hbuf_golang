@@ -1092,32 +1092,32 @@ func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLe
 	return buf, nil
 }
 
-func NewFloat64Descriptor(offset uintptr, isPrt bool, tags ...string) Descriptor {
-	return &Float64Descriptor{
+func NewDoubleDescriptor(offset uintptr, isPrt bool, tags ...string) Descriptor {
+	return &DoubleDescriptor{
 		offset: offset,
 		isPrt:  isPrt,
 		tags:   listToSet(tags),
 	}
 }
 
-type Float64Descriptor struct {
+type DoubleDescriptor struct {
 	offset uintptr
 	isPrt  bool
 	tags   map[string]bool
 }
 
-func (d *Float64Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
+func (d *DoubleDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	if p != nil && (len(tag) == 0 || d.tags[tag]) {
 		return p
 	}
 	return nil
 }
 
-func (d *Float64Descriptor) SetTag(tags map[string]bool) {
+func (d *DoubleDescriptor) SetTag(tags map[string]bool) {
 	d.tags = tags
 }
 
-func (d *Float64Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
+func (d *DoubleDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	if len(tag) > 0 {
 		if _, ok := d.tags[tag]; !ok {
 			return nil
@@ -1137,7 +1137,7 @@ func (d *Float64Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointe
 	return ptr
 }
 
-func (d *Float64Descriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte {
+func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte {
 	var val float64
 	if p == nil {
 		if !null {
@@ -1152,7 +1152,7 @@ func (d *Float64Descriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null
 	return WriterUint64(buf, value)
 }
 
-func (d *Float64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8, tag string) ([]byte, error) {
+func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8, tag string) ([]byte, error) {
 	if typ != TFloat {
 		return nil, errors.New("invalid float type")
 	}
@@ -1168,32 +1168,32 @@ func (d *Float64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, value
 	return buf, nil
 }
 
-func NewFloat32Descriptor(offset uintptr, isPrt bool, tags ...string) Descriptor {
-	return &Float32Descriptor{
+func NewFloatDescriptor(offset uintptr, isPrt bool, tags ...string) Descriptor {
+	return &FloatDescriptor{
 		offset: offset,
 		isPrt:  isPrt,
 		tags:   listToSet(tags),
 	}
 }
 
-type Float32Descriptor struct {
+type FloatDescriptor struct {
 	offset uintptr
 	isPrt  bool
 	tags   map[string]bool
 }
 
-func (d *Float32Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
+func (d *FloatDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	if p != nil && (len(tag) == 0 || d.tags[tag]) {
 		return p
 	}
 	return nil
 }
 
-func (d *Float32Descriptor) SetTag(tags map[string]bool) {
+func (d *FloatDescriptor) SetTag(tags map[string]bool) {
 	d.tags = tags
 }
 
-func (d *Float32Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
+func (d *FloatDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	if len(tag) > 0 {
 		if _, ok := d.tags[tag]; !ok {
 			return nil
@@ -1213,7 +1213,7 @@ func (d *Float32Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointe
 	return ptr
 }
 
-func (d *Float32Descriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte {
+func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null bool, tag string) []byte {
 	var val float32
 	if p == nil {
 		if !null {
@@ -1228,7 +1228,7 @@ func (d *Float32Descriptor) Encode(buf []byte, p unsafe.Pointer, id uint16, null
 	return WriterUint64(buf, uint64(value))
 }
 
-func (d *Float32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8, tag string) ([]byte, error) {
+func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen uint8, tag string) ([]byte, error) {
 	if typ != TFloat {
 		return nil, errors.New("invalid float type")
 	}

@@ -3,7 +3,7 @@ package hbuf_test
 import (
 	"bytes"
 	"encoding/json"
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/buf"
+	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/nbuf"
 	"google.golang.org/protobuf/proto"
 	"os"
 	"path/filepath"
@@ -33,7 +33,7 @@ var src = ProtoBuffTest{
 }
 
 var protoBuffSub ProtoBuffSub
-var protoBuffSubDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ProtoBuffSub{}), map[uint16]hbuf.Descriptor{
+var protoBuffSubDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&protoBuffSub), map[uint16]hbuf.Descriptor{
 	1: hbuf.NewInt64Descriptor(unsafe.Offsetof(protoBuffSub.V1), false, "v"),
 })
 
