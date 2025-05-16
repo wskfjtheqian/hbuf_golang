@@ -7,259 +7,259 @@ data HBufSubTest {
 }
 
 data HBufTest {
-    int8 V1 = 0
+    int8 V1 = 1
 
-    int8? V2 = 1
+    int8? V2 = 2
 
-    int16 V3 = 2
+    int16 V3 = 3
 
-    int16? V4 = 3
+    int16? V4 = 4
 
-    int32 V5 = 4
+    int32 V5 = 5
 
-    int32? V6 = 5
+    int32? V6 = 6
 
-    int64 V7 = 6
+    int64 V7 = 7
 
-    int64? V8 = 7
+    int64? V8 = 8
 
-    uint8 V9 = 8
+    uint8 V9 = 9
 
-    uint8? V10 = 9
+    uint8? V10 = 10
 
-    uint16 V11 = 10
+    uint16 V11 = 11
 
-    uint16? V12 = 11
+    uint16? V12 = 12
 
-    uint32 V13 = 12
+    uint32 V13 = 13
 
-    uint32? V14 = 13
+    uint32? V14 = 14
 
-    uint64 V15 = 14
+    uint64 V15 = 15
 
-    uint64? V16 = 15
+    uint64? V16 = 16
 
-    bool V17 = 16
+    bool V17 = 17
 
-    bool? V18 = 17
+    bool? V18 = 18
 
-    string V19 = 18
+    string V19 = 19
 
-    string? V20 = 19
+    string? V20 = 20
 
-    bytes V21 = 20
+    bytes V21 = 21
 
-    bytes? V22 = 21
+    bytes? V22 = 22
 
-    float V23 = 22
+    float V23 = 23
 
-    float? V24 = 23
+    float? V24 = 24
 
-    double V25 = 24
+    double V25 = 25
 
-    double? V26 = 25
+    double? V26 = 26
 
-    date V27 = 26
+    date V27 = 27
 
-    date? V28 = 27
+    date? V28 = 28
 
-    decimal V29 = 28
+    decimal V29 = 29
 
-    decimal? V30 = 29
+    decimal? V30 = 30
 
-    HBufSubTest V31 = 30
+    HBufSubTest V31 = 31
 
-    HBufSubTest? V32 = 31
-//
-//    int8[] v33 = 32
-//
-//    int8[]? v34 = 33
-//
-//    int16[] v35 = 34
-//
-//    int16[]? v36 = 35
-//
-//    int32[] v37 = 36
-//
-//    int32[]? v38 = 37
-//
-//    int64[] v39 = 38
-//
-//    int64[]? v40 = 39
-//
-//    uint8[] v41 = 40
-//
-//    uint8[]? v42 = 41
-//
-//    uint16[] v43 = 42
-//
-//    uint16[]? v44 = 43
-//
-//    uint32[] v45 = 44
-//
-//    uint32[]? v46 = 45
-//
-//    uint64[] v47 = 46
-//
-//    uint64[]? v48 = 47
-//
-//    bool[] v49 = 48
-//
-//    bool[]? v50 = 49
-//
-//    string[] v51 = 50
-//
-//    string[]? v52 = 51
-//
-//    bytes[] v53 = 52
-//
-//    bytes[]? v54 = 53
-//
-//    float[] v55 = 54
-//
-//    float[]? v56 = 55
-//
-//    double[] v57 = 56
-//
-//    double[]? v58 = 57
-//
-//    date[] v59 = 58
-//
-//    date[]? v60 = 59
-//
-//    decimal[] v61 = 60
-//
-//    decimal?[]? v62 = 61
-//
-//    HBufSubTest[] v63 = 62
-//
-//    HBufSubTest?[]? v64 = 63
-//
-//    int8<int64> v65 = 64
-//
-//    int8<int64>? v66 = 65
-//
-//    int16<int64> v67 = 66
-//
-//    int16<int64>? v68 = 67
-//
-//    int32<int64> v69 = 68
-//
-//    int32<int64>? v70 = 69
-//
-//    int64<int64> v71 = 70
-//
-//    int64<int64>? v72 = 71
-//
-//    uint8<int64> v73 = 72
-//
-//    uint8<int64>? v74 = 73
-//
-//    uint16<int64> v75 = 74
-//
-//    uint16<int64>? v76 = 75
-//
-//    uint32<int64> v77 = 76
-//
-//    uint32<int64>? v78 = 77
-//
-//    uint64<int64> v79= 78
-//
-//    uint64<int64>? v80 = 79
-//
-//    bool<int64> v81 = 80
-//
-//    bool<int64>? v82 = 81
-//
-//    string<int64> v83 = 82
-//
-//    string<int64>? v84 = 83
-//
-//    bytes<int64> v85 = 84
-//
-//    bytes<int64>? v86 = 85
-//
-//    float<int64> v87 = 86
-//
-//    float<int64>? v88 = 87
-//
-//    double<int64> v89 = 88
-//
-//    double<int64>? v90 = 89
-//
-//    date<int64> v91= 90
-//
-//    date<int64>? v92 = 91
-//
-//    decimal<int64> v93 = 92
-//
-//    decimal?<int64>? v94= 93
-//
-//    HBufSubTest<int64> v95 = 94
-//
-//    HBufSubTest?<int64>? v96 = 95
-//
-//    int8<string> v97 = 96
-//
-//    int8<string>? v98 = 97
-//
-//    int16<string> v99 = 98
-//
-//    int16<string>? v100 = 99
-//
-//    int32<string> v101 = 100
-//
-//    int32<string>? v102 = 101
-//
-//    int64<string> v103 = 102
-//
-//    int64<string>? v104 = 103
-//
-//    uint8<string> v105 = 104
-//
-//    uint8<string>? v106 = 105
-//
-//    uint16<string> v107 = 106
-//
-//    uint16<string>? v108 = 107
-//
-//    uint32<string> v109 = 108
-//
-//    uint32<string>? v110 = 109
-//
-//    uint64<string> v111 = 110
-//
-//    uint64<string>? v112 = 111
-//
-//    bool<string> v113 = 112
-//
-//    bool<string>? v114 = 113
-//
-//    string<string> v115 = 114
-//
-//    string<string>? v116 = 115
-//
-//    bytes<string> v117 = 116
-//
-//    bytes<string>? v118 = 117
-//
-//    float<string> v119 = 118
-//
-//    float<string>? v120 = 119
-//
-//    double<string> v121 = 120
-//
-//    double<string>? v122 = 121
-//
-//    date<string> v123 = 122
-//
-//    date<string>? v124 = 123
-//
-//    decimal<string> v125 = 124
-//
-//    decimal<string>? v126 = 125
-//
-//    HBufSubTest<string> v127 = 126
-//
-//    HBufSubTest?<string>? v128 = 127
+    HBufSubTest? V32 = 32
+
+    int8[] v33 = 33
+
+    int8?[] v34 = 34
+
+    int16[] v35 = 35
+
+    int16?[] v36 = 36
+
+    int32[] v37 = 37
+
+    int32?[] v38 = 38
+
+    int64[] v39 = 39
+
+    int64?[] v40 = 40
+
+    uint8[] v41 = 41
+
+    uint8?[] v42 = 42
+
+    uint16[] v43 = 43
+
+    uint16?[] v44 = 44
+
+    uint32[] v45 = 45
+
+    uint32?[] v46 = 46
+
+    uint64[] v47 = 47
+
+    uint64?[] v48 = 48
+
+    bool[] v49 = 49
+
+    bool?[] v50 = 50
+
+    string[] v51 = 51
+
+    string?[] v52 = 52
+
+    bytes[] v53 = 53
+
+    bytes?[] v54 = 54
+
+    float[] v55 = 55
+
+    float?[] v56 = 56
+
+    double[] v57 = 57
+
+    double?[] v58 = 58
+
+    date[] v59 = 59
+
+    date?[] v60 = 60
+
+    decimal[] v61 = 61
+
+    decimal?[] v62 = 62
+
+    HBufSubTest[] v63 = 63
+
+    HBufSubTest?[] v64 = 64
+
+    int8<int64> v65 = 65
+
+    int8?<int64> v66 = 66
+
+    int16<int64> v67 = 67
+
+    int16?<int64> v68 = 68
+
+    int32<int64> v69 = 69
+
+    int32?<int64> v70 = 70
+
+    int64<int64> v71 = 71
+
+    int64?<int64> v72 = 72
+
+    uint8<int64> v73 = 73
+
+    uint8?<int64> v74 = 74
+
+    uint16<int64> v75 = 75
+
+    uint16?<int64> v76 = 76
+
+    uint32<int64> v77 = 77
+
+    uint32?<int64> v78 = 78
+
+    uint64<int64> v79 = 79
+
+    uint64?<int64> v80 = 80
+
+    bool<int64> v81 = 81
+
+    bool?<int64> v82 = 82
+
+    string<int64> v83 = 83
+
+    string?<int64> v84 = 84
+
+    bytes<int64> v85 = 85
+
+    bytes?<int64> v86 = 86
+
+    float<int64> v87 = 87
+
+    float?<int64> v88 = 88
+
+    double<int64> v89 = 89
+
+    double?<int64> v90 = 90
+
+    date<int64> v91 = 91
+
+    date?<int64> v92 = 92
+
+    decimal<int64> v93 = 93
+
+    decimal?<int64> v94 = 94
+
+    HBufSubTest<int64> v95 = 95
+
+    HBufSubTest?<int64> v96 = 96
+
+    int8<string> v97 = 97
+
+    int8?<string> v98 = 98
+
+    int16<string> v99 = 99
+
+    int16?<string> v100 = 100
+
+    int32<string> v101 = 101
+
+    int32?<string> v102 = 102
+
+    int64<string> v103 = 103
+
+    int64?<string> v104 = 104
+
+    uint8<string> v105 = 105
+
+    uint8?<string> v106 = 106
+
+    uint16<string> v107 = 107
+
+    uint16?<string> v108 = 108
+
+    uint32<string> v109 = 109
+
+    uint32?<string> v110 = 110
+
+    uint64<string> v111 = 111
+
+    uint64?<string> v112 = 112
+
+    bool<string> v113 = 113
+
+    bool?<string> v114 = 114
+
+    string<string> v115 = 115
+
+    string?<string> v116 = 116
+
+    bytes<string> v117 = 117
+
+    bytes?<string> v118 = 118
+
+    float<string> v119 = 119
+
+    float?<string> v120 = 120
+
+    double<string> v121 = 121
+
+    double?<string> v122 = 122
+
+    date<string> v123 = 123
+
+    date?<string> v124 = 124
+
+    decimal<string> v125 = 125
+
+    decimal?<string> v126 = 126
+
+    HBufSubTest<string> v127 = 127
+
+    HBufSubTest?<string> v128 = 128
 }

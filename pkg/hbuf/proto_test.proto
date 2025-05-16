@@ -4,7 +4,9 @@ package hbuf.test;
 option go_package = ".;hbuf_test";
 
 message ProtoBuffSub {
-  int64 v1 = 1;
+  int32 V1 = 1;
+
+  repeated int32 V2 = 2;
 }
 
 message ProtoBuffTest {
