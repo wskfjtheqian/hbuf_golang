@@ -1,12 +1,12 @@
 package go = "hbuf"
 
-data ProtoBufSubTest {
+data HBufSubTest {
     int8 V1 = 1
 
     int8? V2 = 2
 }
 
-data ProtoBufTest {
+data HBufTest {
     int8 V1 = 0
 
     int8? V2 = 1
@@ -47,93 +47,219 @@ data ProtoBufTest {
 
     string? V20 = 19
 
-//    bytes V21 = 20
+    bytes V21 = 20
+
+    bytes? V22 = 21
+
+    float V23 = 22
+
+    float? V24 = 23
+
+    double V25 = 24
+
+    double? V26 = 25
+
+    date V27 = 26
+
+    date? V28 = 27
+
+    decimal V29 = 28
+
+    decimal? V30 = 29
+
+//    ProtoBufSubTest V31 = 30
 //
-//    bytes? V22 = 21
-
-    float V23 = 20
-
-    float? V24 = 21
-
-    double V25 = 22
-
-    double? V26 = 23
-
-    date V58 = 24
-
-    date? V59 = 25
-
-    decimal V60 = 26
-
-    decimal? V61 = 27
-
-    ProtoBufSubTest V53 = 28
-
-    ProtoBufSubTest? V54 = 29
-
-    int8[] v27 = 30
-
-    int8[]? v28 = 31
-
-    int16[] v29 = 32
-
-    int16[]? v30 = 33
-
-    int32[] v31 = 34
-
-    int32[]? v32 = 35
-
-    int64[] v33 = 36
-
-    int64[]? v34 = 37
-
-    uint8[] v35 = 38
-
-    uint8[]? v36 = 39
-
-    uint16[] v37 = 40
-
-    uint16[]? v38 = 41
-
-    uint32[] v39 = 42
-
-    uint32[]? v40 = 43
-
-    uint64[] v41 = 44
-
-    uint64[]? v42 = 45
-
-    bool[] v43 = 46
-
-    bool[]? v44 = 47
-
-    string[] v45 = 48
-
-    string[]? v46 = 49
-
-//    bytes[] v47 = 52
+//    ProtoBufSubTest? V32 = 31
 //
-//    bytes[]? v48 = 53
-
-    float[] v49 = 50
-
-    float[]? v50 = 51
-
-    double[] v51 = 52
-
-    double[]? v52 = 53
-
-    date[] v55 = 54
-
-    date[]? v56 = 55
-
-    decimal[] v57 = 56
-
-    decimal[]? v58 = 57
-
-    ProtoBufSubTest[] v62 = 58
-
-    ProtoBufSubTest[]? v63 = 59
-
-
+//    int8[] v33 = 32
+//
+//    int8[]? v34 = 33
+//
+//    int16[] v35 = 34
+//
+//    int16[]? v36 = 35
+//
+//    int32[] v37 = 36
+//
+//    int32[]? v38 = 37
+//
+//    int64[] v39 = 38
+//
+//    int64[]? v40 = 39
+//
+//    uint8[] v41 = 40
+//
+//    uint8[]? v42 = 41
+//
+//    uint16[] v43 = 42
+//
+//    uint16[]? v44 = 43
+//
+//    uint32[] v45 = 44
+//
+//    uint32[]? v46 = 45
+//
+//    uint64[] v47 = 46
+//
+//    uint64[]? v48 = 47
+//
+//    bool[] v49 = 48
+//
+//    bool[]? v50 = 49
+//
+//    string[] v51 = 50
+//
+//    string[]? v52 = 51
+//
+//    bytes[] v53 = 52
+//
+//    bytes[]? v54 = 53
+//
+//    float[] v55 = 54
+//
+//    float[]? v56 = 55
+//
+//    double[] v57 = 56
+//
+//    double[]? v58 = 57
+//
+//    date[] v59 = 58
+//
+//    date[]? v60 = 59
+//
+//    decimal[] v61 = 60
+//
+//    decimal?[]? v62 = 61
+//
+//    ProtoBufSubTest[] v63 = 62
+//
+//    ProtoBufSubTest?[]? v64 = 63
+//
+//    int8<int64> v65 = 64
+//
+//    int8<int64>? v66 = 65
+//
+//    int16<int64> v67 = 66
+//
+//    int16<int64>? v68 = 67
+//
+//    int32<int64> v69 = 68
+//
+//    int32<int64>? v70 = 69
+//
+//    int64<int64> v71 = 70
+//
+//    int64<int64>? v72 = 71
+//
+//    uint8<int64> v73 = 72
+//
+//    uint8<int64>? v74 = 73
+//
+//    uint16<int64> v75 = 74
+//
+//    uint16<int64>? v76 = 75
+//
+//    uint32<int64> v77 = 76
+//
+//    uint32<int64>? v78 = 77
+//
+//    uint64<int64> v79= 78
+//
+//    uint64<int64>? v80 = 79
+//
+//    bool<int64> v81 = 80
+//
+//    bool<int64>? v82 = 81
+//
+//    string<int64> v83 = 82
+//
+//    string<int64>? v84 = 83
+//
+//    bytes<int64> v85 = 84
+//
+//    bytes<int64>? v86 = 85
+//
+//    float<int64> v87 = 86
+//
+//    float<int64>? v88 = 87
+//
+//    double<int64> v89 = 88
+//
+//    double<int64>? v90 = 89
+//
+//    date<int64> v91= 90
+//
+//    date<int64>? v92 = 91
+//
+//    decimal<int64> v93 = 92
+//
+//    decimal?<int64>? v94= 93
+//
+//    ProtoBufSubTest<int64> v95 = 94
+//
+//    ProtoBufSubTest?<int64>? v96 = 95
+//
+//    int8<string> v97 = 96
+//
+//    int8<string>? v98 = 97
+//
+//    int16<string> v99 = 98
+//
+//    int16<string>? v100 = 99
+//
+//    int32<string> v101 = 100
+//
+//    int32<string>? v102 = 101
+//
+//    int64<string> v103 = 102
+//
+//    int64<string>? v104 = 103
+//
+//    uint8<string> v105 = 104
+//
+//    uint8<string>? v106 = 105
+//
+//    uint16<string> v107 = 106
+//
+//    uint16<string>? v108 = 107
+//
+//    uint32<string> v109 = 108
+//
+//    uint32<string>? v110 = 109
+//
+//    uint64<string> v111 = 110
+//
+//    uint64<string>? v112 = 111
+//
+//    bool<string> v113 = 112
+//
+//    bool<string>? v114 = 113
+//
+//    string<string> v115 = 114
+//
+//    string<string>? v116 = 115
+//
+//    bytes<string> v117 = 116
+//
+//    bytes<string>? v118 = 117
+//
+//    float<string> v119 = 118
+//
+//    float<string>? v120 = 119
+//
+//    double<string> v121 = 120
+//
+//    double<string>? v122 = 121
+//
+//    date<string> v123 = 122
+//
+//    date<string>? v124 = 123
+//
+//    decimal<string> v125 = 124
+//
+//    decimal<string>? v126 = 125
+//
+//    ProtoBufSubTest<string> v127 = 126
+//
+//    ProtoBufSubTest?<string>? v128 = 127
 }

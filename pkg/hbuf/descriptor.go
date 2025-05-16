@@ -162,13 +162,14 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valueLen
 	return buf, nil
 }
 
-func NewListDescriptor[T any](offset uintptr, desc Descriptor, tags ...string) Descriptor {
+func NewListDescriptor[T any](offset uintptr, desc Descriptor, isPtr bool, tags ...string) Descriptor {
 	tagMap := listToSet(tags)
 	desc.SetTag(tagMap)
 	return &ListDescriptor[T]{
 		offset: offset,
 		desc:   desc,
 		tags:   tagMap,
+		isPtr:  isPtr,
 	}
 }
 
@@ -176,6 +177,7 @@ type ListDescriptor[T any] struct {
 	offset uintptr
 	desc   Descriptor
 	tags   map[string]bool
+	isPtr  bool
 }
 
 func (d *ListDescriptor[T]) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
@@ -250,7 +252,7 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, value
 	return buf, nil
 }
 
-func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, tags ...string) Descriptor {
+func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, isPtr bool, tags ...string) Descriptor {
 	tagMap := listToSet(tags)
 	keyDesc.SetTag(tagMap)
 	valueDesc.SetTag(tagMap)
@@ -260,6 +262,7 @@ func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, v
 		keyDesc:   keyDesc,
 		valueDesc: valueDesc,
 		tags:      tagMap,
+		isPtr:     isPtr,
 	}
 }
 
@@ -268,6 +271,7 @@ type MapDescriptor[K comparable, V any] struct {
 	keyDesc   Descriptor
 	valueDesc Descriptor
 	tags      map[string]bool
+	isPtr     bool
 }
 
 func (d *MapDescriptor[K, V]) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
