@@ -2,10 +2,12 @@ package hbuf_test
 
 import (
 	"encoding/json"
+	"github.com/shopspring/decimal"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TP[T any](v T) *T {
@@ -29,6 +31,28 @@ var src = HBufTest{
 	V14: TP(uint32(655306553)),
 	V15: 6553065535,
 	V16: TP(hbuf.Uint64(6553065535)),
+	V17: true,
+	V18: TP(true),
+	V19: "hello world",
+	V20: TP("hello world"),
+	V21: []byte("hello world123456"),
+	V22: TP([]byte("hello world123456")),
+	V23: 3.1415926535895781,
+	V24: TP(float32(3.1415926535895781)),
+	V25: 3.1415926535895781,
+	V26: TP(float64(3.1415926535895781)),
+	V27: hbuf.Time(time.Now()),
+	V28: TP(hbuf.Time(time.Now())),
+	V29: decimal.NewFromFloat(3.1415926535),
+	V30: TP(decimal.NewFromFloat(3.14159265359)),
+	V31: HBufSubTest{
+		V1: 12,
+		V2: TP(int8(12)),
+	},
+	V32: &HBufSubTest{
+		V1: 45,
+		V2: TP(int8(45)),
+	},
 }
 
 func TestName(t *testing.T) {

@@ -73,9 +73,13 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	27: hbuf.NewTimeDescriptor(unsafe.Offsetof(hBufTest.V28), true),
 	28: hbuf.NewDecimalDescriptor(unsafe.Offsetof(hBufTest.V29), false),
 	29: hbuf.NewDecimalDescriptor(unsafe.Offsetof(hBufTest.V30), true),
+	30: hbuf.CloneDataDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufTest.V31), false),
+	31: hbuf.CloneDataDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufTest.V32), true),
 })
 
 type HBufTest struct {
+	V31 HBufSubTest      `json:"v31,omitempty" hbuf:"30"` //
+	V32 *HBufSubTest     `json:"v32,omitempty" hbuf:"31"` //
 	V1  int8             `json:"v1,omitempty" hbuf:"0"`   //
 	V2  *int8            `json:"v2,omitempty" hbuf:"1"`   //
 	V3  int16            `json:"v3,omitempty" hbuf:"2"`   //
@@ -106,6 +110,7 @@ type HBufTest struct {
 	V28 *hbuf.Time       `json:"v28,omitempty" hbuf:"27"` //
 	V29 decimal.Decimal  `json:"v29,omitempty" hbuf:"28"` //
 	V30 *decimal.Decimal `json:"v30,omitempty" hbuf:"29"` //
+
 }
 
 func (g *HBufTest) Descriptors() hbuf.Descriptor {
@@ -395,4 +400,23 @@ func (g *HBufTest) GetV30() decimal.Decimal {
 
 func (g *HBufTest) SetV30(val decimal.Decimal) {
 	g.V30 = &val
+}
+
+func (g *HBufTest) GetV31() HBufSubTest {
+	return g.V31
+}
+
+func (g *HBufTest) SetV31(val HBufSubTest) {
+	g.V31 = val
+}
+
+func (g *HBufTest) GetV32() HBufSubTest {
+	if nil == g.V32 {
+		return HBufSubTest{}
+	}
+	return *g.V32
+}
+
+func (g *HBufTest) SetV32(val HBufSubTest) {
+	g.V32 = &val
 }

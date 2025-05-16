@@ -67,9 +67,9 @@ data HBufTest {
 
     decimal? V30 = 29
 
-//    ProtoBufSubTest V31 = 30
-//
-//    ProtoBufSubTest? V32 = 31
+    HBufSubTest V31 = 30
+
+    HBufSubTest? V32 = 31
 //
 //    int8[] v33 = 32
 //
@@ -131,9 +131,9 @@ data HBufTest {
 //
 //    decimal?[]? v62 = 61
 //
-//    ProtoBufSubTest[] v63 = 62
+//    HBufSubTest[] v63 = 62
 //
-//    ProtoBufSubTest?[]? v64 = 63
+//    HBufSubTest?[]? v64 = 63
 //
 //    int8<int64> v65 = 64
 //
@@ -195,9 +195,9 @@ data HBufTest {
 //
 //    decimal?<int64>? v94= 93
 //
-//    ProtoBufSubTest<int64> v95 = 94
+//    HBufSubTest<int64> v95 = 94
 //
-//    ProtoBufSubTest?<int64>? v96 = 95
+//    HBufSubTest?<int64>? v96 = 95
 //
 //    int8<string> v97 = 96
 //
@@ -259,7 +259,7 @@ data HBufTest {
 //
 //    decimal<string>? v126 = 125
 //
-//    ProtoBufSubTest<string> v127 = 126
+//    HBufSubTest<string> v127 = 126
 //
-//    ProtoBufSubTest?<string>? v128 = 127
+//    HBufSubTest?<string>? v128 = 127
 }

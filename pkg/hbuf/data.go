@@ -24,6 +24,21 @@ type Uint64 uint64
 
 type Time time.Time
 
+func (t Time) MarshalJSON() ([]byte, error) {
+	//return []byte(strconv.FormatInt(time.Time(t).UnixMilli(), 10)), nil
+	return time.Time(t).MarshalJSON()
+}
+
+func (t *Time) UnmarshalJSON(data []byte) error {
+	//parseInt, err := strconv.ParseInt(string(data), 10, 64)
+	//if err != nil {
+	//	return err
+	//}
+	//*t = Time(time.UnixMilli(parseInt))
+	//return nil
+	return (*time.Time)(t).UnmarshalJSON(data)
+}
+
 type Data interface {
 	Descriptors() Descriptor
 }
@@ -43,16 +58,9 @@ func Unmarshal(buf []byte, data Data, tag string) (err error) {
 	//	}
 	//}()
 	typ, _, valueLen, buf := Reader(buf)
-
-	doublePtr := reflect.New(reflect.TypeOf(data))
-	_, err = data.Descriptors().Decode(buf, doublePtr.UnsafePointer(), typ, valueLen, tag)
+	_, err = data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, valueLen, tag)
 	if err != nil {
 		return err
 	}
-
-	if doublePtr.Elem().UnsafePointer() == nil {
-		return nil
-	}
-	reflect.ValueOf(data).Elem().Set(doublePtr.Elem().Elem())
 	return nil
 }
