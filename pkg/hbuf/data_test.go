@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/shopspring/decimal"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"google.golang.org/protobuf/proto"
 	"os"
 	"path/filepath"
 	"testing"
@@ -146,26 +147,157 @@ var src = HBufTest{
 	V128: map[string]*HBufSubTest{"a": TP(HBufSubTest{V1: 22, V2: TP(int8(11))}), "b": TP(HBufSubTest{V1: 33, V2: TP(int8(22))}), "c": TP(HBufSubTest{V1: 44, V2: TP(int8(33))})},
 }
 
+var pSrc = ProtoTest{
+	V1:   12,
+	V2:   TP(int32(-12)),
+	V3:   1234,
+	V4:   TP(int32(-1234)),
+	V5:   123456,
+	V6:   TP(int32(-123456)),
+	V7:   123456789,
+	V8:   TP(int64(-123456789)),
+	V9:   200,
+	V10:  TP(uint32(200)),
+	V11:  65530,
+	V12:  TP(uint32(65530)),
+	V13:  655306553,
+	V14:  TP(uint32(655306553)),
+	V15:  6553065535,
+	V16:  TP(uint64(6553065535)),
+	V17:  true,
+	V18:  TP(true),
+	V19:  "hello world",
+	V20:  TP("hello world"),
+	V21:  []byte("hello world123456"),
+	V22:  []byte("hello world123456"),
+	V23:  3.1415926535895781,
+	V24:  TP(float32(-3.1415926535895781)),
+	V25:  3.1415926535895781,
+	V26:  TP(float64(-3.1415926535895781)),
+	V27:  uint64(time.Now().UnixMicro()),
+	V28:  TP(uint64(time.Now().UnixMicro())),
+	V29:  "3.1415926535",
+	V30:  "-3.14159265359",
+	V31:  &ProtoSubTest{V1: 12, V2: int32(12)},
+	V32:  &ProtoSubTest{V1: 45, V2: int32(45)},
+	V33:  []int32{1, 2, 3},
+	V34:  []int32{1, 2, 3},
+	V35:  []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V36:  []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V37:  []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V38:  []int32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V39:  []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V40:  []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V41:  []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V42:  []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V43:  []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V44:  []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V45:  []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V46:  []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V47:  []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V48:  []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	V49:  []bool{true, false},
+	V50:  []bool{true, false},
+	V51:  []string{"hello world", "hello world123456", "hello world123456"},
+	V52:  []string{"hello world", "hello world123456", "hello world123456"},
+	V53:  [][]byte{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
+	V54:  [][]byte{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
+	V55:  []float32{1.58817, 2.58817, 3.58817, 4.58817, -5.58817, 6.58817, -7.58817, 8.58817, 9.58817, 10.58817},
+	V56:  []float32{1.58817, 2.58817, 3.58817, 4.58817, -5.58817, 6.58817, -7.58817, 8.58817, 9.58817, 10.58817},
+	V57:  []float64{1.58817, 2.58817, 3.58817, 4.58817, 5.58817, 6.58817, 7.58817, 8.58817, 9.58817, 10.58817},
+	V58:  []float64{1.58817, 2.58817, 3.58817, 4.58817, 5.58817, 6.58817, 7.58817, 8.58817, 9.58817, 10.58817},
+	V59:  []uint64{uint64(time.Now().UnixMicro()), uint64(time.Now().UnixMicro()), uint64(time.Now().UnixMicro())},
+	V60:  []uint64{uint64(time.Now().UnixMicro()), uint64(time.Now().UnixMicro()), uint64(time.Now().UnixMicro())},
+	V61:  []string{"3.1415926535", "3.14159265359", "3.14159265359"},
+	V62:  []string{"3.1415926535", "3.14159265359", "3.14159265359"},
+	V63:  []*ProtoSubTest{{V1: 12, V2: int32(12)}, {V1: 45, V2: int32(45)}, {V1: 78, V2: int32(78)}},
+	V64:  []*ProtoSubTest{{V1: 12, V2: int32(12)}, {V1: 45, V2: int32(45)}, {V1: 78, V2: int32(78)}},
+	V65:  map[int64]int32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V66:  map[int64]int32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V67:  map[int64]int32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V68:  map[int64]int32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V69:  map[int64]int32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V70:  map[int64]int32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V71:  map[int64]int64{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V72:  map[int64]int64{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V73:  map[int64]uint32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V74:  map[int64]uint32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V75:  map[int64]uint32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V76:  map[int64]uint32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V77:  map[int64]uint32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V78:  map[int64]uint32{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V79:  map[int64]uint64{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V80:  map[int64]uint64{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
+	V81:  map[int64]bool{1: true, 2: false, 3: true, 4: false, 5: true, 6: false, 7: true, 8: false, 9: true, 10: false},
+	V82:  map[int64]bool{1: true, 2: false, 3: true, 4: false, 5: true, 6: false, 7: true, 8: false, 9: true, 10: false},
+	V83:  map[int64]string{1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10"},
+	V84:  map[int64]string{1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10"},
+	V85:  map[int64][]byte{1: {1, 2}, 2: {3, 4}, 3: {5, 6}, 4: {7, 8}, 5: {9, 10}},
+	V86:  map[int64][]byte{1: {1, 2}, 2: {3, 4}, 3: {5, 6}, 4: {7, 8}, 5: {9, 10}},
+	V87:  map[int64]float32{1: 1.1, 2: 2.2, 3: 3.3, 4: 4.4, 5: 5.5},
+	V88:  map[int64]float32{1: 1.1, 2: 2.2, 3: 3.3, 4: 4.4, 5: 5.5},
+	V89:  map[int64]float64{1: 1.1, 2: 2.2, 3: 3.3, 4: 4.4, 5: 5.5},
+	V90:  map[int64]float64{1: 1.1, 2: 2.2, 3: 3.3, 4: 4.4, 5: 5.5},
+	V91:  map[int64]uint64{1: uint64(time.Now().UnixMicro()), 2: uint64(time.Now().UnixMicro()), 3: uint64(time.Now().UnixMicro())},
+	V92:  map[int64]uint64{1: uint64(time.Now().UnixMicro()), 2: uint64(time.Now().UnixMicro()), 3: uint64(time.Now().UnixMicro())},
+	V93:  map[int64]string{1: "3.1415926535", 2: "3.14159265359", 3: "3.14159265359"},
+	V94:  map[int64]string{1: "3.1415926535", 2: "3.14159265359", 3: "3.14159265359"},
+	V95:  map[int64]*ProtoSubTest{1: {V1: 22, V2: int32(11)}, 2: {V1: 33, V2: int32(22)}, 3: {V1: 44, V2: int32(33)}},
+	V96:  map[int64]*ProtoSubTest{1: {V1: 22, V2: int32(11)}, 2: {V1: 33, V2: int32(22)}, 3: {V1: 44, V2: int32(33)}},
+	V97:  map[string]int32{"a": 1, "b": 2, "c": 3},
+	V98:  map[string]int32{"a": 1, "b": 2, "c": 3},
+	V99:  map[string]int32{"a": 1, "b": 2, "c": 3},
+	V100: map[string]int32{"a": 1, "b": 2, "c": 3},
+	V101: map[string]int32{"a": 1, "b": 2, "c": 3},
+	V102: map[string]int32{"a": 1, "b": 2, "c": 3},
+	V103: map[string]int64{"a": 1, "b": 2, "c": 3},
+	V104: map[string]int64{"a": 1, "b": 2, "c": 3},
+	V105: map[string]uint32{"a": 1, "b": 2, "c": 3},
+	V106: map[string]uint32{"a": 1, "b": 2, "c": 3},
+	V107: map[string]uint32{"a": 1, "b": 2, "c": 3},
+	V108: map[string]uint32{"a": 1, "b": 2, "c": 3},
+	V109: map[string]uint32{"a": 1, "b": 2, "c": 3},
+	V110: map[string]uint32{"a": 1, "b": 2, "c": 3},
+	V111: map[string]uint64{"a": 1, "b": 2, "c": 3},
+	V112: map[string]uint64{"a": 1, "b": 2, "c": 3},
+	V113: map[string]bool{"a": true, "b": false, "c": true},
+	V114: map[string]bool{"a": true, "b": false, "c": true},
+	V115: map[string]string{"a": "1", "b": "2", "c": "3"},
+	V116: map[string]string{"a": "1", "b": "2", "c": "3"},
+	V117: map[string][]byte{"a": {1, 2}, "b": {3, 4}, "c": {5, 6}},
+	V118: map[string][]byte{"a": {1, 2}, "b": {3, 4}, "c": {5, 6}},
+	V119: map[string]float32{"a": 1.1, "b": 2.2, "c": 3.3},
+	V120: map[string]float32{"a": 1.1, "b": 2.2, "c": 3.3},
+	V121: map[string]float64{"a": 1.1, "b": 2.2, "c": 3.3},
+	V122: map[string]float64{"a": 1.1, "b": 2.2, "c": 3.3},
+	V123: map[string]uint64{"a": uint64(time.Now().UnixMicro()), "b": uint64(time.Now().UnixMicro()), "c": uint64(time.Now().UnixMicro())},
+	V124: map[string]uint64{"a": uint64(time.Now().UnixMicro()), "b": uint64(time.Now().UnixMicro()), "c": uint64(time.Now().UnixMicro())},
+	V125: map[string]string{"a": "3.1415926535", "b": "3.14159265359", "c": "3.14159265359"},
+	V126: map[string]string{"a": "3.1415926535", "b": "3.14159265359", "c": "3.14159265359"},
+	V127: map[string]*ProtoSubTest{"a": {V1: 22, V2: int32(11)}, "b": {V1: 33, V2: int32(22)}, "c": {V1: 44, V2: int32(33)}},
+	V128: map[string]*ProtoSubTest{"a": {V1: 22, V2: int32(11)}, "b": {V1: 33, V2: int32(22)}, "c": {V1: 44, V2: int32(33)}},
+}
+
 func TestName(t *testing.T) {
 	var err error
-	//var pBuf []byte
-	//t.Run("EncoderProto", func(t *testing.T) {
-	//	pBuf, err = proto.Marshal(&src)
-	//	if err != nil {
-	//		t.Error(err.Error())
-	//		return
-	//	}
-	//	t.Log("len:", len(pBuf))
-	//	t.Log("data:", pBuf)
-	//})
-	//t.Run("DecoderProto", func(t *testing.T) {
-	//	des := ProtoBuffTest{}
-	//	err = proto.Unmarshal(pBuf, &des)
-	//	if err != nil {
-	//		t.Error(err.Error() + "\n" + string(pBuf))
-	//		return
-	//	}
-	//})
+	var pBuf []byte
+	t.Run("EncoderProto", func(t *testing.T) {
+		pBuf, err = proto.Marshal(&pSrc)
+		if err != nil {
+			t.Error(err.Error())
+			return
+		}
+		t.Log("len:", len(pBuf))
+		t.Log("data:", pBuf)
+	})
+	t.Run("DecoderProto", func(t *testing.T) {
+		des := ProtoTest{}
+		err = proto.Unmarshal(pBuf, &des)
+		if err != nil {
+			t.Error(err.Error() + "\n" + string(pBuf))
+			return
+		}
+	})
 
 	jText := ""
 	t.Run("EncoderJson", func(t *testing.T) {
@@ -219,26 +351,26 @@ func TestName(t *testing.T) {
 
 func BenchmarkName(b *testing.B) {
 	var err error
-	//var pBuf []byte
-	//b.Run("EncoderProto", func(b *testing.B) {
-	//	for i := 0; i < b.N; i++ {
-	//		pBuf, err = proto.Marshal(&src)
-	//		if err != nil {
-	//			b.Error(err.Error() + "\n" + string(pBuf))
-	//			return
-	//		}
-	//	}
-	//})
-	//b.Run("DecoderProto", func(b *testing.B) {
-	//	for i := 0; i < b.N; i++ {
-	//		des := ProtoBuffTest{}
-	//		err := proto.Unmarshal(pBuf, &des)
-	//		if err != nil {
-	//			b.Error(err.Error() + "\n" + string(pBuf))
-	//			return
-	//		}
-	//	}
-	//})
+	var pBuf []byte
+	b.Run("EncoderProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			pBuf, err = proto.Marshal(&pSrc)
+			if err != nil {
+				b.Error(err.Error() + "\n" + string(pBuf))
+				return
+			}
+		}
+	})
+	b.Run("DecoderProto", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			des := ProtoTest{}
+			err := proto.Unmarshal(pBuf, &des)
+			if err != nil {
+				b.Error(err.Error() + "\n" + string(pBuf))
+				return
+			}
+		}
+	})
 
 	var jBuf *bytes.Buffer
 	b.Run("EncoderJson", func(b *testing.B) {
