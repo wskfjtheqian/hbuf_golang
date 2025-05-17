@@ -263,3 +263,17 @@ data HBufTest {
 
     HBufSubTest?<string> v128 = 128
 }
+
+data HBufSub1Test {
+    int8 V1 = 1
+
+    int8? V3 = 3
+}
+
+data HBufExtend:HBufSubTest = 1, HBufSub1Test = 2 {
+    int8 V2 = 1
+
+    int8? V4 = 2
+
+    int32?[] V5 = 3
+}

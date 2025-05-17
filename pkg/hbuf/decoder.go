@@ -1,6 +1,16 @@
 package hbuf
 
-func Reader(buf []byte) (typ Type, id uint16, valueLen uint8, ret []byte) {
+func ReaderType(buf []byte) (typ Type, isNullable bool, valueLen uint8, ret []byte) {
+	b := buf[0]
+	typ = Type(b >> 5 & 0b111)
+	valueLen = (b >> 2 & 0b111) + 1
+	isNullable = (b & 0b11) == 1
+
+	ret = buf[1:]
+	return
+}
+
+func ReaderTypeId(buf []byte) (typ Type, id uint16, valueLen uint8, ret []byte) {
 	b := buf[0]
 	typ = Type(b >> 5 & 0b111)
 	valueLen = (b >> 2 & 0b111) + 1

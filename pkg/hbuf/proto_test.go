@@ -21,27 +21,28 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type ProtoBuffSub struct {
+type ProtoSubTest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	V1            int64                  `protobuf:"varint,1,opt,name=v1,proto3" json:"v1,omitempty"`
+	V1            int32                  `protobuf:"varint,1,opt,name=V1,proto3" json:"V1,omitempty"`
+	V2            int32                  `protobuf:"varint,2,opt,name=V2,proto3" json:"V2,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ProtoBuffSub) Reset() {
-	*x = ProtoBuffSub{}
+func (x *ProtoSubTest) Reset() {
+	*x = ProtoSubTest{}
 	mi := &file_proto_test_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProtoBuffSub) String() string {
+func (x *ProtoSubTest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProtoBuffSub) ProtoMessage() {}
+func (*ProtoSubTest) ProtoMessage() {}
 
-func (x *ProtoBuffSub) ProtoReflect() protoreflect.Message {
+func (x *ProtoSubTest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_test_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -53,118 +54,173 @@ func (x *ProtoBuffSub) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProtoBuffSub.ProtoReflect.Descriptor instead.
-func (*ProtoBuffSub) Descriptor() ([]byte, []int) {
+// Deprecated: Use ProtoSubTest.ProtoReflect.Descriptor instead.
+func (*ProtoSubTest) Descriptor() ([]byte, []int) {
 	return file_proto_test_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *ProtoBuffSub) GetV1() int64 {
+func (x *ProtoSubTest) GetV1() int32 {
 	if x != nil {
 		return x.V1
 	}
 	return 0
 }
 
-type ProtoBuffTest struct {
+func (x *ProtoSubTest) GetV2() int32 {
+	if x != nil {
+		return x.V2
+	}
+	return 0
+}
+
+type ProtoTest struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
-	V1            int32                    `protobuf:"varint,1,opt,name=v1,proto3" json:"v1,omitempty"`
-	V2            *int32                   `protobuf:"varint,2,opt,name=v2,proto3,oneof" json:"v2,omitempty"`
-	V3            int64                    `protobuf:"varint,3,opt,name=v3,proto3" json:"v3,omitempty"`
-	V4            *uint64                  `protobuf:"varint,4,opt,name=v4,proto3,oneof" json:"v4,omitempty"`
-	V5            uint32                   `protobuf:"varint,5,opt,name=v5,proto3" json:"v5,omitempty"`
-	V6            *uint32                  `protobuf:"varint,6,opt,name=v6,proto3,oneof" json:"v6,omitempty"`
-	V7            uint64                   `protobuf:"varint,7,opt,name=v7,proto3" json:"v7,omitempty"`
-	V8            *uint64                  `protobuf:"varint,8,opt,name=v8,proto3,oneof" json:"v8,omitempty"`
-	V9            string                   `protobuf:"bytes,9,opt,name=v9,proto3" json:"v9,omitempty"`
-	V10           *string                  `protobuf:"bytes,10,opt,name=v10,proto3,oneof" json:"v10,omitempty"`
-	V11           []byte                   `protobuf:"bytes,11,opt,name=v11,proto3" json:"v11,omitempty"`
-	V12           []byte                   `protobuf:"bytes,12,opt,name=v12,proto3,oneof" json:"v12,omitempty"`
-	V13           float32                  `protobuf:"fixed32,13,opt,name=v13,proto3" json:"v13,omitempty"`
-	V14           *float32                 `protobuf:"fixed32,14,opt,name=v14,proto3,oneof" json:"v14,omitempty"`
-	V15           float64                  `protobuf:"fixed64,15,opt,name=v15,proto3" json:"v15,omitempty"`
-	V16           *float64                 `protobuf:"fixed64,16,opt,name=v16,proto3,oneof" json:"v16,omitempty"`
-	V17           bool                     `protobuf:"varint,17,opt,name=v17,proto3" json:"v17,omitempty"`
-	V18           *bool                    `protobuf:"varint,18,opt,name=v18,proto3,oneof" json:"v18,omitempty"`
-	V19           *ProtoBuffSub            `protobuf:"bytes,19,opt,name=v19,proto3" json:"v19,omitempty"`
-	V20           *ProtoBuffSub            `protobuf:"bytes,20,opt,name=v20,proto3,oneof" json:"v20,omitempty"`
-	V21           []int32                  `protobuf:"varint,21,rep,packed,name=v21,proto3" json:"v21,omitempty"`
-	V22           []int64                  `protobuf:"varint,22,rep,packed,name=v22,proto3" json:"v22,omitempty"`
-	V23           []uint32                 `protobuf:"varint,23,rep,packed,name=v23,proto3" json:"v23,omitempty"`
-	V24           []uint64                 `protobuf:"varint,24,rep,packed,name=v24,proto3" json:"v24,omitempty"`
-	V25           []float32                `protobuf:"fixed32,25,rep,packed,name=v25,proto3" json:"v25,omitempty"`
-	V26           []float64                `protobuf:"fixed64,26,rep,packed,name=v26,proto3" json:"v26,omitempty"`
-	V27           []bool                   `protobuf:"varint,27,rep,packed,name=v27,proto3" json:"v27,omitempty"`
-	V28           []string                 `protobuf:"bytes,28,rep,name=v28,proto3" json:"v28,omitempty"`
-	V29           [][]byte                 `protobuf:"bytes,29,rep,name=v29,proto3" json:"v29,omitempty"`
-	V30           []*ProtoBuffSub          `protobuf:"bytes,30,rep,name=v30,proto3" json:"v30,omitempty"`
-	V31           map[int32]int32          `protobuf:"bytes,31,rep,name=v31,proto3" json:"v31,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V32           map[int32]int64          `protobuf:"bytes,32,rep,name=v32,proto3" json:"v32,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V33           map[int32]uint32         `protobuf:"bytes,33,rep,name=v33,proto3" json:"v33,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V34           map[int32]uint64         `protobuf:"bytes,34,rep,name=v34,proto3" json:"v34,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V35           map[int32]float32        `protobuf:"bytes,35,rep,name=v35,proto3" json:"v35,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-	V36           map[int32]float64        `protobuf:"bytes,36,rep,name=v36,proto3" json:"v36,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	V37           map[int32]bool           `protobuf:"bytes,37,rep,name=v37,proto3" json:"v37,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V38           map[int32]string         `protobuf:"bytes,38,rep,name=v38,proto3" json:"v38,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V39           map[int32][]byte         `protobuf:"bytes,39,rep,name=v39,proto3" json:"v39,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V40           map[int32]*ProtoBuffSub  `protobuf:"bytes,40,rep,name=v40,proto3" json:"v40,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V41           map[int64]int32          `protobuf:"bytes,41,rep,name=v41,proto3" json:"v41,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V42           map[int64]int64          `protobuf:"bytes,42,rep,name=v42,proto3" json:"v42,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V43           map[int64]uint32         `protobuf:"bytes,43,rep,name=v43,proto3" json:"v43,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V44           map[int64]uint64         `protobuf:"bytes,44,rep,name=v44,proto3" json:"v44,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V45           map[int64]float32        `protobuf:"bytes,45,rep,name=v45,proto3" json:"v45,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-	V46           map[int64]float64        `protobuf:"bytes,46,rep,name=v46,proto3" json:"v46,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	V47           map[int64]bool           `protobuf:"bytes,47,rep,name=v47,proto3" json:"v47,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V48           map[int64]string         `protobuf:"bytes,48,rep,name=v48,proto3" json:"v48,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V49           map[int64][]byte         `protobuf:"bytes,49,rep,name=v49,proto3" json:"v49,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V50           map[int64]*ProtoBuffSub  `protobuf:"bytes,50,rep,name=v50,proto3" json:"v50,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V51           map[uint32]int32         `protobuf:"bytes,51,rep,name=v51,proto3" json:"v51,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V52           map[uint32]int64         `protobuf:"bytes,52,rep,name=v52,proto3" json:"v52,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V53           map[uint32]uint32        `protobuf:"bytes,53,rep,name=v53,proto3" json:"v53,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V54           map[uint32]uint64        `protobuf:"bytes,54,rep,name=v54,proto3" json:"v54,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V55           map[uint32]float32       `protobuf:"bytes,55,rep,name=v55,proto3" json:"v55,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-	V56           map[uint32]float64       `protobuf:"bytes,56,rep,name=v56,proto3" json:"v56,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	V57           map[uint32]bool          `protobuf:"bytes,57,rep,name=v57,proto3" json:"v57,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V58           map[uint32]string        `protobuf:"bytes,58,rep,name=v58,proto3" json:"v58,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V59           map[uint32][]byte        `protobuf:"bytes,59,rep,name=v59,proto3" json:"v59,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V60           map[uint32]*ProtoBuffSub `protobuf:"bytes,60,rep,name=v60,proto3" json:"v60,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V61           map[uint64]int32         `protobuf:"bytes,61,rep,name=v61,proto3" json:"v61,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V62           map[uint64]int64         `protobuf:"bytes,62,rep,name=v62,proto3" json:"v62,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V63           map[uint64]uint32        `protobuf:"bytes,63,rep,name=v63,proto3" json:"v63,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V64           map[uint64]uint64        `protobuf:"bytes,64,rep,name=v64,proto3" json:"v64,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V65           map[uint64]float32       `protobuf:"bytes,65,rep,name=v65,proto3" json:"v65,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-	V66           map[uint64]float64       `protobuf:"bytes,66,rep,name=v66,proto3" json:"v66,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	V67           map[uint64]bool          `protobuf:"bytes,67,rep,name=v67,proto3" json:"v67,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V68           map[uint64]string        `protobuf:"bytes,68,rep,name=v68,proto3" json:"v68,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V69           map[uint64][]byte        `protobuf:"bytes,69,rep,name=v69,proto3" json:"v69,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V70           map[uint64]*ProtoBuffSub `protobuf:"bytes,70,rep,name=v70,proto3" json:"v70,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V71           map[string]int32         `protobuf:"bytes,71,rep,name=v71,proto3" json:"v71,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V72           map[string]int64         `protobuf:"bytes,72,rep,name=v72,proto3" json:"v72,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V73           map[string]uint32        `protobuf:"bytes,73,rep,name=v73,proto3" json:"v73,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V74           map[string]uint64        `protobuf:"bytes,74,rep,name=v74,proto3" json:"v74,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V75           map[string]float32       `protobuf:"bytes,75,rep,name=v75,proto3" json:"v75,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-	V76           map[string]float64       `protobuf:"bytes,76,rep,name=v76,proto3" json:"v76,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	V77           map[string]bool          `protobuf:"bytes,77,rep,name=v77,proto3" json:"v77,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	V78           map[string]string        `protobuf:"bytes,78,rep,name=v78,proto3" json:"v78,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V79           map[string][]byte        `protobuf:"bytes,79,rep,name=v79,proto3" json:"v79,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	V80           map[string]*ProtoBuffSub `protobuf:"bytes,80,rep,name=v80,proto3" json:"v80,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V1            int32                    `protobuf:"varint,1,opt,name=V1,proto3" json:"V1,omitempty"`
+	V2            *int32                   `protobuf:"varint,2,opt,name=V2,proto3,oneof" json:"V2,omitempty"`
+	V3            int32                    `protobuf:"varint,3,opt,name=V3,proto3" json:"V3,omitempty"`
+	V4            *int32                   `protobuf:"varint,4,opt,name=V4,proto3,oneof" json:"V4,omitempty"`
+	V5            int32                    `protobuf:"varint,5,opt,name=V5,proto3" json:"V5,omitempty"`
+	V6            *int32                   `protobuf:"varint,6,opt,name=V6,proto3,oneof" json:"V6,omitempty"`
+	V7            int64                    `protobuf:"varint,7,opt,name=V7,proto3" json:"V7,omitempty"`
+	V8            *int64                   `protobuf:"varint,8,opt,name=V8,proto3,oneof" json:"V8,omitempty"`
+	V9            uint32                   `protobuf:"varint,9,opt,name=V9,proto3" json:"V9,omitempty"`
+	V10           *uint32                  `protobuf:"varint,10,opt,name=V10,proto3,oneof" json:"V10,omitempty"`
+	V11           uint32                   `protobuf:"varint,11,opt,name=V11,proto3" json:"V11,omitempty"`
+	V12           *uint32                  `protobuf:"varint,12,opt,name=V12,proto3,oneof" json:"V12,omitempty"`
+	V13           uint32                   `protobuf:"varint,13,opt,name=V13,proto3" json:"V13,omitempty"`
+	V14           *uint32                  `protobuf:"varint,14,opt,name=V14,proto3,oneof" json:"V14,omitempty"`
+	V15           uint64                   `protobuf:"varint,15,opt,name=V15,proto3" json:"V15,omitempty"`
+	V16           *uint64                  `protobuf:"varint,16,opt,name=V16,proto3,oneof" json:"V16,omitempty"`
+	V17           bool                     `protobuf:"varint,17,opt,name=V17,proto3" json:"V17,omitempty"`
+	V18           *bool                    `protobuf:"varint,18,opt,name=V18,proto3,oneof" json:"V18,omitempty"`
+	V19           string                   `protobuf:"bytes,19,opt,name=V19,proto3" json:"V19,omitempty"`
+	V20           *string                  `protobuf:"bytes,20,opt,name=V20,proto3,oneof" json:"V20,omitempty"`
+	V21           []byte                   `protobuf:"bytes,21,opt,name=V21,proto3" json:"V21,omitempty"`
+	V22           []byte                   `protobuf:"bytes,22,opt,name=V22,proto3,oneof" json:"V22,omitempty"`
+	V23           float32                  `protobuf:"fixed32,23,opt,name=V23,proto3" json:"V23,omitempty"`
+	V24           *float32                 `protobuf:"fixed32,24,opt,name=V24,proto3,oneof" json:"V24,omitempty"`
+	V25           float64                  `protobuf:"fixed64,25,opt,name=V25,proto3" json:"V25,omitempty"`
+	V26           *float64                 `protobuf:"fixed64,26,opt,name=V26,proto3,oneof" json:"V26,omitempty"`
+	V27           uint64                   `protobuf:"varint,27,opt,name=V27,proto3" json:"V27,omitempty"`
+	V28           *uint64                  `protobuf:"varint,28,opt,name=V28,proto3,oneof" json:"V28,omitempty"`
+	V29           string                   `protobuf:"bytes,29,opt,name=V29,proto3" json:"V29,omitempty"`
+	V30           string                   `protobuf:"bytes,30,opt,name=V30,proto3" json:"V30,omitempty"`
+	V31           *ProtoSubTest            `protobuf:"bytes,31,opt,name=V31,proto3" json:"V31,omitempty"`
+	V32           *ProtoSubTest            `protobuf:"bytes,32,opt,name=V32,proto3,oneof" json:"V32,omitempty"`
+	V33           []int32                  `protobuf:"varint,33,rep,packed,name=v33,proto3" json:"v33,omitempty"`
+	V34           []int32                  `protobuf:"varint,34,rep,packed,name=v34,proto3" json:"v34,omitempty"`
+	V35           []int32                  `protobuf:"varint,35,rep,packed,name=v35,proto3" json:"v35,omitempty"`
+	V36           []int32                  `protobuf:"varint,36,rep,packed,name=v36,proto3" json:"v36,omitempty"`
+	V37           []int32                  `protobuf:"varint,37,rep,packed,name=v37,proto3" json:"v37,omitempty"`
+	V38           []int32                  `protobuf:"varint,38,rep,packed,name=v38,proto3" json:"v38,omitempty"`
+	V39           []int64                  `protobuf:"varint,39,rep,packed,name=v39,proto3" json:"v39,omitempty"`
+	V40           []int64                  `protobuf:"varint,40,rep,packed,name=v40,proto3" json:"v40,omitempty"`
+	V41           []uint32                 `protobuf:"varint,41,rep,packed,name=v41,proto3" json:"v41,omitempty"`
+	V42           []uint32                 `protobuf:"varint,42,rep,packed,name=v42,proto3" json:"v42,omitempty"`
+	V43           []uint32                 `protobuf:"varint,43,rep,packed,name=v43,proto3" json:"v43,omitempty"`
+	V44           []uint32                 `protobuf:"varint,44,rep,packed,name=v44,proto3" json:"v44,omitempty"`
+	V45           []uint32                 `protobuf:"varint,45,rep,packed,name=v45,proto3" json:"v45,omitempty"`
+	V46           []uint32                 `protobuf:"varint,46,rep,packed,name=v46,proto3" json:"v46,omitempty"`
+	V47           []uint64                 `protobuf:"varint,47,rep,packed,name=v47,proto3" json:"v47,omitempty"`
+	V48           []uint64                 `protobuf:"varint,48,rep,packed,name=v48,proto3" json:"v48,omitempty"`
+	V49           []bool                   `protobuf:"varint,49,rep,packed,name=v49,proto3" json:"v49,omitempty"`
+	V50           []bool                   `protobuf:"varint,50,rep,packed,name=v50,proto3" json:"v50,omitempty"`
+	V51           []string                 `protobuf:"bytes,51,rep,name=v51,proto3" json:"v51,omitempty"`
+	V52           []string                 `protobuf:"bytes,52,rep,name=v52,proto3" json:"v52,omitempty"`
+	V53           [][]byte                 `protobuf:"bytes,53,rep,name=v53,proto3" json:"v53,omitempty"`
+	V54           [][]byte                 `protobuf:"bytes,54,rep,name=v54,proto3" json:"v54,omitempty"`
+	V55           []float32                `protobuf:"fixed32,55,rep,packed,name=v55,proto3" json:"v55,omitempty"`
+	V56           []float32                `protobuf:"fixed32,56,rep,packed,name=v56,proto3" json:"v56,omitempty"`
+	V57           []float64                `protobuf:"fixed64,57,rep,packed,name=v57,proto3" json:"v57,omitempty"`
+	V58           []float64                `protobuf:"fixed64,58,rep,packed,name=v58,proto3" json:"v58,omitempty"`
+	V59           []uint64                 `protobuf:"varint,59,rep,packed,name=v59,proto3" json:"v59,omitempty"`
+	V60           []uint64                 `protobuf:"varint,60,rep,packed,name=v60,proto3" json:"v60,omitempty"`
+	V61           []string                 `protobuf:"bytes,61,rep,name=v61,proto3" json:"v61,omitempty"`
+	V62           []string                 `protobuf:"bytes,62,rep,name=v62,proto3" json:"v62,omitempty"`
+	V63           []*ProtoSubTest          `protobuf:"bytes,63,rep,name=v63,proto3" json:"v63,omitempty"`
+	V64           []*ProtoSubTest          `protobuf:"bytes,64,rep,name=v64,proto3" json:"v64,omitempty"`
+	V65           map[int64]int32          `protobuf:"bytes,65,rep,name=v65,proto3" json:"v65,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V66           map[int64]int32          `protobuf:"bytes,66,rep,name=v66,proto3" json:"v66,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V67           map[int64]int32          `protobuf:"bytes,67,rep,name=v67,proto3" json:"v67,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V68           map[int64]int32          `protobuf:"bytes,68,rep,name=v68,proto3" json:"v68,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V69           map[int64]int32          `protobuf:"bytes,69,rep,name=v69,proto3" json:"v69,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V70           map[int64]int32          `protobuf:"bytes,70,rep,name=v70,proto3" json:"v70,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V71           map[int64]int64          `protobuf:"bytes,71,rep,name=v71,proto3" json:"v71,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V72           map[int64]int64          `protobuf:"bytes,72,rep,name=v72,proto3" json:"v72,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V73           map[int64]uint32         `protobuf:"bytes,73,rep,name=v73,proto3" json:"v73,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V74           map[int64]uint32         `protobuf:"bytes,74,rep,name=v74,proto3" json:"v74,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V75           map[int64]uint32         `protobuf:"bytes,75,rep,name=v75,proto3" json:"v75,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V76           map[int64]uint32         `protobuf:"bytes,76,rep,name=v76,proto3" json:"v76,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V77           map[int64]uint32         `protobuf:"bytes,77,rep,name=v77,proto3" json:"v77,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V78           map[int64]uint32         `protobuf:"bytes,78,rep,name=v78,proto3" json:"v78,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V79           map[int64]uint64         `protobuf:"bytes,79,rep,name=v79,proto3" json:"v79,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V80           map[int64]uint64         `protobuf:"bytes,80,rep,name=v80,proto3" json:"v80,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V81           map[int64]bool           `protobuf:"bytes,81,rep,name=v81,proto3" json:"v81,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V82           map[int64]bool           `protobuf:"bytes,82,rep,name=v82,proto3" json:"v82,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V83           map[int64]string         `protobuf:"bytes,83,rep,name=v83,proto3" json:"v83,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V84           map[int64]string         `protobuf:"bytes,84,rep,name=v84,proto3" json:"v84,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V85           map[int64][]byte         `protobuf:"bytes,85,rep,name=v85,proto3" json:"v85,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V86           map[int64][]byte         `protobuf:"bytes,86,rep,name=v86,proto3" json:"v86,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V87           map[int64]float32        `protobuf:"bytes,87,rep,name=v87,proto3" json:"v87,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	V88           map[int64]float32        `protobuf:"bytes,88,rep,name=v88,proto3" json:"v88,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	V89           map[int64]float64        `protobuf:"bytes,89,rep,name=v89,proto3" json:"v89,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	V90           map[int64]float64        `protobuf:"bytes,90,rep,name=v90,proto3" json:"v90,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	V91           map[int64]uint64         `protobuf:"bytes,91,rep,name=v91,proto3" json:"v91,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V92           map[int64]uint64         `protobuf:"bytes,92,rep,name=v92,proto3" json:"v92,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V93           map[int64]string         `protobuf:"bytes,93,rep,name=v93,proto3" json:"v93,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V94           map[int64]string         `protobuf:"bytes,94,rep,name=v94,proto3" json:"v94,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V95           map[int64]*ProtoSubTest  `protobuf:"bytes,95,rep,name=v95,proto3" json:"v95,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V96           map[int64]*ProtoSubTest  `protobuf:"bytes,96,rep,name=v96,proto3" json:"v96,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V97           map[string]int32         `protobuf:"bytes,97,rep,name=v97,proto3" json:"v97,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V98           map[string]int32         `protobuf:"bytes,98,rep,name=v98,proto3" json:"v98,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V99           map[string]int32         `protobuf:"bytes,99,rep,name=v99,proto3" json:"v99,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V100          map[string]int32         `protobuf:"bytes,100,rep,name=v100,proto3" json:"v100,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V101          map[string]int32         `protobuf:"bytes,101,rep,name=v101,proto3" json:"v101,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V102          map[string]int32         `protobuf:"bytes,102,rep,name=v102,proto3" json:"v102,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V103          map[string]int64         `protobuf:"bytes,103,rep,name=v103,proto3" json:"v103,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V104          map[string]int64         `protobuf:"bytes,104,rep,name=v104,proto3" json:"v104,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V105          map[string]uint32        `protobuf:"bytes,105,rep,name=v105,proto3" json:"v105,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V106          map[string]uint32        `protobuf:"bytes,106,rep,name=v106,proto3" json:"v106,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V107          map[string]uint32        `protobuf:"bytes,107,rep,name=v107,proto3" json:"v107,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V108          map[string]uint32        `protobuf:"bytes,108,rep,name=v108,proto3" json:"v108,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V109          map[string]uint32        `protobuf:"bytes,109,rep,name=v109,proto3" json:"v109,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V110          map[string]uint32        `protobuf:"bytes,110,rep,name=v110,proto3" json:"v110,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V111          map[string]uint64        `protobuf:"bytes,111,rep,name=v111,proto3" json:"v111,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V112          map[string]uint64        `protobuf:"bytes,112,rep,name=v112,proto3" json:"v112,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V113          map[string]bool          `protobuf:"bytes,113,rep,name=v113,proto3" json:"v113,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V114          map[string]bool          `protobuf:"bytes,114,rep,name=v114,proto3" json:"v114,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V115          map[string]string        `protobuf:"bytes,115,rep,name=v115,proto3" json:"v115,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V116          map[string]string        `protobuf:"bytes,116,rep,name=v116,proto3" json:"v116,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V117          map[string][]byte        `protobuf:"bytes,117,rep,name=v117,proto3" json:"v117,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V118          map[string][]byte        `protobuf:"bytes,118,rep,name=v118,proto3" json:"v118,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V119          map[string]float32       `protobuf:"bytes,119,rep,name=v119,proto3" json:"v119,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	V120          map[string]float32       `protobuf:"bytes,120,rep,name=v120,proto3" json:"v120,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	V121          map[string]float64       `protobuf:"bytes,121,rep,name=v121,proto3" json:"v121,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	V122          map[string]float64       `protobuf:"bytes,122,rep,name=v122,proto3" json:"v122,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	V123          map[string]uint64        `protobuf:"bytes,123,rep,name=v123,proto3" json:"v123,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V124          map[string]uint64        `protobuf:"bytes,124,rep,name=v124,proto3" json:"v124,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	V125          map[string]string        `protobuf:"bytes,125,rep,name=v125,proto3" json:"v125,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V126          map[string]string        `protobuf:"bytes,126,rep,name=v126,proto3" json:"v126,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V127          map[string]*ProtoSubTest `protobuf:"bytes,127,rep,name=v127,proto3" json:"v127,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	V128          map[string]*ProtoSubTest `protobuf:"bytes,128,rep,name=v128,proto3" json:"v128,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ProtoBuffTest) Reset() {
-	*x = ProtoBuffTest{}
+func (x *ProtoTest) Reset() {
+	*x = ProtoTest{}
 	mi := &file_proto_test_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProtoBuffTest) String() string {
+func (x *ProtoTest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProtoBuffTest) ProtoMessage() {}
+func (*ProtoTest) ProtoMessage() {}
 
-func (x *ProtoBuffTest) ProtoReflect() protoreflect.Message {
+func (x *ProtoTest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_test_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -176,567 +232,903 @@ func (x *ProtoBuffTest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProtoBuffTest.ProtoReflect.Descriptor instead.
-func (*ProtoBuffTest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ProtoTest.ProtoReflect.Descriptor instead.
+func (*ProtoTest) Descriptor() ([]byte, []int) {
 	return file_proto_test_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ProtoBuffTest) GetV1() int32 {
+func (x *ProtoTest) GetV1() int32 {
 	if x != nil {
 		return x.V1
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV2() int32 {
+func (x *ProtoTest) GetV2() int32 {
 	if x != nil && x.V2 != nil {
 		return *x.V2
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV3() int64 {
+func (x *ProtoTest) GetV3() int32 {
 	if x != nil {
 		return x.V3
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV4() uint64 {
+func (x *ProtoTest) GetV4() int32 {
 	if x != nil && x.V4 != nil {
 		return *x.V4
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV5() uint32 {
+func (x *ProtoTest) GetV5() int32 {
 	if x != nil {
 		return x.V5
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV6() uint32 {
+func (x *ProtoTest) GetV6() int32 {
 	if x != nil && x.V6 != nil {
 		return *x.V6
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV7() uint64 {
+func (x *ProtoTest) GetV7() int64 {
 	if x != nil {
 		return x.V7
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV8() uint64 {
+func (x *ProtoTest) GetV8() int64 {
 	if x != nil && x.V8 != nil {
 		return *x.V8
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV9() string {
+func (x *ProtoTest) GetV9() uint32 {
 	if x != nil {
 		return x.V9
 	}
-	return ""
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV10() string {
+func (x *ProtoTest) GetV10() uint32 {
 	if x != nil && x.V10 != nil {
 		return *x.V10
 	}
-	return ""
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV11() []byte {
+func (x *ProtoTest) GetV11() uint32 {
 	if x != nil {
 		return x.V11
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV12() []byte {
-	if x != nil {
-		return x.V12
+func (x *ProtoTest) GetV12() uint32 {
+	if x != nil && x.V12 != nil {
+		return *x.V12
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV13() float32 {
+func (x *ProtoTest) GetV13() uint32 {
 	if x != nil {
 		return x.V13
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV14() float32 {
+func (x *ProtoTest) GetV14() uint32 {
 	if x != nil && x.V14 != nil {
 		return *x.V14
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV15() float64 {
+func (x *ProtoTest) GetV15() uint64 {
 	if x != nil {
 		return x.V15
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV16() float64 {
+func (x *ProtoTest) GetV16() uint64 {
 	if x != nil && x.V16 != nil {
 		return *x.V16
 	}
 	return 0
 }
 
-func (x *ProtoBuffTest) GetV17() bool {
+func (x *ProtoTest) GetV17() bool {
 	if x != nil {
 		return x.V17
 	}
 	return false
 }
 
-func (x *ProtoBuffTest) GetV18() bool {
+func (x *ProtoTest) GetV18() bool {
 	if x != nil && x.V18 != nil {
 		return *x.V18
 	}
 	return false
 }
 
-func (x *ProtoBuffTest) GetV19() *ProtoBuffSub {
+func (x *ProtoTest) GetV19() string {
 	if x != nil {
 		return x.V19
 	}
-	return nil
+	return ""
 }
 
-func (x *ProtoBuffTest) GetV20() *ProtoBuffSub {
-	if x != nil {
-		return x.V20
+func (x *ProtoTest) GetV20() string {
+	if x != nil && x.V20 != nil {
+		return *x.V20
 	}
-	return nil
+	return ""
 }
 
-func (x *ProtoBuffTest) GetV21() []int32 {
+func (x *ProtoTest) GetV21() []byte {
 	if x != nil {
 		return x.V21
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV22() []int64 {
+func (x *ProtoTest) GetV22() []byte {
 	if x != nil {
 		return x.V22
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV23() []uint32 {
+func (x *ProtoTest) GetV23() float32 {
 	if x != nil {
 		return x.V23
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV24() []uint64 {
-	if x != nil {
-		return x.V24
+func (x *ProtoTest) GetV24() float32 {
+	if x != nil && x.V24 != nil {
+		return *x.V24
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV25() []float32 {
+func (x *ProtoTest) GetV25() float64 {
 	if x != nil {
 		return x.V25
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV26() []float64 {
-	if x != nil {
-		return x.V26
+func (x *ProtoTest) GetV26() float64 {
+	if x != nil && x.V26 != nil {
+		return *x.V26
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV27() []bool {
+func (x *ProtoTest) GetV27() uint64 {
 	if x != nil {
 		return x.V27
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV28() []string {
-	if x != nil {
-		return x.V28
+func (x *ProtoTest) GetV28() uint64 {
+	if x != nil && x.V28 != nil {
+		return *x.V28
 	}
-	return nil
+	return 0
 }
 
-func (x *ProtoBuffTest) GetV29() [][]byte {
+func (x *ProtoTest) GetV29() string {
 	if x != nil {
 		return x.V29
 	}
-	return nil
+	return ""
 }
 
-func (x *ProtoBuffTest) GetV30() []*ProtoBuffSub {
+func (x *ProtoTest) GetV30() string {
 	if x != nil {
 		return x.V30
 	}
-	return nil
+	return ""
 }
 
-func (x *ProtoBuffTest) GetV31() map[int32]int32 {
+func (x *ProtoTest) GetV31() *ProtoSubTest {
 	if x != nil {
 		return x.V31
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV32() map[int32]int64 {
+func (x *ProtoTest) GetV32() *ProtoSubTest {
 	if x != nil {
 		return x.V32
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV33() map[int32]uint32 {
+func (x *ProtoTest) GetV33() []int32 {
 	if x != nil {
 		return x.V33
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV34() map[int32]uint64 {
+func (x *ProtoTest) GetV34() []int32 {
 	if x != nil {
 		return x.V34
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV35() map[int32]float32 {
+func (x *ProtoTest) GetV35() []int32 {
 	if x != nil {
 		return x.V35
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV36() map[int32]float64 {
+func (x *ProtoTest) GetV36() []int32 {
 	if x != nil {
 		return x.V36
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV37() map[int32]bool {
+func (x *ProtoTest) GetV37() []int32 {
 	if x != nil {
 		return x.V37
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV38() map[int32]string {
+func (x *ProtoTest) GetV38() []int32 {
 	if x != nil {
 		return x.V38
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV39() map[int32][]byte {
+func (x *ProtoTest) GetV39() []int64 {
 	if x != nil {
 		return x.V39
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV40() map[int32]*ProtoBuffSub {
+func (x *ProtoTest) GetV40() []int64 {
 	if x != nil {
 		return x.V40
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV41() map[int64]int32 {
+func (x *ProtoTest) GetV41() []uint32 {
 	if x != nil {
 		return x.V41
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV42() map[int64]int64 {
+func (x *ProtoTest) GetV42() []uint32 {
 	if x != nil {
 		return x.V42
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV43() map[int64]uint32 {
+func (x *ProtoTest) GetV43() []uint32 {
 	if x != nil {
 		return x.V43
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV44() map[int64]uint64 {
+func (x *ProtoTest) GetV44() []uint32 {
 	if x != nil {
 		return x.V44
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV45() map[int64]float32 {
+func (x *ProtoTest) GetV45() []uint32 {
 	if x != nil {
 		return x.V45
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV46() map[int64]float64 {
+func (x *ProtoTest) GetV46() []uint32 {
 	if x != nil {
 		return x.V46
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV47() map[int64]bool {
+func (x *ProtoTest) GetV47() []uint64 {
 	if x != nil {
 		return x.V47
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV48() map[int64]string {
+func (x *ProtoTest) GetV48() []uint64 {
 	if x != nil {
 		return x.V48
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV49() map[int64][]byte {
+func (x *ProtoTest) GetV49() []bool {
 	if x != nil {
 		return x.V49
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV50() map[int64]*ProtoBuffSub {
+func (x *ProtoTest) GetV50() []bool {
 	if x != nil {
 		return x.V50
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV51() map[uint32]int32 {
+func (x *ProtoTest) GetV51() []string {
 	if x != nil {
 		return x.V51
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV52() map[uint32]int64 {
+func (x *ProtoTest) GetV52() []string {
 	if x != nil {
 		return x.V52
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV53() map[uint32]uint32 {
+func (x *ProtoTest) GetV53() [][]byte {
 	if x != nil {
 		return x.V53
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV54() map[uint32]uint64 {
+func (x *ProtoTest) GetV54() [][]byte {
 	if x != nil {
 		return x.V54
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV55() map[uint32]float32 {
+func (x *ProtoTest) GetV55() []float32 {
 	if x != nil {
 		return x.V55
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV56() map[uint32]float64 {
+func (x *ProtoTest) GetV56() []float32 {
 	if x != nil {
 		return x.V56
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV57() map[uint32]bool {
+func (x *ProtoTest) GetV57() []float64 {
 	if x != nil {
 		return x.V57
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV58() map[uint32]string {
+func (x *ProtoTest) GetV58() []float64 {
 	if x != nil {
 		return x.V58
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV59() map[uint32][]byte {
+func (x *ProtoTest) GetV59() []uint64 {
 	if x != nil {
 		return x.V59
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV60() map[uint32]*ProtoBuffSub {
+func (x *ProtoTest) GetV60() []uint64 {
 	if x != nil {
 		return x.V60
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV61() map[uint64]int32 {
+func (x *ProtoTest) GetV61() []string {
 	if x != nil {
 		return x.V61
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV62() map[uint64]int64 {
+func (x *ProtoTest) GetV62() []string {
 	if x != nil {
 		return x.V62
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV63() map[uint64]uint32 {
+func (x *ProtoTest) GetV63() []*ProtoSubTest {
 	if x != nil {
 		return x.V63
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV64() map[uint64]uint64 {
+func (x *ProtoTest) GetV64() []*ProtoSubTest {
 	if x != nil {
 		return x.V64
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV65() map[uint64]float32 {
+func (x *ProtoTest) GetV65() map[int64]int32 {
 	if x != nil {
 		return x.V65
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV66() map[uint64]float64 {
+func (x *ProtoTest) GetV66() map[int64]int32 {
 	if x != nil {
 		return x.V66
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV67() map[uint64]bool {
+func (x *ProtoTest) GetV67() map[int64]int32 {
 	if x != nil {
 		return x.V67
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV68() map[uint64]string {
+func (x *ProtoTest) GetV68() map[int64]int32 {
 	if x != nil {
 		return x.V68
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV69() map[uint64][]byte {
+func (x *ProtoTest) GetV69() map[int64]int32 {
 	if x != nil {
 		return x.V69
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV70() map[uint64]*ProtoBuffSub {
+func (x *ProtoTest) GetV70() map[int64]int32 {
 	if x != nil {
 		return x.V70
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV71() map[string]int32 {
+func (x *ProtoTest) GetV71() map[int64]int64 {
 	if x != nil {
 		return x.V71
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV72() map[string]int64 {
+func (x *ProtoTest) GetV72() map[int64]int64 {
 	if x != nil {
 		return x.V72
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV73() map[string]uint32 {
+func (x *ProtoTest) GetV73() map[int64]uint32 {
 	if x != nil {
 		return x.V73
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV74() map[string]uint64 {
+func (x *ProtoTest) GetV74() map[int64]uint32 {
 	if x != nil {
 		return x.V74
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV75() map[string]float32 {
+func (x *ProtoTest) GetV75() map[int64]uint32 {
 	if x != nil {
 		return x.V75
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV76() map[string]float64 {
+func (x *ProtoTest) GetV76() map[int64]uint32 {
 	if x != nil {
 		return x.V76
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV77() map[string]bool {
+func (x *ProtoTest) GetV77() map[int64]uint32 {
 	if x != nil {
 		return x.V77
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV78() map[string]string {
+func (x *ProtoTest) GetV78() map[int64]uint32 {
 	if x != nil {
 		return x.V78
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV79() map[string][]byte {
+func (x *ProtoTest) GetV79() map[int64]uint64 {
 	if x != nil {
 		return x.V79
 	}
 	return nil
 }
 
-func (x *ProtoBuffTest) GetV80() map[string]*ProtoBuffSub {
+func (x *ProtoTest) GetV80() map[int64]uint64 {
 	if x != nil {
 		return x.V80
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV81() map[int64]bool {
+	if x != nil {
+		return x.V81
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV82() map[int64]bool {
+	if x != nil {
+		return x.V82
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV83() map[int64]string {
+	if x != nil {
+		return x.V83
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV84() map[int64]string {
+	if x != nil {
+		return x.V84
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV85() map[int64][]byte {
+	if x != nil {
+		return x.V85
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV86() map[int64][]byte {
+	if x != nil {
+		return x.V86
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV87() map[int64]float32 {
+	if x != nil {
+		return x.V87
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV88() map[int64]float32 {
+	if x != nil {
+		return x.V88
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV89() map[int64]float64 {
+	if x != nil {
+		return x.V89
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV90() map[int64]float64 {
+	if x != nil {
+		return x.V90
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV91() map[int64]uint64 {
+	if x != nil {
+		return x.V91
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV92() map[int64]uint64 {
+	if x != nil {
+		return x.V92
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV93() map[int64]string {
+	if x != nil {
+		return x.V93
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV94() map[int64]string {
+	if x != nil {
+		return x.V94
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV95() map[int64]*ProtoSubTest {
+	if x != nil {
+		return x.V95
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV96() map[int64]*ProtoSubTest {
+	if x != nil {
+		return x.V96
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV97() map[string]int32 {
+	if x != nil {
+		return x.V97
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV98() map[string]int32 {
+	if x != nil {
+		return x.V98
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV99() map[string]int32 {
+	if x != nil {
+		return x.V99
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV100() map[string]int32 {
+	if x != nil {
+		return x.V100
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV101() map[string]int32 {
+	if x != nil {
+		return x.V101
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV102() map[string]int32 {
+	if x != nil {
+		return x.V102
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV103() map[string]int64 {
+	if x != nil {
+		return x.V103
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV104() map[string]int64 {
+	if x != nil {
+		return x.V104
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV105() map[string]uint32 {
+	if x != nil {
+		return x.V105
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV106() map[string]uint32 {
+	if x != nil {
+		return x.V106
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV107() map[string]uint32 {
+	if x != nil {
+		return x.V107
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV108() map[string]uint32 {
+	if x != nil {
+		return x.V108
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV109() map[string]uint32 {
+	if x != nil {
+		return x.V109
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV110() map[string]uint32 {
+	if x != nil {
+		return x.V110
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV111() map[string]uint64 {
+	if x != nil {
+		return x.V111
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV112() map[string]uint64 {
+	if x != nil {
+		return x.V112
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV113() map[string]bool {
+	if x != nil {
+		return x.V113
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV114() map[string]bool {
+	if x != nil {
+		return x.V114
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV115() map[string]string {
+	if x != nil {
+		return x.V115
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV116() map[string]string {
+	if x != nil {
+		return x.V116
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV117() map[string][]byte {
+	if x != nil {
+		return x.V117
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV118() map[string][]byte {
+	if x != nil {
+		return x.V118
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV119() map[string]float32 {
+	if x != nil {
+		return x.V119
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV120() map[string]float32 {
+	if x != nil {
+		return x.V120
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV121() map[string]float64 {
+	if x != nil {
+		return x.V121
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV122() map[string]float64 {
+	if x != nil {
+		return x.V122
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV123() map[string]uint64 {
+	if x != nil {
+		return x.V123
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV124() map[string]uint64 {
+	if x != nil {
+		return x.V124
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV125() map[string]string {
+	if x != nil {
+		return x.V125
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV126() map[string]string {
+	if x != nil {
+		return x.V126
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV127() map[string]*ProtoSubTest {
+	if x != nil {
+		return x.V127
+	}
+	return nil
+}
+
+func (x *ProtoTest) GetV128() map[string]*ProtoSubTest {
+	if x != nil {
+		return x.V128
 	}
 	return nil
 }
@@ -745,251 +1137,348 @@ var File_proto_test_proto protoreflect.FileDescriptor
 
 const file_proto_test_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto_test.proto\x12\thbuf.test\"\x1e\n" +
-	"\fProtoBuffSub\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x03R\x02v1\"\xa91\n" +
-	"\rProtoBuffTest\x12\x0e\n" +
-	"\x02v1\x18\x01 \x01(\x05R\x02v1\x12\x13\n" +
-	"\x02v2\x18\x02 \x01(\x05H\x00R\x02v2\x88\x01\x01\x12\x0e\n" +
-	"\x02v3\x18\x03 \x01(\x03R\x02v3\x12\x13\n" +
-	"\x02v4\x18\x04 \x01(\x04H\x01R\x02v4\x88\x01\x01\x12\x0e\n" +
-	"\x02v5\x18\x05 \x01(\rR\x02v5\x12\x13\n" +
-	"\x02v6\x18\x06 \x01(\rH\x02R\x02v6\x88\x01\x01\x12\x0e\n" +
-	"\x02v7\x18\a \x01(\x04R\x02v7\x12\x13\n" +
-	"\x02v8\x18\b \x01(\x04H\x03R\x02v8\x88\x01\x01\x12\x0e\n" +
-	"\x02v9\x18\t \x01(\tR\x02v9\x12\x15\n" +
-	"\x03v10\x18\n" +
-	" \x01(\tH\x04R\x03v10\x88\x01\x01\x12\x10\n" +
-	"\x03v11\x18\v \x01(\fR\x03v11\x12\x15\n" +
-	"\x03v12\x18\f \x01(\fH\x05R\x03v12\x88\x01\x01\x12\x10\n" +
-	"\x03v13\x18\r \x01(\x02R\x03v13\x12\x15\n" +
-	"\x03v14\x18\x0e \x01(\x02H\x06R\x03v14\x88\x01\x01\x12\x10\n" +
-	"\x03v15\x18\x0f \x01(\x01R\x03v15\x12\x15\n" +
-	"\x03v16\x18\x10 \x01(\x01H\aR\x03v16\x88\x01\x01\x12\x10\n" +
-	"\x03v17\x18\x11 \x01(\bR\x03v17\x12\x15\n" +
-	"\x03v18\x18\x12 \x01(\bH\bR\x03v18\x88\x01\x01\x12)\n" +
-	"\x03v19\x18\x13 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x03v19\x12.\n" +
-	"\x03v20\x18\x14 \x01(\v2\x17.hbuf.test.ProtoBuffSubH\tR\x03v20\x88\x01\x01\x12\x10\n" +
-	"\x03v21\x18\x15 \x03(\x05R\x03v21\x12\x10\n" +
-	"\x03v22\x18\x16 \x03(\x03R\x03v22\x12\x10\n" +
-	"\x03v23\x18\x17 \x03(\rR\x03v23\x12\x10\n" +
-	"\x03v24\x18\x18 \x03(\x04R\x03v24\x12\x10\n" +
-	"\x03v25\x18\x19 \x03(\x02R\x03v25\x12\x10\n" +
-	"\x03v26\x18\x1a \x03(\x01R\x03v26\x12\x10\n" +
-	"\x03v27\x18\x1b \x03(\bR\x03v27\x12\x10\n" +
-	"\x03v28\x18\x1c \x03(\tR\x03v28\x12\x10\n" +
-	"\x03v29\x18\x1d \x03(\fR\x03v29\x12)\n" +
-	"\x03v30\x18\x1e \x03(\v2\x17.hbuf.test.ProtoBuffSubR\x03v30\x123\n" +
-	"\x03v31\x18\x1f \x03(\v2!.hbuf.test.ProtoBuffTest.V31EntryR\x03v31\x123\n" +
-	"\x03v32\x18  \x03(\v2!.hbuf.test.ProtoBuffTest.V32EntryR\x03v32\x123\n" +
-	"\x03v33\x18! \x03(\v2!.hbuf.test.ProtoBuffTest.V33EntryR\x03v33\x123\n" +
-	"\x03v34\x18\" \x03(\v2!.hbuf.test.ProtoBuffTest.V34EntryR\x03v34\x123\n" +
-	"\x03v35\x18# \x03(\v2!.hbuf.test.ProtoBuffTest.V35EntryR\x03v35\x123\n" +
-	"\x03v36\x18$ \x03(\v2!.hbuf.test.ProtoBuffTest.V36EntryR\x03v36\x123\n" +
-	"\x03v37\x18% \x03(\v2!.hbuf.test.ProtoBuffTest.V37EntryR\x03v37\x123\n" +
-	"\x03v38\x18& \x03(\v2!.hbuf.test.ProtoBuffTest.V38EntryR\x03v38\x123\n" +
-	"\x03v39\x18' \x03(\v2!.hbuf.test.ProtoBuffTest.V39EntryR\x03v39\x123\n" +
-	"\x03v40\x18( \x03(\v2!.hbuf.test.ProtoBuffTest.V40EntryR\x03v40\x123\n" +
-	"\x03v41\x18) \x03(\v2!.hbuf.test.ProtoBuffTest.V41EntryR\x03v41\x123\n" +
-	"\x03v42\x18* \x03(\v2!.hbuf.test.ProtoBuffTest.V42EntryR\x03v42\x123\n" +
-	"\x03v43\x18+ \x03(\v2!.hbuf.test.ProtoBuffTest.V43EntryR\x03v43\x123\n" +
-	"\x03v44\x18, \x03(\v2!.hbuf.test.ProtoBuffTest.V44EntryR\x03v44\x123\n" +
-	"\x03v45\x18- \x03(\v2!.hbuf.test.ProtoBuffTest.V45EntryR\x03v45\x123\n" +
-	"\x03v46\x18. \x03(\v2!.hbuf.test.ProtoBuffTest.V46EntryR\x03v46\x123\n" +
-	"\x03v47\x18/ \x03(\v2!.hbuf.test.ProtoBuffTest.V47EntryR\x03v47\x123\n" +
-	"\x03v48\x180 \x03(\v2!.hbuf.test.ProtoBuffTest.V48EntryR\x03v48\x123\n" +
-	"\x03v49\x181 \x03(\v2!.hbuf.test.ProtoBuffTest.V49EntryR\x03v49\x123\n" +
-	"\x03v50\x182 \x03(\v2!.hbuf.test.ProtoBuffTest.V50EntryR\x03v50\x123\n" +
-	"\x03v51\x183 \x03(\v2!.hbuf.test.ProtoBuffTest.V51EntryR\x03v51\x123\n" +
-	"\x03v52\x184 \x03(\v2!.hbuf.test.ProtoBuffTest.V52EntryR\x03v52\x123\n" +
-	"\x03v53\x185 \x03(\v2!.hbuf.test.ProtoBuffTest.V53EntryR\x03v53\x123\n" +
-	"\x03v54\x186 \x03(\v2!.hbuf.test.ProtoBuffTest.V54EntryR\x03v54\x123\n" +
-	"\x03v55\x187 \x03(\v2!.hbuf.test.ProtoBuffTest.V55EntryR\x03v55\x123\n" +
-	"\x03v56\x188 \x03(\v2!.hbuf.test.ProtoBuffTest.V56EntryR\x03v56\x123\n" +
-	"\x03v57\x189 \x03(\v2!.hbuf.test.ProtoBuffTest.V57EntryR\x03v57\x123\n" +
-	"\x03v58\x18: \x03(\v2!.hbuf.test.ProtoBuffTest.V58EntryR\x03v58\x123\n" +
-	"\x03v59\x18; \x03(\v2!.hbuf.test.ProtoBuffTest.V59EntryR\x03v59\x123\n" +
-	"\x03v60\x18< \x03(\v2!.hbuf.test.ProtoBuffTest.V60EntryR\x03v60\x123\n" +
-	"\x03v61\x18= \x03(\v2!.hbuf.test.ProtoBuffTest.V61EntryR\x03v61\x123\n" +
-	"\x03v62\x18> \x03(\v2!.hbuf.test.ProtoBuffTest.V62EntryR\x03v62\x123\n" +
-	"\x03v63\x18? \x03(\v2!.hbuf.test.ProtoBuffTest.V63EntryR\x03v63\x123\n" +
-	"\x03v64\x18@ \x03(\v2!.hbuf.test.ProtoBuffTest.V64EntryR\x03v64\x123\n" +
-	"\x03v65\x18A \x03(\v2!.hbuf.test.ProtoBuffTest.V65EntryR\x03v65\x123\n" +
-	"\x03v66\x18B \x03(\v2!.hbuf.test.ProtoBuffTest.V66EntryR\x03v66\x123\n" +
-	"\x03v67\x18C \x03(\v2!.hbuf.test.ProtoBuffTest.V67EntryR\x03v67\x123\n" +
-	"\x03v68\x18D \x03(\v2!.hbuf.test.ProtoBuffTest.V68EntryR\x03v68\x123\n" +
-	"\x03v69\x18E \x03(\v2!.hbuf.test.ProtoBuffTest.V69EntryR\x03v69\x123\n" +
-	"\x03v70\x18F \x03(\v2!.hbuf.test.ProtoBuffTest.V70EntryR\x03v70\x123\n" +
-	"\x03v71\x18G \x03(\v2!.hbuf.test.ProtoBuffTest.V71EntryR\x03v71\x123\n" +
-	"\x03v72\x18H \x03(\v2!.hbuf.test.ProtoBuffTest.V72EntryR\x03v72\x123\n" +
-	"\x03v73\x18I \x03(\v2!.hbuf.test.ProtoBuffTest.V73EntryR\x03v73\x123\n" +
-	"\x03v74\x18J \x03(\v2!.hbuf.test.ProtoBuffTest.V74EntryR\x03v74\x123\n" +
-	"\x03v75\x18K \x03(\v2!.hbuf.test.ProtoBuffTest.V75EntryR\x03v75\x123\n" +
-	"\x03v76\x18L \x03(\v2!.hbuf.test.ProtoBuffTest.V76EntryR\x03v76\x123\n" +
-	"\x03v77\x18M \x03(\v2!.hbuf.test.ProtoBuffTest.V77EntryR\x03v77\x123\n" +
-	"\x03v78\x18N \x03(\v2!.hbuf.test.ProtoBuffTest.V78EntryR\x03v78\x123\n" +
-	"\x03v79\x18O \x03(\v2!.hbuf.test.ProtoBuffTest.V79EntryR\x03v79\x123\n" +
-	"\x03v80\x18P \x03(\v2!.hbuf.test.ProtoBuffTest.V80EntryR\x03v80\x1a6\n" +
-	"\bV31Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
-	"\bV32Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a6\n" +
-	"\bV33Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
-	"\bV34Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
-	"\bV35Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
-	"\bV36Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
-	"\bV37Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
-	"\bV38Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
-	"\bV39Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1aO\n" +
-	"\bV40Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x05value:\x028\x01\x1a6\n" +
-	"\bV41Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
-	"\bV42Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a6\n" +
-	"\bV43Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
-	"\bV44Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
-	"\bV45Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
-	"\bV46Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
-	"\bV47Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
-	"\bV48Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
-	"\bV49Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1aO\n" +
-	"\bV50Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x03R\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x05value:\x028\x01\x1a6\n" +
-	"\bV51Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
-	"\bV52Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a6\n" +
-	"\bV53Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
-	"\bV54Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
-	"\bV55Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
-	"\bV56Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
-	"\bV57Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
-	"\bV58Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
-	"\bV59Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1aO\n" +
-	"\bV60Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x05value:\x028\x01\x1a6\n" +
-	"\bV61Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
-	"\bV62Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a6\n" +
-	"\bV63Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
-	"\bV64Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
+	"\x10proto_test.proto\x12\thbuf.test\".\n" +
+	"\fProtoSubTest\x12\x0e\n" +
+	"\x02V1\x18\x01 \x01(\x05R\x02V1\x12\x0e\n" +
+	"\x02V2\x18\x02 \x01(\x05R\x02V2\"\xb5A\n" +
+	"\tProtoTest\x12\x0e\n" +
+	"\x02V1\x18\x01 \x01(\x05R\x02V1\x12\x13\n" +
+	"\x02V2\x18\x02 \x01(\x05H\x00R\x02V2\x88\x01\x01\x12\x0e\n" +
+	"\x02V3\x18\x03 \x01(\x05R\x02V3\x12\x13\n" +
+	"\x02V4\x18\x04 \x01(\x05H\x01R\x02V4\x88\x01\x01\x12\x0e\n" +
+	"\x02V5\x18\x05 \x01(\x05R\x02V5\x12\x13\n" +
+	"\x02V6\x18\x06 \x01(\x05H\x02R\x02V6\x88\x01\x01\x12\x0e\n" +
+	"\x02V7\x18\a \x01(\x03R\x02V7\x12\x13\n" +
+	"\x02V8\x18\b \x01(\x03H\x03R\x02V8\x88\x01\x01\x12\x0e\n" +
+	"\x02V9\x18\t \x01(\rR\x02V9\x12\x15\n" +
+	"\x03V10\x18\n" +
+	" \x01(\rH\x04R\x03V10\x88\x01\x01\x12\x10\n" +
+	"\x03V11\x18\v \x01(\rR\x03V11\x12\x15\n" +
+	"\x03V12\x18\f \x01(\rH\x05R\x03V12\x88\x01\x01\x12\x10\n" +
+	"\x03V13\x18\r \x01(\rR\x03V13\x12\x15\n" +
+	"\x03V14\x18\x0e \x01(\rH\x06R\x03V14\x88\x01\x01\x12\x10\n" +
+	"\x03V15\x18\x0f \x01(\x04R\x03V15\x12\x15\n" +
+	"\x03V16\x18\x10 \x01(\x04H\aR\x03V16\x88\x01\x01\x12\x10\n" +
+	"\x03V17\x18\x11 \x01(\bR\x03V17\x12\x15\n" +
+	"\x03V18\x18\x12 \x01(\bH\bR\x03V18\x88\x01\x01\x12\x10\n" +
+	"\x03V19\x18\x13 \x01(\tR\x03V19\x12\x15\n" +
+	"\x03V20\x18\x14 \x01(\tH\tR\x03V20\x88\x01\x01\x12\x10\n" +
+	"\x03V21\x18\x15 \x01(\fR\x03V21\x12\x15\n" +
+	"\x03V22\x18\x16 \x01(\fH\n" +
+	"R\x03V22\x88\x01\x01\x12\x10\n" +
+	"\x03V23\x18\x17 \x01(\x02R\x03V23\x12\x15\n" +
+	"\x03V24\x18\x18 \x01(\x02H\vR\x03V24\x88\x01\x01\x12\x10\n" +
+	"\x03V25\x18\x19 \x01(\x01R\x03V25\x12\x15\n" +
+	"\x03V26\x18\x1a \x01(\x01H\fR\x03V26\x88\x01\x01\x12\x10\n" +
+	"\x03V27\x18\x1b \x01(\x04R\x03V27\x12\x15\n" +
+	"\x03V28\x18\x1c \x01(\x04H\rR\x03V28\x88\x01\x01\x12\x10\n" +
+	"\x03V29\x18\x1d \x01(\tR\x03V29\x12\x10\n" +
+	"\x03V30\x18\x1e \x01(\tR\x03V30\x12)\n" +
+	"\x03V31\x18\x1f \x01(\v2\x17.hbuf.test.ProtoSubTestR\x03V31\x12.\n" +
+	"\x03V32\x18  \x01(\v2\x17.hbuf.test.ProtoSubTestH\x0eR\x03V32\x88\x01\x01\x12\x10\n" +
+	"\x03v33\x18! \x03(\x05R\x03v33\x12\x10\n" +
+	"\x03v34\x18\" \x03(\x05R\x03v34\x12\x10\n" +
+	"\x03v35\x18# \x03(\x05R\x03v35\x12\x10\n" +
+	"\x03v36\x18$ \x03(\x05R\x03v36\x12\x10\n" +
+	"\x03v37\x18% \x03(\x05R\x03v37\x12\x10\n" +
+	"\x03v38\x18& \x03(\x05R\x03v38\x12\x10\n" +
+	"\x03v39\x18' \x03(\x03R\x03v39\x12\x10\n" +
+	"\x03v40\x18( \x03(\x03R\x03v40\x12\x10\n" +
+	"\x03v41\x18) \x03(\rR\x03v41\x12\x10\n" +
+	"\x03v42\x18* \x03(\rR\x03v42\x12\x10\n" +
+	"\x03v43\x18+ \x03(\rR\x03v43\x12\x10\n" +
+	"\x03v44\x18, \x03(\rR\x03v44\x12\x10\n" +
+	"\x03v45\x18- \x03(\rR\x03v45\x12\x10\n" +
+	"\x03v46\x18. \x03(\rR\x03v46\x12\x10\n" +
+	"\x03v47\x18/ \x03(\x04R\x03v47\x12\x10\n" +
+	"\x03v48\x180 \x03(\x04R\x03v48\x12\x10\n" +
+	"\x03v49\x181 \x03(\bR\x03v49\x12\x10\n" +
+	"\x03v50\x182 \x03(\bR\x03v50\x12\x10\n" +
+	"\x03v51\x183 \x03(\tR\x03v51\x12\x10\n" +
+	"\x03v52\x184 \x03(\tR\x03v52\x12\x10\n" +
+	"\x03v53\x185 \x03(\fR\x03v53\x12\x10\n" +
+	"\x03v54\x186 \x03(\fR\x03v54\x12\x10\n" +
+	"\x03v55\x187 \x03(\x02R\x03v55\x12\x10\n" +
+	"\x03v56\x188 \x03(\x02R\x03v56\x12\x10\n" +
+	"\x03v57\x189 \x03(\x01R\x03v57\x12\x10\n" +
+	"\x03v58\x18: \x03(\x01R\x03v58\x12\x10\n" +
+	"\x03v59\x18; \x03(\x04R\x03v59\x12\x10\n" +
+	"\x03v60\x18< \x03(\x04R\x03v60\x12\x10\n" +
+	"\x03v61\x18= \x03(\tR\x03v61\x12\x10\n" +
+	"\x03v62\x18> \x03(\tR\x03v62\x12)\n" +
+	"\x03v63\x18? \x03(\v2\x17.hbuf.test.ProtoSubTestR\x03v63\x12)\n" +
+	"\x03v64\x18@ \x03(\v2\x17.hbuf.test.ProtoSubTestR\x03v64\x12/\n" +
+	"\x03v65\x18A \x03(\v2\x1d.hbuf.test.ProtoTest.V65EntryR\x03v65\x12/\n" +
+	"\x03v66\x18B \x03(\v2\x1d.hbuf.test.ProtoTest.V66EntryR\x03v66\x12/\n" +
+	"\x03v67\x18C \x03(\v2\x1d.hbuf.test.ProtoTest.V67EntryR\x03v67\x12/\n" +
+	"\x03v68\x18D \x03(\v2\x1d.hbuf.test.ProtoTest.V68EntryR\x03v68\x12/\n" +
+	"\x03v69\x18E \x03(\v2\x1d.hbuf.test.ProtoTest.V69EntryR\x03v69\x12/\n" +
+	"\x03v70\x18F \x03(\v2\x1d.hbuf.test.ProtoTest.V70EntryR\x03v70\x12/\n" +
+	"\x03v71\x18G \x03(\v2\x1d.hbuf.test.ProtoTest.V71EntryR\x03v71\x12/\n" +
+	"\x03v72\x18H \x03(\v2\x1d.hbuf.test.ProtoTest.V72EntryR\x03v72\x12/\n" +
+	"\x03v73\x18I \x03(\v2\x1d.hbuf.test.ProtoTest.V73EntryR\x03v73\x12/\n" +
+	"\x03v74\x18J \x03(\v2\x1d.hbuf.test.ProtoTest.V74EntryR\x03v74\x12/\n" +
+	"\x03v75\x18K \x03(\v2\x1d.hbuf.test.ProtoTest.V75EntryR\x03v75\x12/\n" +
+	"\x03v76\x18L \x03(\v2\x1d.hbuf.test.ProtoTest.V76EntryR\x03v76\x12/\n" +
+	"\x03v77\x18M \x03(\v2\x1d.hbuf.test.ProtoTest.V77EntryR\x03v77\x12/\n" +
+	"\x03v78\x18N \x03(\v2\x1d.hbuf.test.ProtoTest.V78EntryR\x03v78\x12/\n" +
+	"\x03v79\x18O \x03(\v2\x1d.hbuf.test.ProtoTest.V79EntryR\x03v79\x12/\n" +
+	"\x03v80\x18P \x03(\v2\x1d.hbuf.test.ProtoTest.V80EntryR\x03v80\x12/\n" +
+	"\x03v81\x18Q \x03(\v2\x1d.hbuf.test.ProtoTest.V81EntryR\x03v81\x12/\n" +
+	"\x03v82\x18R \x03(\v2\x1d.hbuf.test.ProtoTest.V82EntryR\x03v82\x12/\n" +
+	"\x03v83\x18S \x03(\v2\x1d.hbuf.test.ProtoTest.V83EntryR\x03v83\x12/\n" +
+	"\x03v84\x18T \x03(\v2\x1d.hbuf.test.ProtoTest.V84EntryR\x03v84\x12/\n" +
+	"\x03v85\x18U \x03(\v2\x1d.hbuf.test.ProtoTest.V85EntryR\x03v85\x12/\n" +
+	"\x03v86\x18V \x03(\v2\x1d.hbuf.test.ProtoTest.V86EntryR\x03v86\x12/\n" +
+	"\x03v87\x18W \x03(\v2\x1d.hbuf.test.ProtoTest.V87EntryR\x03v87\x12/\n" +
+	"\x03v88\x18X \x03(\v2\x1d.hbuf.test.ProtoTest.V88EntryR\x03v88\x12/\n" +
+	"\x03v89\x18Y \x03(\v2\x1d.hbuf.test.ProtoTest.V89EntryR\x03v89\x12/\n" +
+	"\x03v90\x18Z \x03(\v2\x1d.hbuf.test.ProtoTest.V90EntryR\x03v90\x12/\n" +
+	"\x03v91\x18[ \x03(\v2\x1d.hbuf.test.ProtoTest.V91EntryR\x03v91\x12/\n" +
+	"\x03v92\x18\\ \x03(\v2\x1d.hbuf.test.ProtoTest.V92EntryR\x03v92\x12/\n" +
+	"\x03v93\x18] \x03(\v2\x1d.hbuf.test.ProtoTest.V93EntryR\x03v93\x12/\n" +
+	"\x03v94\x18^ \x03(\v2\x1d.hbuf.test.ProtoTest.V94EntryR\x03v94\x12/\n" +
+	"\x03v95\x18_ \x03(\v2\x1d.hbuf.test.ProtoTest.V95EntryR\x03v95\x12/\n" +
+	"\x03v96\x18` \x03(\v2\x1d.hbuf.test.ProtoTest.V96EntryR\x03v96\x12/\n" +
+	"\x03v97\x18a \x03(\v2\x1d.hbuf.test.ProtoTest.V97EntryR\x03v97\x12/\n" +
+	"\x03v98\x18b \x03(\v2\x1d.hbuf.test.ProtoTest.V98EntryR\x03v98\x12/\n" +
+	"\x03v99\x18c \x03(\v2\x1d.hbuf.test.ProtoTest.V99EntryR\x03v99\x122\n" +
+	"\x04v100\x18d \x03(\v2\x1e.hbuf.test.ProtoTest.V100EntryR\x04v100\x122\n" +
+	"\x04v101\x18e \x03(\v2\x1e.hbuf.test.ProtoTest.V101EntryR\x04v101\x122\n" +
+	"\x04v102\x18f \x03(\v2\x1e.hbuf.test.ProtoTest.V102EntryR\x04v102\x122\n" +
+	"\x04v103\x18g \x03(\v2\x1e.hbuf.test.ProtoTest.V103EntryR\x04v103\x122\n" +
+	"\x04v104\x18h \x03(\v2\x1e.hbuf.test.ProtoTest.V104EntryR\x04v104\x122\n" +
+	"\x04v105\x18i \x03(\v2\x1e.hbuf.test.ProtoTest.V105EntryR\x04v105\x122\n" +
+	"\x04v106\x18j \x03(\v2\x1e.hbuf.test.ProtoTest.V106EntryR\x04v106\x122\n" +
+	"\x04v107\x18k \x03(\v2\x1e.hbuf.test.ProtoTest.V107EntryR\x04v107\x122\n" +
+	"\x04v108\x18l \x03(\v2\x1e.hbuf.test.ProtoTest.V108EntryR\x04v108\x122\n" +
+	"\x04v109\x18m \x03(\v2\x1e.hbuf.test.ProtoTest.V109EntryR\x04v109\x122\n" +
+	"\x04v110\x18n \x03(\v2\x1e.hbuf.test.ProtoTest.V110EntryR\x04v110\x122\n" +
+	"\x04v111\x18o \x03(\v2\x1e.hbuf.test.ProtoTest.V111EntryR\x04v111\x122\n" +
+	"\x04v112\x18p \x03(\v2\x1e.hbuf.test.ProtoTest.V112EntryR\x04v112\x122\n" +
+	"\x04v113\x18q \x03(\v2\x1e.hbuf.test.ProtoTest.V113EntryR\x04v113\x122\n" +
+	"\x04v114\x18r \x03(\v2\x1e.hbuf.test.ProtoTest.V114EntryR\x04v114\x122\n" +
+	"\x04v115\x18s \x03(\v2\x1e.hbuf.test.ProtoTest.V115EntryR\x04v115\x122\n" +
+	"\x04v116\x18t \x03(\v2\x1e.hbuf.test.ProtoTest.V116EntryR\x04v116\x122\n" +
+	"\x04v117\x18u \x03(\v2\x1e.hbuf.test.ProtoTest.V117EntryR\x04v117\x122\n" +
+	"\x04v118\x18v \x03(\v2\x1e.hbuf.test.ProtoTest.V118EntryR\x04v118\x122\n" +
+	"\x04v119\x18w \x03(\v2\x1e.hbuf.test.ProtoTest.V119EntryR\x04v119\x122\n" +
+	"\x04v120\x18x \x03(\v2\x1e.hbuf.test.ProtoTest.V120EntryR\x04v120\x122\n" +
+	"\x04v121\x18y \x03(\v2\x1e.hbuf.test.ProtoTest.V121EntryR\x04v121\x122\n" +
+	"\x04v122\x18z \x03(\v2\x1e.hbuf.test.ProtoTest.V122EntryR\x04v122\x122\n" +
+	"\x04v123\x18{ \x03(\v2\x1e.hbuf.test.ProtoTest.V123EntryR\x04v123\x122\n" +
+	"\x04v124\x18| \x03(\v2\x1e.hbuf.test.ProtoTest.V124EntryR\x04v124\x122\n" +
+	"\x04v125\x18} \x03(\v2\x1e.hbuf.test.ProtoTest.V125EntryR\x04v125\x122\n" +
+	"\x04v126\x18~ \x03(\v2\x1e.hbuf.test.ProtoTest.V126EntryR\x04v126\x122\n" +
+	"\x04v127\x18\x7f \x03(\v2\x1e.hbuf.test.ProtoTest.V127EntryR\x04v127\x123\n" +
+	"\x04v128\x18\x80\x01 \x03(\v2\x1e.hbuf.test.ProtoTest.V128EntryR\x04v128\x1a6\n" +
 	"\bV65Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
-	"\bV66Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
-	"\bV67Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
-	"\bV68Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
-	"\bV69Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1aO\n" +
-	"\bV70Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x05value:\x028\x01\x1a6\n" +
-	"\bV71Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV66Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV67Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV68Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV69Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV70Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV71Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a6\n" +
 	"\bV72Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a6\n" +
 	"\bV73Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
 	"\bV74Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
 	"\bV75Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
 	"\bV76Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
 	"\bV77Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
 	"\bV78Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a6\n" +
 	"\bV79Entry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1aO\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
 	"\bV80Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
+	"\bV81Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
+	"\bV82Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a6\n" +
+	"\bV83Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
+	"\bV84Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
+	"\bV85Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1a6\n" +
+	"\bV86Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1a6\n" +
+	"\bV87Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
+	"\bV88Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a6\n" +
+	"\bV89Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
+	"\bV90Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a6\n" +
+	"\bV91Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
+	"\bV92Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a6\n" +
+	"\bV93Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a6\n" +
+	"\bV94Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aO\n" +
+	"\bV95Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12-\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoSubTestR\x05value:\x028\x01\x1aO\n" +
+	"\bV96Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12-\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoSubTestR\x05value:\x028\x01\x1a6\n" +
+	"\bV97Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV98Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a6\n" +
+	"\bV99Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
+	"\tV100Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
+	"\tV101Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
+	"\tV102Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
+	"\tV103Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a7\n" +
+	"\tV104Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a7\n" +
+	"\tV105Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a7\n" +
+	"\tV106Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a7\n" +
+	"\tV107Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a7\n" +
+	"\tV108Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a7\n" +
+	"\tV109Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a7\n" +
+	"\tV110Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a7\n" +
+	"\tV111Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a7\n" +
+	"\tV112Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a7\n" +
+	"\tV113Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a7\n" +
+	"\tV114Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a7\n" +
+	"\tV115Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a7\n" +
+	"\tV116Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a7\n" +
+	"\tV117Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1a7\n" +
+	"\tV118Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\x1a7\n" +
+	"\tV119Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a7\n" +
+	"\tV120Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x02R\x05value:\x028\x01\x1a7\n" +
+	"\tV121Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a7\n" +
+	"\tV122Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a7\n" +
+	"\tV123Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a7\n" +
+	"\tV124Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a7\n" +
+	"\tV125Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a7\n" +
+	"\tV126Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aP\n" +
+	"\tV127Entry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoBuffSubR\x05value:\x028\x01B\x05\n" +
-	"\x03_v2B\x05\n" +
-	"\x03_v4B\x05\n" +
-	"\x03_v6B\x05\n" +
-	"\x03_v8B\x06\n" +
-	"\x04_v10B\x06\n" +
-	"\x04_v12B\x06\n" +
-	"\x04_v14B\x06\n" +
-	"\x04_v16B\x06\n" +
-	"\x04_v18B\x06\n" +
-	"\x04_v20B\rZ\v.;hbuf_testb\x06proto3"
+	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoSubTestR\x05value:\x028\x01\x1aP\n" +
+	"\tV128Entry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12-\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.hbuf.test.ProtoSubTestR\x05value:\x028\x01B\x05\n" +
+	"\x03_V2B\x05\n" +
+	"\x03_V4B\x05\n" +
+	"\x03_V6B\x05\n" +
+	"\x03_V8B\x06\n" +
+	"\x04_V10B\x06\n" +
+	"\x04_V12B\x06\n" +
+	"\x04_V14B\x06\n" +
+	"\x04_V16B\x06\n" +
+	"\x04_V18B\x06\n" +
+	"\x04_V20B\x06\n" +
+	"\x04_V22B\x06\n" +
+	"\x04_V24B\x06\n" +
+	"\x04_V26B\x06\n" +
+	"\x04_V28B\x06\n" +
+	"\x04_V32B\rZ\v.;hbuf_testb\x06proto3"
 
 var (
 	file_proto_test_proto_rawDescOnce sync.Once
@@ -1003,125 +1492,153 @@ func file_proto_test_proto_rawDescGZIP() []byte {
 	return file_proto_test_proto_rawDescData
 }
 
-var file_proto_test_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_proto_test_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
 var file_proto_test_proto_goTypes = []any{
-	(*ProtoBuffSub)(nil),  // 0: hbuf.test.ProtoBuffSub
-	(*ProtoBuffTest)(nil), // 1: hbuf.test.ProtoBuffTest
-	nil,                   // 2: hbuf.test.ProtoBuffTest.V31Entry
-	nil,                   // 3: hbuf.test.ProtoBuffTest.V32Entry
-	nil,                   // 4: hbuf.test.ProtoBuffTest.V33Entry
-	nil,                   // 5: hbuf.test.ProtoBuffTest.V34Entry
-	nil,                   // 6: hbuf.test.ProtoBuffTest.V35Entry
-	nil,                   // 7: hbuf.test.ProtoBuffTest.V36Entry
-	nil,                   // 8: hbuf.test.ProtoBuffTest.V37Entry
-	nil,                   // 9: hbuf.test.ProtoBuffTest.V38Entry
-	nil,                   // 10: hbuf.test.ProtoBuffTest.V39Entry
-	nil,                   // 11: hbuf.test.ProtoBuffTest.V40Entry
-	nil,                   // 12: hbuf.test.ProtoBuffTest.V41Entry
-	nil,                   // 13: hbuf.test.ProtoBuffTest.V42Entry
-	nil,                   // 14: hbuf.test.ProtoBuffTest.V43Entry
-	nil,                   // 15: hbuf.test.ProtoBuffTest.V44Entry
-	nil,                   // 16: hbuf.test.ProtoBuffTest.V45Entry
-	nil,                   // 17: hbuf.test.ProtoBuffTest.V46Entry
-	nil,                   // 18: hbuf.test.ProtoBuffTest.V47Entry
-	nil,                   // 19: hbuf.test.ProtoBuffTest.V48Entry
-	nil,                   // 20: hbuf.test.ProtoBuffTest.V49Entry
-	nil,                   // 21: hbuf.test.ProtoBuffTest.V50Entry
-	nil,                   // 22: hbuf.test.ProtoBuffTest.V51Entry
-	nil,                   // 23: hbuf.test.ProtoBuffTest.V52Entry
-	nil,                   // 24: hbuf.test.ProtoBuffTest.V53Entry
-	nil,                   // 25: hbuf.test.ProtoBuffTest.V54Entry
-	nil,                   // 26: hbuf.test.ProtoBuffTest.V55Entry
-	nil,                   // 27: hbuf.test.ProtoBuffTest.V56Entry
-	nil,                   // 28: hbuf.test.ProtoBuffTest.V57Entry
-	nil,                   // 29: hbuf.test.ProtoBuffTest.V58Entry
-	nil,                   // 30: hbuf.test.ProtoBuffTest.V59Entry
-	nil,                   // 31: hbuf.test.ProtoBuffTest.V60Entry
-	nil,                   // 32: hbuf.test.ProtoBuffTest.V61Entry
-	nil,                   // 33: hbuf.test.ProtoBuffTest.V62Entry
-	nil,                   // 34: hbuf.test.ProtoBuffTest.V63Entry
-	nil,                   // 35: hbuf.test.ProtoBuffTest.V64Entry
-	nil,                   // 36: hbuf.test.ProtoBuffTest.V65Entry
-	nil,                   // 37: hbuf.test.ProtoBuffTest.V66Entry
-	nil,                   // 38: hbuf.test.ProtoBuffTest.V67Entry
-	nil,                   // 39: hbuf.test.ProtoBuffTest.V68Entry
-	nil,                   // 40: hbuf.test.ProtoBuffTest.V69Entry
-	nil,                   // 41: hbuf.test.ProtoBuffTest.V70Entry
-	nil,                   // 42: hbuf.test.ProtoBuffTest.V71Entry
-	nil,                   // 43: hbuf.test.ProtoBuffTest.V72Entry
-	nil,                   // 44: hbuf.test.ProtoBuffTest.V73Entry
-	nil,                   // 45: hbuf.test.ProtoBuffTest.V74Entry
-	nil,                   // 46: hbuf.test.ProtoBuffTest.V75Entry
-	nil,                   // 47: hbuf.test.ProtoBuffTest.V76Entry
-	nil,                   // 48: hbuf.test.ProtoBuffTest.V77Entry
-	nil,                   // 49: hbuf.test.ProtoBuffTest.V78Entry
-	nil,                   // 50: hbuf.test.ProtoBuffTest.V79Entry
-	nil,                   // 51: hbuf.test.ProtoBuffTest.V80Entry
+	(*ProtoSubTest)(nil), // 0: hbuf.test.ProtoSubTest
+	(*ProtoTest)(nil),    // 1: hbuf.test.ProtoTest
+	nil,                  // 2: hbuf.test.ProtoTest.V65Entry
+	nil,                  // 3: hbuf.test.ProtoTest.V66Entry
+	nil,                  // 4: hbuf.test.ProtoTest.V67Entry
+	nil,                  // 5: hbuf.test.ProtoTest.V68Entry
+	nil,                  // 6: hbuf.test.ProtoTest.V69Entry
+	nil,                  // 7: hbuf.test.ProtoTest.V70Entry
+	nil,                  // 8: hbuf.test.ProtoTest.V71Entry
+	nil,                  // 9: hbuf.test.ProtoTest.V72Entry
+	nil,                  // 10: hbuf.test.ProtoTest.V73Entry
+	nil,                  // 11: hbuf.test.ProtoTest.V74Entry
+	nil,                  // 12: hbuf.test.ProtoTest.V75Entry
+	nil,                  // 13: hbuf.test.ProtoTest.V76Entry
+	nil,                  // 14: hbuf.test.ProtoTest.V77Entry
+	nil,                  // 15: hbuf.test.ProtoTest.V78Entry
+	nil,                  // 16: hbuf.test.ProtoTest.V79Entry
+	nil,                  // 17: hbuf.test.ProtoTest.V80Entry
+	nil,                  // 18: hbuf.test.ProtoTest.V81Entry
+	nil,                  // 19: hbuf.test.ProtoTest.V82Entry
+	nil,                  // 20: hbuf.test.ProtoTest.V83Entry
+	nil,                  // 21: hbuf.test.ProtoTest.V84Entry
+	nil,                  // 22: hbuf.test.ProtoTest.V85Entry
+	nil,                  // 23: hbuf.test.ProtoTest.V86Entry
+	nil,                  // 24: hbuf.test.ProtoTest.V87Entry
+	nil,                  // 25: hbuf.test.ProtoTest.V88Entry
+	nil,                  // 26: hbuf.test.ProtoTest.V89Entry
+	nil,                  // 27: hbuf.test.ProtoTest.V90Entry
+	nil,                  // 28: hbuf.test.ProtoTest.V91Entry
+	nil,                  // 29: hbuf.test.ProtoTest.V92Entry
+	nil,                  // 30: hbuf.test.ProtoTest.V93Entry
+	nil,                  // 31: hbuf.test.ProtoTest.V94Entry
+	nil,                  // 32: hbuf.test.ProtoTest.V95Entry
+	nil,                  // 33: hbuf.test.ProtoTest.V96Entry
+	nil,                  // 34: hbuf.test.ProtoTest.V97Entry
+	nil,                  // 35: hbuf.test.ProtoTest.V98Entry
+	nil,                  // 36: hbuf.test.ProtoTest.V99Entry
+	nil,                  // 37: hbuf.test.ProtoTest.V100Entry
+	nil,                  // 38: hbuf.test.ProtoTest.V101Entry
+	nil,                  // 39: hbuf.test.ProtoTest.V102Entry
+	nil,                  // 40: hbuf.test.ProtoTest.V103Entry
+	nil,                  // 41: hbuf.test.ProtoTest.V104Entry
+	nil,                  // 42: hbuf.test.ProtoTest.V105Entry
+	nil,                  // 43: hbuf.test.ProtoTest.V106Entry
+	nil,                  // 44: hbuf.test.ProtoTest.V107Entry
+	nil,                  // 45: hbuf.test.ProtoTest.V108Entry
+	nil,                  // 46: hbuf.test.ProtoTest.V109Entry
+	nil,                  // 47: hbuf.test.ProtoTest.V110Entry
+	nil,                  // 48: hbuf.test.ProtoTest.V111Entry
+	nil,                  // 49: hbuf.test.ProtoTest.V112Entry
+	nil,                  // 50: hbuf.test.ProtoTest.V113Entry
+	nil,                  // 51: hbuf.test.ProtoTest.V114Entry
+	nil,                  // 52: hbuf.test.ProtoTest.V115Entry
+	nil,                  // 53: hbuf.test.ProtoTest.V116Entry
+	nil,                  // 54: hbuf.test.ProtoTest.V117Entry
+	nil,                  // 55: hbuf.test.ProtoTest.V118Entry
+	nil,                  // 56: hbuf.test.ProtoTest.V119Entry
+	nil,                  // 57: hbuf.test.ProtoTest.V120Entry
+	nil,                  // 58: hbuf.test.ProtoTest.V121Entry
+	nil,                  // 59: hbuf.test.ProtoTest.V122Entry
+	nil,                  // 60: hbuf.test.ProtoTest.V123Entry
+	nil,                  // 61: hbuf.test.ProtoTest.V124Entry
+	nil,                  // 62: hbuf.test.ProtoTest.V125Entry
+	nil,                  // 63: hbuf.test.ProtoTest.V126Entry
+	nil,                  // 64: hbuf.test.ProtoTest.V127Entry
+	nil,                  // 65: hbuf.test.ProtoTest.V128Entry
 }
 var file_proto_test_proto_depIdxs = []int32{
-	0,  // 0: hbuf.test.ProtoBuffTest.v19:type_name -> hbuf.test.ProtoBuffSub
-	0,  // 1: hbuf.test.ProtoBuffTest.v20:type_name -> hbuf.test.ProtoBuffSub
-	0,  // 2: hbuf.test.ProtoBuffTest.v30:type_name -> hbuf.test.ProtoBuffSub
-	2,  // 3: hbuf.test.ProtoBuffTest.v31:type_name -> hbuf.test.ProtoBuffTest.V31Entry
-	3,  // 4: hbuf.test.ProtoBuffTest.v32:type_name -> hbuf.test.ProtoBuffTest.V32Entry
-	4,  // 5: hbuf.test.ProtoBuffTest.v33:type_name -> hbuf.test.ProtoBuffTest.V33Entry
-	5,  // 6: hbuf.test.ProtoBuffTest.v34:type_name -> hbuf.test.ProtoBuffTest.V34Entry
-	6,  // 7: hbuf.test.ProtoBuffTest.v35:type_name -> hbuf.test.ProtoBuffTest.V35Entry
-	7,  // 8: hbuf.test.ProtoBuffTest.v36:type_name -> hbuf.test.ProtoBuffTest.V36Entry
-	8,  // 9: hbuf.test.ProtoBuffTest.v37:type_name -> hbuf.test.ProtoBuffTest.V37Entry
-	9,  // 10: hbuf.test.ProtoBuffTest.v38:type_name -> hbuf.test.ProtoBuffTest.V38Entry
-	10, // 11: hbuf.test.ProtoBuffTest.v39:type_name -> hbuf.test.ProtoBuffTest.V39Entry
-	11, // 12: hbuf.test.ProtoBuffTest.v40:type_name -> hbuf.test.ProtoBuffTest.V40Entry
-	12, // 13: hbuf.test.ProtoBuffTest.v41:type_name -> hbuf.test.ProtoBuffTest.V41Entry
-	13, // 14: hbuf.test.ProtoBuffTest.v42:type_name -> hbuf.test.ProtoBuffTest.V42Entry
-	14, // 15: hbuf.test.ProtoBuffTest.v43:type_name -> hbuf.test.ProtoBuffTest.V43Entry
-	15, // 16: hbuf.test.ProtoBuffTest.v44:type_name -> hbuf.test.ProtoBuffTest.V44Entry
-	16, // 17: hbuf.test.ProtoBuffTest.v45:type_name -> hbuf.test.ProtoBuffTest.V45Entry
-	17, // 18: hbuf.test.ProtoBuffTest.v46:type_name -> hbuf.test.ProtoBuffTest.V46Entry
-	18, // 19: hbuf.test.ProtoBuffTest.v47:type_name -> hbuf.test.ProtoBuffTest.V47Entry
-	19, // 20: hbuf.test.ProtoBuffTest.v48:type_name -> hbuf.test.ProtoBuffTest.V48Entry
-	20, // 21: hbuf.test.ProtoBuffTest.v49:type_name -> hbuf.test.ProtoBuffTest.V49Entry
-	21, // 22: hbuf.test.ProtoBuffTest.v50:type_name -> hbuf.test.ProtoBuffTest.V50Entry
-	22, // 23: hbuf.test.ProtoBuffTest.v51:type_name -> hbuf.test.ProtoBuffTest.V51Entry
-	23, // 24: hbuf.test.ProtoBuffTest.v52:type_name -> hbuf.test.ProtoBuffTest.V52Entry
-	24, // 25: hbuf.test.ProtoBuffTest.v53:type_name -> hbuf.test.ProtoBuffTest.V53Entry
-	25, // 26: hbuf.test.ProtoBuffTest.v54:type_name -> hbuf.test.ProtoBuffTest.V54Entry
-	26, // 27: hbuf.test.ProtoBuffTest.v55:type_name -> hbuf.test.ProtoBuffTest.V55Entry
-	27, // 28: hbuf.test.ProtoBuffTest.v56:type_name -> hbuf.test.ProtoBuffTest.V56Entry
-	28, // 29: hbuf.test.ProtoBuffTest.v57:type_name -> hbuf.test.ProtoBuffTest.V57Entry
-	29, // 30: hbuf.test.ProtoBuffTest.v58:type_name -> hbuf.test.ProtoBuffTest.V58Entry
-	30, // 31: hbuf.test.ProtoBuffTest.v59:type_name -> hbuf.test.ProtoBuffTest.V59Entry
-	31, // 32: hbuf.test.ProtoBuffTest.v60:type_name -> hbuf.test.ProtoBuffTest.V60Entry
-	32, // 33: hbuf.test.ProtoBuffTest.v61:type_name -> hbuf.test.ProtoBuffTest.V61Entry
-	33, // 34: hbuf.test.ProtoBuffTest.v62:type_name -> hbuf.test.ProtoBuffTest.V62Entry
-	34, // 35: hbuf.test.ProtoBuffTest.v63:type_name -> hbuf.test.ProtoBuffTest.V63Entry
-	35, // 36: hbuf.test.ProtoBuffTest.v64:type_name -> hbuf.test.ProtoBuffTest.V64Entry
-	36, // 37: hbuf.test.ProtoBuffTest.v65:type_name -> hbuf.test.ProtoBuffTest.V65Entry
-	37, // 38: hbuf.test.ProtoBuffTest.v66:type_name -> hbuf.test.ProtoBuffTest.V66Entry
-	38, // 39: hbuf.test.ProtoBuffTest.v67:type_name -> hbuf.test.ProtoBuffTest.V67Entry
-	39, // 40: hbuf.test.ProtoBuffTest.v68:type_name -> hbuf.test.ProtoBuffTest.V68Entry
-	40, // 41: hbuf.test.ProtoBuffTest.v69:type_name -> hbuf.test.ProtoBuffTest.V69Entry
-	41, // 42: hbuf.test.ProtoBuffTest.v70:type_name -> hbuf.test.ProtoBuffTest.V70Entry
-	42, // 43: hbuf.test.ProtoBuffTest.v71:type_name -> hbuf.test.ProtoBuffTest.V71Entry
-	43, // 44: hbuf.test.ProtoBuffTest.v72:type_name -> hbuf.test.ProtoBuffTest.V72Entry
-	44, // 45: hbuf.test.ProtoBuffTest.v73:type_name -> hbuf.test.ProtoBuffTest.V73Entry
-	45, // 46: hbuf.test.ProtoBuffTest.v74:type_name -> hbuf.test.ProtoBuffTest.V74Entry
-	46, // 47: hbuf.test.ProtoBuffTest.v75:type_name -> hbuf.test.ProtoBuffTest.V75Entry
-	47, // 48: hbuf.test.ProtoBuffTest.v76:type_name -> hbuf.test.ProtoBuffTest.V76Entry
-	48, // 49: hbuf.test.ProtoBuffTest.v77:type_name -> hbuf.test.ProtoBuffTest.V77Entry
-	49, // 50: hbuf.test.ProtoBuffTest.v78:type_name -> hbuf.test.ProtoBuffTest.V78Entry
-	50, // 51: hbuf.test.ProtoBuffTest.v79:type_name -> hbuf.test.ProtoBuffTest.V79Entry
-	51, // 52: hbuf.test.ProtoBuffTest.v80:type_name -> hbuf.test.ProtoBuffTest.V80Entry
-	0,  // 53: hbuf.test.ProtoBuffTest.V40Entry.value:type_name -> hbuf.test.ProtoBuffSub
-	0,  // 54: hbuf.test.ProtoBuffTest.V50Entry.value:type_name -> hbuf.test.ProtoBuffSub
-	0,  // 55: hbuf.test.ProtoBuffTest.V60Entry.value:type_name -> hbuf.test.ProtoBuffSub
-	0,  // 56: hbuf.test.ProtoBuffTest.V70Entry.value:type_name -> hbuf.test.ProtoBuffSub
-	0,  // 57: hbuf.test.ProtoBuffTest.V80Entry.value:type_name -> hbuf.test.ProtoBuffSub
-	58, // [58:58] is the sub-list for method output_type
-	58, // [58:58] is the sub-list for method input_type
-	58, // [58:58] is the sub-list for extension type_name
-	58, // [58:58] is the sub-list for extension extendee
-	0,  // [0:58] is the sub-list for field type_name
+	0,  // 0: hbuf.test.ProtoTest.V31:type_name -> hbuf.test.ProtoSubTest
+	0,  // 1: hbuf.test.ProtoTest.V32:type_name -> hbuf.test.ProtoSubTest
+	0,  // 2: hbuf.test.ProtoTest.v63:type_name -> hbuf.test.ProtoSubTest
+	0,  // 3: hbuf.test.ProtoTest.v64:type_name -> hbuf.test.ProtoSubTest
+	2,  // 4: hbuf.test.ProtoTest.v65:type_name -> hbuf.test.ProtoTest.V65Entry
+	3,  // 5: hbuf.test.ProtoTest.v66:type_name -> hbuf.test.ProtoTest.V66Entry
+	4,  // 6: hbuf.test.ProtoTest.v67:type_name -> hbuf.test.ProtoTest.V67Entry
+	5,  // 7: hbuf.test.ProtoTest.v68:type_name -> hbuf.test.ProtoTest.V68Entry
+	6,  // 8: hbuf.test.ProtoTest.v69:type_name -> hbuf.test.ProtoTest.V69Entry
+	7,  // 9: hbuf.test.ProtoTest.v70:type_name -> hbuf.test.ProtoTest.V70Entry
+	8,  // 10: hbuf.test.ProtoTest.v71:type_name -> hbuf.test.ProtoTest.V71Entry
+	9,  // 11: hbuf.test.ProtoTest.v72:type_name -> hbuf.test.ProtoTest.V72Entry
+	10, // 12: hbuf.test.ProtoTest.v73:type_name -> hbuf.test.ProtoTest.V73Entry
+	11, // 13: hbuf.test.ProtoTest.v74:type_name -> hbuf.test.ProtoTest.V74Entry
+	12, // 14: hbuf.test.ProtoTest.v75:type_name -> hbuf.test.ProtoTest.V75Entry
+	13, // 15: hbuf.test.ProtoTest.v76:type_name -> hbuf.test.ProtoTest.V76Entry
+	14, // 16: hbuf.test.ProtoTest.v77:type_name -> hbuf.test.ProtoTest.V77Entry
+	15, // 17: hbuf.test.ProtoTest.v78:type_name -> hbuf.test.ProtoTest.V78Entry
+	16, // 18: hbuf.test.ProtoTest.v79:type_name -> hbuf.test.ProtoTest.V79Entry
+	17, // 19: hbuf.test.ProtoTest.v80:type_name -> hbuf.test.ProtoTest.V80Entry
+	18, // 20: hbuf.test.ProtoTest.v81:type_name -> hbuf.test.ProtoTest.V81Entry
+	19, // 21: hbuf.test.ProtoTest.v82:type_name -> hbuf.test.ProtoTest.V82Entry
+	20, // 22: hbuf.test.ProtoTest.v83:type_name -> hbuf.test.ProtoTest.V83Entry
+	21, // 23: hbuf.test.ProtoTest.v84:type_name -> hbuf.test.ProtoTest.V84Entry
+	22, // 24: hbuf.test.ProtoTest.v85:type_name -> hbuf.test.ProtoTest.V85Entry
+	23, // 25: hbuf.test.ProtoTest.v86:type_name -> hbuf.test.ProtoTest.V86Entry
+	24, // 26: hbuf.test.ProtoTest.v87:type_name -> hbuf.test.ProtoTest.V87Entry
+	25, // 27: hbuf.test.ProtoTest.v88:type_name -> hbuf.test.ProtoTest.V88Entry
+	26, // 28: hbuf.test.ProtoTest.v89:type_name -> hbuf.test.ProtoTest.V89Entry
+	27, // 29: hbuf.test.ProtoTest.v90:type_name -> hbuf.test.ProtoTest.V90Entry
+	28, // 30: hbuf.test.ProtoTest.v91:type_name -> hbuf.test.ProtoTest.V91Entry
+	29, // 31: hbuf.test.ProtoTest.v92:type_name -> hbuf.test.ProtoTest.V92Entry
+	30, // 32: hbuf.test.ProtoTest.v93:type_name -> hbuf.test.ProtoTest.V93Entry
+	31, // 33: hbuf.test.ProtoTest.v94:type_name -> hbuf.test.ProtoTest.V94Entry
+	32, // 34: hbuf.test.ProtoTest.v95:type_name -> hbuf.test.ProtoTest.V95Entry
+	33, // 35: hbuf.test.ProtoTest.v96:type_name -> hbuf.test.ProtoTest.V96Entry
+	34, // 36: hbuf.test.ProtoTest.v97:type_name -> hbuf.test.ProtoTest.V97Entry
+	35, // 37: hbuf.test.ProtoTest.v98:type_name -> hbuf.test.ProtoTest.V98Entry
+	36, // 38: hbuf.test.ProtoTest.v99:type_name -> hbuf.test.ProtoTest.V99Entry
+	37, // 39: hbuf.test.ProtoTest.v100:type_name -> hbuf.test.ProtoTest.V100Entry
+	38, // 40: hbuf.test.ProtoTest.v101:type_name -> hbuf.test.ProtoTest.V101Entry
+	39, // 41: hbuf.test.ProtoTest.v102:type_name -> hbuf.test.ProtoTest.V102Entry
+	40, // 42: hbuf.test.ProtoTest.v103:type_name -> hbuf.test.ProtoTest.V103Entry
+	41, // 43: hbuf.test.ProtoTest.v104:type_name -> hbuf.test.ProtoTest.V104Entry
+	42, // 44: hbuf.test.ProtoTest.v105:type_name -> hbuf.test.ProtoTest.V105Entry
+	43, // 45: hbuf.test.ProtoTest.v106:type_name -> hbuf.test.ProtoTest.V106Entry
+	44, // 46: hbuf.test.ProtoTest.v107:type_name -> hbuf.test.ProtoTest.V107Entry
+	45, // 47: hbuf.test.ProtoTest.v108:type_name -> hbuf.test.ProtoTest.V108Entry
+	46, // 48: hbuf.test.ProtoTest.v109:type_name -> hbuf.test.ProtoTest.V109Entry
+	47, // 49: hbuf.test.ProtoTest.v110:type_name -> hbuf.test.ProtoTest.V110Entry
+	48, // 50: hbuf.test.ProtoTest.v111:type_name -> hbuf.test.ProtoTest.V111Entry
+	49, // 51: hbuf.test.ProtoTest.v112:type_name -> hbuf.test.ProtoTest.V112Entry
+	50, // 52: hbuf.test.ProtoTest.v113:type_name -> hbuf.test.ProtoTest.V113Entry
+	51, // 53: hbuf.test.ProtoTest.v114:type_name -> hbuf.test.ProtoTest.V114Entry
+	52, // 54: hbuf.test.ProtoTest.v115:type_name -> hbuf.test.ProtoTest.V115Entry
+	53, // 55: hbuf.test.ProtoTest.v116:type_name -> hbuf.test.ProtoTest.V116Entry
+	54, // 56: hbuf.test.ProtoTest.v117:type_name -> hbuf.test.ProtoTest.V117Entry
+	55, // 57: hbuf.test.ProtoTest.v118:type_name -> hbuf.test.ProtoTest.V118Entry
+	56, // 58: hbuf.test.ProtoTest.v119:type_name -> hbuf.test.ProtoTest.V119Entry
+	57, // 59: hbuf.test.ProtoTest.v120:type_name -> hbuf.test.ProtoTest.V120Entry
+	58, // 60: hbuf.test.ProtoTest.v121:type_name -> hbuf.test.ProtoTest.V121Entry
+	59, // 61: hbuf.test.ProtoTest.v122:type_name -> hbuf.test.ProtoTest.V122Entry
+	60, // 62: hbuf.test.ProtoTest.v123:type_name -> hbuf.test.ProtoTest.V123Entry
+	61, // 63: hbuf.test.ProtoTest.v124:type_name -> hbuf.test.ProtoTest.V124Entry
+	62, // 64: hbuf.test.ProtoTest.v125:type_name -> hbuf.test.ProtoTest.V125Entry
+	63, // 65: hbuf.test.ProtoTest.v126:type_name -> hbuf.test.ProtoTest.V126Entry
+	64, // 66: hbuf.test.ProtoTest.v127:type_name -> hbuf.test.ProtoTest.V127Entry
+	65, // 67: hbuf.test.ProtoTest.v128:type_name -> hbuf.test.ProtoTest.V128Entry
+	0,  // 68: hbuf.test.ProtoTest.V95Entry.value:type_name -> hbuf.test.ProtoSubTest
+	0,  // 69: hbuf.test.ProtoTest.V96Entry.value:type_name -> hbuf.test.ProtoSubTest
+	0,  // 70: hbuf.test.ProtoTest.V127Entry.value:type_name -> hbuf.test.ProtoSubTest
+	0,  // 71: hbuf.test.ProtoTest.V128Entry.value:type_name -> hbuf.test.ProtoSubTest
+	72, // [72:72] is the sub-list for method output_type
+	72, // [72:72] is the sub-list for method input_type
+	72, // [72:72] is the sub-list for extension type_name
+	72, // [72:72] is the sub-list for extension extendee
+	0,  // [0:72] is the sub-list for field type_name
 }
 
 func init() { file_proto_test_proto_init() }
@@ -1136,7 +1653,7 @@ func file_proto_test_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_test_proto_rawDesc), len(file_proto_test_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   52,
+			NumMessages:   66,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -57,7 +57,7 @@ func Unmarshal(buf []byte, data Data, tag string) (err error) {
 	//		err = r.(error)
 	//	}
 	//}()
-	typ, _, valueLen, buf := Reader(buf)
+	typ, _, valueLen, buf := ReaderTypeId(buf)
 	_, err = data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, valueLen, tag)
 	if err != nil {
 		return err

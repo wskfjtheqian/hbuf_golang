@@ -278,7 +278,7 @@ var pSrc = ProtoTest{
 	V128: map[string]*ProtoSubTest{"a": {V1: 22, V2: int32(11)}, "b": {V1: 33, V2: int32(22)}, "c": {V1: 44, V2: int32(33)}},
 }
 
-func TestName(t *testing.T) {
+func TestEncoderDecoder(t *testing.T) {
 	var err error
 	var pBuf []byte
 	t.Run("EncoderProto", func(t *testing.T) {
@@ -287,16 +287,7 @@ func TestName(t *testing.T) {
 			t.Error(err.Error())
 			return
 		}
-		t.Log("len:", len(pBuf))
-		t.Log("data:", pBuf)
-	})
-	t.Run("DecoderProto", func(t *testing.T) {
-		des := ProtoTest{}
-		err = proto.Unmarshal(pBuf, &des)
-		if err != nil {
-			t.Error(err.Error() + "\n" + string(pBuf))
-			return
-		}
+		t.Log("EncoderProto len:", len(pBuf))
 	})
 
 	jText := ""
@@ -306,8 +297,7 @@ func TestName(t *testing.T) {
 			t.Error(err.Error() + "\n" + string(buf))
 			return
 		}
-		t.Log("len:", len(buf))
-		t.Log("EncoderJson:", string(buf))
+		t.Log("EncoderJson len:", len(buf))
 		jText = string(buf)
 	})
 
@@ -318,8 +308,7 @@ func TestName(t *testing.T) {
 			t.Error(err.Error() + "\n")
 			return
 		}
-		t.Log("len:", len(hBuf))
-		t.Log("EncoderHBuf:", hBuf)
+		t.Log("EncoderHBuf len:", len(hBuf))
 		err = os.WriteFile(filepath.Join(os.TempDir(), "test.bin"), hBuf, 0666)
 		if err != nil {
 			t.Error(err.Error() + "\n")
@@ -347,9 +336,11 @@ func TestName(t *testing.T) {
 	if hText != jText {
 		t.Error(jText + " != " + hText)
 	}
+	t.Log("src:", jText)
+	t.Log("desc:", hText)
 }
 
-func BenchmarkName(b *testing.B) {
+func BenchmarkEncoderDecoder(b *testing.B) {
 	var err error
 	var pBuf []byte
 	b.Run("EncoderProto", func(b *testing.B) {
@@ -415,4 +406,50 @@ func BenchmarkName(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestExtend(t *testing.T) {
+	src := HBufExtend{
+		HBufSubTest: HBufSubTest{
+			V1: 20,
+			V2: TP(int8(30)),
+		},
+		HBufSub1Test: HBufSub1Test{
+			V1: 10,
+			V3: TP(int8(40)),
+		},
+		V2: 50,
+		V4: TP(int8(10)),
+		V5: []*int32{TP(int32(10)), nil},
+	}
+
+	buf, err := hbuf.Marshal(&src, "")
+	if err != nil {
+		t.Error(err.Error() + "\n")
+		return
+	}
+	des := HBufExtend{}
+	err = hbuf.Unmarshal(buf, &des, "")
+	if err != nil {
+		t.Error(err.Error() + "\n")
+		return
+	}
+
+	sJson, err := json.Marshal(&src)
+	if err != nil {
+		t.Error(err.Error() + "\n")
+		return
+	}
+	desJson, err := json.Marshal(&des)
+	if err != nil {
+		t.Error(err.Error() + "\n")
+		return
+	}
+
+	t.Log(string(sJson))
+	t.Log(string(desJson))
+	if string(sJson) != string(desJson) {
+		t.Error("not equal")
+		return
+	}
 }

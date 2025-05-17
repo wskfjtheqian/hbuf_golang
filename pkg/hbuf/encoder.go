@@ -1,5 +1,13 @@
 package hbuf
 
+func WriterType(buf []byte, typ Type, isNullable bool, valueLen uint8) []byte {
+	if isNullable {
+		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2|byte(1)&0b11)
+	} else {
+		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2)
+	}
+}
+
 func WriterTypeId(buf []byte, typ Type, id uint16, valueLen uint8) []byte {
 	if id == 0 {
 		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2)
