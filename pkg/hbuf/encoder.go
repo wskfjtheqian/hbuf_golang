@@ -1,20 +1,22 @@
 package hbuf
 
-func WriterType(buf []byte, typ Type, isNullable bool, valueLen uint8) []byte {
-	if isNullable {
-		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2|byte(1)&0b11)
+func WriterType(buf []byte, typ Type, idLen uint8, valueLen uint8) []byte {
+	return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2|byte(idLen)&0b11)
+}
+
+func LengthId(h uint16) uint8 {
+	if h <= 0xFF {
+		return 1
 	} else {
-		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2)
+		return 2
 	}
 }
 
-func WriterTypeId(buf []byte, typ Type, id uint16, valueLen uint8) []byte {
-	if id == 0 {
-		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2)
-	} else if id <= 0xFF {
-		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2|byte(1)&0b11, byte(id))
+func WriterId(buf []byte, v uint16) []byte {
+	if v <= 0xFF {
+		return append(buf, byte(v))
 	} else {
-		return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2|byte(2)&0b11, byte(id), byte(id>>8))
+		return append(buf, byte(v), byte(v>>8))
 	}
 }
 
@@ -78,7 +80,7 @@ func WriterInt64(buf []byte, v int64) []byte {
 	}
 }
 
-func WriterUint64(buf []byte, v uint64) []byte {
+func EncodeUint64(buf []byte, v uint64) []byte {
 	if v <= 0xFF {
 		return append(buf, byte(v))
 	} else if v <= 0xFFFF {

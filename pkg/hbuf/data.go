@@ -45,7 +45,7 @@ type Data interface {
 
 func Marshal(data Data, tag string) ([]byte, error) {
 	buf := make([]byte, 0, 128)
-	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), 0, false, tag), nil
+	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), nil, tag), nil
 }
 
 func Unmarshal(buf []byte, data Data, tag string) (err error) {
@@ -57,8 +57,8 @@ func Unmarshal(buf []byte, data Data, tag string) (err error) {
 	//		err = r.(error)
 	//	}
 	//}()
-	typ, _, valueLen, buf := ReaderTypeId(buf)
-	_, err = data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, valueLen, tag)
+	typ, _, valueLen, buf := DecodeType(buf)
+	_, err = data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, true, valueLen, tag)
 	if err != nil {
 		return err
 	}

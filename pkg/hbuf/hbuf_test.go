@@ -9,35 +9,35 @@ import (
 
 var hBufSubTest HBufSubTest
 var hBufSubTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufSubTest), map[uint16]hbuf.Descriptor{}, map[uint16]hbuf.Descriptor{
-	1: hbuf.NewInt8Descriptor(unsafe.Offsetof(hBufSubTest.V1), false),
-	2: hbuf.NewInt8Descriptor(unsafe.Offsetof(hBufSubTest.V2), true),
+	1: hbuf.NewInt64Descriptor(unsafe.Offsetof(hBufSubTest.V1), false),
+	2: hbuf.NewInt64Descriptor(unsafe.Offsetof(hBufSubTest.V2), true),
 })
 
 type HBufSubTest struct {
-	V1 int8  `json:"v1,omitempty" hbuf:"1"` //
-	V2 *int8 `json:"v2,omitempty" hbuf:"2"` //
+	V1 hbuf.Int64  `json:"v1,omitempty" hbuf:"1"` //
+	V2 *hbuf.Int64 `json:"v2,omitempty" hbuf:"2"` //
 }
 
 func (g *HBufSubTest) Descriptors() hbuf.Descriptor {
 	return hBufSubTestDescriptor
 }
 
-func (g *HBufSubTest) GetV1() int8 {
+func (g *HBufSubTest) GetV1() hbuf.Int64 {
 	return g.V1
 }
 
-func (g *HBufSubTest) SetV1(val int8) {
+func (g *HBufSubTest) SetV1(val hbuf.Int64) {
 	g.V1 = val
 }
 
-func (g *HBufSubTest) GetV2() int8 {
+func (g *HBufSubTest) GetV2() hbuf.Int64 {
 	if nil == g.V2 {
-		return int8(0)
+		return hbuf.Int64(0)
 	}
 	return *g.V2
 }
 
-func (g *HBufSubTest) SetV2(val int8) {
+func (g *HBufSubTest) SetV2(val hbuf.Int64) {
 	g.V2 = &val
 }
 
@@ -1382,84 +1382,137 @@ func (g *HBufTest) SetV128(val map[string]*HBufSubTest) {
 
 var hBufSub1Test HBufSub1Test
 var hBufSub1TestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufSub1Test), map[uint16]hbuf.Descriptor{}, map[uint16]hbuf.Descriptor{
-	1: hbuf.NewInt8Descriptor(unsafe.Offsetof(hBufSub1Test.V1), false),
-	3: hbuf.NewInt8Descriptor(unsafe.Offsetof(hBufSub1Test.V3), true),
+	1:  hbuf.NewInt64Descriptor(unsafe.Offsetof(hBufSub1Test.V1), false),
+	2:  hbuf.NewInt64Descriptor(unsafe.Offsetof(hBufSub1Test.V2), true),
+	3:  hbuf.NewListDescriptor[hbuf.Int64](unsafe.Offsetof(hBufSub1Test.V3), hbuf.NewInt64Descriptor(0, false), false),
+	4:  hbuf.NewListDescriptor[*hbuf.Int64](unsafe.Offsetof(hBufSub1Test.V4), hbuf.NewInt64Descriptor(0, true), false),
+	5:  hbuf.NewMapDescriptor[hbuf.Int64, hbuf.Int64](unsafe.Offsetof(hBufSub1Test.V5), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, false), false),
+	6:  hbuf.NewMapDescriptor[hbuf.Int64, *hbuf.Int64](unsafe.Offsetof(hBufSub1Test.V6), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, true), false),
+	7:  hbuf.NewStringDescriptor(unsafe.Offsetof(hBufSub1Test.V7), false),
+	8:  hbuf.NewStringDescriptor(unsafe.Offsetof(hBufSub1Test.V8), true),
+	9:  hbuf.NewListDescriptor[string](unsafe.Offsetof(hBufSub1Test.V9), hbuf.NewStringDescriptor(0, false), false),
+	10: hbuf.NewListDescriptor[*string](unsafe.Offsetof(hBufSub1Test.V10), hbuf.NewStringDescriptor(0, true), false),
+	11: hbuf.NewMapDescriptor[string, string](unsafe.Offsetof(hBufSub1Test.V11), hbuf.NewStringDescriptor(0, false), hbuf.NewStringDescriptor(0, false), false),
+	12: hbuf.NewMapDescriptor[string, *string](unsafe.Offsetof(hBufSub1Test.V12), hbuf.NewStringDescriptor(0, false), hbuf.NewStringDescriptor(0, true), false),
 })
 
 type HBufSub1Test struct {
-	V1 int8  `json:"v1,omitempty" hbuf:"1"` //
-	V3 *int8 `json:"v3,omitempty" hbuf:"3"` //
+	V1  hbuf.Int64                 `json:"v1,omitempty" hbuf:"1"`   //
+	V2  *hbuf.Int64                `json:"v2,omitempty" hbuf:"2"`   //
+	V3  []hbuf.Int64               `json:"v3,omitempty" hbuf:"3"`   //
+	V4  []*hbuf.Int64              `json:"v4,omitempty" hbuf:"4"`   //
+	V5  map[hbuf.Int64]hbuf.Int64  `json:"v5,omitempty" hbuf:"5"`   //
+	V6  map[hbuf.Int64]*hbuf.Int64 `json:"v6,omitempty" hbuf:"6"`   //
+	V7  string                     `json:"v7,omitempty" hbuf:"7"`   //
+	V8  *string                    `json:"v8,omitempty" hbuf:"8"`   //
+	V9  []string                   `json:"v9,omitempty" hbuf:"9"`   //
+	V10 []*string                  `json:"v10,omitempty" hbuf:"10"` //
+	V11 map[string]string          `json:"v11,omitempty" hbuf:"11"` //
+	V12 map[string]*string         `json:"v12,omitempty" hbuf:"12"` //
 }
 
 func (g *HBufSub1Test) Descriptors() hbuf.Descriptor {
 	return hBufSub1TestDescriptor
 }
 
-func (g *HBufSub1Test) GetV1() int8 {
+func (g *HBufSub1Test) GetV1() hbuf.Int64 {
 	return g.V1
 }
 
-func (g *HBufSub1Test) SetV1(val int8) {
+func (g *HBufSub1Test) SetV1(val hbuf.Int64) {
 	g.V1 = val
 }
 
-func (g *HBufSub1Test) GetV3() int8 {
-	if nil == g.V3 {
-		return int8(0)
+func (g *HBufSub1Test) GetV2() hbuf.Int64 {
+	if nil == g.V2 {
+		return hbuf.Int64(0)
 	}
-	return *g.V3
+	return *g.V2
 }
 
-func (g *HBufSub1Test) SetV3(val int8) {
-	g.V3 = &val
+func (g *HBufSub1Test) SetV2(val hbuf.Int64) {
+	g.V2 = &val
 }
 
-var hBufExtend HBufExtend
-var hBufExtendDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufExtend), map[uint16]hbuf.Descriptor{
-	1: hbuf.CloneDataDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufExtend.HBufSubTest), false),
-	2: hbuf.CloneDataDescriptor(&HBufSub1Test{}, unsafe.Offsetof(hBufExtend.HBufSub1Test), false),
-}, map[uint16]hbuf.Descriptor{
-	1: hbuf.NewInt8Descriptor(unsafe.Offsetof(hBufExtend.V2), false),
-	2: hbuf.NewInt8Descriptor(unsafe.Offsetof(hBufExtend.V4), true),
-	3: hbuf.NewListDescriptor[*int32](unsafe.Offsetof(hBufExtend.V5), hbuf.NewInt32Descriptor(0, true), false),
-})
-
-type HBufExtend struct {
-	HBufSubTest  `hbuf:"1"`
-	HBufSub1Test `hbuf:"2"`
-
-	V2 int8     `json:"v2,omitempty" hbuf:"1"` //
-	V4 *int8    `json:"v4,omitempty" hbuf:"2"` //
-	V5 []*int32 `json:"v5,omitempty" hbuf:"3"` //
+func (g *HBufSub1Test) GetV3() []hbuf.Int64 {
+	return g.V3
 }
 
-func (g *HBufExtend) Descriptors() hbuf.Descriptor {
-	return hBufExtendDescriptor
+func (g *HBufSub1Test) SetV3(val []hbuf.Int64) {
+	g.V3 = val
 }
 
-func (g *HBufExtend) GetV2() int8 {
-	return g.V2
+func (g *HBufSub1Test) GetV4() []*hbuf.Int64 {
+	return g.V4
 }
 
-func (g *HBufExtend) SetV2(val int8) {
-	g.V2 = val
+func (g *HBufSub1Test) SetV4(val []*hbuf.Int64) {
+	g.V4 = val
 }
 
-func (g *HBufExtend) GetV4() int8 {
-	if nil == g.V4 {
-		return int8(0)
-	}
-	return *g.V4
-}
-
-func (g *HBufExtend) SetV4(val int8) {
-	g.V4 = &val
-}
-
-func (g *HBufExtend) GetV5() []*int32 {
+func (g *HBufSub1Test) GetV5() map[hbuf.Int64]hbuf.Int64 {
 	return g.V5
 }
 
-func (g *HBufExtend) SetV5(val []*int32) {
+func (g *HBufSub1Test) SetV5(val map[hbuf.Int64]hbuf.Int64) {
 	g.V5 = val
+}
+
+func (g *HBufSub1Test) GetV6() map[hbuf.Int64]*hbuf.Int64 {
+	return g.V6
+}
+
+func (g *HBufSub1Test) SetV6(val map[hbuf.Int64]*hbuf.Int64) {
+	g.V6 = val
+}
+
+func (g *HBufSub1Test) GetV7() string {
+	return g.V7
+}
+
+func (g *HBufSub1Test) SetV7(val string) {
+	g.V7 = val
+}
+
+func (g *HBufSub1Test) GetV8() string {
+	if nil == g.V8 {
+		return ""
+	}
+	return *g.V8
+}
+
+func (g *HBufSub1Test) SetV8(val string) {
+	g.V8 = &val
+}
+
+func (g *HBufSub1Test) GetV9() []string {
+	return g.V9
+}
+
+func (g *HBufSub1Test) SetV9(val []string) {
+	g.V9 = val
+}
+
+func (g *HBufSub1Test) GetV10() []*string {
+	return g.V10
+}
+
+func (g *HBufSub1Test) SetV10(val []*string) {
+	g.V10 = val
+}
+
+func (g *HBufSub1Test) GetV11() map[string]string {
+	return g.V11
+}
+
+func (g *HBufSub1Test) SetV11(val map[string]string) {
+	g.V11 = val
+}
+
+func (g *HBufSub1Test) GetV12() map[string]*string {
+	return g.V12
+}
+
+func (g *HBufSub1Test) SetV12(val map[string]*string) {
+	g.V12 = val
 }

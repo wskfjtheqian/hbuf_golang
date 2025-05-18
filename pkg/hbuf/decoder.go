@@ -1,31 +1,21 @@
 package hbuf
 
-func ReaderType(buf []byte) (typ Type, isNullable bool, valueLen uint8, ret []byte) {
+func DecodeType(buf []byte) (typ Type, idLen uint8, valueLen uint8, ret []byte) {
 	b := buf[0]
 	typ = Type(b >> 5 & 0b111)
 	valueLen = (b >> 2 & 0b111) + 1
-	isNullable = (b & 0b11) == 1
+	idLen = b & 0b11
 
 	ret = buf[1:]
 	return
 }
 
-func ReaderTypeId(buf []byte) (typ Type, id uint16, valueLen uint8, ret []byte) {
-	b := buf[0]
-	typ = Type(b >> 5 & 0b111)
-	valueLen = (b >> 2 & 0b111) + 1
-	idLen := b & 0b11
-
-	if idLen == 0 {
-		ret = buf[1:]
-	} else if idLen == 1 {
-		id = uint16(buf[1])
-		ret = buf[2:]
-	} else if idLen == 2 {
-		id = uint16(buf[2]) + uint16(buf[3])<<8
-		ret = buf[3:]
+func DecodeId(buf []byte, idLen uint8) (uint16, []byte) {
+	if idLen == 1 {
+		return uint16(int8(buf[0])), buf[1:]
+	} else {
+		return uint16(buf[0]) + uint16(int8(buf[1]))<<8, buf[2:]
 	}
-	return
 }
 
 func DecodeInt64(buf []byte, valueLen uint8) (int64, []byte) {
