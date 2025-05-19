@@ -772,7 +772,12 @@ func (d *Int32Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*int32)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*int32)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Int32Descriptor) SetTag(tags map[string]bool) {
@@ -802,22 +807,26 @@ func (d *Int32Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 }
 
 func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*int32)(p) == 0 {
-		if id != nil {
+	var val int32
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*int32)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*int32)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
-	} else {
+		val = *(*int32)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthInt(int64(val)))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*int32)(p) != 0 {
+			val = *(*int32)(p)
+			buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
+		}
 	}
 	return WriterInt64(buf, int64(val))
 }
@@ -867,7 +876,12 @@ func (d *Int16Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*int16)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*int16)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Int16Descriptor) SetTag(tags map[string]bool) {
@@ -897,22 +911,26 @@ func (d *Int16Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 }
 
 func (d *Int16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*int16)(p) == 0 {
-		if id != nil {
+	var val int16
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*int16)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*int16)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
-	} else {
+		val = *(*int16)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthInt(int64(val)))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*int16)(p) != 0 {
+			val = *(*int16)(p)
+			buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
+		}
 	}
 	return WriterInt64(buf, int64(val))
 }
@@ -962,7 +980,12 @@ func (d *Int8Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*int8)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*int8)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Int8Descriptor) SetTag(tags map[string]bool) {
@@ -992,22 +1015,26 @@ func (d *Int8Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 }
 
 func (d *Int8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*int8)(p) == 0 {
-		if id != nil {
+	var val int8
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*int8)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*int8)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
-	} else {
+		val = *(*int8)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthInt(int64(val)))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*int8)(p) != 0 {
+			val = *(*int8)(p)
+			buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
+		}
 	}
 	return WriterInt64(buf, int64(val))
 }
@@ -1057,7 +1084,12 @@ func (d *Uint64Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*uint64)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*uint64)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Uint64Descriptor) SetTag(tags map[string]bool) {
@@ -1087,22 +1119,26 @@ func (d *Uint64Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 }
 
 func (d *Uint64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*uint64)(p) == 0 {
-		if id != nil {
+	var val uint64
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*uint64)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*uint64)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthUint(val))
-	} else {
+		val = *(*uint64)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthUint(val))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*uint64)(p) != 0 {
+			val = *(*uint64)(p)
+			buf = WriterType(buf, TInt, 1, LengthUint(val))
+		}
 	}
 	return EncodeUint64(buf, val)
 }
@@ -1151,7 +1187,12 @@ func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*uint32)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*uint32)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Uint32Descriptor) SetTag(tags map[string]bool) {
@@ -1181,22 +1222,26 @@ func (d *Uint32Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 }
 
 func (d *Uint32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*uint32)(p) == 0 {
-		if id != nil {
+	var val uint32
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*uint32)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*uint32)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthUint(uint64(val)))
-	} else {
+		val = *(*uint32)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthUint(uint64(val)))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*uint32)(p) != 0 {
+			val = *(*uint32)(p)
+			buf = WriterType(buf, TInt, 1, LengthUint(uint64(val)))
+		}
 	}
 	return EncodeUint64(buf, uint64(val))
 }
@@ -1246,7 +1291,12 @@ func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*uint16)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*uint16)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Uint16Descriptor) SetTag(tags map[string]bool) {
@@ -1276,22 +1326,26 @@ func (d *Uint16Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 }
 
 func (d *Uint16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*uint16)(p) == 0 {
-		if id != nil {
+	var val uint16
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*uint16)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*uint16)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthUint(uint64(val)))
-	} else {
+		val = *(*uint16)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthUint(uint64(val)))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*uint16)(p) != 0 {
+			val = *(*uint16)(p)
+			buf = WriterType(buf, TInt, 1, LengthUint(uint64(val)))
+		}
 	}
 	return EncodeUint64(buf, uint64(val))
 }
@@ -1436,7 +1490,12 @@ func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*uint64)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*float64)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *DoubleDescriptor) SetTag(tags map[string]bool) {
@@ -1466,22 +1525,26 @@ func (d *DoubleDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 }
 
 func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*uint64)(p) == 0 {
-		if id != nil {
+	var val uint64
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*float64)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*uint64)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthUint(val))
-	} else {
+		val = *(*uint64)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthUint(val))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*float64)(p) != 0 {
+			val = *(*uint64)(p)
+			buf = WriterType(buf, TInt, 1, LengthUint(val))
+		}
 	}
 	return EncodeUint64(buf, val)
 }
@@ -1530,7 +1593,12 @@ func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*uint32)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*float32)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *FloatDescriptor) SetTag(tags map[string]bool) {
@@ -1560,22 +1628,26 @@ func (d *FloatDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 }
 
 func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*uint32)(p) == 0 {
-		if id != nil {
+	var val uint32
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*float32)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*uint32)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthUint(uint64(val)))
-	} else {
+		val = *(*uint32)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthUint(uint64(val)))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*float32)(p) != 0 {
+			val = *(*uint32)(p)
+			buf = WriterType(buf, TInt, 1, LengthUint(uint64(val)))
+		}
 	}
 	return EncodeUint64(buf, uint64(val))
 }
