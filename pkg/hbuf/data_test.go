@@ -410,18 +410,24 @@ func BenchmarkEncoderDecoder(b *testing.B) {
 
 func TestExtend(t *testing.T) {
 	src := HBufSub1Test{
-		//V1: 10,
-		//V2: TP(hbuf.Int64(40)),
-		//V3: []hbuf.Int64{0, 1},
-		//V4: []*hbuf.Int64{TP(hbuf.Int64(0)), TP(hbuf.Int64(1)), nil},
-		//V5: map[hbuf.Int64]hbuf.Int64{30: 33, 40: 44},
-		//V6: map[hbuf.Int64]*hbuf.Int64{51: TP(hbuf.Int64(0)), 50: TP(hbuf.Int64(55)), 60: nil},
-		V7:  "hello world",
-		V8:  TP("hello world v8"),
-		V9:  []string{"hello world v9 1", "hello world v9 2"},
-		V10: []*string{TP("hello world v10 1"), TP("hello world v10 2"), nil},
-		V11: map[string]string{"key1": "value1", "key2": "value2"},
-		V12: map[string]*string{"key1": TP("value1"), "key2": TP("value2"), "key3": nil},
+		V1: 0,
+		//V2: TP(hbuf.Int64(1)),
+		V3: []hbuf.Int64{0, 1, 3},
+		V4: []*hbuf.Int64{TP(hbuf.Int64(0)), TP(hbuf.Int64(1)), nil},
+		V5: map[hbuf.Int64]hbuf.Int64{30: 33, 40: 44},
+		V6: map[hbuf.Int64]*hbuf.Int64{51: TP(hbuf.Int64(0)), 50: TP(hbuf.Int64(55)), 60: nil},
+		//V7:  "hello world",
+		//V8:  TP("hello world v8"),
+		//V9:  []string{"hello world v9 1", "hello world v9 2"},
+		//V10: []*string{TP("hello world v10 1"), TP("hello world v10 2"), nil},
+		//V11: map[string]string{"key1": "value1", "key2": "value2"},
+		//V12: map[string]*string{"key1": TP("value1"), "key2": TP("value2"), "key3": nil},
+		//V13: true,
+		//V14: TP(true),
+		//V15: []bool{true, false, true},
+		//V16: []*bool{TP(true), TP(false), nil},
+		//V17: map[string]bool{"true": true, "false": false},
+		//V18: map[string]*bool{"true": TP(true), "false": TP(false), "true1": nil},
 	}
 
 	buf, err := hbuf.Marshal(&src, "")

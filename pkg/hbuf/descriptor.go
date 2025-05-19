@@ -669,7 +669,12 @@ func (d *Int64Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return *(*int64)(ptr) == 0
+	if p == nil {
+		return true
+	} else if *(*int64)(ptr) == 0 {
+		return !d.isPrt
+	}
+	return false
 }
 
 func (d *Int64Descriptor) SetTag(tags map[string]bool) {
@@ -699,22 +704,26 @@ func (d *Int64Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 }
 
 func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || *(*int64)(p) == 0 {
-		if id != nil {
+	var val int64
+	if id != nil {
+		if (d.isPrt && p == nil) || (!d.isPrt && (p == nil || *(*int64)(p) == 0)) {
 			return buf
-		} else if p != nil {
-			return WriterType(buf, TInt, 2, 1)
-		} else {
-			return WriterType(buf, TInt, 0, 1)
 		}
-	}
 
-	val := *(*int64)(p)
-	if id == nil {
-		buf = WriterType(buf, TInt, 1, LengthInt(val))
-	} else {
+		val = *(*int64)(p)
 		buf = WriterType(buf, TInt, LengthId(*id), LengthInt(val))
 		buf = WriterId(buf, *id)
+	} else {
+		if p == nil {
+			if !d.isPrt {
+				return buf
+			}
+			return WriterType(buf, TInt, 0, 1)
+		}
+		if d.isPrt || *(*int64)(p) != 0 {
+			val = *(*int64)(p)
+			buf = WriterType(buf, TInt, 1, LengthInt(val))
+		}
 	}
 	return WriterInt64(buf, val)
 }
@@ -1616,7 +1625,24 @@ func (d *BoolDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 			return true
 		}
 	}
-	return !*(*bool)(ptr)
+
+	if d.isPrt {
+		if p == nil {
+			return true
+		} else if *(*bool)(ptr) {
+			return false
+		} else {
+			return false
+		}
+	} else {
+		if p == nil {
+			return true
+		} else if *(*bool)(ptr) {
+			return false
+		} else {
+			return true
+		}
+	}
 }
 
 func (d *BoolDescriptor) SetTag(tags map[string]bool) {
@@ -1646,27 +1672,49 @@ func (d *BoolDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 }
 
 func (d *BoolDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
-	if p == nil || !*(*bool)(p) {
-		if id != nil {
-			return buf
-		} else if p != nil {
-			return WriterType(buf, TBool, 2, 1)
+	if id != nil {
+		idLen := LengthId(*id)
+		if d.isPrt {
+			if p == nil {
+				return buf
+			} else if *(*bool)(p) {
+				buf = WriterType(buf, TBool, idLen, 2)
+			} else {
+				buf = WriterType(buf, TBool, idLen, 1)
+			}
 		} else {
-			return WriterType(buf, TBool, 0, 1)
+			if p == nil {
+				return buf
+			} else if *(*bool)(p) {
+				buf = WriterType(buf, TBool, idLen, 2)
+			} else {
+				return buf
+			}
 		}
-	}
-
-	if id == nil {
-		buf = WriterType(buf, TBool, 1, 2)
+		return WriterId(buf, *id)
 	} else {
-		buf = WriterType(buf, TBool, LengthId(*id), 2)
-		buf = WriterId(buf, *id)
+		if d.isPrt {
+			if p == nil {
+				buf = WriterType(buf, TBool, 0, 1)
+			} else if *(*bool)(p) {
+				buf = WriterType(buf, TBool, 1, 2)
+			} else {
+				buf = WriterType(buf, TBool, 1, 1)
+			}
+		} else {
+			if p == nil {
+			} else if *(*bool)(p) {
+				buf = WriterType(buf, TBool, 1, 2)
+			} else {
+				buf = WriterType(buf, TBool, 1, 1)
+			}
+		}
+		return buf
 	}
-	return buf
 }
 
 func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
-	if typ != TInt {
+	if typ != TBool {
 		return nil, errors.New("invalid bool type")
 	}
 	val := 2 == valueLen

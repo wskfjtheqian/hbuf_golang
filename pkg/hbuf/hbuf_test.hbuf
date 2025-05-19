@@ -288,6 +288,18 @@ data HBufSub1Test {
     string<string> V11 = 11
 
     string?<string> V12 = 12
+
+    bool V13 = 13
+
+    bool? V14 = 14
+
+    bool[] V15 = 15
+
+    bool?[] V16 = 16
+
+    bool<string> V17 = 17
+
+    bool?<string> V18 = 18
 }
 
 //data HBufExtend:HBufSubTest = 1, HBufSub1Test = 2 {
