@@ -12,9 +12,9 @@ func DecodeType(buf []byte) (typ Type, idLen uint8, valueLen uint8, ret []byte) 
 
 func DecodeId(buf []byte, idLen uint8) (uint16, []byte) {
 	if idLen == 1 {
-		return uint16(int8(buf[0])), buf[1:]
+		return uint16(buf[0]), buf[1:]
 	} else {
-		return uint16(buf[0]) + uint16(int8(buf[1]))<<8, buf[2:]
+		return uint16(buf[0]) + uint16(buf[1])<<8, buf[2:]
 	}
 }
 

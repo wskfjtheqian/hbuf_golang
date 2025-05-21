@@ -2,6 +2,7 @@ package hbuf
 
 import (
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -25,18 +26,17 @@ type Uint64 uint64
 type Time time.Time
 
 func (t Time) MarshalJSON() ([]byte, error) {
-	//return []byte(strconv.FormatInt(time.Time(t).UnixMilli(), 10)), nil
-	return time.Time(t).MarshalJSON()
+	str := time.Time(t).Format("2006-01-02T15:04:05.999Z07:00")
+	return []byte("\"" + str + "\""), nil
 }
 
 func (t *Time) UnmarshalJSON(data []byte) error {
-	//parseInt, err := strconv.ParseInt(string(data), 10, 64)
-	//if err != nil {
-	//	return err
-	//}
-	//*t = Time(time.UnixMilli(parseInt))
-	//return nil
-	return (*time.Time)(t).UnmarshalJSON(data)
+	parse, err := time.Parse("2006-01-02T15:04:05.999Z07:00", strings.Trim(string(data), "\""))
+	if err != nil {
+		return err
+	}
+	*t = Time(parse)
+	return nil
 }
 
 type Data interface {

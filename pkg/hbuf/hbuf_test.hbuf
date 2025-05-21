@@ -1,9 +1,9 @@
 package go = "hbuf"
 
 data HBufSubTest {
-    int64 V1 = 1
+    int64 A1 = 1
 
-    int64? V2 = 2
+    int64? A2 = 2
 }
 
 data HBufTest {
@@ -264,48 +264,15 @@ data HBufTest {
     HBufSubTest?<string> v128 = 128
 }
 
-data HBufSub1Test {
+data HBufBTest {
+    int64 C1 = 1
+
+    int64? C2 = 2
+}
+
+data HBufSub1Test:HBufBTest = 1, HBufSubTest = 2, HBufTest = 3 {
     int64 V1 = 1
 
     int64? V2 = 2
-
-    int64[] V3 = 3
-
-    int64?[] V4 = 4
-
-    int64<int64> V5 = 5
-
-    int64?<int64> V6 = 6
-
-    string V7 = 7
-
-    string? V8 = 8
-
-    string[] V9 = 9
-
-    string?[] V10 = 10
-
-    string<string> V11 = 11
-
-    string?<string> V12 = 12
-
-    bool V13 = 13
-
-    bool? V14 = 14
-
-    bool[] V15 = 15
-
-    bool?[] V16 = 16
-
-    bool<string> V17 = 17
-
-    bool?<string> V18 = 18
 }
 
-//data HBufExtend:HBufSubTest = 1, HBufSub1Test = 2 {
-//    int8 V2 = 1
-//
-//    int32? V4 = 2
-//
-//    int32?[] V5 = 3
-//}

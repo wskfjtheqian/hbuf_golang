@@ -47,8 +47,8 @@ var src = HBufTest{
 	V28:  TP(hbuf.Time(time.Now())),
 	V29:  decimal.NewFromFloat(3.1415926535),
 	V30:  TP(decimal.NewFromFloat(-3.14159265359)),
-	V31:  HBufSubTest{V1: 12, V2: TP(hbuf.Int64(12))},
-	V32:  &HBufSubTest{V1: 45, V2: TP(hbuf.Int64(45))},
+	V31:  HBufSubTest{A1: 12, A2: TP(hbuf.Int64(12))},
+	V32:  &HBufSubTest{A1: 45, A2: TP(hbuf.Int64(45))},
 	V33:  []int8{1, 2, 3},
 	V34:  []*int8{TP(int8(1)), TP(int8(2)), TP(int8(3))},
 	V35:  []int16{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -79,8 +79,8 @@ var src = HBufTest{
 	V60:  []*hbuf.Time{TP(hbuf.Time(time.Now())), TP(hbuf.Time(time.Now())), TP(hbuf.Time(time.Now()))},
 	V61:  []decimal.Decimal{decimal.NewFromFloat(3.1415926535), decimal.NewFromFloat(3.14159265359), decimal.NewFromFloat(3.14159265359)},
 	V62:  []*decimal.Decimal{TP(decimal.NewFromFloat(3.1415926535)), TP(decimal.NewFromFloat(3.14159265359)), TP(decimal.NewFromFloat(3.14159265359))},
-	V63:  []HBufSubTest{{V1: 12, V2: TP(hbuf.Int64(12))}, {V1: 45, V2: TP(hbuf.Int64(45))}, {V1: 78, V2: TP(hbuf.Int64(78))}},
-	V64:  []*HBufSubTest{{V1: 12, V2: TP(hbuf.Int64(12))}, {V1: 45, V2: TP(hbuf.Int64(45))}, {V1: 78, V2: TP(hbuf.Int64(78))}},
+	V63:  []HBufSubTest{{A1: 12, A2: TP(hbuf.Int64(12))}, {A1: 45, A2: TP(hbuf.Int64(45))}, {A1: 78, A2: TP(hbuf.Int64(78))}},
+	V64:  []*HBufSubTest{{A1: 12, A2: TP(hbuf.Int64(12))}, {A1: 45, A2: TP(hbuf.Int64(45))}, {A1: 78, A2: TP(hbuf.Int64(78))}},
 	V65:  map[hbuf.Int64]int8{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
 	V66:  map[hbuf.Int64]*int8{1: TP(int8(1)), 2: TP(int8(2)), 3: TP(int8(3)), 4: TP(int8(4)), 5: TP(int8(5)), 6: TP(int8(6)), 7: TP(int8(7)), 8: TP(int8(8)), 9: TP(int8(9)), 10: TP(int8(10))},
 	V67:  map[hbuf.Int64]int16{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10},
@@ -111,8 +111,8 @@ var src = HBufTest{
 	V92:  map[hbuf.Int64]*hbuf.Time{1: TP(hbuf.Time(time.Now())), 2: TP(hbuf.Time(time.Now())), 3: TP(hbuf.Time(time.Now()))},
 	V93:  map[hbuf.Int64]decimal.Decimal{1: decimal.NewFromFloat(3.1415926535), 2: decimal.NewFromFloat(3.14159265359), 3: decimal.NewFromFloat(3.14159265359)},
 	V94:  map[hbuf.Int64]*decimal.Decimal{1: TP(decimal.NewFromFloat(3.1415926535)), 2: TP(decimal.NewFromFloat(3.14159265359)), 3: TP(decimal.NewFromFloat(3.14159265359))},
-	V95:  map[hbuf.Int64]HBufSubTest{1: {V1: 22, V2: TP(hbuf.Int64(11))}, 2: {V1: 33, V2: TP(hbuf.Int64(22))}, 3: {V1: 44, V2: TP(hbuf.Int64(33))}},
-	V96:  map[hbuf.Int64]*HBufSubTest{1: TP(HBufSubTest{V1: 22, V2: TP(hbuf.Int64(11))}), 2: TP(HBufSubTest{V1: 33, V2: TP(hbuf.Int64(22))}), 3: TP(HBufSubTest{V1: 44, V2: TP(hbuf.Int64(33))})},
+	V95:  map[hbuf.Int64]HBufSubTest{1: {A1: 22, A2: TP(hbuf.Int64(11))}, 2: {A1: 33, A2: TP(hbuf.Int64(22))}, 3: {A1: 44, A2: TP(hbuf.Int64(33))}},
+	V96:  map[hbuf.Int64]*HBufSubTest{1: TP(HBufSubTest{A1: 22, A2: TP(hbuf.Int64(11))}), 2: TP(HBufSubTest{A1: 33, A2: TP(hbuf.Int64(22))}), 3: TP(HBufSubTest{A1: 44, A2: TP(hbuf.Int64(33))})},
 	V97:  map[string]int8{"a": 1, "b": 2, "c": 3},
 	V98:  map[string]*int8{"a": TP(int8(1)), "b": TP(int8(2)), "c": TP(int8(3))},
 	V99:  map[string]int16{"a": 1, "b": 2, "c": 3},
@@ -143,8 +143,8 @@ var src = HBufTest{
 	V124: map[string]*hbuf.Time{"a": TP(hbuf.Time(time.Now())), "b": TP(hbuf.Time(time.Now())), "c": TP(hbuf.Time(time.Now()))},
 	V125: map[string]decimal.Decimal{"a": decimal.NewFromFloat(3.1415926535), "b": decimal.NewFromFloat(3.14159265359), "c": decimal.NewFromFloat(3.14159265359)},
 	V126: map[string]*decimal.Decimal{"a": TP(decimal.NewFromFloat(3.1415926535)), "b": TP(decimal.NewFromFloat(3.14159265359)), "c": TP(decimal.NewFromFloat(3.14159265359))},
-	V127: map[string]HBufSubTest{"a": {V1: 22, V2: TP(hbuf.Int64(11))}, "b": {V1: 33, V2: TP(hbuf.Int64(22))}, "c": {V1: 44, V2: TP(hbuf.Int64(33))}},
-	V128: map[string]*HBufSubTest{"a": TP(HBufSubTest{V1: 22, V2: TP(hbuf.Int64(11))}), "b": TP(HBufSubTest{V1: 33, V2: TP(hbuf.Int64(22))}), "c": TP(HBufSubTest{V1: 44, V2: TP(hbuf.Int64(33))})},
+	V127: map[string]HBufSubTest{"a": {A1: 22, A2: TP(hbuf.Int64(11))}, "b": {A1: 33, A2: TP(hbuf.Int64(22))}, "c": {A1: 44, A2: TP(hbuf.Int64(33))}},
+	V128: map[string]*HBufSubTest{"a": TP(HBufSubTest{A1: 22, A2: TP(hbuf.Int64(11))}), "b": TP(HBufSubTest{A1: 33, A2: TP(hbuf.Int64(22))}), "c": TP(HBufSubTest{A1: 44, A2: TP(hbuf.Int64(33))})},
 }
 
 var pSrc = ProtoTest{
@@ -330,11 +330,10 @@ func TestEncoderDecoder(t *testing.T) {
 			return
 		}
 		buf, _ := json.Marshal(&des)
-		t.Log("DecoderHBuf:", string(buf))
 		hText = string(buf)
 	})
 	if hText != jText {
-		t.Error(jText + " != " + hText)
+		t.Error("jText +  !=  + hText")
 	}
 	t.Log("src:", jText)
 	t.Log("desc:", hText)
@@ -409,28 +408,18 @@ func BenchmarkEncoderDecoder(b *testing.B) {
 }
 
 func TestExtend(t *testing.T) {
-	src := HBufSub1Test{
-		V1: 0,
-		//V2: TP(hbuf.Int64(1)),
-		V3: []hbuf.Int64{0, 1, 3},
-		V4: []*hbuf.Int64{TP(hbuf.Int64(0)), TP(hbuf.Int64(1)), nil},
-		V5: map[hbuf.Int64]hbuf.Int64{30: 33, 40: 44},
-		V6: map[hbuf.Int64]*hbuf.Int64{51: TP(hbuf.Int64(0)), 50: TP(hbuf.Int64(55)), 60: nil},
-		//V7:  "hello world",
-		//V8:  TP("hello world v8"),
-		//V9:  []string{"hello world v9 1", "hello world v9 2"},
-		//V10: []*string{TP("hello world v10 1"), TP("hello world v10 2"), nil},
-		//V11: map[string]string{"key1": "value1", "key2": "value2"},
-		//V12: map[string]*string{"key1": TP("value1"), "key2": TP("value2"), "key3": nil},
-		//V13: true,
-		//V14: TP(true),
-		//V15: []bool{true, false, true},
-		//V16: []*bool{TP(true), TP(false), nil},
-		//V17: map[string]bool{"true": true, "false": false},
-		//V18: map[string]*bool{"true": TP(true), "false": TP(false), "true1": nil},
+	eSrc := HBufSub1Test{
+		HBufTest: src,
+		HBufBTest: HBufBTest{
+			C1: 55,
+			C2: TP(hbuf.Int64(66)),
+		},
+		HBufSubTest: HBufSubTest{A1: 12, A2: TP(hbuf.Int64(12))},
+		V1:          44,
+		V2:          TP(hbuf.Int64(33)),
 	}
 
-	buf, err := hbuf.Marshal(&src, "")
+	buf, err := hbuf.Marshal(&eSrc, "")
 	if err != nil {
 		t.Error(err.Error() + "\n")
 		return
@@ -442,7 +431,7 @@ func TestExtend(t *testing.T) {
 		return
 	}
 
-	sJson, err := json.Marshal(&src)
+	sJson, err := json.Marshal(&eSrc)
 	if err != nil {
 		t.Error(err.Error() + "\n")
 		return
