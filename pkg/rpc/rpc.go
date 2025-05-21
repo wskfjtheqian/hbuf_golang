@@ -19,7 +19,6 @@ const (
 	TypeRequest Type = iota
 	TypeResponse
 	TypeNotification
-	TypeHeartbeat
 	TypeAuthSuccess
 	TypeAuthFailure
 )
@@ -192,7 +191,7 @@ func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
 	if any(data) != nil {
 		descriptor[3] = hbuf.CloneDataDescriptor(data, unsafe.Offsetof(ret.Data)+unsafe.Sizeof(&ret.Data), true)
 	}
-	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), descriptor)
+	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
 	return ret
 }
 
@@ -203,7 +202,7 @@ func NewResultResponse[T hbuf.Data]() *Result[T] {
 		2: hbuf.NewStringDescriptor(unsafe.Offsetof(ret.Msg), false),
 		3: hbuf.CloneDataDescriptor(reflect.New(reflect.TypeOf(ret.Data).Elem()).Interface().(hbuf.Data), unsafe.Offsetof(ret.Data), true),
 	}
-	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), descriptor)
+	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
 	return ret
 }
 
