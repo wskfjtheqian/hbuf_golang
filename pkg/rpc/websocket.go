@@ -1,40 +1,92 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/gobwas/ws"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 const WebSocketConnectId = "WebSocketConnectId"
 
+var now atomic.Pointer[time.Time]
+
+func init() {
+	t := time.Now()
+	now.Store(&t)
+	ticker := time.NewTicker(time.Second)
+	go func() {
+		for t = range ticker.C {
+			now.Store(&t)
+		}
+	}()
+}
+
+type data []byte
+
+func (d data) Read(p []byte) (n int, err error) {
+	n = copy(p, d)
+	if n < len(p) {
+		err = io.EOF
+	}
+	return
+}
+
+func (d *data) Write(p []byte) (n int, err error) {
+	*d = append(*d, p...)
+	return len(p), nil
+}
+
+func (d data) MarshalJSON() ([]byte, error) {
+	return d, nil
+}
+
+func (d *data) UnmarshalJSON(b []byte) error {
+	*d = b
+	return nil
+}
+
 type WebSocketData struct {
 	Type   Type        `json:"type,omitempty"`
 	Header http.Header `json:"header,omitempty"`
-	Data   hbuf.Data   `json:"data,omitempty"`
+	Data   data        `json:"data,omitempty"`
 	Id     uint64      `json:"id,omitempty"`
 	Path   string      `json:"path,omitempty"`
-	Status int         `json:"status,omitempty"`
-}
-
-func (w *WebSocketData) Write(p []byte) (n int, err error) {
-	//return w.Data.Write(p)
-	return 0, nil
+	Status int32       `json:"status,omitempty"`
 }
 
 func (w *WebSocketData) Read(p []byte) (n int, err error) {
-	//return w.Data.Read(p)
-	return 0, nil
+	return w.Data.Read(p)
+}
+
+func (w *WebSocketData) Write(p []byte) (n int, err error) {
+	return w.Data.Write(p)
+}
+
+var webSocketData WebSocketData
+var webSocketDataDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(webSocketData), nil, map[uint16]hbuf.Descriptor{
+	1: hbuf.NewInt8Descriptor(unsafe.Offsetof(webSocketData.Type), false),
+	2: hbuf.NewMapDescriptor[string, []string](unsafe.Offsetof(webSocketData.Header), hbuf.NewStringDescriptor(0, false), hbuf.NewListDescriptor[string](0, hbuf.NewStringDescriptor(0, false), false), false),
+	3: hbuf.NewBytesDescriptor(unsafe.Offsetof(webSocketData.Data), false),
+	4: hbuf.NewUint64Descriptor(unsafe.Offsetof(webSocketData.Id), false),
+	5: hbuf.NewStringDescriptor(unsafe.Offsetof(webSocketData.Path), false),
+	6: hbuf.NewInt32Descriptor(unsafe.Offsetof(webSocketData.Status), false),
+})
+
+func (w *WebSocketData) Descriptors() hbuf.Descriptor {
+	return webSocketDataDescriptor
 }
 
 // ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,10 +94,10 @@ func (w *WebSocketData) Read(p []byte) (n int, err error) {
 func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSocket {
 	ret := &webSocket{
 		conn:        conn,
-		encoder:     json.NewEncoder(conn),
-		decoder:     json.NewDecoder(conn),
+		encoder:     NewJsonEncode(),
+		decoder:     NewJsonDecode(),
 		responseMap: make(map[uint64]chan *WebSocketData),
-		write:       make(chan *WebSocketData, 10),
+		write:       make(chan *WebSocketData, 1),
 		response:    response,
 		responseMiddleware: func(next Response) Response {
 			return response
@@ -53,6 +105,8 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 		requestMiddleware: func(next Request) Request {
 			return next
 		},
+		pingInterval: 30 * time.Second,
+		pongWait:     60 * time.Second,
 	}
 
 	return ret
@@ -62,8 +116,8 @@ type webSocket struct {
 	id          atomic.Uint64
 	conn        net.Conn
 	lock        sync.RWMutex
-	encoder     *json.Encoder
-	decoder     *json.Decoder
+	encoder     Encoder
+	decoder     Decoder
 	responseMap map[uint64]chan *WebSocketData
 	write       chan *WebSocketData
 
@@ -71,42 +125,74 @@ type webSocket struct {
 	response           Response
 	responseMiddleware ResponseMiddleware
 	ctx                context.Context
+
+	pingInterval time.Duration
+	pongWait     time.Duration
 }
 
-func (r *webSocket) Context() context.Context {
-	if r.ctx != nil {
-		return r.ctx
+func (s *webSocket) Context() context.Context {
+	if s.ctx != nil {
+		return s.ctx
 	}
 	return context.Background()
 }
 
-func (ws *webSocket) run() {
+func (s *webSocket) run() {
 	go func() {
 		for {
-			var data *WebSocketData
-			err := ws.decoder.Decode(&data)
+			err := s.conn.SetReadDeadline(now.Load().Add(s.pongWait))
 			if err != nil {
 				erro.PrintStack(err)
 				break
 			}
-			if data.Type == TypeRequest || data.Type == TypeNotification {
-				go ws.onResponse(data, data.Type == TypeNotification)
-			} else if data.Type == TypeResponse {
-				ws.lock.RLock()
-				response, ok := ws.responseMap[data.Id]
-				ws.lock.RUnlock()
-				if ok {
-					response <- data
+			frame, err := ws.ReadFrame(s.conn)
+			if err != nil {
+				erro.PrintStack(err)
+				break
+			}
+
+			switch frame.Header.OpCode {
+			case ws.OpContinuation:
+				println("continuation")
+			case ws.OpPing:
+
+			case ws.OpText:
+
+			case ws.OpBinary:
+				var data WebSocketData
+				err = s.decoder(bytes.NewBuffer(frame.Payload))(&data)
+				if err != nil {
+					erro.PrintStack(err)
 				}
+				if data.Type == TypeRequest || data.Type == TypeNotification {
+					go s.onResponse(&data, data.Type == TypeNotification)
+				} else if data.Type == TypeResponse {
+					s.lock.RLock()
+					response, ok := s.responseMap[data.Id]
+					s.lock.RUnlock()
+					if ok {
+						response <- &data
+					}
+				}
+			case ws.OpClose:
+				break
 			}
 		}
-		close(ws.write)
+		close(s.write)
+		_ = s.conn.Close()
 	}()
 
 	go func() {
 		for {
-			data := <-ws.write
-			err := ws.encoder.Encode(data)
+			data := <-s.write
+
+			buf := bytes.NewBuffer(nil)
+			err := s.encoder(buf)(data)
+			if err != nil {
+				erro.PrintStack(err)
+			}
+
+			err = ws.WriteFrame(s.conn, ws.NewBinaryFrame(buf.Bytes()))
 			if err != nil {
 				erro.PrintStack(err)
 				return
@@ -116,10 +202,10 @@ func (ws *webSocket) run() {
 }
 
 // Request 发送请求
-func (ws *webSocket) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
-	return ws.requestMiddleware(func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+func (s *webSocket) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	return s.requestMiddleware(func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 		data := &WebSocketData{
-			Path:   "/" + path,
+			Path:   path,
 			Header: http.Header{},
 		}
 
@@ -135,25 +221,25 @@ func (ws *webSocket) Request(ctx context.Context, path string, notification bool
 		}
 		if notification {
 			data.Type = TypeNotification
-			ws.write <- data
+			s.write <- data
 			return nil, nil
 		}
 
 		data.Type = TypeRequest
-		data.Id = ws.id.Add(1)
+		data.Id = s.id.Add(1)
 
 		response := make(chan *WebSocketData, 1)
-		ws.lock.RLock()
-		ws.responseMap[data.Id] = response
-		ws.lock.RUnlock()
+		s.lock.RLock()
+		s.responseMap[data.Id] = response
+		s.lock.RUnlock()
 
 		defer func() {
-			ws.lock.Lock()
-			delete(ws.responseMap, data.Id)
-			ws.lock.Unlock()
+			s.lock.Lock()
+			delete(s.responseMap, data.Id)
+			s.lock.Unlock()
 			close(response)
 		}()
-		ws.write <- data
+		s.write <- data
 
 		timer := time.NewTimer(30 * time.Second)
 		defer timer.Stop()
@@ -162,7 +248,7 @@ func (ws *webSocket) Request(ctx context.Context, path string, notification bool
 			return nil, errors.New("time out")
 		case val := <-response:
 			if val.Status != http.StatusOK {
-				return nil, errors.New(http.StatusText(val.Status))
+				return nil, errors.New(http.StatusText(int(val.Status)))
 			}
 			return io.NopCloser(val), nil
 		}
@@ -170,19 +256,19 @@ func (ws *webSocket) Request(ctx context.Context, path string, notification bool
 }
 
 // onResponse  当从客户端接收到请求时调用
-func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
+func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	response := &WebSocketData{
 		Id:     data.Id,
 		Type:   TypeResponse,
 		Status: http.StatusOK,
 	}
-	if nil == ws.response {
+	if nil == s.response {
 		response.Status = http.StatusNotFound
-		ws.write <- response
+		s.write <- response
 		return
 	}
 
-	ctx := ws.Context()
+	ctx := s.Context()
 	for key, values := range data.Header {
 		for _, value := range values {
 			AddHeader(ctx, key, value)
@@ -190,8 +276,8 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 	}
 
 	if notification {
-		err := ws.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
-			return ws.response(ctx, path, writer, reader)
+		err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+			return s.response(ctx, path, writer, reader)
 		})(ctx, data.Path, response, data)
 		if err != nil {
 			erro.PrintStack(err)
@@ -199,8 +285,8 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return
 	}
 
-	err := ws.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
-		return ws.response(ctx, path, writer, reader)
+	err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+		return s.response(ctx, path, writer, reader)
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data)
 	if err != nil {
 		err = json.NewEncoder(response).Encode(&Result[hbuf.Data]{
@@ -214,7 +300,7 @@ func (ws *webSocket) onResponse(data *WebSocketData, notification bool) {
 	} else {
 		response.Status = http.StatusOK
 	}
-	ws.write <- response
+	s.write <- response
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -238,6 +324,18 @@ func WithWebSocketClientResponseMiddleware(middleware ...ResponseMiddleware) Web
 func WithWebSocketClientRequestMiddleware(middleware RequestMiddleware) WebSocketClientOptions {
 	return func(c *WebSocketClient) {
 		c.requestMiddleware = middleware
+	}
+}
+
+func WithWebSocketClientDecode(decoder Decoder) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.decode = decoder
+	}
+}
+
+func WithWebSocketClientEncode(encoder Encoder) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.encode = encoder
 	}
 }
 
@@ -266,6 +364,8 @@ type WebSocketClient struct {
 	base               string
 	socket             *webSocket
 	response           Response
+	decode             Decoder
+	encode             Encoder
 }
 
 // Connect 连接客户端
@@ -281,6 +381,12 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 	}
 	if c.requestMiddleware != nil {
 		c.socket.requestMiddleware = c.requestMiddleware
+	}
+	if c.decode != nil {
+		c.socket.decoder = c.decode
+	}
+	if c.encode != nil {
+		c.socket.encoder = c.encode
 	}
 	c.socket.run()
 	return nil
@@ -320,6 +426,18 @@ func WithWebSocketServerRequestMiddleware(middleware ...RequestMiddleware) WebSo
 	}
 }
 
+func WithWebSocketServerDecode(decoder Decoder) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.decode = decoder
+	}
+}
+
+func WithWebSocketServerEncode(encoder Encoder) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.encode = encoder
+	}
+}
+
 // NewWebSocketServer 创建一个WebSocket服务器
 func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *WebSocketServer {
 	ret := &WebSocketServer{
@@ -344,6 +462,8 @@ type WebSocketServer struct {
 	responseMiddleware ResponseMiddleware
 	socket             *webSocket
 	response           Response
+	decode             Decoder
+	encode             Encoder
 }
 
 // Serve 启动WebSocket服务器
@@ -395,6 +515,12 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn) {
 	}
 	if w.requestMiddleware != nil {
 		w.socket.requestMiddleware = w.requestMiddleware
+	}
+	if w.decode != nil {
+		w.socket.decoder = w.decode
+	}
+	if w.encode != nil {
+		w.socket.encoder = w.encode
 	}
 	w.socket.run()
 }

@@ -12,7 +12,7 @@ import (
 
 // 测试 TestWebsocket_RPC 方法
 func TestWebsocket_RPC(t *testing.T) {
-	rpcServer := NewServer()
+	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
 	server := NewWebSocketServer(rpcServer.Response)
@@ -26,7 +26,7 @@ func TestWebsocket_RPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpcClient := NewClient(client.Request)
+	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
 	testClient := NewTestRpcClient(rpcClient)
 
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
@@ -40,7 +40,7 @@ func TestWebsocket_RPC(t *testing.T) {
 
 // 测试多个 RPC 同时调用
 func TestWebsocket_MultipleRPC(t *testing.T) {
-	rpcServer := NewServer()
+	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
 	RegisterRpcServer(rpcServer, &TestRpcServer{})
 
 	server := NewWebSocketServer(rpcServer.Response)
@@ -60,7 +60,7 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				rpcClient := NewClient(client.Request)
+				rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
 				testClient := NewTestRpcClient(rpcClient)
 
 				resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
@@ -76,7 +76,7 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 	waitGroup.Wait()
 }
 
-// 测试监听 WebSocket 连接 秋 RPC 服务
+// 测试监听 WebSocket 连接 RPC 服务
 func TestWebsocket_Listen(t *testing.T) {
 	rpcServer := NewServer()
 	RegisterRpcServer(rpcServer, &TestRpcServer{})

@@ -9,7 +9,7 @@ import (
 )
 
 var getNameRequest GetNameRequest
-var getNameRequestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(GetNameRequest{}), map[uint16]hbuf.Descriptor{
+var getNameRequestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&getNameRequest), nil, map[uint16]hbuf.Descriptor{
 	1: hbuf.NewStringDescriptor(unsafe.Offsetof(getNameRequest.Name), false),
 })
 
@@ -22,7 +22,7 @@ func (r *GetNameRequest) Descriptors() hbuf.Descriptor {
 }
 
 var getNameResponse GetNameResponse
-var getNameResponseDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(GetNameResponse{}), map[uint16]hbuf.Descriptor{
+var getNameResponseDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&getNameResponse), nil, map[uint16]hbuf.Descriptor{
 	1: hbuf.NewStringDescriptor(unsafe.Offsetof(getNameResponse.Name), false),
 })
 
