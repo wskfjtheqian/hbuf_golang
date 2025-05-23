@@ -34,9 +34,9 @@ func init() {
 	}()
 }
 
-type data []byte
+type rawMessage []byte
 
-func (d data) Read(p []byte) (n int, err error) {
+func (d rawMessage) Read(p []byte) (n int, err error) {
 	n = copy(p, d)
 	if n < len(p) {
 		err = io.EOF
@@ -44,24 +44,24 @@ func (d data) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (d *data) Write(p []byte) (n int, err error) {
+func (d *rawMessage) Write(p []byte) (n int, err error) {
 	*d = append(*d, p...)
 	return len(p), nil
 }
 
-func (d data) MarshalJSON() ([]byte, error) {
-	return d, nil
-}
-
-func (d *data) UnmarshalJSON(b []byte) error {
-	*d = b
-	return nil
-}
+//func (d data) MarshalJSON() ([]byte, error) {
+//	return d, nil
+//}
+//
+//func (d *data) UnmarshalJSON(b []byte) error {
+//	*d = b
+//	return nil
+//}
 
 type WebSocketData struct {
 	Type   Type        `json:"type,omitempty"`
 	Header http.Header `json:"header,omitempty"`
-	Data   data        `json:"data,omitempty"`
+	Data   rawMessage  `json:"data,omitempty"`
 	Id     uint64      `json:"id,omitempty"`
 	Path   string      `json:"path,omitempty"`
 	Status int32       `json:"status,omitempty"`
@@ -89,6 +89,18 @@ func (w *WebSocketData) Descriptors() hbuf.Descriptor {
 	return webSocketDataDescriptor
 }
 
+type writeType int
+
+const (
+	writeTypeData writeType = iota
+	writeTypePong
+)
+
+type writeData struct {
+	Type writeType
+	Data *WebSocketData
+}
+
 // ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSocket {
@@ -97,7 +109,6 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 		encoder:     NewJsonEncode(),
 		decoder:     NewJsonDecode(),
 		responseMap: make(map[uint64]chan *WebSocketData),
-		write:       make(chan *WebSocketData, 1),
 		response:    response,
 		responseMiddleware: func(next Response) Response {
 			return response
@@ -105,10 +116,11 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 		requestMiddleware: func(next Request) Request {
 			return next
 		},
-		pingInterval: 30 * time.Second,
-		pongWait:     60 * time.Second,
+		pingInterval: 5 * time.Second,
+		pongWait:     10 * time.Second,
 	}
-
+	write := make(chan *writeData)
+	ret.write.Store(&write)
 	return ret
 }
 
@@ -119,7 +131,7 @@ type webSocket struct {
 	encoder     Encoder
 	decoder     Decoder
 	responseMap map[uint64]chan *WebSocketData
-	write       chan *WebSocketData
+	write       atomic.Pointer[chan *writeData]
 
 	requestMiddleware  RequestMiddleware
 	response           Response
@@ -138,6 +150,7 @@ func (s *webSocket) Context() context.Context {
 }
 
 func (s *webSocket) run() {
+	ticker := time.NewTicker(s.pingInterval)
 	go func() {
 		for {
 			err := s.conn.SetReadDeadline(now.Load().Add(s.pongWait))
@@ -155,7 +168,10 @@ func (s *webSocket) run() {
 			case ws.OpContinuation:
 				println("continuation")
 			case ws.OpPing:
-
+				*s.write.Load() <- &writeData{
+					Type: writeTypePong,
+					Data: nil,
+				}
 			case ws.OpText:
 
 			case ws.OpBinary:
@@ -178,21 +194,47 @@ func (s *webSocket) run() {
 				break
 			}
 		}
-		close(s.write)
+
+		write := s.write.Load()
+		s.write.Store(nil)
+
+		close(*write)
 		_ = s.conn.Close()
+		ticker.Stop()
 	}()
 
 	go func() {
 		for {
-			data := <-s.write
-
-			buf := bytes.NewBuffer(nil)
-			err := s.encoder(buf)(data)
-			if err != nil {
-				erro.PrintStack(err)
+			write := s.write.Load()
+			if write == nil {
+				break
 			}
+			data := <-*write
+			if data.Type == writeTypeData {
+				buf := bytes.NewBuffer(nil)
+				err := s.encoder(buf)(data.Data)
+				if err != nil {
+					erro.PrintStack(err)
+				}
 
-			err = ws.WriteFrame(s.conn, ws.NewBinaryFrame(buf.Bytes()))
+				err = ws.WriteFrame(s.conn, ws.NewBinaryFrame(buf.Bytes()))
+				if err != nil {
+					erro.PrintStack(err)
+					return
+				}
+			} else if data.Type == writeTypePong {
+				err := ws.WriteFrame(s.conn, ws.NewPingFrame(nil))
+				if err != nil {
+					erro.PrintStack(err)
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for _ = range ticker.C {
+			err := ws.WriteFrame(s.conn, ws.NewPingFrame(nil))
 			if err != nil {
 				erro.PrintStack(err)
 				return
@@ -221,7 +263,14 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 		}
 		if notification {
 			data.Type = TypeNotification
-			s.write <- data
+			write := s.write.Load()
+			if write == nil {
+				return nil, errors.New("connection is closed")
+			}
+			*write <- &writeData{
+				Type: writeTypeData,
+				Data: data,
+			}
 			return nil, nil
 		}
 
@@ -239,7 +288,15 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 			s.lock.Unlock()
 			close(response)
 		}()
-		s.write <- data
+
+		write := s.write.Load()
+		if write == nil {
+			return nil, errors.New("connection is closed")
+		}
+		*write <- &writeData{
+			Type: writeTypeData,
+			Data: data,
+		}
 
 		timer := time.NewTimer(30 * time.Second)
 		defer timer.Stop()
@@ -264,7 +321,14 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	}
 	if nil == s.response {
 		response.Status = http.StatusNotFound
-		s.write <- response
+		write := s.write.Load()
+		if write == nil {
+			return
+		}
+		*write <- &writeData{
+			Type: writeTypeData,
+			Data: response,
+		}
 		return
 	}
 
@@ -300,7 +364,15 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	} else {
 		response.Status = http.StatusOK
 	}
-	s.write <- response
+	write := s.write.Load()
+	if write == nil {
+		return
+	}
+	*write <- &writeData{
+		Type: writeTypeData,
+		Data: response,
+	}
+	return
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -28,7 +28,7 @@ func TestWebsocket_RPC(t *testing.T) {
 	}
 	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
 	testClient := NewTestRpcClient(rpcClient)
-
+	<-time.After(time.Second * 120)
 	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
