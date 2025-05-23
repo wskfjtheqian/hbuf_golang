@@ -140,6 +140,7 @@ type webSocket struct {
 
 	pingInterval time.Duration
 	pongWait     time.Duration
+	isSendPing   bool
 }
 
 func (s *webSocket) Context() context.Context {
@@ -150,7 +151,11 @@ func (s *webSocket) Context() context.Context {
 }
 
 func (s *webSocket) run() {
-	ticker := time.NewTicker(s.pingInterval)
+	var ticker *time.Ticker
+	if s.isSendPing {
+		ticker = time.NewTicker(s.pingInterval)
+	}
+
 	go func() {
 		for {
 			err := s.conn.SetReadDeadline(now.Load().Add(s.pongWait))
@@ -200,7 +205,9 @@ func (s *webSocket) run() {
 
 		close(*write)
 		_ = s.conn.Close()
-		ticker.Stop()
+		if ticker != nil {
+			ticker.Stop()
+		}
 	}()
 
 	go func() {
@@ -210,6 +217,9 @@ func (s *webSocket) run() {
 				break
 			}
 			data := <-*write
+			if data == nil {
+				break
+			}
 			if data.Type == writeTypeData {
 				buf := bytes.NewBuffer(nil)
 				err := s.encoder(buf)(data.Data)
@@ -232,15 +242,17 @@ func (s *webSocket) run() {
 		}
 	}()
 
-	go func() {
-		for _ = range ticker.C {
-			err := ws.WriteFrame(s.conn, ws.NewPingFrame(nil))
-			if err != nil {
-				erro.PrintStack(err)
-				return
+	if ticker != nil {
+		go func() {
+			for _ = range ticker.C {
+				err := ws.WriteFrame(s.conn, ws.NewPingFrame(nil))
+				if err != nil {
+					erro.PrintStack(err)
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
 // Request 发送请求
@@ -411,6 +423,24 @@ func WithWebSocketClientEncode(encoder Encoder) WebSocketClientOptions {
 	}
 }
 
+func WithWebSocketClientPingInterval(interval time.Duration) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.pingInterval = interval
+	}
+}
+
+func WithWebSocketClientPongWait(wait time.Duration) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.pongWait = wait
+	}
+}
+
+func WithWebSocketClientIsSendPing(isSendPing bool) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.isSendPing = isSendPing
+	}
+}
+
 // NewWebSocketClient 创建一个WebSocket客户端
 func NewWebSocketClient(base string, response Response, options ...WebSocketClientOptions) *WebSocketClient {
 	ret := &WebSocketClient{
@@ -422,6 +452,9 @@ func NewWebSocketClient(base string, response Response, options ...WebSocketClie
 		responseMiddleware: func(next Response) Response {
 			return next
 		},
+		isSendPing:   true,
+		pongWait:     60 * time.Second,
+		pingInterval: 30 * time.Second,
 	}
 	for _, option := range options {
 		option(ret)
@@ -438,6 +471,9 @@ type WebSocketClient struct {
 	response           Response
 	decode             Decoder
 	encode             Encoder
+	isSendPing         bool
+	pongWait           time.Duration
+	pingInterval       time.Duration
 }
 
 // Connect 连接客户端
@@ -460,6 +496,9 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 	if c.encode != nil {
 		c.socket.encoder = c.encode
 	}
+	c.socket.isSendPing = c.isSendPing
+	c.socket.pongWait = c.pongWait
+	c.socket.pingInterval = c.pingInterval
 	c.socket.run()
 	return nil
 }
@@ -510,6 +549,24 @@ func WithWebSocketServerEncode(encoder Encoder) WebSocketServerOptions {
 	}
 }
 
+func WithWebSocketServerPingInterval(interval time.Duration) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.pingInterval = interval
+	}
+}
+
+func WithWebSocketServerPongWait(wait time.Duration) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.pongWait = wait
+	}
+}
+
+func WithWebSocketServerIsSendPing(isSendPing bool) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.isSendPing = isSendPing
+	}
+}
+
 // NewWebSocketServer 创建一个WebSocket服务器
 func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *WebSocketServer {
 	ret := &WebSocketServer{
@@ -520,6 +577,9 @@ func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *W
 		responseMiddleware: func(next Response) Response {
 			return next
 		},
+		isSendPing:   false,
+		pongWait:     60 * time.Second,
+		pingInterval: 30 * time.Second,
 	}
 
 	for _, option := range options {
@@ -536,6 +596,9 @@ type WebSocketServer struct {
 	response           Response
 	decode             Decoder
 	encode             Encoder
+	pingInterval       time.Duration
+	pongWait           time.Duration
+	isSendPing         bool
 }
 
 // Serve 启动WebSocket服务器
@@ -594,5 +657,8 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn) {
 	if w.encode != nil {
 		w.socket.encoder = w.encode
 	}
+	w.socket.isSendPing = w.isSendPing
+	w.socket.pongWait = w.pongWait
+	w.socket.pingInterval = w.pingInterval
 	w.socket.run()
 }
