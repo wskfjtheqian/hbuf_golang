@@ -2,6 +2,12 @@ package nats
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
@@ -9,11 +15,13 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 // 协议名称
@@ -256,15 +264,73 @@ func (s *Service) startRpcServer() error {
 				return
 			}
 		} else {
-			// 开启http服务
-			err := http.Serve(listen, mux)
+			// 1. 生成私钥
+			privateKey, err := s.generatePrivateKey()
+			if err != nil {
+				hlog.Error("generate private key failed: ", err)
+				return
+			}
+
+			// 5. 生成自签名证书
+			cert, err := s.generateSelfSignedCert(privateKey)
+			if err != nil {
+				hlog.Error("generate self signed cert failed: ", err)
+				return
+			}
+
+			server := &http.Server{
+				Handler: mux,
+				TLSConfig: &tls.Config{
+					Certificates: []tls.Certificate{cert},
+				},
+			}
+			err = server.Serve(listen)
 			if err != nil {
 				hlog.Error("start http server failed: ", err)
 				return
 			}
+
 		}
 	}()
 	return nil
+}
+
+// 生成 ECDSA 私钥
+func (s *Service) generatePrivateKey() (*ecdsa.PrivateKey, error) {
+	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+}
+
+// 自签名证书
+func (s *Service) generateSelfSignedCert(privateKey *ecdsa.PrivateKey) (tls.Certificate, error) {
+	// 填写自签名证书的信息
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Fitten Tech"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(1, 0, 0),
+		SubjectKeyId:          []byte{1, 2, 3, 4, 6},
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IsCA:                  false,
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"localhost"},
+	}
+
+	// 自签名证书
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// 创建 TLS 证书
+	cert := tls.Certificate{
+		Certificate: [][]byte{certBytes},
+		PrivateKey:  privateKey,
+	}
+
+	return cert, nil
 }
 
 // GetServerAddr 获取服务地址
