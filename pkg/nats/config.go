@@ -22,43 +22,43 @@ type Config struct {
 func (c *Config) Validate() bool {
 	var valid bool = true
 	if c.User == "" {
-		hlog.Error("User field is required")
+		hlog.Error("Nats User field is required")
 		valid = false
 	}
 	if c.Password == "" {
-		hlog.Error("Password field is required")
+		hlog.Error("Nats Password field is required")
 		valid = false
 	}
 	if c.Name == "" {
-		hlog.Error("Name field is required")
+		hlog.Error("Nats Name field is required")
 		valid = false
 	}
 	if c.ReconnectBufSize < 0 {
-		hlog.Error("ReconnectBufSize field is required")
+		hlog.Error("Nats ReconnectBufSize field is required")
 		valid = false
 	}
 	if c.MaxReconnects < 0 {
-		hlog.Error("MaxReconnects field is required")
+		hlog.Error("Nats MaxReconnects field is required")
 		valid = false
 	}
 	if c.Timeout < 0 {
-		hlog.Error("Timeout field is required")
+		hlog.Error("Nats Timeout field is required")
 		valid = false
 	}
 	if c.PingInterval < 0 {
-		hlog.Error("PingInterval field is required")
+		hlog.Error("Nats PingInterval field is required")
 		valid = false
 	}
 	if len(c.Addrs) == 0 {
-		hlog.Error("Addrs field is required")
+		hlog.Error("Nats Addrs field is required")
 		valid = false
 	}
 	if c.AckWait < 0 {
-		hlog.Error("AckWait field is required")
+		hlog.Error("Nats AckWait field is required")
 		valid = false
 	}
 	if c.MaxDeliver < 0 {
-		hlog.Error("MaxDeliver field is required")
+		hlog.Error("Nats MaxDeliver field is required")
 		valid = false
 	}
 	return valid
