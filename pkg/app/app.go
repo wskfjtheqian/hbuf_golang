@@ -60,3 +60,7 @@ func (a *App) SetConfig(conf *Config) error {
 	}
 	return nil
 }
+
+func (a *App) Init() {
+
+}

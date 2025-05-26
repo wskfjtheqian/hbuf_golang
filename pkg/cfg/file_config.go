@@ -63,6 +63,7 @@ func (c *fileConfig) Close() error {
 func (c *fileConfig) Watch() error {
 	done := make(chan bool)
 	go func() {
+		hlog.Info("start watch config file: %s", c.path)
 		for {
 			select {
 			case event, ok := <-c.watcher.Events:
