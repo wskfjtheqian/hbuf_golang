@@ -36,12 +36,12 @@ func NewWatch() Watch {
 
 	var c Watch
 	if 0 != len(*endpoints) {
-		hlog.Info("Host name:" + *hostname)
-		hlog.Info("Etcd endpoints:" + *endpoints)
+		hlog.Info("Host name: %s", *hostname)
+		hlog.Info("Etcd endpoints: %s", *endpoints)
 		c = NewEtcdConfig(*hostname, *endpoints, keyVal)
 	} else if 0 != len(*path) {
-		hlog.Info("Host name:" + *hostname)
-		hlog.Info("Config.yaml file path:" + *path)
+		hlog.Info("Host name: %s", *hostname)
+		hlog.Info("Config.yaml file path: %s", *path)
 		c = NewFileConfig(*hostname, *path, keyVal)
 	} else {
 		hlog.Exit("please input config.yaml file path or etcd endpoints")

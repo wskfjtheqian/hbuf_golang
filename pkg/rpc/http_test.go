@@ -246,14 +246,14 @@ func TestHttpService_Middleware2(t *testing.T) {
 		// 1. 生成私钥
 		privateKey, err := generatePrivateKey()
 		if err != nil {
-			hlog.Error("generate private key failed: ", err)
+			hlog.Error("generate private key failed: %s", err)
 			return
 		}
 
 		// 5. 生成自签名证书
 		cert, err := generateSelfSignedCert(privateKey)
 		if err != nil {
-			hlog.Error("generate self signed cert failed: ", err)
+			hlog.Error("generate self signed cert failed: %s", err)
 			return
 		}
 

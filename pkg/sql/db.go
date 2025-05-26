@@ -9,6 +9,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync/atomic"
+	"time"
 )
 
 // WithContext 给上下文添加 Builder 连接
@@ -59,8 +60,17 @@ func (d *DB) SetConfig(cfg *Config) error {
 	if d.config.Equal(cfg) {
 		return nil
 	}
+	old := d.db.Load()
+	defer func() {
+		if old != nil {
+			<-time.After(time.Second * 30)
+			_ = old.Close()
+			hlog.Info("old database client closed")
+		}
+	}()
+
 	if cfg == nil {
-		if d.db.Load() != nil {
+		if old != nil {
 			conn := d.db.Swap(nil)
 			_ = conn.Close()
 		}
@@ -94,7 +104,7 @@ func (d *DB) SetConfig(cfg *Config) error {
 	if err := db.Ping(); err != nil {
 		return erro.Wrap(err)
 	}
-	hlog.Info("database connected")
+	hlog.Info("database client connected")
 	d.db.Store(db)
 	return nil
 }

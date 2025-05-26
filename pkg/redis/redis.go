@@ -9,6 +9,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync/atomic"
+	"time"
 )
 
 // WithContext 给上下文添加 REDIS 连接
@@ -62,8 +63,17 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	if r.config.Equal(cfg) {
 		return nil
 	}
+	old := r.conn.Load()
+	defer func() {
+		if old != nil {
+			<-time.After(time.Second * 30)
+			_ = old.Close()
+			hlog.Info("old redis client closed")
+		}
+	}()
+
 	if cfg == nil {
-		if r.conn.Load() != nil {
+		if old != nil {
 			conn := r.conn.Swap(nil)
 			_ = conn.Close()
 		}
@@ -131,7 +141,7 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		return erro.Wrap(err)
 	}
-	hlog.Info("redis client created")
+	hlog.Info("redis client connected")
 	r.conn.Store(client)
 
 	return nil

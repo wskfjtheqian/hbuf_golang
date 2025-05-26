@@ -18,7 +18,7 @@ type Config struct {
 	//
 	// The default max idle connections is currently 2. This may change in
 	// a future release.
-	MaxOpenConns *int `yaml:"maxOpenConns"`
+	MaxOpenConns *int `yaml:"MaxOpenConns"`
 
 	// SetMaxIdleConns sets the maximum number of connections in the idle
 	// connection pool.
@@ -30,36 +30,36 @@ type Config struct {
 	//
 	// The default max idle connections is currently 2. This may change in
 	// a future release.
-	MaxIdleConns *int `yaml:"maxIdleConns"`
+	MaxIdleConns *int `yaml:"MaxIdleConns"`
 
 	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 	//
 	// Expired connections may be closed lazily before reuse.
 	//
 	// If d <= 0, connections are not closed due to a connection's age.
-	ConnMaxLifetime *time.Duration `yaml:"connMaxLifetime"`
+	ConnMaxLifetime *time.Duration `yaml:"ConnMaxLifetime"`
 
 	// SetConnMaxIdleTime sets the maximum amount of time a connection may be idle.
 	//
 	// Expired connections may be closed lazily before reuse.
 	//
 	// If d <= 0, connections are not closed due to a connection's idle time.
-	ConnMaxIdleTime *time.Duration `yaml:"connMaxIdleTime"`
+	ConnMaxIdleTime *time.Duration `yaml:"ConnMaxIdleTime"`
 
 	// SetType sets the type of database.
 	//
 	// Currently supported types are:
 	// - mysql
-	Type *string `yaml:"type"`
+	Type *string `yaml:"Type"`
 
 	// SetUsername sets the username for the database.
-	Username *string `yaml:"username"`
+	Username *string `yaml:"Username"`
 
 	// SetPassword sets the password for the database.
-	Password *string `yaml:"password"`
+	Password *string `yaml:"Password"`
 
 	// SetURL sets the url for the database.
-	URL *string `yaml:"url"`
+	URL *string `yaml:"Url"`
 }
 
 // Validate 检查配置是否有效

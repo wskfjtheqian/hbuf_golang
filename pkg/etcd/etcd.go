@@ -64,8 +64,18 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 	if e.config.Equal(cfg) {
 		return nil
 	}
+
+	old := e.client.Load()
+	defer func() {
+		if old != nil {
+			<-time.After(time.Second * 30)
+			_ = old.Close()
+			hlog.Info("old etcd client closed")
+		}
+	}()
+
 	if cfg == nil {
-		if e.client.Load() != nil {
+		if old != nil {
 			conn := e.client.Swap(nil)
 			_ = conn.Close()
 		}
@@ -131,10 +141,11 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 		ctx1, _ := context.WithTimeout(ctx, time.Second*10)
 		status, err := client.Status(ctx1, endpoint)
 		if err != nil {
-			hlog.Exit("dial etcd failed: ", err)
+			hlog.Exit("dial etcd failed: %s", err)
 		}
 		hlog.Info("etcd endpoint: %s, isLearner: %t", endpoint, status.IsLearner)
 	}
+	hlog.Info("etcd client connected")
 	e.client.Store(client)
 	return err
 }

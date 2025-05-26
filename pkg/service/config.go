@@ -63,7 +63,7 @@ func (h *Http) Validate() bool {
 	if h.Crt != nil && *h.Crt != "" && h.Key != nil && *h.Key != "" {
 		_, err := tls.LoadX509KeyPair(*h.Crt, *h.Key)
 		if err != nil {
-			hlog.Error("load x509 key pair error: ", err.Error())
+			hlog.Error("load x509 key pair error: %s", err.Error())
 			valid = false
 		}
 	}

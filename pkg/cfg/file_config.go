@@ -28,7 +28,7 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 	if 0 == len(c.value) {
 		buffer, err := os.ReadFile(c.path)
 		if err != nil {
-			hlog.Error("config file read error:", err)
+			hlog.Error("config file read error: %s", err)
 		}
 		c.value = string(buffer)
 		if nil != call {
@@ -47,7 +47,7 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 func NewFileConfig(hostname string, path string, val map[string]any) Watch {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		hlog.Error("watch error:%s", err)
+		hlog.Error("watch error: %s", err)
 	}
 	return &fileConfig{
 		watcher:  watcher,
@@ -69,11 +69,11 @@ func (c *fileConfig) Watch() error {
 				if !ok {
 					return
 				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					hlog.Info("config file change:", c.path)
+				if event.Op&event.Op == fsnotify.Write {
+					hlog.Info("config file change: %s", c.path)
 					buffer, err := os.ReadFile(c.path)
 					if err != nil {
-						hlog.Error("read config file error:", c.path)
+						hlog.Error("read config file error: %s", c.path)
 						return
 					}
 					value := string(buffer)
@@ -91,7 +91,7 @@ func (c *fileConfig) Watch() error {
 				if !ok {
 					return
 				}
-				hlog.Error("watch error:", err)
+				hlog.Error("watch error: %s", err)
 			}
 		}
 	}()

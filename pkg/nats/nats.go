@@ -81,8 +81,18 @@ func (d *Nats) SetConfig(cfg *Config) error {
 	if d.config.Equal(cfg) {
 		return nil
 	}
+
+	old := d.conn.Load()
+	defer func() {
+		if old != nil {
+			<-time.After(time.Second * 30)
+			old.Close()
+			hlog.Info("old etcd client closed")
+		}
+	}()
+
 	if cfg == nil {
-		if d.conn.Load() != nil {
+		if old != nil {
 			conn := d.conn.Swap(nil)
 			conn.Close()
 		}
@@ -523,7 +533,7 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 		}()
 		if err != nil {
 			if int(metadata.NumDelivered) >= n.maxDeliver {
-				hlog.Error("" + string(msg.Data()))
+				hlog.Error("callback failed, error: %s", string(msg.Data()))
 
 				err = msg.Ack()
 				if err != nil {

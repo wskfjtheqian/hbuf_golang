@@ -51,7 +51,7 @@ func NewEtcdConfig(hostname string, endpoints string, val map[string]any) Watch 
 	}
 	client, err := clientv3.New(etc)
 	if err != nil {
-		hlog.Error("Etcd server connection failed, please check the configuration is correct:", err)
+		hlog.Error("Etcd server connection failed, please check the configuration is correct:%s", err)
 	}
 	ret.client = client
 	return ret
@@ -63,8 +63,8 @@ func (c *etcdConfig) Close() error {
 
 func (c *etcdConfig) Watch() error {
 	rch := c.client.Watch(context.Background(), "config")
-	for wresp := range rch {
-		for _, ev := range wresp.Events {
+	for wResp := range rch {
+		for _, ev := range wResp.Events {
 			var value string
 			if clientv3.EventTypeDelete == ev.Type {
 				value = ""
@@ -72,13 +72,13 @@ func (c *etcdConfig) Watch() error {
 				value = string(ev.Kv.Value)
 			}
 			if value != c.value && nil != c.onChange {
-				hlog.Info("config file change:", value)
+				hlog.Info("config file change: %s", value)
 				config, err := generateConfig(value, c.keyVal)
 				if err != nil {
 					erro.PrintStack(err)
 					return err
 				}
-				hlog.Debug("config change:" + config)
+				hlog.Debug("config change:%s" + config)
 				c.onChange(config)
 			}
 			c.value = value
