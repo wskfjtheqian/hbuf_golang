@@ -72,13 +72,18 @@ func (r *Redis) SetConfig(cfg *Config) error {
 
 	r.config = cfg
 	options := &redis.Options{}
-	if cfg.Addr != nil && len(*cfg.Addr) > 0 {
+	if cfg.Network != nil {
+		options.Network = *cfg.Network
+	}
+	if cfg.Addr != nil {
 		options.Addr = *cfg.Addr
 	}
-	if cfg.Password != nil && len(*cfg.Password) > 0 {
+	if cfg.Username != nil {
+		options.Username = *cfg.Username
+	}
+	if cfg.Password != nil {
 		options.Password = *cfg.Password
 	}
-
 	if cfg.DB != nil {
 		options.DB = *cfg.DB
 	}
@@ -100,6 +105,9 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	if cfg.WriteTimeout != nil {
 		options.WriteTimeout = *cfg.WriteTimeout
 	}
+	if cfg.PoolFIFO != nil {
+		options.PoolFIFO = *cfg.PoolFIFO
+	}
 	if cfg.PoolSize != nil {
 		options.PoolSize = *cfg.PoolSize
 	}
@@ -111,6 +119,12 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	}
 	if cfg.PoolTimeout != nil {
 		options.PoolTimeout = *cfg.PoolTimeout
+	}
+	if cfg.IdleTimeout != nil {
+		options.IdleTimeout = *cfg.IdleTimeout
+	}
+	if cfg.IdleCheckFrequency != nil {
+		options.IdleCheckFrequency = *cfg.IdleCheckFrequency
 	}
 	client := redis.NewClient(options)
 	if err := client.Ping(context.Background()).Err(); err != nil {

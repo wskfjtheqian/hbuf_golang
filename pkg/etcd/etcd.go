@@ -76,23 +76,47 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 	c := clientv3.Config{
 		Endpoints: cfg.Endpoints,
 	}
-	if cfg.DialTimeout > 0 {
-		c.DialTimeout = cfg.DialTimeout
+	if cfg.Endpoints != nil {
+		c.Endpoints = cfg.Endpoints
 	}
-	if cfg.AutoSyncInterval > 0 {
-		c.AutoSyncInterval = cfg.AutoSyncInterval
+	if cfg.AutoSyncInterval != nil {
+		c.AutoSyncInterval = *cfg.AutoSyncInterval
 	}
-	if cfg.DialKeepAliveTime > 0 {
-		c.DialKeepAliveTime = cfg.DialKeepAliveTime
+	if cfg.DialTimeout != nil {
+		c.DialTimeout = *cfg.DialTimeout
 	}
-	if cfg.DialKeepAliveTimeout > 0 {
-		c.DialKeepAliveTimeout = cfg.DialKeepAliveTimeout
+	if cfg.DialKeepAliveTime != nil {
+		c.DialKeepAliveTime = *cfg.DialKeepAliveTime
 	}
-	if cfg.Username != "" {
-		c.Username = cfg.Username
+	if cfg.DialKeepAliveTimeout != nil {
+		c.DialKeepAliveTimeout = *cfg.DialKeepAliveTimeout
 	}
-	if cfg.Password != "" {
-		c.Password = cfg.Password
+	if cfg.MaxCallSendMsgSize != nil {
+		c.MaxCallSendMsgSize = *cfg.MaxCallSendMsgSize
+	}
+	if cfg.MaxCallRecvMsgSize != nil {
+		c.MaxCallRecvMsgSize = *cfg.MaxCallRecvMsgSize
+	}
+	if cfg.Username != nil {
+		c.Username = *cfg.Username
+	}
+	if cfg.Password != nil {
+		c.Password = *cfg.Password
+	}
+	if cfg.RejectOldCluster != nil {
+		c.RejectOldCluster = *cfg.RejectOldCluster
+	}
+	if cfg.PermitWithoutStream != nil {
+		c.PermitWithoutStream = *cfg.PermitWithoutStream
+	}
+	if cfg.MaxUnaryRetries != nil {
+		c.MaxUnaryRetries = *cfg.MaxUnaryRetries
+	}
+	if cfg.BackoffWaitBetween != nil {
+		c.BackoffWaitBetween = *cfg.BackoffWaitBetween
+	}
+	if cfg.BackoffJitterFraction != nil {
+		c.BackoffJitterFraction = *cfg.BackoffJitterFraction
 	}
 
 	client, err := clientv3.New(c)

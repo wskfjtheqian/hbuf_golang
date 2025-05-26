@@ -93,27 +93,87 @@ func (d *Nats) SetConfig(cfg *Config) error {
 	d.config = cfg
 	// 连接到 NATS 服务器
 	var options []nats.Option
-	if cfg.User != "" && cfg.Password != "" {
-		options = append(options, nats.UserInfo(cfg.User, cfg.Password))
+	if cfg.User != nil && cfg.Password != nil {
+		options = append(options, nats.UserInfo(*cfg.User, *cfg.Password))
 	}
-	if cfg.Timeout > 0 {
-		options = append(options, nats.Timeout(cfg.Timeout))
+	if cfg.NoRandomize != nil && *cfg.NoRandomize {
+		options = append(options, nats.DontRandomize())
 	}
-	if cfg.Name != "" {
-		options = append(options, nats.Name(cfg.Name))
+	if cfg.NoEcho != nil && *cfg.NoEcho {
+		options = append(options, nats.NoEcho())
 	}
-	if cfg.ReconnectBufSize > 0 {
-		options = append(options, nats.ReconnectBufSize(int(cfg.ReconnectBufSize)))
+	if cfg.Name != nil {
+		options = append(options, nats.Name(*cfg.Name))
 	}
-	if cfg.MaxReconnects > 0 {
-		options = append(options, nats.MaxReconnects(int(cfg.MaxReconnects)))
+	if cfg.Secure != nil && *cfg.Secure {
+		options = append(options, nats.TLSHandshakeFirst())
 	}
-	if cfg.PingInterval > 0 {
-		options = append(options, nats.PingInterval(cfg.PingInterval))
+	if cfg.AllowReconnect != nil && !*cfg.AllowReconnect {
+		options = append(options, nats.NoReconnect())
+	}
+	if cfg.MaxReconnect != nil {
+		options = append(options, nats.MaxReconnects(*cfg.MaxReconnect))
+	}
+	if cfg.ReconnectWait != nil {
+		options = append(options, nats.ReconnectWait(*cfg.ReconnectWait))
+	}
+	if cfg.ReconnectJitter != nil && cfg.ReconnectJitterTLS != nil {
+		options = append(options, nats.ReconnectJitter(*cfg.ReconnectJitter, *cfg.ReconnectJitterTLS))
+	}
+	if cfg.Timeout != nil {
+		options = append(options, nats.Timeout(*cfg.Timeout))
+	}
+	if cfg.DrainTimeout != nil {
+		options = append(options, nats.DrainTimeout(*cfg.DrainTimeout))
+	}
+	if cfg.FlusherTimeout != nil {
+		options = append(options, nats.FlusherTimeout(*cfg.FlusherTimeout))
+	}
+	if cfg.PingInterval != nil {
+		options = append(options, nats.PingInterval(*cfg.PingInterval))
+	}
+	if cfg.MaxPingsOut != nil {
+		options = append(options, nats.MaxPingsOutstanding(*cfg.MaxPingsOut))
+	}
+	if cfg.ReconnectBufSize != nil {
+		options = append(options, nats.ReconnectBufSize(*cfg.ReconnectBufSize))
+	}
+	if cfg.SubChanLen != nil {
+		options = append(options, nats.SyncQueueLen(*cfg.SubChanLen))
+	}
+	if cfg.Token != nil {
+		options = append(options, nats.Token(*cfg.Token))
+	}
+	if cfg.UseOldRequestStyle != nil && *cfg.UseOldRequestStyle {
+		options = append(options, nats.UseOldRequestStyle())
+	}
+	if cfg.NoCallbacksAfterClientClose != nil && *cfg.NoCallbacksAfterClientClose {
+		options = append(options, nats.NoCallbacksAfterClientClose())
+	}
+	if cfg.RetryOnFailedConnect != nil {
+		options = append(options, nats.RetryOnFailedConnect(*cfg.RetryOnFailedConnect))
+	}
+	if cfg.Compression != nil {
+		options = append(options, nats.Compression(*cfg.Compression))
+	}
+	if cfg.ProxyPath != nil {
+		options = append(options, nats.ProxyPath(*cfg.ProxyPath))
+	}
+	if cfg.InboxPrefix != nil {
+		options = append(options, nats.CustomInboxPrefix(*cfg.InboxPrefix))
+	}
+	if cfg.IgnoreAuthErrorAbort != nil && *cfg.IgnoreAuthErrorAbort {
+		options = append(options, nats.IgnoreAuthErrorAbort())
+	}
+	if cfg.SkipHostLookup != nil && *cfg.SkipHostLookup {
+		options = append(options, nats.SkipHostLookup())
+	}
+	if cfg.PermissionErrOnSubscribe != nil {
+		options = append(options, nats.PermissionErrOnSubscribe(*cfg.PermissionErrOnSubscribe))
 	}
 
 	nc, err := nats.Connect(
-		strings.Join(cfg.Addrs, ","),
+		strings.Join(cfg.Servers, ","),
 		options...,
 	)
 	if err != nil {

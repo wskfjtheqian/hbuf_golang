@@ -78,7 +78,7 @@ func (c *fileConfig) Watch() error {
 					}
 					value := string(buffer)
 					if value != c.value && nil != c.onChange {
-						config, err := generateConfig(c.value, c.keyVal)
+						config, err := generateConfig(value, c.keyVal)
 						if err != nil {
 							erro.PrintStack(err)
 							return

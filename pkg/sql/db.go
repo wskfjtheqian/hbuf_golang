@@ -90,8 +90,12 @@ func (d *DB) SetConfig(cfg *Config) error {
 	if cfg.MaxIdleConns != nil {
 		db.SetMaxIdleConns(*cfg.MaxIdleConns)
 	}
+	if cfg.ConnMaxIdleTime != nil {
+		db.SetConnMaxIdleTime(*cfg.ConnMaxIdleTime)
+	}
+
 	if err := db.Ping(); err != nil {
-		hlog.Exit("failed to ping database: %v", err)
+		return erro.Wrap(err)
 	}
 
 	d.db.Store(db)
