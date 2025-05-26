@@ -4,7 +4,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"io/ioutil"
 	"os"
 )
 
@@ -27,7 +26,6 @@ func (c *fileConfig) CheckConfig() int {
 
 func (c *fileConfig) OnChange(call func(value string)) error {
 	if 0 == len(c.value) {
-		hlog.Info("config file path:", c.path)
 		buffer, err := os.ReadFile(c.path)
 		if err != nil {
 			hlog.Error("config file read error:", err)
@@ -39,7 +37,6 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 				erro.PrintStack(err)
 				return err
 			}
-			hlog.Info("config file path：" + c.path)
 			call(config)
 		}
 	}
@@ -73,10 +70,11 @@ func (c *fileConfig) Watch() error {
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					hlog.Info("配置文件路径:", c.path)
-					buffer, err := ioutil.ReadFile(c.path)
+					hlog.Info("config file change:", c.path)
+					buffer, err := os.ReadFile(c.path)
 					if err != nil {
-						hlog.Info("读取配置文件失败:", c.path)
+						hlog.Error("read config file error:", c.path)
+						return
 					}
 					value := string(buffer)
 					if value != c.value && nil != c.onChange {
@@ -85,7 +83,7 @@ func (c *fileConfig) Watch() error {
 							erro.PrintStack(err)
 							return
 						}
-						hlog.Info("配置文件改变：" + config)
+						hlog.Debug("config change:" + config)
 						c.onChange(config)
 					}
 					c.value = value
@@ -94,7 +92,7 @@ func (c *fileConfig) Watch() error {
 				if !ok {
 					return
 				}
-				hlog.Info("error:", err)
+				hlog.Error("watch error:", err)
 			}
 		}
 	}()

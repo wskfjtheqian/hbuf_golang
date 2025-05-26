@@ -135,7 +135,7 @@ func (l *Logger) Exit(v ...any) {
 	_ = l.output(0, 2, EXIT, func(b []byte) []byte {
 		return fmt.Append(b, v...)
 	})
-	os.Exit(-1)
+	panic(fmt.Sprint(v...))
 }
 
 func (l *Logger) Output(calldepth int, level Level, s string) error {
@@ -389,7 +389,7 @@ func init() {
 		DEBUG: "DEBUG",
 	})
 
-	flag.Func("log_out", "日志输入目标,支持目录和Http上传地址", func(s string) error {
+	flag.Func("log_out", "Log output target, supports directories and HTTP upload addresses.", func(s string) error {
 		if strings.Index(s, "http://") == 0 || strings.Index(s, "https://") == 0 {
 			std.SetOutTarget(func(level Level) SyncWriter {
 				return newHttpWriter(s, level)
@@ -408,7 +408,7 @@ func init() {
 		}
 		return nil
 	})
-	flag.Func("log_level", "日志输出等级,DEBUG(00000)、INFO(10000)、WARN(20000)、ERROR(30000)[默认]、EXIT(40000)", func(s string) error {
+	flag.Func("log_level", "Log output level, DEBUG(00000), INFO(10000), WARN(20000), ERROR(30000)[default], EXIT(40000)", func(s string) error {
 		atoi, err := strconv.Atoi(s)
 		if err != nil {
 			return err
@@ -416,11 +416,11 @@ func init() {
 		std.SetOutLevel(Level(atoi))
 		return nil
 	})
-	flag.BoolFunc("log_simple", "开启简单模式，默认false。简单模式日志文件中只有当前第级的日志，复杂模式日志文件中会包含低等级的日志", func(s string) error {
+	flag.BoolFunc("log_simple", "Enable simple mode, default is false. In simple mode, the log file contains only logs of the current level. In complex mode, the log file includes logs of lower levels as well.", func(s string) error {
 		std.setSimple("true" == s)
 		return nil
 	})
-	flag.BoolFunc("log_err", "是否输出日志到控制台,默认为 true", func(s string) error {
+	flag.BoolFunc("log_err", "Whether to output logs to the console, default is true.", func(s string) error {
 		std.setOutError("true" == s)
 		return nil
 	})
@@ -462,7 +462,7 @@ func Exit(v ...any) {
 	_ = std.output(0, 2, EXIT, func(b []byte) []byte {
 		return fmt.Append(b, v...)
 	})
-	os.Exit(-1)
+	panic(fmt.Sprint(v...))
 }
 
 func Output(calldepth int, level Level, s string) error {
