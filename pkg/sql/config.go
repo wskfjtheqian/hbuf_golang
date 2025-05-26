@@ -65,7 +65,7 @@ type Config struct {
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
 	var valid bool = true
-	if c.Type == nil || *c.Type != "" {
+	if c.Type == nil || *c.Type == "" {
 		valid = false
 		hlog.Error("sql config type is empty")
 	}

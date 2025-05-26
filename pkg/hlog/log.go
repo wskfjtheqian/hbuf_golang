@@ -108,34 +108,34 @@ func (l *Logger) Flush() {
 		_ = writer.Flush()
 	}
 }
-func (l *Logger) Debug(v ...any) {
+func (l *Logger) Debug(format string, v ...any) {
 	_ = l.output(0, 2, DEBUG, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
-func (l *Logger) Info(v ...any) {
+func (l *Logger) Info(format string, v ...any) {
 	_ = l.output(0, 2, INFO, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func (l *Logger) Warn(v ...any) {
+func (l *Logger) Warn(format string, v ...any) {
 	_ = l.output(0, 2, WARN, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func (l *Logger) Error(v ...any) {
+func (l *Logger) Error(format string, v ...any) {
 	_ = l.output(0, 2, ERROR, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func (l *Logger) Exit(v ...any) {
+func (l *Logger) Exit(format string, v ...any) {
 	_ = l.output(0, 2, EXIT, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
-	panic(fmt.Sprint(v...))
+	panic(fmt.Sprintf(format, v...))
 }
 
 func (l *Logger) Output(calldepth int, level Level, s string) error {
@@ -434,35 +434,35 @@ func SetPrefix(prefix string) {
 	std.SetPrefix(prefix)
 }
 
-func Debug(v ...any) {
+func Debug(format string, v ...any) {
 	_ = std.output(0, 2, DEBUG, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Info(v ...any) {
+func Info(format string, v ...any) {
 	_ = std.output(0, 2, INFO, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Warn(v ...any) {
+func Warn(format string, v ...any) {
 	_ = std.output(0, 2, WARN, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Error(v ...any) {
+func Error(format string, v ...any) {
 	_ = std.output(0, 2, ERROR, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Exit(v ...any) {
+func Exit(format string, v ...any) {
 	_ = std.output(0, 2, EXIT, func(b []byte) []byte {
-		return fmt.Append(b, v...)
+		return fmt.Appendf(b, format, v...)
 	})
-	panic(fmt.Sprint(v...))
+	panic(fmt.Sprintf(format, v...))
 }
 
 func Output(calldepth int, level Level, s string) error {

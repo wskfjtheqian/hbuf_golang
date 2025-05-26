@@ -4,10 +4,12 @@ import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"reflect"
 	"sync/atomic"
+	"time"
 )
 
 // WithContext 给上下文添加 NATS 连接
@@ -124,6 +126,15 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 		return erro.Wrap(err)
 	}
 
+	ctx := context.Background()
+	for _, endpoint := range client.Endpoints() {
+		ctx1, _ := context.WithTimeout(ctx, time.Second*10)
+		status, err := client.Status(ctx1, endpoint)
+		if err != nil {
+			hlog.Exit("dial etcd failed: ", err)
+		}
+		hlog.Info("etcd endpoint: %s, isLearner: %t", endpoint, status.IsLearner)
+	}
 	e.client.Store(client)
 	return err
 }

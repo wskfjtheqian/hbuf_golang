@@ -60,5 +60,8 @@ func generateConfig(config string, keyVal map[string]any) (string, error) {
 	if err != nil {
 		return "", erro.Wrap(err)
 	}
-	return w.String(), nil
+
+	config = w.String()
+	hlog.Debug("config change:\n" + config)
+	return config, nil
 }

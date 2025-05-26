@@ -70,12 +70,9 @@ func (d *DB) SetConfig(cfg *Config) error {
 
 	d.config = cfg
 
-	if cfg.Type == nil || cfg.Username == nil || cfg.Password == nil || cfg.URL == nil {
-		hlog.Exit("invalid database config")
-	}
 	db, err := sql.Open(*cfg.Type, *cfg.Username+":"+*cfg.Password+"@"+*cfg.URL+"&parseTime=true&clientFoundRows=true")
 	if err != nil {
-		hlog.Exit("failed to connect to database: %v", err)
+		return erro.Wrap(err)
 	}
 
 	if cfg.MaxOpenConns != nil {
@@ -97,7 +94,7 @@ func (d *DB) SetConfig(cfg *Config) error {
 	if err := db.Ping(); err != nil {
 		return erro.Wrap(err)
 	}
-
+	hlog.Info("database connected")
 	d.db.Store(db)
 	return nil
 }

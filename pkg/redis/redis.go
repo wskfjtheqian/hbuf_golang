@@ -5,6 +5,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"reflect"
 	"sync/atomic"
@@ -130,7 +131,7 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		return erro.Wrap(err)
 	}
-
+	hlog.Info("redis client created")
 	r.conn.Store(client)
 
 	return nil

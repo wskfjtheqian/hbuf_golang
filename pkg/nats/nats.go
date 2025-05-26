@@ -238,7 +238,7 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg 
 	}
 	_, err = conn.Subscribe(subject, callback)
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("subscribe failed, error: %s", err)
 		return err
 	}
 	return nil
@@ -281,7 +281,7 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 	}
 	_, err = jetStream.Publish(ctx, subject, data, jetstream.WithMsgID(uuid.NewString()))
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("publish failed, error: %s", err)
 		return err
 	}
 	return nil
@@ -345,17 +345,17 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 
 		retErr := callback(msg)
 		if retErr != nil {
-			hlog.Error(err)
+			hlog.Error("callback failed, error: %s", err)
 			metadata, err := msg.Metadata()
 			if err != nil {
-				hlog.Error(err)
+				hlog.Error("metadata failed, error: %s", err)
 				return
 			}
 			if int(metadata.NumDelivered) >= n.maxDeliver {
 				n.saveErrorMessage(ctx, stream, subject, durable, msgId, msg.Data(), retErr.Error())
 				err = msg.Ack()
 				if err != nil {
-					hlog.Error(err)
+					hlog.Error("ack failed, error: %s", err)
 					return
 				}
 			}
@@ -363,12 +363,12 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		}
 		err = msg.Ack()
 		if err != nil {
-			hlog.Error(err)
+			hlog.Error("ack failed, error: %s", err)
 			return
 		}
 	})
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("commit failed, error: %s", err)
 		return err
 	}
 	return nil
@@ -463,18 +463,18 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 	}
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("marshal failed, error: %s", err)
 		return
 	}
 
 	jetStream, err := n.GetJetStream()
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("get jetstream failed, error: %s", err)
 		return
 	}
 	_, err = jetStream.Publish(ctx, ErrorMessage_Subject, jsonData, jetstream.WithMsgID(uuid.NewString()))
 	if err != nil {
-		hlog.Error(err, string(jsonData))
+		hlog.Error("publish failed, error: %s", err)
 		return
 	}
 }
@@ -503,7 +503,7 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 	_, err = consumer.Consume(func(msg jetstream.Msg) {
 		metadata, err := msg.Metadata()
 		if err != nil {
-			hlog.Error(err)
+			hlog.Error("metadata failed, error: %s", err)
 			return
 		}
 
@@ -527,7 +527,7 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 
 				err = msg.Ack()
 				if err != nil {
-					hlog.Error(err)
+					hlog.Error("ack failed, error: %s", err)
 					return
 				}
 			}
@@ -535,12 +535,12 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 		}
 		err = msg.Ack()
 		if err != nil {
-			hlog.Error(err)
+			hlog.Error("ack failed, error: %s", err)
 			return
 		}
 	})
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("commit failed, error: %s", err)
 		return err
 	}
 	return nil

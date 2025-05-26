@@ -47,7 +47,7 @@ func (c *fileConfig) OnChange(call func(value string)) error {
 func NewFileConfig(hostname string, path string, val map[string]any) Watch {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		hlog.Error(err)
+		hlog.Error("watch error:%s", err)
 	}
 	return &fileConfig{
 		watcher:  watcher,
@@ -83,7 +83,6 @@ func (c *fileConfig) Watch() error {
 							erro.PrintStack(err)
 							return
 						}
-						hlog.Debug("config change:" + config)
 						c.onChange(config)
 					}
 					c.value = value
