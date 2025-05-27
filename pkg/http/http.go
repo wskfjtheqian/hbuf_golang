@@ -14,19 +14,20 @@ import (
 )
 
 type Http struct {
-	mux    *http.ServeMux
+	mux    http.ServeMux
 	http   *http.Server
 	config Config
 
-	init     chan bool
-	isInit   bool
-	listener net.Listener
+	init   chan bool
+	isInit bool
 }
 
 func NewHttp() *Http {
-	return &Http{
+	ret := &Http{
 		init: make(chan bool, 1),
 	}
+	ret.mux.HandleFunc("/health", ret.health)
+	return ret
 }
 
 func (a *Http) Init() {
@@ -40,48 +41,24 @@ func (a *Http) SetConfig(conf *Config) error {
 		return nil
 	}
 
-	old := a.http
-	defer func() {
-		if old != nil {
-			<-time.After(time.Second * 30)
-			_ = old.Close()
-			hlog.Info("close old http connection")
-		}
-	}()
+	if a.http != nil {
+		_ = a.http.Close()
+		hlog.Info("close old http connection")
+	}
 
-	oldListener := a.listener
 	if nil == conf {
-		if nil != oldListener {
-			_ = oldListener.Close()
-		}
-		a.listener = nil
 		a.http = nil
 		return nil
 	}
 
-	a.mux = &http.ServeMux{}
-	a.mux.HandleFunc("/health", a.health)
-
-	addr := *conf.Addr
-	if !utl.Equal(a.config.Addr, &addr) {
-		var err error
-		a.listener, err = net.Listen("tcp", addr)
-		if err != nil {
-			hlog.Error("Listen server failed with '%s'\n", err)
-			return nil
-		}
-
-		go func() {
-			if oldListener != nil {
-				<-time.After(time.Second * 2)
-				_ = oldListener.Close()
-				hlog.Info("close old tcp listener: %s", addr)
-			}
-		}()
+	listener, err := net.Listen("tcp", *conf.Addr)
+	if err != nil {
+		hlog.Error("Listen server failed with '%s'\n", err)
+		return nil
 	}
 
 	a.http = &http.Server{
-		Handler: a.mux,
+		Handler: &a.mux,
 	}
 
 	go func() {
@@ -90,15 +67,15 @@ func (a *Http) SetConfig(conf *Config) error {
 		}
 		var err error
 		if conf.Crt != nil && conf.Key != nil {
-			hlog.Info("Start https server, addr: %s", addr)
-			err = a.http.ServeTLS(a.listener, *conf.Crt, *conf.Key)
+			hlog.Info("Start https server, addr: %s", *conf.Addr)
+			err = a.http.ServeTLS(listener, *conf.Crt, *conf.Key)
 		} else {
-			hlog.Info("Start http server, addr: %s", addr)
-			err = a.http.Serve(a.listener)
+			hlog.Info("Start http server, addr: %s", *conf.Addr)
+			err = a.http.Serve(listener)
 		}
 		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				hlog.Info("Server closed %s", addr)
+			if errors.Is(err, http.ErrServerClosed) {
+				hlog.Info("Server closed %s", *conf.Addr)
 			} else {
 				hlog.Error("Listen server failed with '%s'\n", err)
 			}
