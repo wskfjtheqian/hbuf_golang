@@ -178,6 +178,10 @@ type Result[T hbuf.Data] struct {
 	descriptor hbuf.Descriptor
 }
 
+func (r *Result[T]) Error() string {
+	return r.Msg
+}
+
 func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
 	ret := &Result[T]{
 		Code: code,
@@ -310,6 +314,10 @@ func NewServer(options ...ServerOption) *Server {
 		option(ret)
 	}
 	return ret
+}
+
+type ServerRegister interface {
+	Register(id int32, name string, methods ...Method)
 }
 
 // Server 是用于处理RPC请求的服务器

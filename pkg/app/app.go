@@ -5,6 +5,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/nats"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/redis"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/service"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/sql"
 )
 
@@ -17,14 +18,13 @@ func NewApp() *App {
 		sqlDb: sql.NewDB(),
 	}
 
-	ret.rpc = rpc.NewServer(
-		rpc.WithServerMiddleware(
-			ret.nats.NewMiddleware(),
-			ret.etcd.NewMiddleware(),
-			ret.redis.NewMiddleware(),
-			ret.sqlDb.NewMiddleware(),
-		),
-	)
+	ret.service = service.NewService(ret.etcd, []rpc.HandlerMiddleware{
+		ret.nats.NewMiddleware(),
+		ret.etcd.NewMiddleware(),
+		ret.redis.NewMiddleware(),
+		ret.sqlDb.NewMiddleware(),
+	})
+
 	return ret
 }
 
@@ -34,7 +34,8 @@ type App struct {
 	etcd  *etcd.Etcd
 	redis *redis.Redis
 	sqlDb *sql.DB
-	rpc   *rpc.Server
+
+	service *service.Service
 }
 
 // SetConfig 设置配置
@@ -58,9 +59,28 @@ func (a *App) SetConfig(conf *Config) error {
 	if err != nil {
 		return err
 	}
+
+	err = a.service.SetConfig(conf.Service)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (a *App) Init() {
 
+}
+
+func (a *App) Service() *service.Service {
+	return a.service
+}
+
+func (a *App) Middlewares() []rpc.HandlerMiddleware {
+	return []rpc.HandlerMiddleware{
+		a.nats.NewMiddleware(),
+		a.etcd.NewMiddleware(),
+		a.redis.NewMiddleware(),
+		a.sqlDb.NewMiddleware(),
+		a.service.NewMiddleware(),
+	}
 }

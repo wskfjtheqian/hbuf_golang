@@ -1,4 +1,4 @@
-package nats
+package service
 
 import (
 	"crypto/tls"
@@ -6,8 +6,8 @@ import (
 )
 
 type Config struct {
-	Server *Server `yaml:"server"` //服务配置
-	Client *Client `yaml:"client"` //客服配置
+	Server *Server `yaml:"Server"` //服务端配置
+	Client *Client `yaml:"Client"` //客户端配置
 }
 
 // Equal 判断两个Config是否相同
@@ -41,11 +41,11 @@ func (c *Config) Validate() bool {
 
 // Http 服务配置
 type Http struct {
-	Hostname *string `yaml:"hostname"` //主机名
-	Address  *string `yaml:"address"`  //监听地址
-	Crt      *string `yaml:"crt"`      //crt证书
-	Key      *string `yaml:"key"`      //crt密钥
-	Path     *string `yaml:"path"`     //路径
+	Hostname *string `yaml:"Hostname"` //主机名
+	Address  *string `yaml:"Address"`  //监听地址
+	Crt      *string `yaml:"Crt"`      //crt证书
+	Key      *string `yaml:"Key"`      //crt密钥
+	Path     *string `yaml:"Path"`     //路径
 }
 
 // Validate 检查配置是否有效
@@ -91,11 +91,11 @@ func (h *Http) Equal(other *Http) bool {
 
 // Server 服务配置
 type Server struct {
-	Register  bool      `yaml:"register"`  //是否注册服务到注册中心
-	Local     bool      `yaml:"local"`     //是否开启本地服务
-	Http      *Http     `yaml:"http"`      //Http 服务配置
-	List      *[]string `yaml:"list"`      //开始的服务列表
-	LeaseTime int64     `yaml:"leaseTime"` //租约时间
+	Register  bool     `yaml:"Register"`  //是否注册服务到注册中心
+	Local     bool     `yaml:"Local"`     //是否开启本地服务
+	Http      *Http    `yaml:"Http"`      //Http 服务配置
+	List      []string `yaml:"List"`      //开始的服务列表
+	LeaseTime int64    `yaml:"LeaseTime"` //租约时间
 }
 
 // Validate 检查配置是否有效
@@ -122,11 +122,11 @@ func (s *Server) Equal(other *Server) bool {
 	if s == nil || other == nil {
 		return false
 	}
-	if !(s.Register == other.Register && s.Local == other.Local && s.Http.Equal(other.Http) && len(*s.List) == len(*other.List)) {
+	if !(s.Register == other.Register && s.Local == other.Local && s.Http.Equal(other.Http) && len(s.List) == len(other.List)) {
 		return false
 	}
-	for i, v := range *s.List {
-		if v != (*other.List)[i] {
+	for i, v := range s.List {
+		if v != (other.List)[i] {
 			return false
 		}
 	}
@@ -134,8 +134,8 @@ func (s *Server) Equal(other *Server) bool {
 }
 
 type Client struct {
-	Find   bool                `yaml:"find"` //是否开启服务发现功能
-	Server map[string][]string `yaml:"server"`
+	Find   bool                `yaml:"Find"` //是否开启服务发现功能
+	Server map[string][]string `yaml:"Server"`
 }
 
 func (c *Client) Validate() bool {

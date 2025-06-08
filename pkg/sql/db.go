@@ -13,17 +13,25 @@ import (
 )
 
 // WithContext 给上下文添加 Builder 连接
-func WithContext(ctx context.Context, n *DB) context.Context {
-	return &Context{
+func WithContext(ctx context.Context, n *DB, tableNameFunc func(ctx context.Context, name string) string) context.Context {
+	ret := &Context{
 		Context: ctx,
 		db:      n,
+		tableNameFunc: func(ctx context.Context, name string) string {
+			return name
+		},
 	}
+	if tableNameFunc != nil {
+		ret.tableNameFunc = tableNameFunc
+	}
+	return ret
 }
 
 // Context 定义了 Builder 的上下文
 type Context struct {
 	context.Context
-	db *DB
+	db            *DB
+	tableNameFunc func(ctx context.Context, name string) string
 }
 
 var contextType = reflect.TypeOf(&Context{})
@@ -43,6 +51,15 @@ func FromContext(ctx context.Context) (n *DB, ok bool) {
 		return nil, false
 	}
 	return val.(*Context).db, true
+}
+
+// TableName 获取表名的函数
+func TableName(ctx context.Context, name string) string {
+	val := ctx.Value(contextType)
+	if val == nil {
+		return name
+	}
+	return val.(*Context).tableNameFunc(ctx, name)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +137,7 @@ func (d *DB) GetDB() (*sql.DB, error) {
 func (d *DB) NewMiddleware() rpc.HandlerMiddleware {
 	return func(next rpc.Handler) rpc.Handler {
 		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
-			return next(WithContext(ctx, d), req)
+			return next(WithContext(ctx, d, nil), req)
 		}
 	}
 }

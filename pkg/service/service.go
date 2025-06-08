@@ -1,4 +1,4 @@
-package nats
+package service
 
 import (
 	"context"
@@ -11,18 +11,54 @@ import (
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"math/big"
+	rand2 "math/rand/v2"
 	"net"
 	"net/http"
-	"net/url"
+	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// WithContext 创建一个新的Context
+func WithContext(ctx context.Context, service *Service) context.Context {
+	return &Context{
+		Context: ctx,
+		service: service,
+	}
+}
+
+// Context 是用于处理RPC请求的上下文
+type Context struct {
+	context.Context
+	service *Service
+}
+
+var contextType = reflect.TypeOf(&Context{})
+
+// Value 返回Context的value
+func (d *Context) Value(key any) any {
+	if reflect.TypeOf(d) == key {
+		return d
+	}
+	return d.Context.Value(key)
+}
+
+// FromContext 从Context中获取Context
+func FromContext(ctx context.Context) *Service {
+	val := ctx.Value(contextType)
+	if val == nil {
+		return nil
+	}
+	return val.(*Context).service
+}
 
 // 协议名称
 const ProtocolName = "hbuf-rpc://"
@@ -31,16 +67,34 @@ const ProtocolName = "hbuf-rpc://"
 type RegisterInfo struct {
 	Name string `json:"name"`
 	Addr string `json:"addr"`
-	Port int    `json:"port"`
-	TTL  int    `json:"ttl"`
+	Path string `json:"path"`
 }
 
+type Option func(*Service)
+
 // NewService 创建一个新的Service实例
-func NewService(etcd *etcd.Etcd) *Service {
-	return &Service{
-		etcd:    etcd,
-		install: make(map[string]struct{}),
+func NewService(etcd *etcd.Etcd, rpcMiddlewares []rpc.HandlerMiddleware, options ...Option) *Service {
+	ret := &Service{
+		etcd:       etcd,
+		install:    make(map[string]*ServerInfo),
+		servers:    make(map[string]*ServerInfo),
+		clients:    make(map[string][]Init),
+		httpClient: make(map[string]*rpc.Client),
 	}
+	rpcMiddlewares = append(rpcMiddlewares, ret.NewMiddleware())
+
+	ret.middleware = func(next rpc.Handler) rpc.Handler {
+		for i := len(rpcMiddlewares) - 1; i >= 0; i-- {
+			next = rpcMiddlewares[i](next)
+		}
+		return next
+	}
+
+	ret.rpcServer = rpc.NewServer(rpc.WithServerMiddleware(rpcMiddlewares...), rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	for _, option := range options {
+		option(ret)
+	}
+	return ret
 }
 
 // Service 定义了一个服务接口
@@ -50,7 +104,13 @@ type Service struct {
 	lease     atomic.Pointer[clientv3.LeaseGrantResponse]
 	listen    atomic.Pointer[net.Listener]
 	rpcServer *rpc.Server
-	install   map[string]struct{}
+	install   map[string]*ServerInfo
+
+	servers    map[string]*ServerInfo
+	clients    map[string][]Init
+	lock       sync.RWMutex
+	httpClient map[string]*rpc.Client
+	middleware rpc.HandlerMiddleware
 }
 
 // SetConfig 设置配置
@@ -58,13 +118,24 @@ func (s *Service) SetConfig(cfg *Config) error {
 	if s.config.Equal(cfg) {
 		return nil
 	}
+	ctx := context.Background()
 	if cfg == nil {
-		err := s.Deregister(context.Background())
+		err := s.Deregister(ctx)
 		if err != nil {
 			hlog.Error("deregister service failed: %s", err)
 		}
 		s.config = nil
 		return nil
+	}
+
+	for _, item := range cfg.Server.List {
+		if install, ok := s.install[item]; ok {
+			_, _ = s.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+				install.init.Init(ctx)
+				return nil, nil
+			})(ctx, nil)
+			s.rpcServer.Register(install.id, install.name, install.methods...)
+		}
 	}
 
 	s.config = cfg
@@ -73,12 +144,12 @@ func (s *Service) SetConfig(cfg *Config) error {
 		return err
 	}
 
-	err = s.Register(context.Background())
+	err = s.Register(ctx)
 	if err != nil {
 		return err
 	}
 	go func() {
-		err := s.Discovery(context.Background())
+		err := s.Discovery(ctx)
 		if err != nil {
 			hlog.Error("discovery service failed: %s", err)
 		}
@@ -122,10 +193,22 @@ func (s *Service) Register(ctx context.Context) error {
 		return err
 	}
 
+	config := s.config.Server.Http
+	var path string
+	if config != nil && config.Path != nil {
+		path = *config.Path
+	}
+	path = "/" + strings.Trim(path, "/") + "/"
+
 	for key, _ := range s.install {
 		// 构造服务注册信息
-		name := ProtocolName + s.GetServerAddr() + "/" + key
-		value, err := json.Marshal(&RegisterInfo{})
+		info := &RegisterInfo{
+			Name: key,
+			Addr: s.GetServerAddr(),
+			Path: path,
+		}
+		name := ProtocolName + info.Addr + "/" + key
+		value, err := json.Marshal(info)
 		if err != nil {
 			return err
 		}
@@ -204,7 +287,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 
 	// 解析服务信息
 	for _, v := range resp.Kvs {
-		err := s.addClient(v, true)
+		err := s.addHttpClient(v)
 		if err != nil {
 			hlog.Error("add client failed: %s", err)
 		}
@@ -215,7 +298,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 	for w := range watchCh {
 		for _, ev := range w.Events {
 			if ev.Type == clientv3.EventTypePut {
-				err := s.addClient(ev.Kv, true)
+				err := s.addHttpClient(ev.Kv)
 				if err != nil {
 					hlog.Error("add client failed: %s", err)
 				}
@@ -234,11 +317,10 @@ func (s *Service) startRpcServer() error {
 	}
 
 	config := s.config.Server.Http
-	var path string
+	var path = "/"
 	if config.Path != nil {
-		path = *config.Path
+		path += strings.Trim(*config.Path, "/") + "/"
 	}
-	path = "/" + strings.Trim(path, "/") + "/"
 
 	mux := http.NewServeMux()
 	mux.Handle(path, rpc.NewHttpServer(path, s.rpcServer))
@@ -253,14 +335,17 @@ func (s *Service) startRpcServer() error {
 		return err
 	}
 	s.listen.Store(&listen)
-	hlog.Info("start http server: %s", listen.Addr())
+	hlog.Info("start https rpc server: %s", listen.Addr())
 
 	go func() {
 		if config.Crt != nil && config.Key != nil && *config.Crt != "" && *config.Key != "" {
 			// 开启https服务
-			err := http.ServeTLS(listen, mux, *config.Crt, *config.Key)
+			server := &http.Server{
+				Handler: mux,
+			}
+			err := server.ServeTLS(listen, *config.Crt, *config.Key)
 			if err != nil {
-				hlog.Error("start https server failed: %s", err)
+				hlog.Error("start https rpc server failed: %s", err)
 				return
 			}
 		} else {
@@ -284,9 +369,9 @@ func (s *Service) startRpcServer() error {
 					Certificates: []tls.Certificate{cert},
 				},
 			}
-			err = server.Serve(listen)
+			err = server.ServeTLS(listen, "", "")
 			if err != nil {
-				hlog.Error("start http server failed: %s", err)
+				hlog.Error("start https rpc server failed: %s", err)
 				return
 			}
 
@@ -353,61 +438,91 @@ func (s *Service) GetServerAddr() string {
 	return addrs[0].(*net.IPNet).IP.String() + ":" + port
 }
 
-// addClient 增加客户端
-func (s *Service) addClient(v *mvccpb.KeyValue, isHttp bool) error {
-	parse, err := url.Parse(string(v.Key))
-	if err != nil {
-		return erro.Wrap(err)
-	}
-
-	if parse.Path == "" {
-		return nil
-	}
-
-	if _, ok := s.install[parse.Path]; ok {
-		return nil
-	}
-
+// addHttpClient 增加客户端
+func (s *Service) addHttpClient(v *mvccpb.KeyValue) error {
 	info := &RegisterInfo{}
-	err = json.Unmarshal(v.Value, info)
+	err := json.Unmarshal(v.Value, info)
 	if err != nil {
 		return erro.Wrap(err)
 	}
 
+	install, ok := s.install[info.Name]
+	if !ok {
+		return nil
+	}
+
+	var connect *rpc.Client
+	s.lock.Lock()
+	connect, ok = s.httpClient[info.Addr]
+	if !ok {
+		connect = rpc.NewClient(
+			rpc.NewHttpClient("https://"+info.Addr+info.Path).Request,
+			rpc.WithClientEncoder(rpc.NewHBufEncode()),
+			rpc.WithClientDecode(rpc.NewHBufDecode()),
+		)
+		s.httpClient[info.Addr] = connect
+	}
+	s.lock.Unlock()
+	client := install.client(connect)
+
+	s.lock.Lock()
+	s.clients[info.Name] = append(s.clients[info.Name], client)
+	s.lock.Unlock()
 	return nil
 }
 
-//
-//type RcpClient interface {
-//	getClient() rpc.Init
-//}
-//
-//type localRpcClient struct {
-//	client rpc.Init
-//}
-//
-//func newLocalRpcClient(router rpc.ServerRouter) RcpClient {
-//	return &localRpcClient{
-//		client: router.GetServer(),
-//	}
-//}
-//
-//func (c *localRpcClient) getClient() rpc.Init {
-//	return c.client
-//}
-//
-//type httpRpcClient struct {
-//	client rpc.Init
-//}
-//
-//func newHttpRpcClient(url string, call CallClient) RcpClient {
-//	client := rpc.NewClientHttp(url)
-//	jsonClient := rpc.NewJsonClient(client)
-//	return &httpRpcClient{
-//		client: call(jsonClient),
-//	}
-//}
-//
-//func (c *httpRpcClient) getClient() rpc.Init {
-//	return c.client
-//}
+func (s *Service) NewMiddleware() rpc.HandlerMiddleware {
+	return func(next rpc.Handler) rpc.Handler {
+		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			return next(WithContext(ctx, s), req)
+		}
+	}
+}
+
+func (s *Service) GetClient(name string) Init {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	clients, ok := s.clients[name]
+	length := len(clients)
+	if !ok || length == 0 {
+		return nil
+	}
+
+	return clients[rand2.Int32N(int32(length))]
+}
+
+type Init interface {
+	Init(ctx context.Context)
+}
+
+// 服务描述
+type ServerInfo struct {
+	s       *Service
+	methods []rpc.Method
+	name    string
+	id      int32
+	client  func(c *rpc.Client) Init
+	init    Init
+}
+
+func (r *ServerInfo) Register(id int32, name string, methods ...rpc.Method) {
+	r.id = id
+	r.name = name
+	r.methods = methods
+	r.s.install[name] = r
+}
+
+func Register[T Init](s *Service, init T, server func(r rpc.ServerRegister, s T), client func(c *rpc.Client) T) {
+	server(&ServerInfo{s: s, init: init, client: func(c *rpc.Client) Init {
+		return client(c)
+	}}, init)
+}
+
+func GetClient(ctx context.Context, name string) Init {
+	s := FromContext(ctx)
+	if s == nil {
+		return nil
+	}
+	return s.GetClient(name)
+}

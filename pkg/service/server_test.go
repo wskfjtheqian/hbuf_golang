@@ -1,7 +1,8 @@
-package nats
+package service_test
 
 import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/service"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
 	"testing"
 )
@@ -19,7 +20,7 @@ func TestService_RegisterAndDeregister(t *testing.T) {
 	}
 
 	// 创建一个新的Service实例
-	service := NewService(e)
+	service := serviceNewService(e)
 	service.install = map[string]struct{}{
 		"user":  {},
 		"order": {},
@@ -57,7 +58,7 @@ func TestService_Deregister_NoRegistration(t *testing.T) {
 	}
 
 	// 创建一个新的Service实例
-	service := NewService(e)
+	service := service.NewService(e)
 	service.install = map[string]struct{}{
 		"user":  {},
 		"order": {},
@@ -97,7 +98,7 @@ func TestService_Discovery(t *testing.T) {
 	//		Addr:      "127.0.0.1",
 	//		Port:      8080,
 	//		TTL:       60,
-	//		Register:  true,
+	//		RegisterEtcd:  true,
 	//		LeaseTime: 60,
 	//	},
 	//}
@@ -106,7 +107,7 @@ func TestService_Discovery(t *testing.T) {
 	//assert.NoError(t, err)
 	//
 	//// 注册服务以便进行发现
-	//err = service.Register(context.Background())
+	//err = service.RegisterEtcd(context.Background())
 	//assert.NoError(t, err, "注册服务失败")
 	//
 	//// 启动服务发现
@@ -126,14 +127,14 @@ func TestService_Register_EtcdClientError(t *testing.T) {
 	//
 	//cfg := &Config{
 	//	Server: &ServerConfig{
-	//		Register: true,
+	//		RegisterEtcd: true,
 	//	},
 	//}
 	//
 	//err := service.SetConfig(cfg)
 	//assert.NoError(t, err)
 	//
-	//err = service.Register(context.Background())
+	//err = service.RegisterEtcd(context.Background())
 	//assert.Error(t, err, "注册服务时应返回 Etcd 客户端错误")
 	//assert.Equal(t, "etcd client error", err.Error())
 }
@@ -166,7 +167,7 @@ func TestService_Register_LeaseError(t *testing.T) {
 	//
 	//cfg := &Config{
 	//	Server: &ServerConfig{
-	//		Register:  true,
+	//		RegisterEtcd:  true,
 	//		LeaseTime: 60,
 	//	},
 	//}
@@ -175,7 +176,7 @@ func TestService_Register_LeaseError(t *testing.T) {
 	//assert.NoError(t, err)
 	//
 	//// 这里我们模拟租约申请失败
-	//err = service.Register(context.Background())
+	//err = service.RegisterEtcd(context.Background())
 	//assert.Error(t, err, "注册服务时应返回租约申请错误")
 }
 

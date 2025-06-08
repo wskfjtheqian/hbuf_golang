@@ -2,18 +2,16 @@ module github.com/wskfjtheqian/hbuf_golang
 
 go 1.22
 
-toolchain go1.22.10
-
 require (
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gobwas/ws v1.4.0
 	github.com/google/uuid v1.6.0
-	github.com/nats-io/nats.go v1.38.0
+	github.com/nats-io/nats.go v1.37.0
 	github.com/shopspring/decimal v1.4.0
 	go.etcd.io/etcd/api/v3 v3.5.17
 	go.etcd.io/etcd/client/v3 v3.5.17
 	golang.org/x/net v0.33.0
-	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/protobuf v1.33.0
 )
 
@@ -36,6 +34,7 @@ require (
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
+	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/grpc v1.59.0 // indirect

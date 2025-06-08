@@ -8,7 +8,6 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
 	"net"
 	"net/http"
-	"reflect"
 	"strconv"
 	"time"
 )
@@ -34,6 +33,13 @@ func (a *Http) Init() {
 	a.isInit = true
 	a.init <- true
 }
+func (a *Http) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	a.mux.HandleFunc(pattern, handler)
+}
+
+func (a *Http) Handle(pattern string, handler http.Handler) {
+	a.mux.Handle(pattern, handler)
+}
 
 // SetConfig 设置配置
 func (a *Http) SetConfig(conf *Config) error {
@@ -58,7 +64,7 @@ func (a *Http) SetConfig(conf *Config) error {
 	}
 
 	a.http = &http.Server{
-		Handler: &a.mux,
+		Handler: a,
 	}
 
 	go func() {
@@ -90,6 +96,24 @@ func (a *Http) health(writer http.ResponseWriter, request *http.Request) {
 	writer.WriteHeader(http.StatusOK)
 }
 
+type ResponseWriter struct {
+	writer http.ResponseWriter
+	status int
+}
+
+func (r *ResponseWriter) Header() http.Header {
+	return r.writer.Header()
+}
+
+func (r *ResponseWriter) Write(bytes []byte) (int, error) {
+	return r.writer.Write(bytes)
+}
+
+func (r *ResponseWriter) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.writer.WriteHeader(statusCode)
+}
+
 func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	//允许跨域
 	writer.Header().Add("Access-Control-Allow-Origin", "*")
@@ -102,7 +126,11 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	old := time.Now().UnixMilli()
-	a.mux.ServeHTTP(writer, request)
+	w := &ResponseWriter{
+		writer: writer,
+		status: http.StatusOK,
+	}
+	a.mux.ServeHTTP(w, request)
 	old = time.Now().UnixMilli() - old
 	t := "[" + strconv.FormatFloat(float64(old)/1000, 'g', 3, 64) + "s]"
 	if 200 > old {
@@ -111,8 +139,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		t = utl.Red(t)
 	}
 
+	//获得响应状态码
 	ip, _ := ip.GetHttpIP(request)
-	value := reflect.ValueOf(writer).Elem()
-	status := value.FieldByName("status")
-	_ = hlog.Output(1, LogHTTP, fmt.Sprintln(t, ip, request.Method, request.Proto, status.Int(), utl.Green(request.URL.String())))
+	_ = hlog.Output(1, LogHTTP, fmt.Sprintln(t, ip, request.Method, request.Proto, w.status, utl.Green(request.URL.String())))
 }

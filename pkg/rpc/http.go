@@ -180,7 +180,9 @@ type HttpServerOptions func(*HttpServer)
 
 // NewHttpServer 创建一个新的 HttpServer。
 func NewHttpServer(pathPrefix string, server *Server, options ...HttpServerOptions) *HttpServer {
-	pathPrefix = "/" + strings.Trim(pathPrefix, "/") + "/"
+	if pathPrefix != "/" {
+		pathPrefix = "/" + strings.Trim(pathPrefix, "/") + "/"
+	}
 	ret := &HttpServer{
 		pathPrefix: pathPrefix,
 		server:     server,
