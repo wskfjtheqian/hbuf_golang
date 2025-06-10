@@ -57,7 +57,7 @@ func NewHttpClient(base string, options ...HttpClientOption) *HttpClient {
 
 	transport := &http.Transport{
 		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-		MaxIdleConns:        100, // 限制最大空闲连接数
+		MaxIdleConns:        50, // 限制最大空闲连接数
 		IdleConnTimeout:     30 * time.Second,
 		MaxIdleConnsPerHost: 100, // 限制每个主机的最大连接数
 	}

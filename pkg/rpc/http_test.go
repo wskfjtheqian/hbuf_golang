@@ -21,7 +21,9 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -566,4 +568,177 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 			}
 		}
 	})
+}
+
+type ProtoServiceConcurrency struct {
+	UnimplementedProtoServiceServer
+	count atomic.Int32
+}
+
+func (p *ProtoServiceConcurrency) ProtoMethod(ctx context.Context, req *ProtoRequest) (*ProtoResponse, error) {
+	p.count.Add(1)
+	return &ProtoResponse{Name: req.Name, Age: req.Age}, nil
+}
+
+type HbufServiceConcurrency struct {
+	count atomic.Int32
+}
+
+func (h *HbufServiceConcurrency) Init(ctx context.Context) {
+
+}
+
+func (h *HbufServiceConcurrency) HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error) {
+	h.count.Add(1)
+	return &HbufResponse{Name: req.Name, Age: req.Age}, nil
+}
+
+// 测试并发性能
+func Test_Concurrency(t *testing.T) {
+	var now atomic.Int64
+	now.Store(time.Now().UnixMilli())
+	go func() {
+		for {
+			temp := <-time.After(time.Second * 1)
+			now.Store(temp.UnixMilli())
+		}
+	}()
+
+	//grpcListener, err := net.Listen("tcp", ":8080")
+	//if err != nil {
+	//	t.Fatal(err)
+	//	return
+	//}
+	//
+	//grpcService := &ProtoServiceConcurrency{}
+	//grpcServer := grpc.NewServer()
+	//RegisterProtoServiceServer(grpcServer, grpcService)
+	//go grpcServer.Serve(grpcListener)
+	//
+	//grpcClient, err := grpc.NewClient("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	//if err != nil {
+	//	t.Fatal(err)
+	//	return
+	//}
+	//grpcTestClient := NewProtoServiceClient(grpcClient)
+	//
+	//_, err = grpcTestClient.ProtoMethod(context.Background(), &ProtoRequest{Name: "test " + strconv.Itoa(-1), Age: 18})
+	//if err != nil {
+	//	t.Error(err)
+	//	return
+	//}
+	//
+	//timeLength := 10
+	//end := now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
+	//
+	//var wg sync.WaitGroup
+	//for i := 0; i < 1000; i++ {
+	//	wg.Add(1)
+	//	go func() {
+	//		defer wg.Done()
+	//		for end > now.Load() {
+	//			_, err := grpcTestClient.ProtoMethod(context.Background(), &ProtoRequest{Name: "test " + strconv.Itoa(i), Age: 18})
+	//			if err != nil {
+	//				t.Error(err)
+	//				return
+	//			}
+	//		}
+	//	}()
+	//}
+	//wg.Wait()
+	//t.Log("grpc concurrency count: per second ", grpcService.count.Load()/int32(timeLength))
+	//
+	//hrpcService := &HbufServiceConcurrency{}
+	//hRpcServer := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	//RegisterHbufService(hRpcServer, hrpcService)
+	//mux := http.NewServeMux()
+	//mux.Handle("/rpc/", rpc.NewHttpServer("/rpc/", hRpcServer))
+	//go http.ListenAndServeTLS(":8081", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux)
+	//
+	//httpClient := rpc.NewHttpClient("https://localhost:8081/rpc")
+	//rpcClient := rpc.NewClient(httpClient.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+	//rpcTestClient := NewHbufServiceClient(rpcClient)
+	//
+	//_, err = rpcTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test " + strconv.Itoa(-1)})
+	//if err != nil {
+	//	t.Error(err)
+	//	return
+	//}
+	//
+	//timeLength = 10
+	//end = now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
+	//
+	//var wg1 sync.WaitGroup
+	//for i := 0; i < 1000; i++ {
+	//	wg1.Add(1)
+	//	go func() {
+	//		defer wg1.Done()
+	//		for end > now.Load() {
+	//			_, err := rpcTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test " + strconv.Itoa(i)})
+	//			if err != nil {
+	//				t.Error(err)
+	//				return
+	//			}
+	//		}
+	//	}()
+	//}
+	//wg1.Wait()
+	//t.Log("HRPC_HTTP concurrency count: per second ", hrpcService.count.Load()/int32(timeLength))
+
+	func() {
+		// 测试 HRPC_WS 并发性能
+		wsService := &HbufServiceConcurrency{}
+		rpcServer3 := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+		RegisterHbufService(rpcServer3, wsService)
+
+		wsServer := rpc.NewWebSocketServer(rpcServer3.Response)
+
+		mux := http.NewServeMux()
+		mux.Handle("/socket", wsServer)
+		go http.ListenAndServeTLS(":8082", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux)
+
+		timeLength := 10
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				wsClient := rpc.NewWebSocketClient("wss://localhost:8082/socket", nil)
+				wsRpcClient := rpc.NewClient(wsClient.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+				wsTestClient := NewHbufServiceClient(wsRpcClient)
+				err := wsClient.Connect(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				_, err = wsTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test " + strconv.Itoa(-1)})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				end := now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
+
+				var wg2 sync.WaitGroup
+				for i := 0; i < 20; i++ {
+					wg2.Add(1)
+					go func() {
+						defer wg2.Done()
+						for end > now.Load() {
+							_, err := wsTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test " + strconv.Itoa(i)})
+							if err != nil {
+								t.Error(err)
+								return
+							}
+						}
+					}()
+				}
+				wg2.Wait()
+			}()
+			wg.Wait()
+		}
+
+		t.Log("HRPC_WS concurrency count: per second ", wsService.count.Load()/int32(timeLength))
+	}()
+
 }

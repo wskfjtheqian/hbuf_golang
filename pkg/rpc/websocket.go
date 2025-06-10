@@ -291,9 +291,9 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 		data.Id = s.id.Add(1)
 
 		response := make(chan *WebSocketData, 1)
-		s.lock.RLock()
+		s.lock.Lock()
 		s.responseMap[data.Id] = response
-		s.lock.RUnlock()
+		s.lock.Unlock()
 
 		defer func() {
 			s.lock.Lock()
