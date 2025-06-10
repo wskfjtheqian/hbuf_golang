@@ -65,3 +65,29 @@ func (l *EtcdLock) Unlock() error {
 	}
 	return nil
 }
+
+// DoubleLock 双重锁
+func DoubleLock(ctx context.Context, pfx string, fn func(ctx context.Context) (bool, error), fn2 func(ctx context.Context) error) error {
+	b, err := fn(ctx)
+	if err != nil {
+		return err
+	}
+	if b {
+		return nil
+	}
+	lock, err := Lock(ctx, pfx)
+	if err != nil {
+		return err
+	}
+	defer lock.Unlock()
+
+	b, err = fn(ctx)
+	if err != nil {
+		return err
+	}
+	if b {
+		return nil
+	}
+
+	return fn2(ctx)
+}
