@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package hbuf.test;
+option go_package = ".;rpc_test";
+
+
+message ProtoRequest {
+    string name = 1;
+    int32 age = 2;
+}
+
+message ProtoResponse {
+  string name = 1;
+  int32 age = 2;
+}
+
+service ProtoService {
+    rpc ProtoMethod(ProtoRequest) returns (ProtoResponse) {}
+}

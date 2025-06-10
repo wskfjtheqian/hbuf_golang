@@ -1,0 +1,18 @@
+package go = "rpc"
+
+data HbufRequest {
+    string name = 1
+
+    int32 age = 2
+}
+
+data HbufResponse {
+    string name = 1
+
+    int32 age = 2
+}
+
+server HbufService {
+    HbufResponse HbufMethod(HbufRequest req) = 1
+}
+

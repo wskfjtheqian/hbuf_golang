@@ -1,8 +1,9 @@
-package rpc
+package rpc_test
 
 import (
 	"context"
 	"encoding/base64"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"io"
 	"net/http"
 	"sync"
@@ -12,24 +13,24 @@ import (
 
 // 测试 TestWebsocket_RPC 方法
 func TestWebsocket_RPC(t *testing.T) {
-	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewWebSocketServer(rpcServer.Response)
+	server := rpc.NewWebSocketServer(rpcServer.Response)
 
 	http.Handle("/socket", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewWebSocketClient("ws://localhost:8080/socket", nil)
+	client := rpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
 
 	err := client.Connect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
-	testClient := NewTestRpcClient(rpcClient)
+	rpcClient := rpc.NewClient(client.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+	testClient := NewHbufServiceClient(rpcClient)
 	//<-time.After(time.Second * 1)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,10 +41,10 @@ func TestWebsocket_RPC(t *testing.T) {
 
 // 测试多个 RPC 同时调用
 func TestWebsocket_MultipleRPC(t *testing.T) {
-	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewWebSocketServer(rpcServer.Response)
+	server := rpc.NewWebSocketServer(rpcServer.Response)
 
 	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
@@ -54,16 +55,16 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 		go func() {
 			t.Run("TestWebsocket_RPC", func(t *testing.T) {
 				defer waitGroup.Done()
-				client := NewWebSocketClient("ws://localhost:8080/socket", nil)
+				client := rpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
 
 				err := client.Connect(context.Background())
 				if err != nil {
 					t.Fatal(err)
 				}
-				rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
-				testClient := NewTestRpcClient(rpcClient)
+				rpcClient := rpc.NewClient(client.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+				testClient := NewHbufServiceClient(rpcClient)
 
-				resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+				resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -78,23 +79,23 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 
 // 测试监听 WebSocket 连接 RPC 服务
 func TestWebsocket_Listen(t *testing.T) {
-	rpcServer := NewServer()
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer()
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewWebSocketServer(rpcServer.Response)
+	server := rpc.NewWebSocketServer(rpcServer.Response)
 	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
 
-	client := NewWebSocketClient("ws://localhost:8080/socket", nil)
+	client := rpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
 
 	err := client.Connect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpcClient := NewClient(client.Request)
-	testClient := NewTestRpcClient(rpcClient)
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
 
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"}) //调用 RPC 服务
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"}) //调用 RPC 服务
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,10 +107,10 @@ func TestWebsocket_Listen(t *testing.T) {
 
 // 测试 TestWebsocket 加密通信
 func TestWebsocket_Encrypt(t *testing.T) {
-	rpcServer := NewServer()
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer()
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	requestMiddleware := func(next Request) Request {
+	requestMiddleware := func(next rpc.Request) rpc.Request {
 		return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 			body, err := next(ctx, path, notification, func(writer io.Writer) error {
 				encoder := base64.NewEncoder(base64.StdEncoding, writer)
@@ -126,7 +127,7 @@ func TestWebsocket_Encrypt(t *testing.T) {
 		}
 	}
 
-	responseMiddleware := func(next Response) Response {
+	responseMiddleware := func(next rpc.Response) rpc.Response {
 		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
@@ -137,26 +138,26 @@ func TestWebsocket_Encrypt(t *testing.T) {
 		}
 	}
 
-	server := NewWebSocketServer(rpcServer.Response,
-		WithWebSocketServerRequestMiddleware(requestMiddleware),
-		WithWebSocketServerResponseMiddleware(responseMiddleware),
+	server := rpc.NewWebSocketServer(rpcServer.Response,
+		rpc.WithWebSocketServerRequestMiddleware(requestMiddleware),
+		rpc.WithWebSocketServerResponseMiddleware(responseMiddleware),
 	)
 	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
 
-	client := NewWebSocketClient("ws://localhost:8080/socket", nil,
-		WithWebSocketClientRequestMiddleware(requestMiddleware),
-		WithWebSocketClientResponseMiddleware(responseMiddleware),
+	client := rpc.NewWebSocketClient("ws://localhost:8080/socket", nil,
+		rpc.WithWebSocketClientRequestMiddleware(requestMiddleware),
+		rpc.WithWebSocketClientResponseMiddleware(responseMiddleware),
 	)
 
 	err := client.Connect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpcClient := NewClient(client.Request)
-	testClient := NewTestRpcClient(rpcClient)
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
 
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"}) //调用 RPC 服务
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"}) //调用 RPC 服务
 	if err != nil {
 		t.Fatal(err)
 	}

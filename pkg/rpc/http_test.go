@@ -1,4 +1,4 @@
-package rpc
+package rpc_test
 
 import (
 	"bytes"
@@ -10,31 +10,55 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"encoding/json"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"golang.org/x/net/http2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
 )
 
+type TestHbufService struct {
+}
+
+func (t TestHbufService) Init(ctx context.Context) {
+}
+
+func (t TestHbufService) HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error) {
+	return &HbufResponse{Name: req.Name, Age: req.Age}, nil
+}
+
+type TestProtoServiceServer struct {
+	UnimplementedProtoServiceServer
+}
+
+func (t TestProtoServiceServer) ProtoMethod(ctx context.Context, request *ProtoRequest) (*ProtoResponse, error) {
+	return &ProtoResponse{Name: request.Name, Age: request.Age}, nil
+}
+
 // 测试 HttpService 的 Response 方法
 func TestHttpService_Invoke(t *testing.T) {
-	rpcServer := NewServer()
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer()
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := rpc.NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewHttpClient("http://localhost:8080/rpc")
+	client := rpc.NewHttpClient("http://localhost:8080/rpc")
 
-	rpcClient := NewClient(client.Request)
-	testClient := NewTestRpcClient(rpcClient)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,19 +69,19 @@ func TestHttpService_Invoke(t *testing.T) {
 
 // 测试 HttpService 的 Response 方法
 func TestHttpService_InvokeHBuf(t *testing.T) {
-	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := rpc.NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewHttpClient("http://localhost:8080/rpc")
+	client := rpc.NewHttpClient("http://localhost:8080/rpc")
 
-	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
-	testClient := NewTestRpcClient(rpcClient)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	rpcClient := rpc.NewClient(client.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+	testClient := NewHbufServiceClient(rpcClient)
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,10 +92,10 @@ func TestHttpService_InvokeHBuf(t *testing.T) {
 
 // 测试 HttpService 加密通信
 func TestHttpService_Encoder(t *testing.T) {
-	rpcServer := NewServer(WithServerEncoder(NewHBufEncode()), WithServerDecode(NewHBufDecode()))
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewHttpServer("/rpc/", rpcServer, WithResponseMiddleware(func(next Response) Response {
+	server := rpc.NewHttpServer("/rpc/", rpcServer, rpc.WithResponseMiddleware(func(next rpc.Response) rpc.Response {
 		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
@@ -85,7 +109,7 @@ func TestHttpService_Encoder(t *testing.T) {
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewHttpClient("http://localhost:8080/rpc", WithRequestMiddleware(func(next Request) Request {
+	client := rpc.NewHttpClient("http://localhost:8080/rpc", rpc.WithRequestMiddleware(func(next rpc.Request) rpc.Request {
 		return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
 			body, err := next(ctx, path, notification, func(writer io.Writer) error {
 				encoder := base64.NewEncoder(base64.StdEncoding, writer)
@@ -102,9 +126,9 @@ func TestHttpService_Encoder(t *testing.T) {
 		}
 	}))
 
-	rpcClient := NewClient(client.Request, WithClientEncoder(NewHBufEncode()), WithClientDecode(NewHBufDecode()))
-	testClient := NewTestRpcClient(rpcClient)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	rpcClient := rpc.NewClient(client.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+	testClient := NewHbufServiceClient(rpcClient)
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,23 +148,23 @@ func TestBase64(t *testing.T) {
 
 // 测试 HttpService 的 Middleware 方法
 func TestHttpService_Middleware(t *testing.T) {
-	rpcServer := NewServer(WithServerMiddleware(func(next Handler) Handler {
+	rpcServer := rpc.NewServer(rpc.WithServerMiddleware(func(next rpc.Handler) rpc.Handler {
 		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 			return next(ctx, req)
 		}
 	}))
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := rpc.NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := NewHttpClient("http://localhost:8080/rpc")
+	client := rpc.NewHttpClient("http://localhost:8080/rpc")
 
-	rpcClient := NewClient(client.Request)
-	testClient := NewTestRpcClient(rpcClient)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,10 +174,10 @@ func TestHttpService_Middleware(t *testing.T) {
 }
 
 func TestHttpService_Http2(t *testing.T) {
-	rpcServer := NewServer()
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer()
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := rpc.NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go func() {
@@ -168,17 +192,17 @@ func TestHttpService_Http2(t *testing.T) {
 		}
 	}()
 
-	client := NewHttpClient("https://localhost:9080/rpc")
+	client := rpc.NewHttpClient("https://localhost:9080/rpc")
 
-	rpcClient := NewClient(client.Request)
-	testClient := NewTestRpcClient(rpcClient)
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
 	<-time.After(time.Second * 5)
 
 	await := sync.WaitGroup{}
 	for i := 0; i < 2; i++ {
 		await.Add(1)
 		go func() {
-			resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+			resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 			if err != nil {
 				t.Error(err)
 				return
@@ -236,10 +260,10 @@ func TestHttpService_Middleware2(t *testing.T) {
 		return cert, nil
 	}
 
-	rpcServer := NewServer()
-	RegisterRpcServer(rpcServer, &TestRpcServer{})
+	rpcServer := rpc.NewServer()
+	RegisterHbufService(rpcServer, &TestHbufService{})
 
-	server := NewHttpServer("/rpc/", rpcServer)
+	server := rpc.NewHttpServer("/rpc/", rpcServer)
 
 	http.Handle("/rpc/", server)
 	go func() {
@@ -271,15 +295,250 @@ func TestHttpService_Middleware2(t *testing.T) {
 		}
 	}()
 
-	client := NewHttpClient("https://localhost:9080/rpc")
+	client := rpc.NewHttpClient("https://localhost:9080/rpc")
 
-	rpcClient := NewClient(client.Request)
-	testClient := NewTestRpcClient(rpcClient)
-	resp, err := testClient.GetName(context.Background(), &GetNameRequest{Name: "test"})
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
+	resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if resp.Name != "test" {
 		t.Fatal("test fail")
 	}
+}
+
+// 测试 HttpService 的性能
+func Benchmark_HRPC_HTTP(b *testing.B) {
+	rpcServer := rpc.NewServer()
+	RegisterHbufService(rpcServer, &TestHbufService{})
+
+	server := rpc.NewHttpServer("/rpc/", rpcServer)
+
+	mux := http.NewServeMux()
+	mux.Handle("/rpc/", server)
+	go http.ListenAndServe(":8080", mux)
+
+	client := rpc.NewHttpClient("http://localhost:8080/rpc")
+	rpcClient := rpc.NewClient(client.Request)
+	testClient := NewHbufServiceClient(rpcClient)
+
+	b.Run("HRPC_HTTP", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	rpcServer1 := rpc.NewServer()
+	RegisterHbufService(rpcServer1, &TestHbufService{})
+
+	server1 := rpc.NewHttpServer("/rpc/", rpcServer1)
+
+	mux1 := http.NewServeMux()
+	mux1.Handle("/rpc/", server1)
+	go http.ListenAndServeTLS(":8081", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux1)
+
+	client1 := rpc.NewHttpClient("https://localhost:8081/rpc")
+	rpcClient1 := rpc.NewClient(client1.Request)
+	testClient1 := NewHbufServiceClient(rpcClient1)
+
+	b.Run("HRPC_HTTPS", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient1.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	rpcServer2 := rpc.NewServer()
+	RegisterHbufService(rpcServer2, &TestHbufService{})
+
+	server2 := rpc.NewWebSocketServer(rpcServer2.Response)
+
+	mux2 := http.NewServeMux()
+	mux2.Handle("/socket", server2)
+	go http.ListenAndServe(":8084", mux2)
+
+	client2 := rpc.NewWebSocketClient("ws://localhost:8084/socket", nil)
+
+	err := client2.Connect(context.Background())
+	if err != nil {
+		b.Fatal(err)
+	}
+	rpcClient2 := rpc.NewClient(client2.Request)
+	testClient2 := NewHbufServiceClient(rpcClient2)
+	//<-time.After(time.Second * 1)
+	b.Run("HRPC_WS", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient2.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	rpcServer3 := rpc.NewServer()
+	RegisterHbufService(rpcServer3, &TestHbufService{})
+
+	server3 := rpc.NewWebSocketServer(rpcServer3.Response)
+
+	mux3 := http.NewServeMux()
+	mux3.Handle("/socket", server3)
+	go http.ListenAndServeTLS(":8085", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux3)
+
+	client3 := rpc.NewWebSocketClient("wss://localhost:8085/socket", nil)
+
+	err = client3.Connect(context.Background())
+	if err != nil {
+		b.Fatal(err)
+	}
+	rpcClient3 := rpc.NewClient(client3.Request)
+	testClient3 := NewHbufServiceClient(rpcClient3)
+	//<-time.After(time.Second * 1)
+	b.Run("HRPC_WSS", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient3.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	go http.ListenAndServe(":8082", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := &HbufRequest{}
+		err := json.NewDecoder(r.Body).Decode(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp := &HbufResponse{Name: req.Name}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	b.Run("Http", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			req := &HbufRequest{
+				Name: "test",
+			}
+			body := bytes.NewBuffer(nil)
+			err := json.NewEncoder(body).Encode(req)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			post, err := http.Post("http://localhost:8082", "application/json", body)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			defer post.Body.Close()
+			resp := &HbufResponse{Name: req.Name}
+			err = json.NewDecoder(post.Body).Decode(resp)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+				return
+			}
+		}
+	})
+
+	go http.ListenAndServeTLS(":8083", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := &HbufRequest{}
+		err := json.NewDecoder(r.Body).Decode(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp := &HbufResponse{Name: req.Name}
+		json.NewEncoder(w).Encode(resp)
+	}))
+
+	client6 := &http.Client{
+		Transport: &http2.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	b.Run("Https", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			req := &HbufRequest{
+				Name: "test",
+			}
+			body := bytes.NewBuffer(nil)
+			err := json.NewEncoder(body).Encode(req)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			post, err := client6.Post("https://localhost:8083", "application/json", body)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			defer post.Body.Close()
+			resp := &HbufResponse{Name: req.Name}
+			err = json.NewDecoder(post.Body).Decode(resp)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+				return
+			}
+		}
+	})
+
+	listen, err := net.Listen("tcp", ":8086")
+	if err != nil {
+		b.Fatal(err)
+		return
+	}
+	rpcServer4 := grpc.NewServer()
+	RegisterProtoServiceServer(rpcServer4, &TestProtoServiceServer{})
+	go rpcServer4.Serve(listen)
+
+	newClient4, err := grpc.NewClient("localhost:8086", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		b.Fatal(err)
+		return
+	}
+	testClient4 := NewProtoServiceClient(newClient4)
+	_, err = testClient4.ProtoMethod(context.Background(), &ProtoRequest{Name: "test", Age: 18})
+	if err != nil {
+		b.Fatal(err)
+		return
+	}
+	b.Run("GRPC", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient4.ProtoMethod(context.Background(), &ProtoRequest{Name: "test", Age: 18})
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+				return
+			}
+		}
+	})
 }

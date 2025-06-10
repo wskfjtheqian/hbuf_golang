@@ -3,6 +3,7 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/gobwas/ws"
@@ -455,6 +456,9 @@ func NewWebSocketClient(base string, response Response, options ...WebSocketClie
 		isSendPing:   true,
 		pongWait:     60 * time.Second,
 		pingInterval: 30 * time.Second,
+		dialer: &ws.Dialer{
+			TLSConfig: &tls.Config{InsecureSkipVerify: true},
+		},
 	}
 	for _, option := range options {
 		option(ret)
@@ -474,11 +478,12 @@ type WebSocketClient struct {
 	isSendPing         bool
 	pongWait           time.Duration
 	pingInterval       time.Duration
+	dialer             *ws.Dialer
 }
 
 // Connect 连接客户端
 func (c *WebSocketClient) Connect(ctx context.Context) error {
-	conn, _, _, err := ws.Dial(ctx, c.base)
+	conn, _, _, err := c.dialer.Dial(ctx, c.base)
 	if err != nil {
 		return err
 	}
