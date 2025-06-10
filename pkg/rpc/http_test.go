@@ -310,6 +310,31 @@ func TestHttpService_Middleware2(t *testing.T) {
 
 // 测试 HttpService 的性能
 func Benchmark_HRPC_HTTP(b *testing.B) {
+	rpcServer8 := rpc.NewServer(rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer8, &TestHbufService{})
+
+	server8 := rpc.NewHttpServer("/rpc/", rpcServer8)
+
+	mux8 := http.NewServeMux()
+	mux8.Handle("/rpc/", server8)
+	go http.ListenAndServe(":8180", mux8)
+
+	client8 := rpc.NewHttpClient("http://localhost:8180/rpc")
+	rpcClient8 := rpc.NewClient(client8.Request, rpc.WithClientEncoder(rpc.NewHBufEncode()), rpc.WithClientDecode(rpc.NewHBufDecode()))
+	testClient8 := NewHbufServiceClient(rpcClient8)
+
+	b.Run("HRPC_HTTP_HBufEncode", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient8.HbufMethod(context.Background(), &HbufRequest{Name: "test"})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
 	rpcServer := rpc.NewServer()
 	RegisterHbufService(rpcServer, &TestHbufService{})
 
