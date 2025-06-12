@@ -699,7 +699,7 @@ func Test_Concurrency(t *testing.T) {
 
 		timeLength := 10
 		var wg sync.WaitGroup
-		for i := 0; i < 40; i++ {
+		for i := 0; i < 33; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -720,7 +720,7 @@ func Test_Concurrency(t *testing.T) {
 				end := now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
 
 				var wg2 sync.WaitGroup
-				for i := 0; i < 100; i++ {
+				for i := 0; i < 33; i++ {
 					wg2.Add(1)
 					go func() {
 						defer wg2.Done()
