@@ -28,7 +28,7 @@ func NewHbufServiceClient(client *rpc.Client) HbufService {
 }
 
 func (r *HbufServiceClient) HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error) {
-	response, err := rpc.ClientCall[*HbufRequest, *HbufResponse](ctx, r.client, 0, "hbuf_service", "hbuf_method", req)
+	response, err := rpc.ClientCall[*HbufResponse](ctx, r.client, 0, "hbuf_service", "hbuf_method", req)
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +37,13 @@ func (r *HbufServiceClient) HbufMethod(ctx context.Context, req *HbufRequest) (*
 
 func RegisterHbufService(r rpc.ServerRegister, server HbufService) {
 	r.Register(0, "hbuf_service",
-		&rpc.MethodImpl[*HbufRequest, *HbufResponse]{
+		&rpc.Method{
 			Name: "hbuf_method",
 			Handler: func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 				return server.HbufMethod(ctx, req.(*HbufRequest))
+			},
+			Decode: func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error) {
+				return decoder(&HbufRequest{})
 			},
 		},
 	)

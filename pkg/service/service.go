@@ -499,14 +499,14 @@ type Init interface {
 // 服务描述
 type ServerInfo struct {
 	s       *Service
-	methods []rpc.Method
+	methods []*rpc.Method
 	name    string
 	id      int32
 	client  func(c *rpc.Client) Init
 	init    Init
 }
 
-func (r *ServerInfo) Register(id int32, name string, methods ...rpc.Method) {
+func (r *ServerInfo) Register(id int32, name string, methods ...*rpc.Method) {
 	r.id = id
 	r.name = name
 	r.methods = methods

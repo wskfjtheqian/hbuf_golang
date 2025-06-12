@@ -132,41 +132,11 @@ func (d *Context) GetMethod() string {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-type Method interface {
-	GetId() uint32
-	GetName() string
-	GetHandler() Handler
-	DecodeRequest(decoder func(v hbuf.Data) error) (hbuf.Data, error)
-}
-
-// MethodImpl 是用于处理RPC请求的接口
-type MethodImpl[T hbuf.Data, E hbuf.Data] struct {
+type Method struct {
 	Id      uint32
 	Name    string
 	Handler Handler
-}
-
-func (m *MethodImpl[T, E]) GetId() uint32 {
-	return m.Id
-}
-
-func (m *MethodImpl[T, E]) GetName() string {
-	return m.Name
-}
-
-func (m *MethodImpl[T, E]) DecodeRequest(decoder func(v hbuf.Data) error) (hbuf.Data, error) {
-	request := reflect.New(reflect.TypeOf(*new(T)).Elem()).Interface()
-
-	err := decoder(request.(hbuf.Data))
-	if err != nil {
-		return nil, nil
-	}
-
-	return request.(hbuf.Data), nil
-}
-
-func (m *MethodImpl[T, E]) GetHandler() Handler {
-	return m.Handler
+	Decode  func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error)
 }
 
 //////////////////////////////////////////////////////
@@ -303,7 +273,7 @@ func WithServerEncoder(encoder Encoder) ServerOption {
 // NewServer 创建一个新的服务器
 func NewServer(options ...ServerOption) *Server {
 	ret := &Server{
-		methods: make(map[string]Method),
+		methods: make(map[string]*Method),
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
 		middleware: func(next Handler) Handler {
@@ -317,26 +287,26 @@ func NewServer(options ...ServerOption) *Server {
 }
 
 type ServerRegister interface {
-	Register(id int32, name string, methods ...Method)
+	Register(id int32, name string, methods ...*Method)
 }
 
 // Server 是用于处理RPC请求的服务器
 type Server struct {
 	lock       sync.RWMutex
-	methods    map[string]Method
+	methods    map[string]*Method
 	decode     Decoder
 	encode     Encoder
 	middleware HandlerMiddleware
 }
 
 // Register 注册方法
-func (r *Server) Register(id int32, name string, methods ...Method) {
+func (r *Server) Register(id int32, name string, methods ...*Method) {
 	name = strings.Trim(name, "/") + "/"
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
 	for _, method := range methods {
-		key := strings.TrimLeft(method.GetName(), "/")
+		key := strings.TrimLeft(method.Name, "/")
 		r.methods[name+key] = method
 	}
 }
@@ -350,13 +320,20 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	if !ok {
 		return newHttpError(http.StatusNotFound)
 	}
-	request, err := method.DecodeRequest(r.decode(reader))
+
+	request, err := method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
+		err := r.decode(reader)(v)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	})
 	if err != nil {
 		return err
 	}
 
-	ctx = WithContext(ctx, method.GetName())
-	response, err := r.middleware(method.GetHandler())(ctx, request)
+	ctx = WithContext(ctx, method.Name)
+	response, err := r.middleware(method.Handler)(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -421,7 +398,7 @@ type Client struct {
 }
 
 // ClientCall 调用远程服务
-func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request T) (E, error) {
+func ClientCall[E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request hbuf.Data) (E, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
 		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
@@ -443,7 +420,7 @@ func ClientCall[T hbuf.Data, E hbuf.Data](ctx context.Context, c *Client, id uin
 		}
 
 		return result.Data, nil
-	})(ctx, any(request).(hbuf.Data))
+	})(ctx, request)
 	if err != nil {
 		var r E
 		return r, err
