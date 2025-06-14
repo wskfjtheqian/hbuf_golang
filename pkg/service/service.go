@@ -20,6 +20,7 @@ import (
 	rand2 "math/rand/v2"
 	"net"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -138,6 +139,25 @@ func (s *Service) SetConfig(cfg *Config) error {
 		}
 	}
 
+	for key, value := range cfg.Client.Server {
+		if install, ok := s.install[key]; ok {
+			for _, item := range value {
+				if "local" == strings.ToLower(item) {
+					s.addLocalClient(install)
+				} else {
+					parse, err := url.Parse(item)
+					if err != nil {
+						return err
+					}
+					err = s.addHttpClient(install, parse)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
 	s.config = cfg
 	err := s.startRpcServer()
 	if err != nil {
@@ -148,12 +168,15 @@ func (s *Service) SetConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	go func() {
-		err := s.Discovery(ctx)
-		if err != nil {
-			hlog.Error("discovery service failed: %s", err)
-		}
-	}()
+
+	if cfg.Client.Find {
+		go func() {
+			err := s.Discovery(ctx)
+			if err != nil {
+				hlog.Error("discovery service failed: %s", err)
+			}
+		}()
+	}
 	return nil
 }
 
@@ -287,7 +310,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 
 	// 解析服务信息
 	for _, v := range resp.Kvs {
-		err := s.addHttpClient(v)
+		err := s.parseRegisterInfo(v)
 		if err != nil {
 			hlog.Error("add client failed: %s", err)
 		}
@@ -298,7 +321,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 	for w := range watchCh {
 		for _, ev := range w.Events {
 			if ev.Type == clientv3.EventTypePut {
-				err := s.addHttpClient(ev.Kv)
+				err := s.parseRegisterInfo(ev.Kv)
 				if err != nil {
 					hlog.Error("add client failed: %s", err)
 				}
@@ -438,8 +461,8 @@ func (s *Service) GetServerAddr() string {
 	return addrs[0].(*net.IPNet).IP.String() + ":" + port
 }
 
-// addHttpClient 增加客户端
-func (s *Service) addHttpClient(v *mvccpb.KeyValue) error {
+// parseRegisterInfo 解析服务注册信息
+func (s *Service) parseRegisterInfo(v *mvccpb.KeyValue) error {
 	info := &RegisterInfo{}
 	err := json.Unmarshal(v.Value, info)
 	if err != nil {
@@ -451,24 +474,43 @@ func (s *Service) addHttpClient(v *mvccpb.KeyValue) error {
 		return nil
 	}
 
-	var connect *rpc.Client
+	addr, err := url.Parse("https://" + info.Addr + "/" + info.Path) //解析服务地址
+	if err != nil {
+		return err
+	}
+	err = s.addHttpClient(install, addr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// addHttpClient 增加HTTP客户端
+func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	s.lock.Lock()
-	connect, ok = s.httpClient[info.Addr]
+	connect, ok := s.httpClient[addr.Host]
 	if !ok {
 		connect = rpc.NewClient(
-			rpc.NewHttpClient("https://"+info.Addr+info.Path).Request,
+			rpc.NewHttpClient(addr.String()).Request,
 			rpc.WithClientEncoder(rpc.NewHBufEncode()),
 			rpc.WithClientDecode(rpc.NewHBufDecode()),
 		)
-		s.httpClient[info.Addr] = connect
+		s.httpClient[addr.Host] = connect
 	}
 	s.lock.Unlock()
 	client := install.client(connect)
 
 	s.lock.Lock()
-	s.clients[info.Name] = append(s.clients[info.Name], client)
+	s.clients[install.name] = append(s.clients[install.name], client)
 	s.lock.Unlock()
 	return nil
+}
+
+// addLocalClient 增加本地客户端
+func (s *Service) addLocalClient(install *ServerInfo) {
+	s.lock.Lock()
+	s.clients[install.name] = append(s.clients[install.name], install.init)
+	s.lock.Unlock()
 }
 
 func (s *Service) NewMiddleware() rpc.HandlerMiddleware {
@@ -479,6 +521,7 @@ func (s *Service) NewMiddleware() rpc.HandlerMiddleware {
 	}
 }
 
+// GetClient 获取客户端
 func (s *Service) GetClient(name string) Init {
 	s.lock.Lock()
 	defer s.lock.Unlock()
