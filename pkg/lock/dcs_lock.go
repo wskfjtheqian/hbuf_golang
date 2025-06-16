@@ -1,8 +1,9 @@
-package etcd
+package lock
 
 import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
@@ -12,13 +13,13 @@ type Mutex struct {
 	ctx   context.Context
 }
 
-// Lock 加锁
-func Lock(ctx context.Context, pfx string) (*Mutex, error) {
-	etcd, ok := FromContext(ctx)
+// DcsLock 分布式控制系统加锁
+func DcsLock(ctx context.Context, pfx string) (*Mutex, error) {
+	e, ok := etcd.FromContext(ctx)
 	if !ok {
 		return nil, erro.NewError("etcd not found in context")
 	}
-	client, err := etcd.GetClient()
+	client, err := e.GetClient()
 	if err != nil {
 		return nil, err
 	}
@@ -37,13 +38,13 @@ func Lock(ctx context.Context, pfx string) (*Mutex, error) {
 	return l, nil
 }
 
-// TryLock 尝试加锁
-func TryLock(ctx context.Context, pfx string) (*Mutex, error) {
-	etcd, ok := FromContext(ctx)
+// TryDcsLock 分布式控制系统尝试加锁
+func TryDcsLock(ctx context.Context, pfx string) (*Mutex, error) {
+	e, ok := etcd.FromContext(ctx)
 	if !ok {
 		return nil, erro.NewError("etcd not found in context")
 	}
-	client, err := etcd.GetClient()
+	client, err := e.GetClient()
 	if err != nil {
 		return nil, err
 	}

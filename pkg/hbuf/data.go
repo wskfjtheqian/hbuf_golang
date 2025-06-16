@@ -2,6 +2,7 @@ package hbuf
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,7 +22,15 @@ const (
 
 type Int64 int64
 
+func (i Int64) String() string {
+	return strconv.FormatInt(int64(i), 10)
+}
+
 type Uint64 uint64
+
+func (i Uint64) String() string {
+	return strconv.FormatUint(uint64(i), 10)
+}
 
 type Time time.Time
 

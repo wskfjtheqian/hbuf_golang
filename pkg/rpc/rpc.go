@@ -427,3 +427,11 @@ func ClientCall[E hbuf.Data](ctx context.Context, c *Client, id uint32, name str
 	}
 	return data.(E), nil
 }
+
+func CloneContext(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
+
+func CloseContext(ctx context.Context) {
+
+}

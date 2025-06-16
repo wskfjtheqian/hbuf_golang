@@ -155,3 +155,7 @@ func (r *Redis) NewMiddleware() rpc.HandlerMiddleware {
 		}
 	}
 }
+
+func (r *Redis) Get() *redis.Client {
+	return r.conn.Load()
+}

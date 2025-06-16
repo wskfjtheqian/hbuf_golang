@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"io"
 )
@@ -130,4 +132,9 @@ func PKCS7UnPadding(origData []byte) []byte {
 	length := len(origData)
 	unpadding := int(origData[length-1])
 	return origData[:(length - unpadding)]
+}
+
+func Md5(value []byte) string {
+	data := md5.Sum(value)
+	return hex.EncodeToString(data[:])
 }
