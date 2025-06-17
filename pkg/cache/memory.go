@@ -51,7 +51,7 @@ func init() {
 		}
 	}()
 
-	//第10分钟清理一次过期的缓存
+	//每1分钟清理一次过期的缓存
 	go func() {
 		ticker := time.NewTicker(time.Minute * 1)
 		for {
