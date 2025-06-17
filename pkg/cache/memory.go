@@ -202,7 +202,7 @@ type MemoryCache[K comparable, V any] struct {
 
 // ReadCall 清理过期的缓存
 func (c *MemoryCache[K, V]) clearExpire(now int64) {
-	keys := make([]K, 0)
+	keys := make([]K, 0, len(c.maps))
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -232,11 +232,7 @@ func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
 	val, ok := c.maps[key]
 	c.lock.RUnlock()
 	if ok {
-		value, err := val.get(ctx, key)
-		if err != nil {
-			return nil, err
-		}
-		return value, nil
+		return val.get(ctx, key)
 	}
 
 	c.lock.Lock()
@@ -244,11 +240,7 @@ func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
 
 	val, ok = c.maps[key]
 	if ok {
-		value, err := val.get(ctx, key)
-		if err != nil {
-			return nil, err
-		}
-		return value, nil
+		return val.get(ctx, key)
 	}
 
 	temp := &item[K, V]{
@@ -279,11 +271,7 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx con
 	val, ok := c.maps[key]
 	c.lock.RUnlock()
 	if ok {
-		err := val.modify(ctx, key, call)
-		if err != nil {
-			return err
-		}
-		return nil
+		return val.modify(ctx, key, call)
 	}
 
 	c.lock.Lock()
@@ -291,11 +279,7 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx con
 
 	val, ok = c.maps[key]
 	if ok {
-		err := val.modify(ctx, key, call)
-		if err != nil {
-			return err
-		}
-		return nil
+		return val.modify(ctx, key, call)
 	}
 
 	temp := &item[K, V]{
