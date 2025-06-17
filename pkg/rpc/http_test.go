@@ -604,6 +604,61 @@ func Test_Concurrency(t *testing.T) {
 		}
 	}()
 
+	count := atomic.Int32{}
+
+	go http.ListenAndServe(":8089", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count.Add(1)
+		req := &HbufRequest{}
+		err := json.NewDecoder(r.Body).Decode(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp := &HbufResponse{Name: req.Name}
+		json.NewEncoder(w).Encode(resp)
+	}))
+
+	<-time.After(time.Second * 1)
+
+	timeLength := 10
+	end := now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
+	var wgHttp sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wgHttp.Add(1)
+		go func() {
+			defer wgHttp.Done()
+			for end > now.Load() {
+				req := &HbufRequest{
+					Name: "test",
+				}
+				body := bytes.NewBuffer(nil)
+				err := json.NewEncoder(body).Encode(req)
+				if err != nil {
+					t.Fatal(err)
+					return
+				}
+				post, err := http.Post("http://localhost:8089", "application/json", body)
+				if err != nil {
+					t.Fatal(err)
+					return
+				}
+				defer post.Body.Close()
+				resp := &HbufResponse{Name: req.Name}
+				err = json.NewDecoder(post.Body).Decode(resp)
+				if err != nil {
+					t.Fatal(err)
+					return
+				}
+				if resp.Name != "test" {
+					t.Fatal("test fail")
+					return
+				}
+			}
+		}()
+	}
+	wgHttp.Wait()
+	t.Log("http concurrency count: per second ", count.Load()/int32(timeLength))
+
 	grpcListener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		t.Fatal(err)
@@ -628,8 +683,8 @@ func Test_Concurrency(t *testing.T) {
 		return
 	}
 
-	timeLength := 10
-	end := now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
+	timeLength = 10
+	end = now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 1000; i++ {
@@ -664,7 +719,7 @@ func Test_Concurrency(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
+	<-time.After(time.Second * 1)
 	timeLength = 10
 	end = now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
 
