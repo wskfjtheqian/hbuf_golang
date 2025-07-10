@@ -56,7 +56,7 @@ var cacheList = make([]expireClear, 0)
 var lock sync.Mutex
 
 func init() {
-
+	timestamp.Store(time.Now().UnixMilli())
 	//每秒更新一次时间戳
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -239,7 +239,7 @@ func (c *MemoryCache[K, V]) clearExpire(now int64) {
 // ReadCall 没有缓存时，读取原始数据
 func (c *MemoryCache[K, V]) ReadCall(call readData[K, V]) {
 	if call == nil {
-		c.call = defaultReadCall
+		c.call = defaultReadCall[K, V]
 	} else {
 		c.call = call
 	}
