@@ -65,6 +65,11 @@ func (con *Config) CheckConfig() int {
 			errCount++
 			hlog.Error("数据库链接失败，请检查配置是否正确", err)
 		}
+		err = db.Ping()
+		if err != nil {
+			errCount++
+			hlog.Error("数据库链接失败，请检查配置是否正确", err)
+		}
 		defer func(db *sql.DB) {
 			_ = db.Close()
 		}(db)
