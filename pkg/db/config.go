@@ -78,3 +78,45 @@ func (con *Config) CheckConfig() int {
 func (con *Config) Source() string {
 	return *con.Username + ":" + *con.Password + "@" + *con.Network + "(" + *con.Host + ")/" + *con.DbName + "?" + *con.Params
 }
+
+func (con *Config) GetType() string {
+	if con.Type == nil {
+		return ""
+	}
+	return *con.Type
+}
+
+func (con *Config) GetDbName() string {
+	if con.DbName == nil {
+		return ""
+	}
+	return *con.DbName
+}
+
+func (con *Config) GetParams() string {
+	if con.Params == nil {
+		return ""
+	}
+	return *con.Params
+}
+
+func (con *Config) GetHost() string {
+	if con.Host == nil {
+		return ""
+	}
+	return *con.Host
+}
+
+func (con *Config) GetNetwork() string {
+	if con.Network == nil {
+		return ""
+	}
+	return *con.Network
+}
+
+func (con *Config) GetUsername() string {
+	if con.Username == nil {
+		return ""
+	}
+	return *con.Username
+}
