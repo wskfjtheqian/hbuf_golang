@@ -59,7 +59,7 @@ func (c *Context) Query(query string, args ...any) (*sql.Rows, error) {
 		}
 		return rows, nil
 	}
-	rows, err := c.db.Query(query, args...)
+	rows, err := c.db.DB.Query(query, args...)
 	if err != nil {
 		return nil, erro.Wrap(err)
 	}
@@ -74,7 +74,7 @@ func (c *Context) Exec(query string, args ...any) (sql.Result, error) {
 		}
 		return exec, nil
 	}
-	exec, err := c.db.Exec(query, args...)
+	exec, err := c.db.DB.Exec(query, args...)
 	if err != nil {
 		return nil, erro.Wrap(err)
 	}
@@ -135,7 +135,7 @@ func (d *Database) SetConfig(config *Config) {
 	defer d.lock.Unlock()
 	if nil == config {
 		if nil != d.db {
-			d.db.Close()
+			d.db.DB.Close()
 		}
 		d.db = nil
 		d.config = nil
@@ -175,13 +175,13 @@ func (d *Database) SetConfig(config *Config) {
 	db.SetConnMaxLifetime(connMaxLifetime)
 
 	if nil != d.db {
-		d.db.Close()
+		d.db.DB.Close()
 	}
 	d.db = &DB{DB: db, config: *config}
 }
 
 func (d *Database) Ping() error {
-	return d.db.Ping()
+	return d.db.DB.Ping()
 }
 
 func NewDB() *Database {
@@ -232,7 +232,7 @@ func Begin(ctx context.Context) (*Tx, error) {
 	}
 	val.tx = tx
 	var err error
-	tx.t, err = val.db.Begin()
+	tx.t, err = val.db.DB.Begin()
 	if nil != err {
 		return nil, erro.Wrap(err)
 	}
