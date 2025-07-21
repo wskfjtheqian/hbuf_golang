@@ -1,7 +1,13 @@
 #网络类型
 type: mysql
-#数据库 服务器地址
-url: "tcp(127.0.0.1:3306)/full_frame?charset=utf8"
+#数据库名
+dbname: "full_frame"
+#连接参数
+params: "charset=utf8"
+#数据库服务器地址
+hostname: "127.0.0.1:3306"
+#网络类型
+network: "tcp"
 #用户名
 username: "root"
 #密码

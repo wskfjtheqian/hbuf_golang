@@ -20,20 +20,30 @@ type Execute interface {
 
 	Table(name string) string
 
-	Db() *sql.DB
+	Db() *DB
+}
+
+type DB struct {
+	*sql.DB
+
+	config Config
+}
+
+func (D *DB) Config() Config {
+	return D.config
 }
 
 type Context struct {
 	context.Context
 
-	db *sql.DB
+	db *DB
 
 	tx *Tx
 
 	tableName func(ctx context.Context, name string) string
 }
 
-func NewContext(context context.Context, db *sql.DB, tableName func(ctx context.Context, name string) string) *Context {
+func NewContext(context context.Context, db *DB, tableName func(ctx context.Context, name string) string) *Context {
 	return &Context{
 		Context:   context,
 		db:        db,
@@ -75,7 +85,7 @@ func (c *Context) Table(name string) string {
 	return c.tableName(c, name)
 }
 
-func (c *Context) Db() *sql.DB {
+func (c *Context) Db() *DB {
 	return c.db
 }
 
@@ -101,7 +111,7 @@ func GET(ctx context.Context) Execute {
 }
 
 type Database struct {
-	db     *sql.DB
+	db     *DB
 	config *Config
 	lock   sync.Mutex
 }
@@ -136,7 +146,7 @@ func (d *Database) SetConfig(config *Config) {
 	}
 	d.config = config
 
-	db, err := sql.Open(*config.Type, *config.Username+":"+*config.Password+"@"+*config.URL+"&parseTime=true&clientFoundRows=true")
+	db, err := sql.Open(*config.Type, config.Source())
 	if err != nil {
 		hlog.Exit("数据库链接失败，请检查配置是否正确", err)
 	}
@@ -167,7 +177,7 @@ func (d *Database) SetConfig(config *Config) {
 	if nil != d.db {
 		d.db.Close()
 	}
-	d.db = db
+	d.db = &DB{DB: db, config: *config}
 }
 
 func (d *Database) Ping() error {

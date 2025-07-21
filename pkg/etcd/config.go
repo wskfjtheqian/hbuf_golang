@@ -26,5 +26,8 @@ func (con *Config) CheckConfig() int {
 		errCount++
 		hlog.Error("未找到Etcd 连接地址")
 	}
+	if errCount == 0 {
+		hlog.Info("Etcd 检查: ok")
+	}
 	return errCount
 }

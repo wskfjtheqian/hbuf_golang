@@ -53,6 +53,8 @@ func (con *Config) CheckConfig() int {
 			hlog.Error("Redis 认证失败，请检查密码是否正确", err)
 		}
 	}
-	hlog.Info("Redis 检查：Ok")
+	if errCount == 0 {
+		hlog.Info("Redis 检查：Ok")
+	}
 	return errCount
 }
