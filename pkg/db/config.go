@@ -81,7 +81,7 @@ func (con *Config) CheckConfig() int {
 }
 
 func (con *Config) Source() string {
-	return *con.Username + ":" + *con.Password + "@" + *con.Network + "(" + *con.Host + ")/" + *con.DbName + "?" + *con.Params
+	return *con.Username + ":" + *con.Password + "@" + *con.Network + "(" + *con.Host + ")/" + *con.DbName + "?" + *con.Params + "&parseTime=true&clientFoundRows=true"
 }
 
 func (con *Config) GetType() string {
