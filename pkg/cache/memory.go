@@ -41,7 +41,7 @@ var cacheList = make([]expireClear, 0)
 var lock sync.Mutex
 
 func init() {
-
+	timestamp.Store(time.Now().UnixMilli())
 	//每秒更新一次时间戳
 	go func() {
 		ticker := time.NewTicker(time.Second)
