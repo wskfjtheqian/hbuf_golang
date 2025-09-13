@@ -145,3 +145,12 @@ func MapToSlice[K comparable, V any, E any](m map[K]V, f func(K, V) E) []E {
 	}
 	return result
 }
+
+// ToAnyList 将一个切片转换为一个 any 切片。
+func ToAnyList[T any](list []T) []any {
+	result := make([]any, 0, len(list))
+	for i, v := range list {
+		result[i] = v
+	}
+	return result
+}

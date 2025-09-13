@@ -75,3 +75,26 @@ func (l *Mutex) Unlock() error {
 	}
 	return nil
 }
+
+// WithDcsLockFallback 带有 fallback 函数的本地锁。
+func WithDcsLockFallback(ctx context.Context, key string, primary func(ctx context.Context) (bool, error), fallback func(ctx context.Context) error) error {
+	ret, err := primary(ctx)
+	if err != nil {
+		return err
+	}
+	if ret {
+		return nil
+	}
+
+	l, err := DcsLock(ctx, key)
+	if err != nil {
+		return err
+	}
+	defer l.Unlock()
+
+	err = fallback(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}

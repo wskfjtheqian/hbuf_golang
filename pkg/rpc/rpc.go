@@ -48,7 +48,7 @@ func WithContext(ctx context.Context, method string) context.Context {
 	return &Context{
 		Context: ctx,
 		header:  http.Header{},
-		tags:    make(map[string][]any),
+		tags:    make(map[string][]string),
 		method:  method,
 	}
 }
@@ -57,7 +57,7 @@ func WithContext(ctx context.Context, method string) context.Context {
 type Context struct {
 	context.Context
 	header http.Header
-	tags   map[string][]any
+	tags   map[string][]string
 	method string
 }
 
@@ -108,16 +108,16 @@ func GetHeaders(ctx context.Context) http.Header {
 }
 
 // AddTag 添加Tag
-func AddTag(ctx context.Context, key string, value any) {
+func AddTag(ctx context.Context, key string, value ...string) {
 	d := FromContext(ctx)
 	if d == nil {
 		return
 	}
-	d.tags[key] = append(d.tags[key], value)
+	d.tags[key] = append(d.tags[key], value...)
 }
 
 // GetTag 获得Tag
-func GetTag(ctx context.Context, key string) []any {
+func GetTag(ctx context.Context, key string) []string {
 	d := FromContext(ctx)
 	if d == nil {
 		return nil
@@ -133,10 +133,11 @@ func (d *Context) GetMethod() string {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type Method struct {
-	Id      uint32
-	Name    string
-	Handler Handler
-	Decode  func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error)
+	Id          uint32
+	Name        string
+	Handler     Handler
+	WithContext func(ctx context.Context) context.Context
+	Decode      func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error)
 }
 
 //////////////////////////////////////////////////////
@@ -333,6 +334,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	}
 
 	ctx = WithContext(ctx, method.Name)
+	ctx = method.WithContext(ctx)
 	response, err := r.middleware(method.Handler)(ctx, request)
 	if err != nil {
 		return err

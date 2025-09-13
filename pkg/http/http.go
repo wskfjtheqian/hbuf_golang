@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -8,6 +9,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
 	"net"
 	"net/http"
+	"reflect"
 	"strconv"
 	"time"
 )
@@ -114,6 +116,41 @@ func (r *ResponseWriter) WriteHeader(statusCode int) {
 	r.writer.WriteHeader(statusCode)
 }
 
+// WithContext 给上下文添加 HTTP 连接
+func WithContext(ctx context.Context, writer http.ResponseWriter, request *http.Request) context.Context {
+	return &Context{
+		Context: ctx,
+		writer:  writer,
+		request: request,
+	}
+}
+
+// Context 定义了 HTTP 的上下文
+type Context struct {
+	context.Context
+	writer  http.ResponseWriter
+	request *http.Request
+}
+
+var contextType = reflect.TypeOf(&Context{})
+
+// Value 返回Context的value
+func (d *Context) Value(key any) any {
+	if reflect.TypeOf(d) == key {
+		return d
+	}
+	return d.Context.Value(key)
+}
+
+// FromContext 从上下文中获取 HTTP 连接
+func FromContext(ctx context.Context) (writer http.ResponseWriter, request *http.Request, ok bool) {
+	val := ctx.Value(contextType)
+	if val == nil {
+		return nil, nil, false
+	}
+	return val.(*Context).writer, val.(*Context).request, true
+}
+
 func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	//允许跨域
 	writer.Header().Add("Access-Control-Allow-Origin", "*")
@@ -130,7 +167,8 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		writer: writer,
 		status: http.StatusOK,
 	}
-	a.mux.ServeHTTP(w, request)
+
+	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
 	old = time.Now().UnixMilli() - old
 	t := "[" + strconv.FormatFloat(float64(old)/1000, 'g', 3, 64) + "s]"
 	if 200 > old {

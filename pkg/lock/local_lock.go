@@ -94,3 +94,20 @@ func (k *localLock) TryLock() bool {
 	k.count.Add(-1)
 	return false
 }
+
+// LocalLockFallback 带有 fallback 函数的本地锁。
+func LocalLockFallback(ctx context.Context, key string, primary func(ctx context.Context) (bool, error), fallback func(ctx context.Context) error) error {
+	ret, err := primary(ctx)
+	if err != nil {
+		return err
+	}
+	if ret {
+		return nil
+	}
+
+	err = LocalLock(ctx, key, fallback)
+	if err != nil {
+		return err
+	}
+	return nil
+}
