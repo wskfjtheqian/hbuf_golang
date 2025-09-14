@@ -147,6 +147,11 @@ type Config struct {
 
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
+	if c == nil {
+		hlog.Error("not found nats config")
+		return false
+	}
+
 	var valid bool = true
 	if c.Servers != nil && len(c.Servers) < 0 {
 		valid = false

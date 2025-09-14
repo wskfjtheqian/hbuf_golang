@@ -64,6 +64,11 @@ type Config struct {
 
 // Validate 验证配置是否有效
 func (c *Config) Validate() bool {
+	if c == nil {
+		hlog.Error("not found etcd config")
+		return false
+	}
+
 	valid := true
 
 	if c.Endpoints == nil || len(c.Endpoints) == 0 {

@@ -319,7 +319,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	r.lock.RUnlock()
 
 	if !ok {
-		return newHttpError(http.StatusNotFound)
+		return NewResult[hbuf.Data](-1, "method not found", nil)
 	}
 
 	request, err := method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
@@ -337,6 +337,10 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	ctx = method.WithContext(ctx)
 	response, err := r.middleware(method.Handler)(ctx, request)
 	if err != nil {
+		var e *Result[hbuf.Data]
+		if errors.As(err, &e) && e.Code != -1 {
+			err = r.encode(writer)(e)
+		}
 		return err
 	}
 

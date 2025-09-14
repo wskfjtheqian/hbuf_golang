@@ -19,26 +19,26 @@ type Config struct {
 
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
+	if c == nil {
+		hlog.Error("not found app config")
+		return false
+	}
+
 	valid := true
-	if c.Nats == nil || !c.Nats.Validate() {
+	if !c.Nats.Validate() {
 		valid = false
-		hlog.Error("nats config is invalid")
 	}
-	if c.Etcd == nil || !c.Etcd.Validate() {
+	if !c.Etcd.Validate() {
 		valid = false
-		hlog.Error("etcd config is invalid")
 	}
-	if c.Redis == nil || !c.Redis.Validate() {
+	if !c.Redis.Validate() {
 		valid = false
-		hlog.Error("redis config is invalid")
 	}
-	if c.Sql == nil || !c.Sql.Validate() {
+	if !c.Sql.Validate() {
 		valid = false
-		hlog.Error("sql config is invalid")
 	}
-	if c.Service == nil || !c.Service.Validate() {
+	if !c.Service.Validate() {
 		valid = false
-		hlog.Error("service config is invalid")
 	}
 	return valid
 }

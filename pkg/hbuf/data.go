@@ -1,9 +1,10 @@
 package hbuf
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -35,17 +36,32 @@ func (i Uint64) String() string {
 type Time time.Time
 
 func (t Time) MarshalJSON() ([]byte, error) {
-	str := time.Time(t).Format("2006-01-02T15:04:05.999Z07:00")
-	return []byte("\"" + str + "\""), nil
+	return []byte(strconv.FormatInt(time.Time(t).UnixMilli(), 10)), nil
 }
 
 func (t *Time) UnmarshalJSON(data []byte) error {
-	parse, err := time.Parse("2006-01-02T15:04:05.999Z07:00", strings.Trim(string(data), "\""))
+	parseInt, err := strconv.ParseInt(string(data), 10, 64)
 	if err != nil {
 		return err
 	}
-	*t = Time(parse)
+	*t = Time(time.UnixMilli(parseInt))
 	return nil
+}
+
+func (t *Time) Scan(value any) error {
+	nullTime := sql.NullTime{}
+	err := nullTime.Scan(value)
+	if err != nil {
+		return err
+	}
+	if nullTime.Valid {
+		*t = Time(nullTime.Time)
+	}
+	return nil
+}
+
+func (t Time) Value() (driver.Value, error) {
+	return time.Time(t), nil
 }
 
 type Data interface {

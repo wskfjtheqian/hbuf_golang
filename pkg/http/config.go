@@ -13,23 +13,28 @@ type Config struct {
 	Key  *string `yaml:"Key"` //crt密钥
 }
 
-func (h *Config) Validate() bool {
+func (c *Config) Validate() bool {
+	if c == nil {
+		hlog.Error("not found http config")
+		return false
+	}
+
 	valid := true
-	if h.Addr == nil || *h.Addr == "" {
+	if c.Addr == nil || *c.Addr == "" {
 		valid = false
 		hlog.Error("Addr is empty")
 	}
 	return valid
 }
 
-func (h *Config) Equal(other *Config) bool {
-	if h == nil && other == nil {
+func (c *Config) Equal(other *Config) bool {
+	if c == nil && other == nil {
 		return true
 	}
-	if h == nil || other == nil {
+	if c == nil || other == nil {
 		return false
 	}
-	return utl.Equal(h.Addr, other.Addr) &&
-		utl.Equal(h.Crt, other.Crt) &&
-		utl.Equal(h.Key, other.Key)
+	return utl.Equal(c.Addr, other.Addr) &&
+		utl.Equal(c.Crt, other.Crt) &&
+		utl.Equal(c.Key, other.Key)
 }

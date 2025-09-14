@@ -27,6 +27,11 @@ func (c *Config) Equal(other *Config) bool {
 
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
+	if c == nil {
+		hlog.Error("not found server config")
+		return false
+	}
+
 	var valid = true
 	if c.Server == nil {
 		valid = false

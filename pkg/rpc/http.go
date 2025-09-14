@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"golang.org/x/net/http2"
 	"io"
 	"net"
@@ -207,7 +209,7 @@ type HttpServer struct {
 // ServeHTTP 实现 http.Handler 接口。
 func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -216,12 +218,13 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return h.server.Response(ctx, path, writer, reader)
 	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body)
 	if err != nil {
-		var e *httpError
-		if errors.As(err, &e) {
-			http.Error(w, e.msg, e.code)
-		} else {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		var e *Result[hbuf.Data]
+		if errors.As(err, &e) && e.Code == -1 {
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
+		w.WriteHeader(http.StatusInternalServerError)
+		erro.PrintStack(err)
 	}
 }
 
@@ -234,21 +237,5 @@ func WithResponseMiddleware(middleware ...ResponseMiddleware) HttpServerOptions 
 			}
 			return next
 		}
-	}
-}
-
-type httpError struct {
-	code int
-	msg  string
-}
-
-func (e *httpError) Error() string {
-	return e.msg
-}
-
-func newHttpError(code int) error {
-	return &httpError{
-		code: code,
-		msg:  http.StatusText(code),
 	}
 }

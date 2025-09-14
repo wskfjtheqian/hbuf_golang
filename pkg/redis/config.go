@@ -78,6 +78,11 @@ type Config struct {
 
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
+	if c == nil {
+		hlog.Error("not found redis config")
+		return false
+	}
+
 	var valid bool = true
 	if c.Network != nil && *c.Network != "tcp" && *c.Network != "unix" {
 		valid = false
