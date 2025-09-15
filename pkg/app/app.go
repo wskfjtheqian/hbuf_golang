@@ -9,8 +9,17 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/sql"
 )
 
+// Option 应用选项
+type Option func(*App)
+
+func WithMiddleware(middlewares ...rpc.HandlerMiddleware) Option {
+	return func(s *App) {
+		s.middlewares = append(s.middlewares, middlewares...)
+	}
+}
+
 // NewApp 新建一个App
-func NewApp() *App {
+func NewApp(options ...Option) *App {
 	ret := &App{
 		nats:  nats.NewNats(),
 		etcd:  etcd.NewEtcd(),
@@ -18,12 +27,13 @@ func NewApp() *App {
 		sqlDb: sql.NewDB(),
 	}
 
-	ret.service = service.NewService(ret.etcd, []rpc.HandlerMiddleware{
-		ret.nats.NewMiddleware(),
-		ret.etcd.NewMiddleware(),
-		ret.redis.NewMiddleware(),
-		ret.sqlDb.NewMiddleware(),
-	})
+	for _, option := range options {
+		option(ret)
+	}
+
+	ret.service = service.NewService(ret.etcd, service.WithMiddleware(
+		append(ret.Middlewares(), ret.middlewares...)...,
+	))
 
 	return ret
 }
@@ -35,7 +45,8 @@ type App struct {
 	redis *redis.Redis
 	sqlDb *sql.DB
 
-	service *service.Service
+	service     *service.Service
+	middlewares []rpc.HandlerMiddleware
 }
 
 // SetConfig 设置配置

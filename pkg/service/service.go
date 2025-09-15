@@ -73,8 +73,14 @@ type RegisterInfo struct {
 
 type Option func(*Service)
 
+func WithMiddleware(middlewares ...rpc.HandlerMiddleware) Option {
+	return func(s *Service) {
+		s.middlewares = append(s.middlewares, middlewares...)
+	}
+}
+
 // NewService 创建一个新的Service实例
-func NewService(etcd *etcd.Etcd, rpcMiddlewares []rpc.HandlerMiddleware, options ...Option) *Service {
+func NewService(etcd *etcd.Etcd, options ...Option) *Service {
 	ret := &Service{
 		etcd:       etcd,
 		install:    make(map[string]*ServerInfo),
@@ -82,19 +88,19 @@ func NewService(etcd *etcd.Etcd, rpcMiddlewares []rpc.HandlerMiddleware, options
 		clients:    make(map[string][]Init),
 		httpClient: make(map[string]*rpc.Client),
 	}
-	rpcMiddlewares = append(rpcMiddlewares, ret.NewMiddleware())
 
-	ret.middleware = func(next rpc.Handler) rpc.Handler {
-		for i := len(rpcMiddlewares) - 1; i >= 0; i-- {
-			next = rpcMiddlewares[i](next)
-		}
-		return next
-	}
-
-	ret.rpcServer = rpc.NewServer(rpc.WithServerMiddleware(rpcMiddlewares...), rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
 	for _, option := range options {
 		option(ret)
 	}
+
+	ret.middleware = func(next rpc.Handler) rpc.Handler {
+		for i := len(ret.middlewares) - 1; i >= 0; i-- {
+			next = ret.middlewares[i](next)
+		}
+		return next
+	}
+	ret.rpcServer = rpc.NewServer(rpc.WithServerMiddleware(append(ret.middlewares, ret.NewMiddleware())...), rpc.WithServerEncoder(rpc.NewHBufEncode()), rpc.WithServerDecode(rpc.NewHBufDecode()))
+
 	return ret
 }
 
@@ -107,11 +113,12 @@ type Service struct {
 	rpcServer *rpc.Server
 	install   map[string]*ServerInfo
 
-	servers    map[string]*ServerInfo
-	clients    map[string][]Init
-	lock       sync.RWMutex
-	httpClient map[string]*rpc.Client
-	middleware rpc.HandlerMiddleware
+	servers     map[string]*ServerInfo
+	clients     map[string][]Init
+	lock        sync.RWMutex
+	httpClient  map[string]*rpc.Client
+	middleware  rpc.HandlerMiddleware
+	middlewares []rpc.HandlerMiddleware
 }
 
 // SetConfig 设置配置
