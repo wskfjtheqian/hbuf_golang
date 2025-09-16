@@ -113,16 +113,16 @@ func (d *Nats) GetClient() *nats.Conn {
 	return d.client
 }
 
-func (d *Nats) PublishMsg(Subject string, data []byte) error {
-	err := d.client.PublishMsg(&nats.Msg{Subject: "hello", Data: data})
+func (d *Nats) PublishMsg(subject string, data []byte) error {
+	err := d.client.PublishMsg(&nats.Msg{Subject: subject, Data: data})
 	if err != nil {
 		return erro.Wrap(err)
 	}
 	return nil
 }
 
-func (d *Nats) Subscribe(Subject string, handler func(data []byte) error) error {
-	_, err := d.client.Subscribe(Subject, func(msg *nats.Msg) {
+func (d *Nats) Subscribe(subject string, handler func(data []byte) error) error {
+	_, err := d.client.Subscribe(subject, func(msg *nats.Msg) {
 		err := handler(msg.Data)
 		if err != nil {
 			hlog.Error("nats subscribe error:", err)
