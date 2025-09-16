@@ -129,7 +129,7 @@ func (d *Nats) Subscribe(Subject string, handler func(data []byte) error) error 
 		}
 	})
 	if err != nil {
-		return err
+		return erro.Wrap(err)
 	}
 	return nil
 }
