@@ -126,6 +126,7 @@ func (a *App) SetConfig(config *Config) {
 		a.dataCenterId = config.DataCenterId
 		a.workerId = config.WorkerId
 	}
+
 }
 
 func (a *App) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, call rpc.FilterCall) (context.Context, hbuf.Data, error) {
@@ -181,4 +182,6 @@ func (a *App) Init() {
 	ctx := a.CloneContext()
 	defer rpc.CloseContext(ctx)
 	a.manage.Init(ctx)
+
+	a.GetExt().Init(ctx)
 }

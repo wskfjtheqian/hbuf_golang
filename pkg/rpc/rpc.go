@@ -238,9 +238,10 @@ func (f *Filter) OnNext(ctx context.Context, data hbuf.Data, call FilterCall) (c
 }
 
 type Server struct {
-	router map[string]*ServerInvoke
-	lock   sync.RWMutex
-	filter *Filter
+	router  map[string]*ServerInvoke
+	lock    sync.RWMutex
+	filter  *Filter
+	servers []Init
 }
 
 func NewServer() *Server {
@@ -249,6 +250,7 @@ func NewServer() *Server {
 		filter: &Filter{
 			isDefault: true,
 		},
+		servers: []Init{},
 	}
 	return &ret
 }
@@ -307,8 +309,19 @@ func (s *Server) Add(router ServerRouter) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	s.servers = append(s.servers, router.GetServer())
+
 	for key, value := range router.GetInvoke() {
 		s.router["/"+router.GetName()+"/"+key] = value
+	}
+}
+
+func (s *Server) Init(ctx context.Context) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	for _, server := range s.servers {
+		server.Init(ctx)
 	}
 }
 
