@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/etcd"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"go.etcd.io/etcd/api/v3/mvccpb"
@@ -138,7 +137,7 @@ func (s *Service) SetConfig(cfg *Config) error {
 
 	for _, item := range cfg.Server.List {
 		if install, ok := s.install[item]; ok {
-			_, _ = s.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			_, _ = s.middleware(func(ctx context.Context, req any) (any, error) {
 				install.init.Init(ctx)
 				return nil, nil
 			})(ctx, nil)
@@ -522,7 +521,7 @@ func (s *Service) addLocalClient(install *ServerInfo) {
 
 func (s *Service) NewMiddleware() rpc.HandlerMiddleware {
 	return func(next rpc.Handler) rpc.Handler {
-		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, s), req)
 		}
 	}

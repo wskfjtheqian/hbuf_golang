@@ -11,7 +11,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"golang.org/x/net/http2"
@@ -29,6 +28,11 @@ import (
 )
 
 type TestHbufService struct {
+}
+
+func (t TestHbufService) HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (t TestHbufService) Init(ctx context.Context) {
@@ -151,7 +155,7 @@ func TestBase64(t *testing.T) {
 // 测试 HttpService 的 Middleware 方法
 func TestHttpService_Middleware(t *testing.T) {
 	rpcServer := rpc.NewServer(rpc.WithServerMiddleware(func(next rpc.Handler) rpc.Handler {
-		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+		return func(ctx context.Context, req any) (any, error) {
 			return next(ctx, req)
 		}
 	}))
@@ -582,6 +586,11 @@ func (p *ProtoServiceConcurrency) ProtoMethod(ctx context.Context, req *ProtoReq
 
 type HbufServiceConcurrency struct {
 	count atomic.Int32
+}
+
+func (h *HbufServiceConcurrency) HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (h *HbufServiceConcurrency) Init(ctx context.Context) {

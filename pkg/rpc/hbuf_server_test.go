@@ -6,12 +6,15 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/service"
+	"io"
 )
 
 type HbufService interface {
 	Init(ctx context.Context)
 
 	HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error)
+
+	HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error)
 }
 
 type HbufServiceClient struct {
@@ -28,18 +31,26 @@ func NewHbufServiceClient(client *rpc.Client) HbufService {
 }
 
 func (r *HbufServiceClient) HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error) {
-	response, err := rpc.ClientCall[*HbufResponse](ctx, r.client, 0, "hbuf_service", "hbuf_method", req)
+	response, err := r.client.Invoke(ctx, 0, "hbuf_service", "hbuf_method", req, rpc.NewResultResponse[*HbufResponse]())
 	if err != nil {
 		return nil, err
 	}
-	return response, nil
+	return response.(*HbufResponse), nil
+}
+
+func (p *HbufServiceClient) HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func RegisterHbufService(r rpc.ServerRegister, server HbufService) {
 	r.Register(0, "hbuf_service",
 		&rpc.Method{
 			Name: "hbuf_method",
-			Handler: func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+			WithContext: func(ctx context.Context) context.Context {
+				return ctx
+			},
+			Handler: func(ctx context.Context, req any) (any, error) {
 				return server.HbufMethod(ctx, req.(*HbufRequest))
 			},
 			Decode: func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error) {
@@ -56,6 +67,10 @@ func (s *DefaultHbufService) Init(ctx context.Context) {
 }
 
 func (s *DefaultHbufService) HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error) {
+	return nil, erro.NewError("not find server hbuf_service")
+}
+
+func (s *DefaultHbufService) HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error) {
 	return nil, erro.NewError("not find server hbuf_service")
 }
 

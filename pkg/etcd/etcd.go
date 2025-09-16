@@ -3,7 +3,6 @@ package etcd
 import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -162,7 +161,7 @@ func (e *Etcd) GetClient() (*clientv3.Client, error) {
 // NewMiddleware 创建中间件
 func (e *Etcd) NewMiddleware() rpc.HandlerMiddleware {
 	return func(next rpc.Handler) rpc.Handler {
-		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, e), req)
 		}
 	}

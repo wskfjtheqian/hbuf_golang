@@ -1,9 +1,11 @@
 package http
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/ip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
@@ -116,6 +118,14 @@ func (r *ResponseWriter) WriteHeader(statusCode int) {
 	r.writer.WriteHeader(statusCode)
 }
 
+func (r *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.writer.(http.Hijacker)
+	if !ok {
+		return nil, nil, erro.NewError("the writer doesn't support the Hijacker interface")
+	}
+	return h.Hijack()
+}
+
 // WithContext 给上下文添加 HTTP 连接
 func WithContext(ctx context.Context, writer http.ResponseWriter, request *http.Request) context.Context {
 	return &Context{
@@ -178,6 +188,6 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	//获得响应状态码
-	ip, _ := ip.GetHttpIP(request)
-	_ = hlog.Output(1, LogHTTP, fmt.Sprintln(t, ip, request.Method, request.Proto, w.status, utl.Green(request.URL.String())))
+	httpIP, _ := ip.GetHttpIP(request)
+	_ = hlog.Output(1, LogHTTP, fmt.Sprintln(t, httpIP, request.Method, request.Proto, w.status, utl.Green(request.URL.String())))
 }

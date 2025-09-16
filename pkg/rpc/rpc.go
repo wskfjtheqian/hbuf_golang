@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"io"
 	"net/http"
@@ -36,7 +37,7 @@ type Response func(ctx context.Context, path string, writer io.Writer, reader io
 type ResponseMiddleware func(next Response) Response
 
 // Handler 是用于处理RPC请求
-type Handler func(ctx context.Context, req hbuf.Data) (hbuf.Data, error)
+type Handler func(ctx context.Context, req any) (any, error)
 
 // HandlerMiddleware 用于对 Handler 进行中间件处理。
 type HandlerMiddleware func(next Handler) Handler
@@ -140,7 +141,16 @@ type Method struct {
 	Decode      func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error)
 }
 
-//////////////////////////////////////////////////////
+// ////////////////////////////////////////////////////
+type ResultI interface {
+	GetCode() int32
+
+	Error() string
+
+	GetData() any
+
+	Descriptors() hbuf.Descriptor
+}
 
 type Result[T hbuf.Data] struct {
 	Code       int32  `json:"code"`
@@ -149,8 +159,16 @@ type Result[T hbuf.Data] struct {
 	descriptor hbuf.Descriptor
 }
 
+func (r *Result[T]) GetCode() int32 {
+	return r.Code
+}
+
 func (r *Result[T]) Error() string {
 	return r.Msg
+}
+
+func (r *Result[T]) GetData() any {
+	return r.Data
 }
 
 func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
@@ -322,29 +340,37 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return NewResult[hbuf.Data](-1, "method not found", nil)
 	}
 
-	request, err := method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
-		err := r.decode(reader)(v)
+	var err error
+	var in any
+	if method.Decode == nil {
+		in = reader
+	} else {
+		in, err = method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
+			err := r.decode(reader)(v)
+			if err != nil {
+				return nil, err
+			}
+			return v, nil
+		})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return v, nil
-	})
-	if err != nil {
-		return err
 	}
 
 	ctx = WithContext(ctx, method.Name)
 	ctx = method.WithContext(ctx)
-	response, err := r.middleware(method.Handler)(ctx, request)
-	if err != nil {
+	response, err := r.middleware(method.Handler)(ctx, in)
+	if val, ok := response.(io.Reader); ok {
+		_, err = io.Copy(writer, val)
+		return err
+	} else if err != nil {
 		var e *Result[hbuf.Data]
 		if errors.As(err, &e) && e.Code != -1 {
 			err = r.encode(writer)(e)
 		}
 		return err
 	}
-
-	return r.encode(writer)(NewResult(0, "ok", response))
+	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)))
 }
 
 //////////////////////////////////////////////////////
@@ -403,35 +429,45 @@ type Client struct {
 	middleware HandlerMiddleware
 }
 
-// ClientCall 调用远程服务
-func ClientCall[E hbuf.Data](ctx context.Context, c *Client, id uint32, name string, method string, request hbuf.Data) (E, error) {
+func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, request any, response any) (any, error) {
 	name = strings.Trim(name, "/") + "/"
-	data, err := c.middleware(func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+	data, err := c.middleware(func(ctx context.Context, req any) (any, error) {
 		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
-			return c.encode(writer)(req)
+			if val, ok := request.(io.Reader); ok {
+				_, err := io.Copy(writer, val)
+				return err
+			} else if val, ok := request.(hbuf.Data); ok {
+				return c.encode(writer)(val)
+			} else {
+				return erro.NewError("request is not io.Reader or hbuf.Data")
+			}
 		})
 		if err != nil {
 			return nil, err
 		}
-		defer reader.Close()
+		if _, ok := response.(io.Reader); ok {
+			return reader, nil
+		} else if val, ok := response.(ResultI); ok {
+			defer reader.Close()
 
-		result := NewResultResponse[E]()
-		err = c.decode(reader)(result)
-		if err != nil {
-			return nil, err
+			err = c.decode(reader)(val)
+			if err != nil {
+				return nil, err
+			}
+
+			if val.GetCode() != 0 {
+				return nil, errors.New(val.Error())
+			}
+
+			return val.GetData(), nil
+		} else {
+			return nil, erro.NewError("response is not io.Reader or hbuf.Data")
 		}
-
-		if result.Code != 0 {
-			return nil, errors.New(result.Msg)
-		}
-
-		return result.Data, nil
 	})(ctx, request)
 	if err != nil {
-		var r E
-		return r, err
+		return nil, err
 	}
-	return data.(E), nil
+	return data, nil
 }
 
 func CloneContext(ctx context.Context) (context.Context, error) {
