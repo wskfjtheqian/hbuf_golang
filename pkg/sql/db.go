@@ -136,7 +136,7 @@ func (d *DB) GetDB() (*sql.DB, error) {
 
 func (d *DB) NewMiddleware() rpc.HandlerMiddleware {
 	return func(next rpc.Handler) rpc.Handler {
-		return func(ctx context.Context, req hbuf.Data) (hbuf.Data, error) {
+		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, d, nil), req)
 		}
 	}
