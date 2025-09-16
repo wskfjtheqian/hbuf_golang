@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/garyburd/redigo/redis"
 	"github.com/nats-io/nats.go"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
@@ -14,7 +15,7 @@ import (
 
 type Context struct {
 	context.Context
-	client *nats.Conn
+	nats *Nats
 }
 
 var cType = reflect.TypeOf(&Context{})
@@ -30,12 +31,12 @@ func (d *Context) Done() <-chan struct{} {
 	return d.Context.Done()
 }
 
-func GET(ctx context.Context) *nats.Conn {
+func GET(ctx context.Context) *Nats {
 	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
-	return ret.(*Context).client
+	return ret.(*Context).nats
 }
 
 type Nats struct {
@@ -102,7 +103,7 @@ func (d *Nats) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, cal
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
-			d.client,
+			d,
 		}
 	}
 	return in.OnNext(ctx, data, call)
@@ -110,4 +111,25 @@ func (d *Nats) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, cal
 
 func (d *Nats) GetClient() *nats.Conn {
 	return d.client
+}
+
+func (d *Nats) PublishMsg(Subject string, data []byte) error {
+	err := d.client.PublishMsg(&nats.Msg{Subject: "hello", Data: data})
+	if err != nil {
+		return erro.Wrap(err)
+	}
+	return nil
+}
+
+func (d *Nats) Subscribe(Subject string, handler func(data []byte) error) error {
+	_, err := d.client.Subscribe(Subject, func(msg *nats.Msg) {
+		err := handler(msg.Data)
+		if err != nil {
+			hlog.Error("nats subscribe error:", err)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
