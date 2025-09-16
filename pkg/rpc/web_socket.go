@@ -303,11 +303,12 @@ func (h *ClientWebSocket) Invoke(ctx context.Context, name string, in io.Reader,
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type ServerWebSocket struct {
-	invoke  Invoke
-	rpc     *WebSocketRpc
-	Context func() context.Context
-	OnAuth  func(request *ht.Request, Query url.Values) bool
-	OnClose func()
+	invoke    Invoke
+	rpc       *WebSocketRpc
+	Context   func() context.Context
+	OnAuth    func(request *ht.Request, Query url.Values) bool
+	OnConnect func() bool
+	OnClose   func()
 }
 
 func NewServerWebSocket(invoke Invoke) *ServerWebSocket {
@@ -360,6 +361,10 @@ func (s *ServerWebSocket) ServeHTTP(w ht.ResponseWriter, r *ht.Request) {
 	s.rpc = newWebSocketRpc(wsConn, s.invoke, s.Context)
 	s.rpc.OnClose(s.OnClose)
 	s.rpc.Run()
+
+	if s.OnConnect != nil {
+		s.OnConnect()
+	}
 }
 
 func (h *ServerWebSocket) Invoke(ctx context.Context, name string, in io.Reader, out io.Writer, broadcast bool) error {
