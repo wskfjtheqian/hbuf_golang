@@ -12,20 +12,16 @@ import (
 	"sync"
 )
 
-type contextValue struct {
-	client *nats.Conn
-}
-
 type Context struct {
 	context.Context
-	value *contextValue
+	client *nats.Conn
 }
 
 var cType = reflect.TypeOf(&Context{})
 
 func (d *Context) Value(key any) any {
 	if reflect.TypeOf(d) == key {
-		return d.value
+		return d
 	}
 	return d.Context.Value(key)
 }
@@ -34,12 +30,12 @@ func (d *Context) Done() <-chan struct{} {
 	return d.Context.Done()
 }
 
-func GET(ctx context.Context) *contextValue {
+func GET(ctx context.Context) *nats.Conn {
 	var ret = ctx.Value(cType)
 	if nil == ret {
 		return nil
 	}
-	return ret.(*contextValue)
+	return ret.(*Context).client
 }
 
 type Nats struct {
@@ -106,9 +102,7 @@ func (d *Nats) OnFilter(ctx context.Context, data hbuf.Data, in *rpc.Filter, cal
 	if nil == ctx.Value(cType) {
 		ctx = &Context{
 			ctx,
-			&contextValue{
-				client: d.client,
-			},
+			d.client,
 		}
 	}
 	return in.OnNext(ctx, data, call)
