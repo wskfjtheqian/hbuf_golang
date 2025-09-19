@@ -1,6 +1,7 @@
 package rpc_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
@@ -35,6 +36,20 @@ func TestWebsocket_RPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
+
+	stream, err := testClient.HbufStream(context.Background(), bytes.NewReader([]byte("HbufStream Test")))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "HbufStream Test" {
 		t.Fatal("test fail")
 	}
 }
@@ -162,6 +177,20 @@ func TestWebsocket_Encrypt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
+
+	stream, err := testClient.HbufStream(context.Background(), bytes.NewReader([]byte("HbufStream Test")))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "HbufStream Test" {
 		t.Fatal("test fail")
 	}
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"github.com/gobwas/ws"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
@@ -366,7 +365,7 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return s.response(ctx, path, writer, reader)
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data)
 	if err != nil {
-		err = json.NewEncoder(response).Encode(&Result[hbuf.Data]{
+		err = s.encoder(response)(&Result[hbuf.Data]{
 			Code: http.StatusInternalServerError,
 			Msg:  "Server error",
 		})
