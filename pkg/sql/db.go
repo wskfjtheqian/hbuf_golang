@@ -63,13 +63,26 @@ func TableName(ctx context.Context, name string) string {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func NewDB() *DB {
-	return &DB{}
+type Option func(*DB)
+
+func WithCache(cache DbCache) Option {
+	return func(db *DB) {
+		db.cache = cache
+	}
+}
+
+func NewDB(option ...Option) *DB {
+	ret := &DB{}
+	for _, opt := range option {
+		opt(ret)
+	}
+	return ret
 }
 
 type DB struct {
 	config *Config
 	db     atomic.Pointer[sql.DB]
+	cache  DbCache
 }
 
 func (d *DB) SetConfig(cfg *Config) error {
