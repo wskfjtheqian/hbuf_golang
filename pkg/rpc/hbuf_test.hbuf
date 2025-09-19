@@ -14,5 +14,7 @@ data HbufResponse {
 
 server HbufService {
     HbufResponse HbufMethod(HbufRequest req) = 1
+
+    stream HbufMethod(stream req) = 2
 }
 

@@ -38,9 +38,12 @@ func (r *HbufServiceClient) HbufMethod(ctx context.Context, req *HbufRequest) (*
 	return response.(*HbufResponse), nil
 }
 
-func (p *HbufServiceClient) HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error) {
-	//TODO implement me
-	panic("implement me")
+func (r *HbufServiceClient) HbufStream(ctx context.Context, req io.Reader) (io.ReadCloser, error) {
+	response, err := r.client.Invoke(ctx, 0, "hbuf_service", "hbuf_stream", req, nil)
+	if err != nil {
+		return nil, err
+	}
+	return response.(io.ReadCloser), nil
 }
 
 func RegisterHbufService(r rpc.ServerRegister, server HbufService) {
@@ -55,6 +58,15 @@ func RegisterHbufService(r rpc.ServerRegister, server HbufService) {
 			},
 			Decode: func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error) {
 				return decoder(&HbufRequest{})
+			},
+		},
+		&rpc.Method{
+			Name: "hbuf_stream",
+			WithContext: func(ctx context.Context) context.Context {
+				return ctx
+			},
+			Handler: func(ctx context.Context, req any) (any, error) {
+				return server.HbufStream(ctx, req.(io.Reader))
 			},
 		},
 	)

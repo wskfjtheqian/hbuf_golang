@@ -445,9 +445,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := response.(io.Reader); ok {
-			return reader, nil
-		} else if val, ok := response.(ResultI); ok {
+		if val, ok := response.(ResultI); ok {
 			defer reader.Close()
 
 			err = c.decode(reader)(val)
@@ -461,7 +459,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 
 			return val.GetData(), nil
 		} else {
-			return nil, erro.NewError("response is not io.Reader or hbuf.Data")
+			return reader, nil
 		}
 	})(ctx, request)
 	if err != nil {

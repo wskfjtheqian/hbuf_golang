@@ -31,8 +31,12 @@ type TestHbufService struct {
 }
 
 func (t TestHbufService) HbufStream(ctx context.Context, reader io.Reader) (io.ReadCloser, error) {
-	//TODO implement me
-	panic("implement me")
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	hlog.Info("receive data: %s", string(data))
+	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
 func (t TestHbufService) Init(ctx context.Context) {
@@ -71,6 +75,20 @@ func TestHttpService_Invoke(t *testing.T) {
 	if resp.Name != "test" {
 		t.Fatal("test fail")
 	}
+
+	stream, err := testClient.HbufStream(context.Background(), bytes.NewReader([]byte("HbufStream Test")))
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "HbufStream Test" {
+		t.Fatal("test fail")
+	}
 }
 
 // 测试 HttpService 的 Response 方法
@@ -92,6 +110,20 @@ func TestHttpService_InvokeHBuf(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
+
+	stream, err := testClient.HbufStream(context.Background(), bytes.NewReader([]byte("HbufStream Test")))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "HbufStream Test" {
 		t.Fatal("test fail")
 	}
 }
@@ -141,6 +173,20 @@ func TestHttpService_Encoder(t *testing.T) {
 	if resp.Name != "test" {
 		t.Fatal("test fail")
 	}
+
+	stream, err := testClient.HbufStream(context.Background(), bytes.NewReader([]byte("HbufStream Test")))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "HbufStream Test" {
+		t.Fatal("test fail")
+	}
 }
 
 // 测试 base64
@@ -175,6 +221,19 @@ func TestHttpService_Middleware(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.Name != "test" {
+		t.Fatal("test fail")
+	}
+	stream, err := testClient.HbufStream(context.Background(), bytes.NewReader([]byte("HbufStream Test")))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "HbufStream Test" {
 		t.Fatal("test fail")
 	}
 }
