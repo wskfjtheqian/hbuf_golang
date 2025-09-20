@@ -3,38 +3,58 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/sql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
 	"time"
 )
 
+func NewDBCache() sql.DbCache {
+	return &DBCache{}
+}
+
 type DBCache struct {
 }
 
-func (d *DBCache) Get(ctx context.Context, table string, sql string, out any) (bool, error) {
+func (d *DBCache) Lock(ctx context.Context, key string) error {
+
+	return nil
+}
+func (d *DBCache) Unlock(ctx context.Context, key string) error {
+
+	return nil
+}
+
+func (d *DBCache) Get(ctx context.Context, key string, table string, out any, expiration time.Duration) (bool, error) {
 	r, ok := FromContext(ctx)
 	if !ok {
 		return false, erro.NewError("redis not found in context")
 	}
-	key := "db:cache:" + table + ":" + utl.Md5(sql)
+	c := r.Get()
 
-	cmd := r.Get().Get(ctx, key)
+	cmd := c.Get(ctx, "db:cache:"+key)
+	if errors.Is(cmd.Err(), redis.Nil) {
+		return false, nil
+	}
 	if cmd.Err() != nil {
 		return false, erro.Wrap(cmd.Err())
 	}
-
-	if cmd.Val() == "" {
+	if cmd.Val() == "null" {
 		return true, nil
 	}
 	err := json.Unmarshal([]byte(cmd.Val()), out)
 	if err != nil {
 		return false, erro.Wrap(err)
 	}
+
+	c.Expire(ctx, "db:cache:"+key, expiration)
 	return true, nil
 }
 
-func (d *DBCache) Set(ctx context.Context, table string, sql string, in any, expiration time.Duration) error {
+func (d *DBCache) Set(ctx context.Context, key string, table string, sql string, in any, expiration time.Duration) error {
 	r, ok := FromContext(ctx)
 	if !ok {
 		return erro.NewError("redis not found in context")
@@ -44,12 +64,11 @@ func (d *DBCache) Set(ctx context.Context, table string, sql string, in any, exp
 		return erro.Wrap(err)
 	}
 	c := r.Get()
-	key := "db:cache:" + table
-	reply := c.Set(ctx, key+":"+utl.Md5(sql), bytes, expiration)
+	reply := c.Set(ctx, "db:cache:"+key, bytes, expiration)
 	if reply.Err() != nil {
 		return erro.Wrap(reply.Err())
 	}
-	c.HSet(ctx, key+":"+table, utl.Md5(reply.Val()), bytes)
+	c.HSet(ctx, "db:cache:"+table, key, nil)
 	return nil
 }
 

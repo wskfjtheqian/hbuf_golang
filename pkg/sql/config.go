@@ -58,8 +58,17 @@ type Config struct {
 	// SetPassword sets the password for the database.
 	Password *string `yaml:"Password"`
 
-	// SetURL sets the url for the database.
-	URL *string `yaml:"Url"`
+	// SetDbName sets the name of the database.
+	DbName *string `yaml:"DbName"`
+
+	// SetCharset sets the charset for the database.
+	Network *string `yaml:"Network"`
+
+	// SetHost sets the host for the database.
+	Host *string `yaml:"Host"`
+
+	// SetPort sets the port for the database.
+	Params *string `yaml:"Params"`
 }
 
 // Validate 检查配置是否有效
@@ -82,10 +91,22 @@ func (c *Config) Validate() bool {
 		valid = false
 		hlog.Error("sql config password is empty")
 	}
-	if c.URL == nil || *c.URL == "" {
+	if c.DbName == nil || *c.DbName == "" {
 		valid = false
-		hlog.Error("sql config url is empty")
+		hlog.Error("sql config dbname is empty")
 	}
+	if c.Network == nil || *c.Network == "" {
+		valid = false
+		hlog.Error("sql config network is empty")
+	}
+	if c.Host == nil || *c.Host == "" {
+		valid = false
+		hlog.Error("sql config host is empty")
+	}
+	if c.Params == nil {
+		c.Params = utl.ToPointer("")
+	}
+
 	return valid
 }
 
@@ -105,5 +126,8 @@ func (c *Config) Equal(other *Config) bool {
 		utl.Equal(c.Type, other.Type) &&
 		utl.Equal(c.Username, other.Username) &&
 		utl.Equal(c.Password, other.Password) &&
-		utl.Equal(c.URL, other.URL)
+		utl.Equal(c.DbName, other.DbName) &&
+		utl.Equal(c.Network, other.Network) &&
+		utl.Equal(c.Host, other.Host) &&
+		utl.Equal(c.Params, other.Params)
 }

@@ -14,27 +14,28 @@ type Option func(*App)
 
 func WithMiddleware(middlewares ...rpc.HandlerMiddleware) Option {
 	return func(s *App) {
-		s.middlewares = append(s.middlewares, middlewares...)
+		service.WithMiddleware(append(s.Middlewares(), middlewares...)...)(s.service)
+	}
+}
+
+func WithDbCache(cache sql.DbCache) Option {
+	return func(s *App) {
+		sql.WithCache(cache)(s.sqlDb)
 	}
 }
 
 // NewApp 新建一个App
 func NewApp(options ...Option) *App {
-	ret := &App{
-		nats:  nats.NewNats(),
-		etcd:  etcd.NewEtcd(),
-		redis: redis.NewRedis(),
-		sqlDb: sql.NewDB(),
-	}
+	ret := &App{}
+	ret.nats = nats.NewNats()
+	ret.etcd = etcd.NewEtcd()
+	ret.redis = redis.NewRedis()
+	ret.sqlDb = sql.NewDB(sql.WithCache(redis.NewDBCache()))
+	ret.service = service.NewService(ret.etcd, service.WithMiddleware())
 
 	for _, option := range options {
 		option(ret)
 	}
-
-	ret.service = service.NewService(ret.etcd, service.WithMiddleware(
-		append(ret.Middlewares(), ret.middlewares...)...,
-	))
-
 	return ret
 }
 
@@ -45,8 +46,7 @@ type App struct {
 	redis *redis.Redis
 	sqlDb *sql.DB
 
-	service     *service.Service
-	middlewares []rpc.HandlerMiddleware
+	service *service.Service
 }
 
 // SetConfig 设置配置

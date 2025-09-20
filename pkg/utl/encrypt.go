@@ -134,7 +134,7 @@ func PKCS7UnPadding(origData []byte) []byte {
 	return origData[:(length - unpadding)]
 }
 
-func Md5(value string) string {
+func Md5(value []byte) string {
 	data := md5.Sum(value)
 	return hex.EncodeToString(data[:])
 }

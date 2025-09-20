@@ -3,39 +3,33 @@ package sql
 import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
 	"time"
 )
 
 type DbCache interface {
-	Lock(ctx context.Context, table string, sql string) error
-	Unlock(ctx context.Context, table string, sql string) error
-	Get(ctx context.Context, table string, sql string, out any) (bool, error)
-	Set(ctx context.Context, table string, sql string, in any, expiration time.Duration) error
+	Lock(ctx context.Context, key string) error
+	Unlock(ctx context.Context, key string) error
+	Get(ctx context.Context, key string, table string, out any, expiration time.Duration) (bool, error)
+	Set(ctx context.Context, key string, table string, sql string, in any, expiration time.Duration) error
 	Del(ctx context.Context, table string) error
 }
 
-func NewCache(table string, builder *Builder) *Cache {
-	return &Cache{
-		table: table,
-		sql:   builder.ToText(),
-	}
-}
-
-type Cache struct {
-	sql   string
-	table string
-}
-
-func (c *Cache) Save(ctx context.Context, val any, fn func(ctx context.Context, val any) error) error {
+func SaveCache(ctx context.Context, table string, builder *Builder, val any, expiration time.Duration, fn func(ctx context.Context) (any, error)) error {
 	db, ok := FromContext(ctx)
 	if !ok {
 		return erro.NewError("no db in context")
 	}
+	var err error
 	if db.cache == nil {
-		return fn(ctx, val)
+		_, err = fn(ctx)
+		return err
 	}
+	table = *db.config.DbName + "." + table
+	sql := builder.ToText()
+	key := table + ":" + utl.Md5([]byte(sql))
 
-	ok, err := db.cache.Get(ctx, c.table, c.sql, val)
+	ok, err = db.cache.Get(ctx, key, table, val, expiration)
 	if err != nil {
 		return err
 	}
@@ -43,13 +37,13 @@ func (c *Cache) Save(ctx context.Context, val any, fn func(ctx context.Context, 
 		return nil
 	}
 
-	err = db.cache.Lock(ctx, c.table, c.sql)
+	err = db.cache.Lock(ctx, key)
 	if err != nil {
 		return err
 	}
-	defer db.cache.Unlock(ctx, c.table, c.sql)
+	defer db.cache.Unlock(ctx, key)
 
-	ok, err = db.cache.Get(ctx, c.table, c.sql, val)
+	ok, err = db.cache.Get(ctx, key, table, val, expiration)
 	if err != nil {
 		return err
 	}
@@ -57,18 +51,19 @@ func (c *Cache) Save(ctx context.Context, val any, fn func(ctx context.Context, 
 		return nil
 	}
 
-	err = fn(ctx, val)
+	val, err = fn(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = db.cache.Set(ctx, c.table, c.sql, val, 0)
+	err = db.cache.Set(ctx, key, table, sql, val, expiration)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func (c *Cache) Clear(ctx context.Context) error {
+
+func ClearCache(ctx context.Context, table string) error {
 	db, ok := FromContext(ctx)
 	if !ok {
 		return erro.NewError("no db in context")
@@ -76,5 +71,5 @@ func (c *Cache) Clear(ctx context.Context) error {
 	if db.cache == nil {
 		return nil
 	}
-	return db.cache.Del(ctx, c.table)
+	return db.cache.Del(ctx, table)
 }

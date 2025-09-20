@@ -6,6 +6,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"net/url"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -109,7 +110,17 @@ func (d *DB) SetConfig(cfg *Config) error {
 
 	d.config = cfg
 
-	db, err := sql.Open(*cfg.Type, *cfg.Username+":"+*cfg.Password+"@"+*cfg.URL+"&parseTime=true&clientFoundRows=true")
+	uri := *cfg.Username + ":" + *cfg.Password + "@" + *cfg.Network + "(" + *cfg.Host + ")/" + *cfg.DbName
+
+	query, err := url.ParseQuery(*cfg.Params)
+	if err != nil {
+		return erro.Wrap(err)
+	}
+	query.Set("parseTime", "true")
+	query.Set("clientFoundRows", "true")
+	uri += "?" + query.Encode()
+
+	db, err := sql.Open(*cfg.Type, uri)
 	if err != nil {
 		return erro.Wrap(err)
 	}
@@ -144,6 +155,10 @@ func (d *DB) GetDB() (*sql.DB, error) {
 		return nil, erro.NewError("database not initialized")
 	}
 	return db, nil
+}
+
+func (d *DB) GetConfig() *Config {
+	return d.config
 }
 
 func (d *DB) NewMiddleware() rpc.HandlerMiddleware {

@@ -14,6 +14,7 @@ func (d *DBCache) Set(ctx context.Context, table string, sql string, in any) err
 
 	return nil
 }
+
 func (d *DBCache) Clear(ctx context.Context, table string) error {
 
 	return nil
