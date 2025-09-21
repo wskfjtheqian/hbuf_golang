@@ -27,7 +27,7 @@ func WithDbCache(cache sql.DbCache) Option {
 // NewApp 新建一个App
 func NewApp(options ...Option) *App {
 	ret := &App{}
-	ret.nats = nats.NewNats()
+	ret.nats = hmq.NewNats()
 	ret.etcd = etcd.NewEtcd()
 	ret.redis = redis.NewRedis()
 	ret.sqlDb = sql.NewDB(sql.WithCache(redis.NewDBCache()))
@@ -41,7 +41,7 @@ func NewApp(options ...Option) *App {
 
 // App 应用
 type App struct {
-	nats  *nats.Nats
+	nats  *hmq.Nats
 	etcd  *etcd.Etcd
 	redis *redis.Redis
 	sqlDb *sql.DB

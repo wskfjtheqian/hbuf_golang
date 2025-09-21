@@ -1,4 +1,4 @@
-package nats
+package hmq
 
 import (
 	"context"
@@ -240,27 +240,27 @@ func Publish[T any](ctx context.Context, subject string, msg *T) error {
 }
 
 // Subscribe 订阅指定的主题
-func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg *nats.Msg)) error {
+func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg *nats.Msg)) (*nats.Subscription, error) {
 	conn, err := n.GetConn()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = conn.Subscribe(subject, callback)
+	subscription, err := conn.Subscribe(subject, callback)
 	if err != nil {
 		hlog.Error("subscribe failed, error: %s", err)
-		return err
+		return nil, err
 	}
-	return nil
+	return subscription, nil
 }
 
 // Subscribe 订阅指定的主题
-func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T) error) error {
+func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T) error) (*nats.Subscription, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
-		return erro.NewError("nats not initialized")
+		return nil, erro.NewError("nats not initialized")
 	}
 
-	err := n.Subscribe(ctx, subject, func(msg *nats.Msg) {
+	subscription, err := n.Subscribe(ctx, subject, func(msg *nats.Msg) {
 		var data T
 		err := json.Unmarshal(msg.Data, &data)
 		if err != nil {
@@ -272,46 +272,46 @@ func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T)
 		}
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return subscription, nil
 }
 
 // JetStreamPublish 发布消息到指定的主题
-func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, data []byte) error {
+func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, data []byte) (*jetstream.PubAck, error) {
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	jetStream, err := n.GetJetStream()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = jetStream.Publish(ctx, subject, data, jetstream.WithMsgID(uuid.NewString()))
+	pubAck, err := jetStream.Publish(ctx, subject, data, jetstream.WithMsgID(uuid.NewString()))
 	if err != nil {
 		hlog.Error("publish failed, error: %s", err)
-		return err
+		return nil, err
 	}
-	return nil
+	return pubAck, nil
 }
 
 // JetStreamPublish 发布消息到指定的主题
-func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T) error {
+func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T) (*jetstream.PubAck, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
-		return erro.NewError("nats not initialized")
+		return nil, erro.NewError("nats not initialized")
 	}
 
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = n.JetStreamPublish(ctx, stream, subject, jsonData)
+	pubAck, err := n.JetStreamPublish(ctx, stream, subject, jsonData)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return pubAck, nil
 }
 
 func (n *Nats) GetJetStream() (jetstream.JetStream, error) {

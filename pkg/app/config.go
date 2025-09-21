@@ -10,7 +10,7 @@ import (
 )
 
 type Config struct {
-	Nats    *nats.Config    `yaml:"Nats"`
+	Nats    *hmq.Config     `yaml:"Nats"`
 	Etcd    *etcd.Config    `yaml:"Etcd"`
 	Redis   *redis.Config   `yaml:"Redis"`
 	Sql     *sql.Config     `yaml:"Sql"`

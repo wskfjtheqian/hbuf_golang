@@ -468,10 +468,10 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 	return data, nil
 }
 
-//func CloneContext(ctx context.Context) (context.Context, error) {
-//	return ctx, nil
-//}
-//
-//func CloseContext(ctx context.Context) {
-//
-//}
+func CloneContext(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
+
+func CloseContext(ctx context.Context) {
+
+}

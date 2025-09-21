@@ -1,4 +1,4 @@
-package nats
+package hmq
 
 import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
