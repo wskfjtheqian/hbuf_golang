@@ -2,7 +2,7 @@ package hmq
 
 import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/utl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"sort"
 	"time"
 )
@@ -138,11 +138,6 @@ type Config struct {
 
 	// SkipHostLookup skips the DNS lookup for the server hostname.
 	SkipHostLookup *bool `yaml:"SkipHostLookup"`
-
-	// PermissionErrOnSubscribe - if set to true, the client will return ErrPermissionViolation
-	// from SubscribeSync if the server returns a permissions error for a subscription.
-	// Defaults to false.
-	PermissionErrOnSubscribe *bool `yaml:"PermissionErrOnSubscribe"`
 }
 
 // Validate 检查配置是否有效
@@ -243,33 +238,33 @@ func (c *Config) Equal(other *Config) bool {
 			return false
 		}
 	}
-	return utl.Equal(c.NoRandomize, other.NoRandomize) &&
-		utl.Equal(c.NoEcho, other.NoEcho) &&
-		utl.Equal(c.Name, other.Name) &&
-		utl.Equal(c.Verbose, other.Verbose) &&
-		utl.Equal(c.Secure, other.Secure) &&
-		utl.Equal(c.AllowReconnect, other.AllowReconnect) &&
-		utl.Equal(c.MaxReconnect, other.MaxReconnect) &&
-		utl.Equal(c.ReconnectWait, other.ReconnectWait) &&
-		utl.Equal(c.ReconnectJitter, other.ReconnectJitter) &&
-		utl.Equal(c.ReconnectJitterTLS, other.ReconnectJitterTLS) &&
-		utl.Equal(c.Timeout, other.Timeout) &&
-		utl.Equal(c.DrainTimeout, other.DrainTimeout) &&
-		utl.Equal(c.FlusherTimeout, other.FlusherTimeout) &&
-		utl.Equal(c.PingInterval, other.PingInterval) &&
-		utl.Equal(c.MaxPingsOut, other.MaxPingsOut) &&
-		utl.Equal(c.ReconnectBufSize, other.ReconnectBufSize) &&
-		utl.Equal(c.SubChanLen, other.SubChanLen) &&
-		utl.Equal(c.User, other.User) &&
-		utl.Equal(c.Password, other.Password) &&
-		utl.Equal(c.Token, other.Token) &&
-		utl.Equal(c.UseOldRequestStyle, other.UseOldRequestStyle) &&
-		utl.Equal(c.NoCallbacksAfterClientClose, other.NoCallbacksAfterClientClose) &&
-		utl.Equal(c.RetryOnFailedConnect, other.RetryOnFailedConnect) &&
-		utl.Equal(c.Compression, other.Compression) &&
-		utl.Equal(c.ProxyPath, other.ProxyPath) &&
-		utl.Equal(c.InboxPrefix, other.InboxPrefix) &&
-		utl.Equal(c.IgnoreAuthErrorAbort, other.IgnoreAuthErrorAbort) &&
-		utl.Equal(c.SkipHostLookup, other.SkipHostLookup) &&
-		utl.Equal(c.PermissionErrOnSubscribe, other.PermissionErrOnSubscribe)
+	return hutl.Equal(c.NoRandomize, other.NoRandomize) &&
+		hutl.Equal(c.NoEcho, other.NoEcho) &&
+		hutl.Equal(c.Name, other.Name) &&
+		hutl.Equal(c.Verbose, other.Verbose) &&
+		hutl.Equal(c.Secure, other.Secure) &&
+		hutl.Equal(c.AllowReconnect, other.AllowReconnect) &&
+		hutl.Equal(c.MaxReconnect, other.MaxReconnect) &&
+		hutl.Equal(c.ReconnectWait, other.ReconnectWait) &&
+		hutl.Equal(c.ReconnectJitter, other.ReconnectJitter) &&
+		hutl.Equal(c.ReconnectJitterTLS, other.ReconnectJitterTLS) &&
+		hutl.Equal(c.Timeout, other.Timeout) &&
+		hutl.Equal(c.DrainTimeout, other.DrainTimeout) &&
+		hutl.Equal(c.FlusherTimeout, other.FlusherTimeout) &&
+		hutl.Equal(c.PingInterval, other.PingInterval) &&
+		hutl.Equal(c.MaxPingsOut, other.MaxPingsOut) &&
+		hutl.Equal(c.ReconnectBufSize, other.ReconnectBufSize) &&
+		hutl.Equal(c.SubChanLen, other.SubChanLen) &&
+		hutl.Equal(c.User, other.User) &&
+		hutl.Equal(c.Password, other.Password) &&
+		hutl.Equal(c.Token, other.Token) &&
+		hutl.Equal(c.UseOldRequestStyle, other.UseOldRequestStyle) &&
+		hutl.Equal(c.NoCallbacksAfterClientClose, other.NoCallbacksAfterClientClose) &&
+		hutl.Equal(c.RetryOnFailedConnect, other.RetryOnFailedConnect) &&
+		hutl.Equal(c.Compression, other.Compression) &&
+		hutl.Equal(c.ProxyPath, other.ProxyPath) &&
+		hutl.Equal(c.InboxPrefix, other.InboxPrefix) &&
+		hutl.Equal(c.IgnoreAuthErrorAbort, other.IgnoreAuthErrorAbort) &&
+		hutl.Equal(c.SkipHostLookup, other.SkipHostLookup) &&
+		hutl.Equal(c.PermissionErrOnSubscribe, other.PermissionErrOnSubscribe)
 }

@@ -6,9 +6,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"reflect"
 	"strings"
 	"sync"
@@ -177,22 +177,19 @@ func (d *Nats) SetConfig(cfg *Config) error {
 	if cfg.SkipHostLookup != nil && *cfg.SkipHostLookup {
 		options = append(options, nats.SkipHostLookup())
 	}
-	if cfg.PermissionErrOnSubscribe != nil {
-		options = append(options, nats.PermissionErrOnSubscribe(*cfg.PermissionErrOnSubscribe))
-	}
 
 	nc, err := nats.Connect(
 		strings.Join(cfg.Servers, ","),
 		options...,
 	)
 	if err != nil {
-		return erro.Wrap(err)
+		return herror.Wrap(err)
 	}
 
 	js, err := jetstream.New(nc)
 	if err != nil {
 		nc.Close()
-		return erro.Wrap(err)
+		return herror.Wrap(err)
 	}
 
 	d.conn.Store(nc)
@@ -226,7 +223,7 @@ func (n *Nats) Publish(ctx context.Context, subject string, data []byte) error {
 func Publish[T any](ctx context.Context, subject string, msg *T) error {
 	n, ok := FromContext(ctx)
 	if !ok {
-		return erro.NewError("nats not initialized")
+		return herror.NewError("nats not initialized")
 	}
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
@@ -257,7 +254,7 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg 
 func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T) error) (*nats.Subscription, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
-		return nil, erro.NewError("nats not initialized")
+		return nil, herror.NewError("nats not initialized")
 	}
 
 	subscription, err := n.Subscribe(ctx, subject, func(msg *nats.Msg) {
@@ -300,7 +297,7 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T) (*jetstream.PubAck, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
-		return nil, erro.NewError("nats not initialized")
+		return nil, herror.NewError("nats not initialized")
 	}
 
 	jsonData, err := json.Marshal(msg)
@@ -316,14 +313,14 @@ func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T
 
 func (n *Nats) GetJetStream() (jetstream.JetStream, error) {
 	if n.js.Load() == nil {
-		return nil, erro.NewError("nats not initialized")
+		return nil, herror.NewError("nats not initialized")
 	}
 	return *n.js.Load(), nil
 }
 
 func (n *Nats) GetConn() (*nats.Conn, error) {
 	if n.conn.Load() == nil {
-		return nil, erro.NewError("nats not initialized")
+		return nil, herror.NewError("nats not initialized")
 	}
 	return n.conn.Load(), nil
 }
@@ -387,7 +384,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(msg *T) error) error {
 	n, ok := FromContext(ctx)
 	if !ok {
-		return erro.NewError("nats not initialized")
+		return herror.NewError("nats not initialized")
 	}
 
 	err := n.JetStreamSubscribe(ctx, stream, subject, durable, func(msg jetstream.Msg) error {
@@ -556,8 +553,8 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 }
 
 // NewMiddleware 创建中间件
-func (n *Nats) NewMiddleware() rpc.HandlerMiddleware {
-	return func(next rpc.Handler) rpc.Handler {
+func (n *Nats) NewMiddleware() hrpc.HandlerMiddleware {
+	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, n), req)
 		}

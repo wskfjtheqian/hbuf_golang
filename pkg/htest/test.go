@@ -3,13 +3,13 @@ package htest
 import (
 	"context"
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/rpc"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"testing"
 )
 
 var Context func() context.Context = func() context.Context {
-	return rpc.NewContext(context.TODO())
+	return hrpc.WithContext(context.TODO(), "test")
 }
 
 func HTest(desc string, t *testing.T, call func(ctx context.Context) (any, error)) {
@@ -20,7 +20,7 @@ func HTest(desc string, t *testing.T, call func(ctx context.Context) (any, error
 	}
 	marshal, err := json.MarshalIndent(&val, "", "\t")
 	if err != nil {
-		erro.PrintStack(err)
+		herror.PrintStack(err)
 		return
 	}
 	t.Log(string(marshal))

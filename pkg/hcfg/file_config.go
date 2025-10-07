@@ -1,0 +1,106 @@
+package hcfg
+
+import (
+	"github.com/fsnotify/fsnotify"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"os"
+)
+
+type fileConfig struct {
+	path     string
+	value    string
+	onChange func(c string)
+	hostname string
+	watcher  *fsnotify.Watcher
+	keyVal   map[string]any
+}
+
+func (c *fileConfig) Yaml() string {
+	return c.value
+}
+
+func (c *fileConfig) CheckConfig() int {
+	return 0
+}
+
+func (c *fileConfig) OnChange(call func(value string)) error {
+	if 0 == len(c.value) {
+		buffer, err := os.ReadFile(c.path)
+		if err != nil {
+			hlog.Error("config file read error: %s", err)
+		}
+		c.value = string(buffer)
+		if nil != call {
+			config, err := generateConfig(c.value, c.keyVal)
+			if err != nil {
+				herror.PrintStack(err)
+				return err
+			}
+			call(config)
+		}
+	}
+	c.onChange = call
+	return nil
+}
+
+func NewFileConfig(hostname string, path string, val map[string]any) Watch {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		hlog.Error("watch error: %s", err)
+	}
+	return &fileConfig{
+		watcher:  watcher,
+		hostname: hostname,
+		path:     path,
+		keyVal:   val,
+	}
+}
+func (c *fileConfig) Close() error {
+	return c.watcher.Close()
+}
+
+func (c *fileConfig) Watch() error {
+	done := make(chan bool)
+	go func() {
+		hlog.Info("start watch config file: %s", c.path)
+		for {
+			select {
+			case event, ok := <-c.watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&event.Op == fsnotify.Write {
+					hlog.Info("config file change: %s", c.path)
+					buffer, err := os.ReadFile(c.path)
+					if err != nil {
+						hlog.Error("read config file error: %s", c.path)
+						return
+					}
+					value := string(buffer)
+					if value != c.value && nil != c.onChange {
+						config, err := generateConfig(value, c.keyVal)
+						if err != nil {
+							herror.PrintStack(err)
+							return
+						}
+						c.onChange(config)
+					}
+					c.value = value
+				}
+			case err, ok := <-c.watcher.Errors:
+				if !ok {
+					return
+				}
+				hlog.Error("watch error: %s", err)
+			}
+		}
+	}()
+	err := c.watcher.Add(c.path)
+	if err != nil {
+		return err
+	}
+	<-done
+	hlog.Flush()
+	return nil
+}

@@ -8,13 +8,13 @@ require (
 	github.com/gobwas/ws v1.4.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.37.0
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.3
 	github.com/shopspring/decimal v1.4.0
 	go.etcd.io/etcd/api/v3 v3.5.17
 	go.etcd.io/etcd/client/v3 v3.5.17
 	golang.org/x/net v0.33.0
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.33.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
