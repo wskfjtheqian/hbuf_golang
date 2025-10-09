@@ -2,6 +2,7 @@ package hredis
 
 import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"time"
 )
 

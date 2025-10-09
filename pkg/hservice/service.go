@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hctx"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -51,6 +52,18 @@ func (d *Context) Value(key any) any {
 	return d.Context.Value(key)
 }
 
+// Clone 克隆Context
+func (d *Context) Clone(ctx context.Context) context.Context {
+	if val, ok := d.Context.(hctx.CloneableContext); ok {
+		ctx = val.Clone(ctx)
+	}
+	ret := &Context{
+		Context: ctx,
+		service: d.service,
+	}
+	return ret
+}
+
 // FromContext 从Context中获取Context
 func FromContext(ctx context.Context) *Service {
 	val := ctx.Value(contextType)
@@ -60,7 +73,7 @@ func FromContext(ctx context.Context) *Service {
 	return val.(*Context).service
 }
 
-// 协议名称
+// ProtocolName 协议名称
 const ProtocolName = "hbuf-rpc://"
 
 // RegisterInfo 定义了服务注册信息
@@ -133,16 +146,6 @@ func (s *Service) SetConfig(cfg *Config) error {
 		return nil
 	}
 
-	for _, item := range cfg.Server.List {
-		if install, ok := s.install[item]; ok {
-			_, _ = s.middleware(func(ctx context.Context, req any) (any, error) {
-				install.init.Init(ctx)
-				return nil, nil
-			})(ctx, nil)
-			s.rpcServer.Register(install.id, install.name, install.methods...)
-		}
-	}
-
 	for key, value := range cfg.Client.Server {
 		if install, ok := s.install[key]; ok {
 			for _, item := range value {
@@ -180,6 +183,16 @@ func (s *Service) SetConfig(cfg *Config) error {
 				hlog.Error("discovery service failed: %s", err)
 			}
 		}()
+	}
+
+	for _, item := range cfg.Server.List {
+		if install, ok := s.install[item]; ok {
+			_, _ = s.middleware(func(ctx context.Context, req any) (any, error) {
+				install.init.Init(ctx)
+				return nil, nil
+			})(ctx, nil)
+			s.rpcServer.Register(install.id, install.name, install.methods...)
+		}
 	}
 	return nil
 }

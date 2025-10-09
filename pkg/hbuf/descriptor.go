@@ -5,6 +5,7 @@ import (
 	"github.com/shopspring/decimal"
 	"reflect"
 	"sort"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -2103,4 +2104,23 @@ func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 		}
 	}
 	return buf, nil
+}
+
+func NewSyncDescriptor(f func() Descriptor) *SyncDescriptor {
+	return &SyncDescriptor{
+		f: f,
+	}
+}
+
+type SyncDescriptor struct {
+	once sync.Once
+	desc Descriptor
+	f    func() Descriptor
+}
+
+func (s *SyncDescriptor) Desc() Descriptor {
+	s.once.Do(func() {
+		s.desc = s.f()
+	})
+	return s.desc
 }

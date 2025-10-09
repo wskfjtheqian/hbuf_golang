@@ -3,10 +3,26 @@ package hrpc
 import (
 	"context"
 	"encoding/json"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"reflect"
 	"runtime"
 	"strings"
 )
+
+// GetServerAndFuncName 获得指定服务和方法的名字
+func GetServerAndFuncName(f any) (string, string, error) {
+	str := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+	var method string
+	if i := strings.LastIndex(str, "."); i >= 0 {
+		method = str[i+1:]
+		str = str[:i]
+		if i := strings.LastIndex(str, "."); i >= 0 {
+			return str[i+1:], method, nil
+		}
+	}
+
+	return "", "", herror.NewError("invalid server function")
+}
 
 // GetServerFuncName 获得指定方法的名字
 func GetServerFuncName(f any) string {

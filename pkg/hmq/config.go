@@ -265,6 +265,5 @@ func (c *Config) Equal(other *Config) bool {
 		hutl.Equal(c.ProxyPath, other.ProxyPath) &&
 		hutl.Equal(c.InboxPrefix, other.InboxPrefix) &&
 		hutl.Equal(c.IgnoreAuthErrorAbort, other.IgnoreAuthErrorAbort) &&
-		hutl.Equal(c.SkipHostLookup, other.SkipHostLookup) &&
-		hutl.Equal(c.PermissionErrOnSubscribe, other.PermissionErrOnSubscribe)
+		hutl.Equal(c.SkipHostLookup, other.SkipHostLookup)
 }

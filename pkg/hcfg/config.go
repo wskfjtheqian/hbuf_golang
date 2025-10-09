@@ -3,6 +3,7 @@ package hcfg
 import (
 	"bytes"
 	"flag"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"html/template"
 )

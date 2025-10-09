@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hctx"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"io"
 	"net/http"
@@ -70,6 +71,30 @@ func (d *Context) Value(key any) any {
 		return d
 	}
 	return d.Context.Value(key)
+}
+
+// Clone 克隆Context
+func (d *Context) Clone(ctx context.Context) context.Context {
+	if val, ok := d.Context.(hctx.CloneableContext); ok {
+		ctx = val.Clone(ctx)
+	}
+	ret := &Context{
+		Context: ctx,
+		header:  http.Header{},
+		tags:    make(map[string][]string),
+		method:  d.method,
+	}
+	for k, v := range d.header {
+		for _, vv := range v {
+			ret.header[k] = append(ret.header[k], vv)
+		}
+	}
+	for k, v := range d.tags {
+		for _, vv := range v {
+			ret.tags[k] = append(ret.tags[k], vv)
+		}
+	}
+	return ret
 }
 
 // FromContext 从Context中获取Context
@@ -466,12 +491,4 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 		return nil, err
 	}
 	return data, nil
-}
-
-func CloneContext(ctx context.Context) (context.Context, error) {
-	return ctx, nil
-}
-
-func CloseContext(ctx context.Context) {
-
 }

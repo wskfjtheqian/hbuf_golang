@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/gobwas/ws"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"io"
 	"net"
 	"net/http"

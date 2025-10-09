@@ -3,6 +3,7 @@ package hrpc_test
 import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"io"
 )
 

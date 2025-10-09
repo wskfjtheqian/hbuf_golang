@@ -6,48 +6,15 @@ import (
 	"crypto/tls"
 	"errors"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"golang.org/x/net/http2"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 )
-
-// WithHttpContext 在 context 中存储 HttpContext。
-func WithHttpContext(ctx context.Context, writer http.ResponseWriter, request *http.Request) context.Context {
-	return &HttpContext{
-		Context: ctx,
-		writer:  writer,
-		request: request,
-	}
-}
-
-// HttpContext Value 用于在 context 中存储 HttpContext。
-type HttpContext struct {
-	context.Context
-
-	writer  http.ResponseWriter
-	request *http.Request
-}
-
-var httpType = reflect.TypeOf(&HttpContext{})
-
-func (d *HttpContext) Value(key any) any {
-	if reflect.TypeOf(d) == key {
-		return d
-	}
-	return d.Context.Value(key)
-}
-
-// FromHttpContext 从 context 中获取 HttpContext。
-func FromHttpContext(ctx context.Context) *HttpContext {
-	return ctx.Value(httpType).(*HttpContext)
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // HttpClientOption  HttpClient 的选项。
 type HttpClientOption func(*HttpClient)
@@ -211,11 +178,9 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	ctx := WithHttpContext(r.Context(), w, r)
 	err := h.middleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
 		return h.server.Response(ctx, path, writer, reader)
-	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body)
+	})(r.Context(), r.URL.Path[len(h.pathPrefix):], w, r.Body)
 	if err != nil {
 		var e *Result[hbuf.Data]
 		if errors.As(err, &e) && e.Code == -1 {

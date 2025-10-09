@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/go-redis/redis/v8"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hsql"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"time"
 )
 
@@ -30,9 +33,11 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 	if !ok {
 		return false, herror.NewError("redis not found in context")
 	}
-	c := r.Get()
 
-	cmd := c.Get(ctx, "db:cache:"+key)
+	c := r.Get()
+	key = "db:cache:" + table + ":" + key
+	cmd := c.Get(ctx, key)
+
 	err := cmd.Err()
 	if errors.Is(err, redis.Nil) {
 		return false, nil
@@ -43,12 +48,13 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 	if cmd.Val() == "null" {
 		return true, nil
 	}
+
 	err = json.Unmarshal([]byte(cmd.Val()), out)
 	if err != nil {
 		return false, herror.Wrap(err)
 	}
 
-	c.Expire(ctx, "db:cache:"+key, expiration)
+	c.Expire(ctx, key, expiration)
 	return true, nil
 }
 
@@ -61,11 +67,13 @@ func (d *DBCache) Set(ctx context.Context, key string, table string, sql string,
 	if err != nil {
 		return herror.Wrap(err)
 	}
+
 	c := r.Get()
-	reply := c.Set(ctx, "db:cache:"+key, bytes, expiration)
+	reply := c.Set(ctx, "db:cache:"+table+":"+key, bytes, expiration)
 	if err = reply.Err(); err != nil {
 		return herror.Wrap(err)
 	}
+
 	c.HSet(ctx, "db:cache:"+table, key, nil)
 	c.HSet(ctx, "db:cache", table, nil)
 	return nil
@@ -82,10 +90,11 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 	if err := reply.Err(); err != nil {
 		return herror.Wrap(err)
 	}
-	keys := append(hutl.Keys(reply.Val()), key)
-	keys = hutl.Slice(keys, func(v string) string {
+
+	keys := hutl.Slice(hutl.Keys(reply.Val()), func(v string) string {
 		return key + ":" + v
 	})
+	keys = append(keys, key)
 
 	err := c.Del(ctx, keys...).Err()
 	if err != nil {
@@ -94,7 +103,7 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		err := c.Del(ctx, keys...).Err()
+		err := c.Del(context.TODO(), keys...).Err()
 		if err != nil {
 			hlog.Error("redis del error: %v", err)
 		}

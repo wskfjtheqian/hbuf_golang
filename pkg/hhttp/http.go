@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hctx"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -150,6 +151,14 @@ func (d *Context) Value(key any) any {
 		return d
 	}
 	return d.Context.Value(key)
+}
+
+// Clone 克隆Context
+func (d *Context) Clone(ctx context.Context) context.Context {
+	if val, ok := d.Context.(hctx.CloneableContext); ok {
+		ctx = val.Clone(ctx)
+	}
+	return ctx
 }
 
 // FromContext 从上下文中获取 HTTP 连接

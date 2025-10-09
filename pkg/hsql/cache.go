@@ -27,7 +27,7 @@ func SaveCache(ctx context.Context, table string, builder *Builder, val any, exp
 	}
 	table = *db.config.DbName + "." + table
 	sql := builder.ToText()
-	key := table + ":" + hutl.Md5([]byte(sql))
+	key := hutl.Md5([]byte(sql))
 
 	ok, err = db.cache.Get(ctx, key, table, val, expiration)
 	if err != nil {
@@ -37,11 +37,11 @@ func SaveCache(ctx context.Context, table string, builder *Builder, val any, exp
 		return nil
 	}
 
-	err = db.cache.Lock(ctx, key)
+	err = db.cache.Lock(ctx, table+":"+key)
 	if err != nil {
 		return err
 	}
-	defer db.cache.Unlock(ctx, key)
+	defer db.cache.Unlock(ctx, table+":"+key)
 
 	ok, err = db.cache.Get(ctx, key, table, val, expiration)
 	if err != nil {
@@ -71,5 +71,6 @@ func ClearCache(ctx context.Context, table string) error {
 	if db.cache == nil {
 		return nil
 	}
+	table = *db.config.DbName + "." + table
 	return db.cache.Del(ctx, table)
 }
