@@ -40,7 +40,7 @@ func InvokeServerFunc(ctx context.Context, obj any, method string, args string) 
 		return nil, herror.NewError("method not found")
 	}
 
-	paramCount := m.Type().Len()
+	paramCount := m.Type().NumIn()
 	var params []reflect.Value
 	if paramCount > 0 {
 		params = append(params, reflect.ValueOf(ctx))
