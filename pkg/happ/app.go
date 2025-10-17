@@ -1,6 +1,8 @@
 package happ
 
 import (
+	"context"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hmq"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hredis"
@@ -14,6 +16,12 @@ type Option func(*App)
 
 func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 	return func(s *App) {
+		s.middleware = func(next hrpc.Handler) hrpc.Handler {
+			for i := len(middlewares) - 1; i >= 0; i-- {
+				next = middlewares[i](next)
+			}
+			return next
+		}
 		hservice.WithMiddleware(append(s.Middlewares(), middlewares...)...)(s.service)
 	}
 }
@@ -26,7 +34,11 @@ func WithDbCache(cache hsql.DbCache) Option {
 
 // NewApp 新建一个App
 func NewApp(options ...Option) *App {
-	ret := &App{}
+	ret := &App{
+		middleware: func(next hrpc.Handler) hrpc.Handler {
+			return next
+		},
+	}
 	ret.nats = hmq.NewNats()
 	ret.etcd = hetcd.NewEtcd()
 	ret.redis = hredis.NewRedis()
@@ -46,7 +58,8 @@ type App struct {
 	redis *hredis.Redis
 	sqlDb *hsql.DB
 
-	service *hservice.Service
+	service    *hservice.Service
+	middleware func(next hrpc.Handler) hrpc.Handler
 }
 
 // SetConfig 设置配置
@@ -94,4 +107,17 @@ func (a *App) Middlewares() []hrpc.HandlerMiddleware {
 		a.sqlDb.NewMiddleware(),
 		a.service.NewMiddleware(),
 	}
+}
+
+func (a *App) Goroutine(fn func(ctx context.Context) error) {
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	go func() {
+		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
+			return nil, fn(ctx)
+		})(ctx, nil)
+		if err != nil {
+			herror.PrintStack(err)
+		}
+	}()
 }

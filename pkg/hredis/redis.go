@@ -3,7 +3,6 @@ package hredis
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hctx"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
@@ -34,18 +33,6 @@ func (d *Context) Value(key any) any {
 		return d
 	}
 	return d.Context.Value(key)
-}
-
-// Clone 克隆Context
-func (d *Context) Clone(ctx context.Context) context.Context {
-	if val, ok := d.Context.(hctx.CloneableContext); ok {
-		ctx = val.Clone(ctx)
-	}
-	ret := &Context{
-		Context: ctx,
-		redis:   d.redis,
-	}
-	return ret
 }
 
 // FromContext 从上下文中获取 REDIS 连接

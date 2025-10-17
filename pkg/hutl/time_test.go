@@ -1,6 +1,9 @@
 package hutl
 
 import (
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -228,5 +231,164 @@ func TestTimeFunctions(t *testing.T) {
 	otherSecond := time.Date(2021, 8, 15, 12, 30, 1, 0, time.Local)
 	if IsSameSecond(baseTime, otherSecond) {
 		t.Error("IsSameSecond failed: expected false, got true")
+	}
+}
+
+func TestTimeConst(t *testing.T) {
+	aa := map[string]string{
+		"0":   "International Date Change West",
+		"1":   "When coordinating the world-11",
+		"10":  "Labast, Mazartland",
+		"100": "Klasinoelsk",
+		"101": "Bangkok, Hanoi, Jakarta",
+		"102": "Tomosk",
+		"103": "New Siberia",
+		"104": "Beijing, Chongqing, Hong Kong Special Administrative Region, Urumqi",
+		"105": "Kuala Lumpur, Singapore",
+		"106": "Perth",
+		"107": "Taipei",
+		"108": "Ulanbato",
+		"109": "Irkutzk",
+		"11":  "Mountain Time (the United States and Canada)",
+		"110": "Ukola",
+		"111": "Chita City",
+		"112": "Osaka, Sapporo, Tokyo",
+		"113": "Pyongyang",
+		"114": "Seoul",
+		"115": "Yakuzk",
+		"116": "Adelaide",
+		"117": "Darwin",
+		"118": "Brisbane",
+		"119": "Vladivostak",
+		"12":  "Arizona",
+		"120": "Guam, Mogzbi Port",
+		"121": "Hobart",
+		"122": "Canberra, Melbourne, Sydney",
+		"123": "Lord Haojima",
+		"124": "Bukkovir Island",
+		"125": "Magatan",
+		"126": "Norfolk Island",
+		"127": "Jacquidh",
+		"128": "Sahalin",
+		"129": "Solomon Islands, New Cauritonia",
+		"13":  "Educate",
+		"130": "Anader, Kanshaga Peter Ravorovsk",
+		"131": "Auckland, Wellington",
+		"132": "Fiji",
+		"133": "When coordinating the world +12",
+		"134": "Chartham Islands",
+		"135": "Nuku Alpha",
+		"136": "Samoa Islands",
+		"137": "When coordinating the world +13",
+		"138": "Christmas Island",
+		"14":  "Easter Island",
+		"15":  "Guadalahara, Mexico City, Monterey",
+		"16":  "Saskhawin",
+		"17":  "Central time (the United States and Canada)",
+		"18":  "Central America",
+		"19":  "Boge Da, Lima, Kido, Rio Bronki",
+		"2":   "Alei Islands",
+		"20":  "Eastern Time (the United States and Canada)",
+		"21":  "Havana",
+		"22":  "Haiti",
+		"23":  "Chermal",
+		"24":  "Tax and Kaikos Islands",
+		"25":  "Indian Ana (East) (East)",
+		"26":  "Atlantic time (Canada)",
+		"27":  "Galagas",
+		"28":  "Kaza",
+		"29":  "George Dun, Rabas, Aids, San Hu'an",
+		"3":   "Hawaii",
+		"30":  "San Diego",
+		"31":  "Yatongsen",
+		"32":  "Nuvenovenland",
+		"33":  "Alagua",
+		"34":  "Brazilian",
+		"35":  "Buenos Aires",
+		"36":  "Cayenne, Fumausa",
+		"37":  "Montae",
+		"38":  "Puffa Arenas",
+		"39":  "Salvador",
+		"4":   "Maxus Islands",
+		"40":  "St. Piel and Michigal Islands",
+		"41":  "Greenland",
+		"42":  "When coordinating the world -02",
+		"43":  "Buddhist islands",
+		"44":  "Acel Islands",
+		"45":  "When coordinating the world",
+		"46":  "Dublin, Edinburgh, Lisbon, London",
+		"47":  "Monrovia, Reykjavik",
+		"48":  "Shengdomei",
+		"49":  "Casablanka",
+		"5":   "Alaska",
+		"50":  "Amsterdam, Berlin, Berne, Rome, Stockholm, Vienna",
+		"51":  "Belgrade, Bladisla, Budapest, Lulburia, Prague",
+		"52":  "Brussels, Copenhagen, Madrid, Paris",
+		"53":  "Sarajewo, Skopry, Warsaw, Saglerb",
+		"54":  "Western China",
+		"55":  "Berut",
+		"56":  "Ripari",
+		"57":  "Harary, Billeria",
+		"58":  "Helsinki, Kiev, Rica, Sorfiya, Tarin, Vernis",
+		"59":  "Kichinwu",
+		"6":   "When coordinating the world -09",
+		"60":  "Kalinrad",
+		"61":  "Gasha, Helima",
+		"62":  "Kagums",
+		"63":  "Cairo",
+		"64":  "Winhehe",
+		"65":  "Athens, Buccuster",
+		"66":  "Jerusalem",
+		"67":  "Juba",
+		"68":  "Amman",
+		"69":  "Baghdad",
+		"7":   "Pacific Time (the United States and Canada)",
+		"70":  "Damascus",
+		"71":  "Volgage",
+		"72":  "Kuwait, Riyadh",
+		"73":  "Minsk",
+		"74":  "Moscow, St. Petersburg",
+		"75":  "Nairobi",
+		"76":  "Istanbul",
+		"77":  "Tehran",
+		"78":  "Abu Dhabi, Maskat",
+		"79":  "Astraham, Uliyanovsk",
+		"8":   "Lower Galifa",
+		"80":  "Erinewin",
+		"81":  "Pakugu",
+		"82":  "Bilis",
+		"83":  "Louis Port",
+		"84":  "Salatov",
+		"85":  "Ilvsk, Samara",
+		"86":  "Kabul",
+		"87":  "Ashhabad, Tashgan",
+		"88":  "Astana",
+		"89":  "Yekaterinburg",
+		"9":   "Coordinating the World -08",
+		"90":  "Islamabad, Karachi",
+		"91":  "Qin Nai, Kolkata, Mumbai, New Delhi",
+		"92":  "Sriga Wulden Pulala",
+		"93":  "Kathmandu",
+		"94":  "Bishkek",
+		"95":  "Darka",
+		"96":  "Emuzk",
+		"97":  "Yangon",
+		"98":  "Balube, Gorno Altaysk",
+		"99":  "Kobado",
+	}
+
+	keys := Slice(Keys(aa), func(t string) int {
+		val, _ := strconv.Atoi(t)
+		return val
+	})
+	sort.Ints(keys)
+	for _, key := range keys {
+		val := aa[strconv.Itoa(key)]
+		val = strings.ReplaceAll(val, " ", "")
+		val = strings.ReplaceAll(val, ",", "_")
+		val = strings.ReplaceAll(val, "(", "")
+		val = strings.ReplaceAll(val, ")", "")
+		val = strings.ReplaceAll(val, "-", "_")
+		println("TimeZone" + val + "=" + strconv.Itoa(key))
 	}
 }

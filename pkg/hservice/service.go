@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hctx"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -52,18 +51,6 @@ func (d *Context) Value(key any) any {
 	return d.Context.Value(key)
 }
 
-// Clone 克隆Context
-func (d *Context) Clone(ctx context.Context) context.Context {
-	if val, ok := d.Context.(hctx.CloneableContext); ok {
-		ctx = val.Clone(ctx)
-	}
-	ret := &Context{
-		Context: ctx,
-		service: d.service,
-	}
-	return ret
-}
-
 // FromContext 从Context中获取Context
 func FromContext(ctx context.Context) *Service {
 	val := ctx.Value(contextType)
@@ -87,7 +74,6 @@ type Option func(*Service)
 
 func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 	return func(s *Service) {
-		middlewares = append(middlewares, s.NewMiddleware())
 		hrpc.WithServerMiddleware(middlewares...)(s.rpcServer)
 		s.middleware = func(next hrpc.Handler) hrpc.Handler {
 			for i := len(middlewares) - 1; i >= 0; i-- {
@@ -106,6 +92,9 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 		servers:    make(map[string]*ServerInfo),
 		clients:    make(map[string][]Init),
 		httpClient: make(map[string]*hrpc.Client),
+		middleware: func(next hrpc.Handler) hrpc.Handler {
+			return next
+		},
 	}
 	ret.rpcServer = hrpc.NewServer(hrpc.WithServerMiddleware(), hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 

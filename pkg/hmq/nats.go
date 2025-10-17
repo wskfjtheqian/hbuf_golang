@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hctx"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
@@ -39,18 +38,6 @@ func (d *Context) Value(key any) any {
 		return d
 	}
 	return d.Context.Value(key)
-}
-
-// Clone 克隆Context
-func (d *Context) Clone(ctx context.Context) context.Context {
-	if val, ok := d.Context.(hctx.CloneableContext); ok {
-		ctx = val.Clone(ctx)
-	}
-	ret := &Context{
-		Context: ctx,
-		nats:    d.nats,
-	}
-	return ret
 }
 
 // FromContext 从上下文中获取 NATS 连接
