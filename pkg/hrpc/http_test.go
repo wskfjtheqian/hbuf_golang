@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

@@ -181,7 +181,7 @@ func (s *webSocket) run() {
 
 			case ws.OpBinary:
 				var data WebSocketData
-				err = s.decoder(bytes.NewBuffer(frame.Payload))(&data)
+				err = s.decoder(bytes.NewBuffer(frame.Payload))(&data, "")
 				if err != nil {
 					herror.PrintStack(err)
 				}
@@ -222,7 +222,7 @@ func (s *webSocket) run() {
 			}
 			if data.Type == writeTypeData {
 				buf := bytes.NewBuffer(nil)
-				err := s.encoder(buf)(data.Data)
+				err := s.encoder(buf)(data.Data, "")
 				if err != nil {
 					herror.PrintStack(err)
 				}
@@ -368,7 +368,7 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 		err = s.encoder(response)(&Result[hbuf.Data]{
 			Code: http.StatusInternalServerError,
 			Msg:  "Server error",
-		})
+		}, "")
 		if err != nil {
 			herror.PrintStack(err)
 			return

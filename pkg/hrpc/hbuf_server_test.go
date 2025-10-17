@@ -4,6 +4,8 @@ import (
 	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hservice"
 	"io"
 )
 
@@ -29,7 +31,7 @@ func NewHbufServiceClient(client *hrpc.Client) HbufService {
 }
 
 func (r *HbufServiceClient) HbufMethod(ctx context.Context, req *HbufRequest) (*HbufResponse, error) {
-	response, err := r.client.Invoke(ctx, 0, "hbuf_service", "hbuf_method", req, hrpc.NewResultResponse[*HbufResponse]())
+	response, err := r.client.Invoke(ctx, 0, "hbuf_service", "hbuf_method", "", req, hrpc.NewResultResponse[*HbufResponse]())
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +39,7 @@ func (r *HbufServiceClient) HbufMethod(ctx context.Context, req *HbufRequest) (*
 }
 
 func (r *HbufServiceClient) HbufStream(ctx context.Context, req io.Reader) (io.ReadCloser, error) {
-	response, err := r.client.Invoke(ctx, 0, "hbuf_service", "hbuf_stream", req, nil)
+	response, err := r.client.Invoke(ctx, 0, "hbuf_service", "hbuf_stream", "", req, nil)
 	if err != nil {
 		return nil, err
 	}
