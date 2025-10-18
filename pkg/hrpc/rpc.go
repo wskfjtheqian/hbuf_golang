@@ -276,6 +276,9 @@ func NewHBufDecode() Decoder {
 }
 
 // ////////////////////////////////////////////////////
+type Init interface {
+	Init(ctx context.Context)
+}
 
 // ServerOption 服务器选项
 type ServerOption func(*Server)
@@ -309,6 +312,7 @@ func WithServerEncoder(encoder Encoder) ServerOption {
 // NewServer 创建一个新的服务器
 func NewServer(options ...ServerOption) *Server {
 	ret := &Server{
+		inits:   make(map[string]Init),
 		methods: make(map[string]*Method),
 		decode:  NewJsonDecode(),
 		encode:  NewJsonEncode(),
@@ -323,12 +327,13 @@ func NewServer(options ...ServerOption) *Server {
 }
 
 type ServerRegister interface {
-	Register(id int32, name string, methods ...*Method)
+	Register(id int32, name string, init Init, methods ...*Method)
 }
 
 // Server 是用于处理RPC请求的服务器
 type Server struct {
 	lock       sync.RWMutex
+	inits      map[string]Init
 	methods    map[string]*Method
 	decode     Decoder
 	encode     Encoder
@@ -336,10 +341,12 @@ type Server struct {
 }
 
 // Register 注册方法
-func (r *Server) Register(id int32, name string, methods ...*Method) {
+func (r *Server) Register(id int32, name string, init Init, methods ...*Method) {
 	name = strings.Trim(name, "/") + "/"
 	r.lock.Lock()
 	defer r.lock.Unlock()
+
+	r.inits[name] = init
 
 	for _, method := range methods {
 		key := strings.TrimLeft(method.Name, "/")
@@ -388,6 +395,17 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return err
 	}
 	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), "")
+}
+
+func (r *Server) Init() {
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	defer cancelFunc()
+	_, _ = r.middleware(func(ctx context.Context, req any) (any, error) {
+		for _, init := range r.inits {
+			init.Init(ctx)
+		}
+		return nil, nil
+	})(ctx, nil)
 }
 
 //////////////////////////////////////////////////////

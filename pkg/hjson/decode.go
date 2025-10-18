@@ -684,7 +684,7 @@ func (d *decodeState) object(v reflect.Value) error {
 		var subv reflect.Value
 		destring := false // whether the value is wrapped in a string to be decoded first
 
-		var f *field = nil
+		var tags map[string]struct{} = nil
 		if v.Kind() == reflect.Map {
 			elemType := t.Elem()
 			if !mapElem.IsValid() {
@@ -694,11 +694,12 @@ func (d *decodeState) object(v reflect.Value) error {
 			}
 			subv = mapElem
 		} else {
-			f = fields.byExactName[string(key)]
+			f := fields.byExactName[string(key)]
 			if f == nil {
 				f = fields.byFoldedName[string(foldName(key))]
 			}
 			if f != nil {
+				tags = f.tags
 				subv = v
 				destring = f.quoted
 				for _, i := range f.index {
@@ -745,18 +746,18 @@ func (d *decodeState) object(v reflect.Value) error {
 		if destring {
 			switch qv := d.valueQuoted().(type) {
 			case nil:
-				if err := d.literalStore(nullLiteral, subv, false, f.tags); err != nil {
+				if err := d.literalStore(nullLiteral, subv, false, tags); err != nil {
 					return err
 				}
 			case string:
-				if err := d.literalStore([]byte(qv), subv, true, f.tags); err != nil {
+				if err := d.literalStore([]byte(qv), subv, true, tags); err != nil {
 					return err
 				}
 			default:
 				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal unquoted value into %v", subv.Type()))
 			}
 		} else {
-			if err := d.value(subv, f.tags); err != nil {
+			if err := d.value(subv, tags); err != nil {
 				return err
 			}
 		}

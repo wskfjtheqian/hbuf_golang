@@ -172,16 +172,16 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	old := time.Now().UnixMilli()
+	old := time.Now().UnixMicro()
 	w := &ResponseWriter{
 		writer: writer,
 		status: http.StatusOK,
 	}
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
-	old = time.Now().UnixMilli() - old
-	t := "[" + strconv.FormatFloat(float64(old)/1000, 'g', 3, 64) + "s]"
-	if 200 > old {
+	old = time.Now().UnixMicro() - old
+	t := "[" + strconv.FormatFloat(float64(old)/1000, 'g', 3, 64) + "ms]"
+	if 200000 > old {
 		t = hutl.Yellow(t)
 	} else {
 		t = hutl.Red(t)

@@ -49,14 +49,32 @@ func FromContext(ctx context.Context) (n *Nats, ok bool) {
 	return val.(*Context).nats, true
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type Option func(*Nats)
+
+func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
+	return func(s *Nats) {
+		s.middleware = func(next hrpc.Handler) hrpc.Handler {
+			for i := len(middlewares) - 1; i >= 0; i-- {
+				next = middlewares[i](next)
+			}
+			return next
+		}
+	}
+}
 
 // NewNats 定义了 NATS 的配置
-func NewNats() *Nats {
+func NewNats(options ...Option) *Nats {
 	ret := &Nats{
 		stream:     make(map[string]struct{}),
 		ackWait:    time.Second * 10,
 		maxDeliver: 3,
+		middleware: func(next hrpc.Handler) hrpc.Handler {
+			return next
+		},
+	}
+	for _, opt := range options {
+		opt(ret)
 	}
 	return ret
 }
@@ -73,6 +91,7 @@ type Nats struct {
 	ServerName string
 	Version    string
 	config     *Config
+	middleware func(next hrpc.Handler) hrpc.Handler
 }
 
 // SetConfig 设置配置
@@ -237,12 +256,19 @@ func Publish[T any](ctx context.Context, subject string, msg *T) error {
 }
 
 // Subscribe 订阅指定的主题
-func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg *nats.Msg)) (*nats.Subscription, error) {
+func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx context.Context, msg *nats.Msg) error) (*nats.Subscription, error) {
 	conn, err := n.GetConn()
 	if err != nil {
 		return nil, err
 	}
-	subscription, err := conn.Subscribe(subject, callback)
+	subscription, err := conn.Subscribe(subject, func(msg *nats.Msg) {
+		_, err := n.middleware(func(ctx context.Context, req any) (any, error) {
+			return nil, callback(ctx, msg)
+		})(context.TODO(), nil)
+		if err != nil {
+			herror.PrintStack(err)
+		}
+	})
 	if err != nil {
 		hlog.Error("subscribe failed, error: %s", err)
 		return nil, err
@@ -251,22 +277,19 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(msg 
 }
 
 // Subscribe 订阅指定的主题
-func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T) error) (*nats.Subscription, error) {
+func Subscribe[T any](ctx context.Context, subject string, callback func(ctx context.Context, msg *T) error) (*nats.Subscription, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
 		return nil, herror.NewError("nats not initialized")
 	}
 
-	subscription, err := n.Subscribe(ctx, subject, func(msg *nats.Msg) {
+	subscription, err := n.Subscribe(ctx, subject, func(ctx context.Context, msg *nats.Msg) error {
 		var data T
 		err := json.Unmarshal(msg.Data, &data)
 		if err != nil {
-			return
+			return herror.Wrap(err)
 		}
-		err = callback(&data)
-		if err != nil {
-			return
-		}
+		return callback(ctx, &data)
 	})
 	if err != nil {
 		return nil, err
@@ -274,8 +297,24 @@ func Subscribe[T any](ctx context.Context, subject string, callback func(msg *T)
 	return subscription, nil
 }
 
+type PublishOption func(*nats.Header)
+
+const DurableHeader = "durable-header"
+
+func WithPublishMsgId(msgId string) PublishOption {
+	return func(h *nats.Header) {
+		h.Set(jetstream.MsgIDHeader, msgId)
+	}
+}
+
+func WithPublishDurable(msgId string) PublishOption {
+	return func(h *nats.Header) {
+		h.Set(DurableHeader, msgId)
+	}
+}
+
 // JetStreamPublish 发布消息到指定的主题
-func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, data []byte) (*jetstream.PubAck, error) {
+func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, data []byte, options ...PublishOption) (*jetstream.PubAck, error) {
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
 		return nil, err
@@ -285,7 +324,14 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 	if err != nil {
 		return nil, err
 	}
-	pubAck, err := jetStream.Publish(ctx, subject, data, jetstream.WithMsgID(uuid.NewString()))
+
+	msg := &nats.Msg{Subject: subject, Data: data, Header: nats.Header{}}
+	msg.Header.Set(jetstream.MsgIDHeader, uuid.NewString())
+	for _, opt := range options {
+		opt(&msg.Header)
+	}
+
+	pubAck, err := jetStream.PublishMsg(ctx, msg)
 	if err != nil {
 		hlog.Error("publish failed, error: %s", err)
 		return nil, err
@@ -294,7 +340,7 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 }
 
 // JetStreamPublish 发布消息到指定的主题
-func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T) (*jetstream.PubAck, error) {
+func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T, options ...PublishOption) (*jetstream.PubAck, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
 		return nil, herror.NewError("nats not initialized")
@@ -304,7 +350,7 @@ func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T
 	if err != nil {
 		return nil, err
 	}
-	pubAck, err := n.JetStreamPublish(ctx, stream, subject, jsonData)
+	pubAck, err := n.JetStreamPublish(context.TODO(), stream, subject, jsonData, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +372,7 @@ func (n *Nats) GetConn() (*nats.Conn, error) {
 }
 
 // JetStreamSubscribe 订阅指定的主题
-func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(msg jetstream.Msg) error) error {
+func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg jetstream.Msg) error) error {
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
 		return err
@@ -341,15 +387,26 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		FilterSubject: subject,
 		AckWait:       n.ackWait,    // 未返回ack 30秒后重发
 		MaxDeliver:    n.maxDeliver, // 最大重试发送次数
+
 	})
 	if err != nil {
 		return err
 	}
 
 	_, err = consumer.Consume(func(msg jetstream.Msg) {
+		durableHeader := msg.Headers().Get(DurableHeader)
+		if len(durableHeader) > 0 && durableHeader != durable {
+			err = msg.Ack()
+			if err != nil {
+				hlog.Error("ack failed, error: %s", err)
+				return
+			}
+			return
+		}
 		msgId := msg.Headers().Get(jetstream.MsgIDHeader)
-
-		retErr := callback(msg)
+		_, retErr := n.middleware(func(ctx context.Context, req any) (any, error) {
+			return nil, callback(ctx, msgId, msg)
+		})(context.TODO(), nil)
 		if retErr != nil {
 			hlog.Error("callback failed, error: %s", err)
 			metadata, err := msg.Metadata()
@@ -381,23 +438,19 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 }
 
 // JetStreamSubscribe 订阅指定的主题
-func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(msg *T) error) error {
+func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg *T) error) error {
 	n, ok := FromContext(ctx)
 	if !ok {
 		return herror.NewError("nats not initialized")
 	}
 
-	err := n.JetStreamSubscribe(ctx, stream, subject, durable, func(msg jetstream.Msg) error {
+	err := n.JetStreamSubscribe(ctx, stream, subject, durable, func(ctx context.Context, msgId string, msg jetstream.Msg) error {
 		var data T
 		err := json.Unmarshal(msg.Data(), &data)
 		if err != nil {
 			return err
 		}
-		err = callback(&data)
-		if err != nil {
-			return err
-		}
-		return nil
+		return callback(ctx, msgId, &data)
 	})
 	if err != nil {
 		return err
@@ -486,7 +539,7 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 }
 
 // ErrorMessageSubscribe 订阅错误信息
-func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId string, msg *ErrorMessage) error) error {
+func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx context.Context, msgId string, msg *ErrorMessage) error) error {
 	err := n.checkStream(ctx, ErrorMessage_Stream, ErrorMessage_Subject)
 	if err != nil {
 		return err
@@ -514,19 +567,14 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(msgId st
 		}
 
 		msgId := msg.Headers().Get(jetstream.MsgIDHeader)
-		err = func() error {
+		_, err = n.middleware(func(ctx context.Context, req any) (any, error) {
 			var data ErrorMessage
-			err = json.Unmarshal(msg.Data(), &data)
+			err := json.Unmarshal(msg.Data(), &data)
 			if err != nil {
-				return err
+				return nil, herror.Wrap(err)
 			}
-
-			err = callback(msgId, &data)
-			if err != nil {
-				return err
-			}
-			return nil
-		}()
+			return nil, callback(ctx, msgId, &data)
+		})(context.TODO(), nil)
 		if err != nil {
 			if int(metadata.NumDelivered) >= n.maxDeliver {
 				hlog.Error("callback failed, error: %s", string(msg.Data()))

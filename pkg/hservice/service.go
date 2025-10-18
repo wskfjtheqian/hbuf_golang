@@ -75,12 +75,6 @@ type Option func(*Service)
 func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 	return func(s *Service) {
 		hrpc.WithServerMiddleware(middlewares...)(s.rpcServer)
-		s.middleware = func(next hrpc.Handler) hrpc.Handler {
-			for i := len(middlewares) - 1; i >= 0; i-- {
-				next = middlewares[i](next)
-			}
-			return next
-		}
 	}
 }
 
@@ -90,11 +84,8 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 		etcd:       etcd,
 		install:    make(map[string]*ServerInfo),
 		servers:    make(map[string]*ServerInfo),
-		clients:    make(map[string][]Init),
+		clients:    make(map[string][]hrpc.Init),
 		httpClient: make(map[string]*hrpc.Client),
-		middleware: func(next hrpc.Handler) hrpc.Handler {
-			return next
-		},
 	}
 	ret.rpcServer = hrpc.NewServer(hrpc.WithServerMiddleware(), hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 
@@ -114,10 +105,9 @@ type Service struct {
 	install   map[string]*ServerInfo
 
 	servers    map[string]*ServerInfo
-	clients    map[string][]Init
+	clients    map[string][]hrpc.Init
 	lock       sync.RWMutex
 	httpClient map[string]*hrpc.Client
-	middleware hrpc.HandlerMiddleware
 }
 
 // SetConfig 设置配置
@@ -176,13 +166,10 @@ func (s *Service) SetConfig(cfg *Config) error {
 
 	for _, item := range cfg.Server.List {
 		if install, ok := s.install[item]; ok {
-			_, _ = s.middleware(func(ctx context.Context, req any) (any, error) {
-				install.init.Init(ctx)
-				return nil, nil
-			})(ctx, nil)
-			s.rpcServer.Register(install.id, install.name, install.methods...)
+			s.rpcServer.Register(install.id, install.name, install.init, install.methods...)
 		}
 	}
+	s.rpcServer.Init()
 	return nil
 }
 
@@ -528,7 +515,7 @@ func (s *Service) NewMiddleware() hrpc.HandlerMiddleware {
 }
 
 // GetClient 获取客户端
-func (s *Service) GetClient(name string) Init {
+func (s *Service) GetClient(name string) hrpc.Init {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -541,34 +528,30 @@ func (s *Service) GetClient(name string) Init {
 	return clients[rand2.Int32N(int32(length))]
 }
 
-type Init interface {
-	Init(ctx context.Context)
-}
-
 // 服务描述
 type ServerInfo struct {
 	s       *Service
 	methods []*hrpc.Method
 	name    string
 	id      int32
-	client  func(c *hrpc.Client) Init
-	init    Init
+	client  func(c *hrpc.Client) hrpc.Init
+	init    hrpc.Init
 }
 
-func (r *ServerInfo) Register(id int32, name string, methods ...*hrpc.Method) {
+func (r *ServerInfo) Register(id int32, name string, init hrpc.Init, methods ...*hrpc.Method) {
 	r.id = id
 	r.name = name
 	r.methods = methods
 	r.s.install[name] = r
 }
 
-func Register[T Init](s *Service, init T, server func(r hrpc.ServerRegister, s T), client func(c *hrpc.Client) T) {
-	server(&ServerInfo{s: s, init: init, client: func(c *hrpc.Client) Init {
+func Register[T hrpc.Init](s *Service, init T, server func(r hrpc.ServerRegister, s T), client func(c *hrpc.Client) T) {
+	server(&ServerInfo{s: s, init: init, client: func(c *hrpc.Client) hrpc.Init {
 		return client(c)
 	}}, init)
 }
 
-func GetClient(ctx context.Context, name string) Init {
+func GetClient(ctx context.Context, name string) hrpc.Init {
 	s := FromContext(ctx)
 	if s == nil {
 		return nil

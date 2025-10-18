@@ -137,11 +137,11 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 	}
 	db, err := sql.GetDB()
 	if err != nil {
-		return 0, err
+		return 0, herror.Wrap(err)
 	}
 	result, err := db.Query(s.text.String(), s.params...)
 	if err != nil {
-		return 0, err
+		return 0, herror.Wrap(err)
 	}
 	defer result.Close()
 
@@ -151,7 +151,7 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 		if isScan {
 			isScan, err = scan(result)
 			if err != nil {
-				return 0, err
+				return 0, herror.Wrap(err)
 			}
 		}
 	}
@@ -311,9 +311,9 @@ func (p *printLog) print() {
 	if !PrintSQL {
 		return
 	}
-	now := time.Now().UnixMilli() - p.now
-	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "s]"
-	if 200 > now {
+	now := time.Now().UnixMicro() - p.now
+	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "ms]"
+	if 200000 > now {
 		t = hutl.Yellow(t)
 	} else {
 		t = hutl.Red(t)
@@ -327,7 +327,7 @@ func newPrintLog(builder *Builder, count *int64) *printLog {
 		count:   count,
 	}
 	if PrintSQL {
-		ret.now = time.Now().UnixMilli()
+		ret.now = time.Now().UnixMicro()
 	}
 	return ret
 }

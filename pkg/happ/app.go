@@ -16,13 +16,15 @@ type Option func(*App)
 
 func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 	return func(s *App) {
+		middlewares = append(s.Middlewares(), middlewares...)
 		s.middleware = func(next hrpc.Handler) hrpc.Handler {
 			for i := len(middlewares) - 1; i >= 0; i-- {
 				next = middlewares[i](next)
 			}
 			return next
 		}
-		hservice.WithMiddleware(append(s.Middlewares(), middlewares...)...)(s.service)
+		hservice.WithMiddleware(middlewares...)(s.service)
+		hmq.WithMiddleware(middlewares...)(s.nats)
 	}
 }
 
@@ -111,8 +113,9 @@ func (a *App) Middlewares() []hrpc.HandlerMiddleware {
 
 func (a *App) Goroutine(fn func(ctx context.Context) error) {
 	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
 	go func() {
+		defer cancel()
+
 		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
 			return nil, fn(ctx)
 		})(ctx, nil)
