@@ -371,8 +371,34 @@ func (n *Nats) GetConn() (*nats.Conn, error) {
 	return n.conn.Load(), nil
 }
 
+type SubscribeOption func(*jetstream.ConsumerConfig)
+
+func WithSubscribeMaxDeliver(val int) SubscribeOption {
+	return func(config *jetstream.ConsumerConfig) {
+		config.MaxDeliver = val
+	}
+}
+
+func WithSubscribeAckWait(val time.Duration) SubscribeOption {
+	return func(config *jetstream.ConsumerConfig) {
+		config.AckWait = val
+	}
+}
+
+func WithSubscribeMaxAckPending(val int) SubscribeOption {
+	return func(config *jetstream.ConsumerConfig) {
+		config.MaxAckPending = val
+	}
+}
+
+func WithSubscribeRateLimit(val uint64) SubscribeOption {
+	return func(config *jetstream.ConsumerConfig) {
+		config.RateLimit = val
+	}
+}
+
 // JetStreamSubscribe 订阅指定的主题
-func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg jetstream.Msg) error) error {
+func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg jetstream.Msg) error, options ...SubscribeOption) error {
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
 		return err
@@ -381,14 +407,19 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 	if err != nil {
 		return err
 	}
-	consumer, err := jetStream.CreateOrUpdateConsumer(ctx, stream, jetstream.ConsumerConfig{
+
+	config := jetstream.ConsumerConfig{
 		Durable:       durable,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: subject,
 		AckWait:       n.ackWait,    // 未返回ack 30秒后重发
 		MaxDeliver:    n.maxDeliver, // 最大重试发送次数
+	}
+	for _, opt := range options {
+		opt(&config)
+	}
+	consumer, err := jetStream.CreateOrUpdateConsumer(ctx, stream, config)
 
-	})
 	if err != nil {
 		return err
 	}
@@ -438,7 +469,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 }
 
 // JetStreamSubscribe 订阅指定的主题
-func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg *T) error) error {
+func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg *T) error, options ...SubscribeOption) error {
 	n, ok := FromContext(ctx)
 	if !ok {
 		return herror.NewError("nats not initialized")
@@ -451,7 +482,7 @@ func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable str
 			return err
 		}
 		return callback(ctx, msgId, &data)
-	})
+	}, options...)
 	if err != nil {
 		return err
 	}

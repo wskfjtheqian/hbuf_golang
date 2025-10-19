@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+type Sql interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
 // WithContext 给上下文添加 Builder 连接
 func WithContext(ctx context.Context, n *DB, tableNameFunc func(ctx context.Context, name string) string) context.Context {
 	ret := &Context{
@@ -31,6 +36,7 @@ func WithContext(ctx context.Context, n *DB, tableNameFunc func(ctx context.Cont
 type Context struct {
 	context.Context
 	db            *DB
+	tx            *sql.Tx
 	tableNameFunc func(ctx context.Context, name string) string
 }
 
@@ -44,13 +50,32 @@ func (d *Context) Value(key any) any {
 	return d.Context.Value(key)
 }
 
+func (d *Context) GetDB() (Sql, error) {
+	if d.tx != nil {
+		return d.tx, nil
+	}
+	db := d.db.db.Load()
+	if db == nil {
+		return nil, herror.NewError("database not initialized")
+	}
+	return db, nil
+}
+
+func (d *Context) GetConfig() *Config {
+	return d.db.config
+}
+
+func (d *Context) GetCache() DbCache {
+	return d.db.cache
+}
+
 // FromContext 从上下文中获取 Builder 连接
-func FromContext(ctx context.Context) (n *DB, ok bool) {
+func FromContext(ctx context.Context) (n *Context, ok bool) {
 	val := ctx.Value(contextType)
 	if val == nil {
 		return nil, false
 	}
-	return val.(*Context).db, true
+	return val.(*Context), true
 }
 
 // TableName 获取表名的函数
@@ -149,22 +174,52 @@ func (d *DB) SetConfig(cfg *Config) error {
 	return nil
 }
 
-func (d *DB) GetDB() (*sql.DB, error) {
-	db := d.db.Load()
-	if db == nil {
-		return nil, herror.NewError("database not initialized")
-	}
-	return db, nil
-}
-
-func (d *DB) GetConfig() *Config {
-	return d.config
-}
-
 func (d *DB) NewMiddleware() hrpc.HandlerMiddleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, d, nil), req)
 		}
 	}
+}
+
+// Transaction 事务函数
+func Transaction(ctx context.Context, fn func(ctx context.Context) error) error {
+	val := ctx.Value(contextType)
+	if val == nil {
+		return herror.NewError("not found Db in context")
+	}
+
+	if val.(*Context).tx != nil {
+		return fn(ctx)
+	}
+
+	db, err := val.(*Context).GetDB()
+	if err != nil {
+		return err
+	}
+	tx, err := (db.(*sql.DB)).Begin()
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			_ = tx.Rollback()
+			panic(r)
+		} else if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	ctx = &Context{
+		Context:       ctx,
+		db:            val.(*Context).db,
+		tableNameFunc: val.(*Context).tableNameFunc,
+		tx:            tx,
+	}
+
+	err = fn(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }

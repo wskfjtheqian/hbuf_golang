@@ -47,7 +47,7 @@ func (r *HbufServiceClient) HbufStream(ctx context.Context, req io.Reader) (io.R
 }
 
 func RegisterHbufService(r hrpc.ServerRegister, server HbufService) {
-	r.Register(0, "hbuf_service",
+	r.Register(0, "hbuf_service", server,
 		&hrpc.Method{
 			Name: "hbuf_method",
 			WithContext: func(ctx context.Context) context.Context {

@@ -21,15 +21,15 @@ func SaveCache(ctx context.Context, table string, builder *Builder, val any, exp
 		return herror.NewError("no db in context")
 	}
 	var err error
-	if db.cache == nil {
+	if db.GetCache() == nil {
 		_, err = fn(ctx)
 		return err
 	}
-	table = *db.config.DbName + "." + table
+	table = *db.GetConfig().DbName + "." + table
 	sql := builder.ToText()
 	key := hutl.Md5([]byte(sql))
 
-	ok, err = db.cache.Get(ctx, key, table, val, expiration)
+	ok, err = db.GetCache().Get(ctx, key, table, val, expiration)
 	if err != nil {
 		return err
 	}
@@ -37,13 +37,13 @@ func SaveCache(ctx context.Context, table string, builder *Builder, val any, exp
 		return nil
 	}
 
-	err = db.cache.Lock(ctx, table+":"+key)
+	err = db.GetCache().Lock(ctx, table+":"+key)
 	if err != nil {
 		return err
 	}
-	defer db.cache.Unlock(ctx, table+":"+key)
+	defer db.GetCache().Unlock(ctx, table+":"+key)
 
-	ok, err = db.cache.Get(ctx, key, table, val, expiration)
+	ok, err = db.GetCache().Get(ctx, key, table, val, expiration)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func SaveCache(ctx context.Context, table string, builder *Builder, val any, exp
 		return err
 	}
 
-	err = db.cache.Set(ctx, key, table, sql, val, expiration)
+	err = db.GetCache().Set(ctx, key, table, sql, val, expiration)
 	if err != nil {
 		return err
 	}
@@ -68,9 +68,9 @@ func ClearCache(ctx context.Context, table string) error {
 	if !ok {
 		return herror.NewError("no db in context")
 	}
-	if db.cache == nil {
+	if db.GetCache() == nil {
 		return nil
 	}
-	table = *db.config.DbName + "." + table
-	return db.cache.Del(ctx, table)
+	table = *db.GetConfig().DbName + "." + table
+	return db.GetCache().Del(ctx, table)
 }
