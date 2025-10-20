@@ -1,333 +1,170 @@
 package hutl
 
-import "time"
-
-type TimeZone int
-
-const (
-	TimeZoneInternationalDateChangeWest                                  = 0
-	TimeZoneWhencoordinatingtheworld_11                                  = 1
-	TimeZoneAleiIslands                                                  = 2
-	TimeZoneHawaii                                                       = 3
-	TimeZoneMaxusIslands                                                 = 4
-	TimeZoneAlaska                                                       = 5
-	TimeZoneWhencoordinatingtheworld_09                                  = 6
-	TimeZonePacificTimetheUnitedStatesandCanada                          = 7
-	TimeZoneLowerGalifa                                                  = 8
-	TimeZoneCoordinatingtheWorld_08                                      = 9
-	TimeZoneLabast_Mazartland                                            = 10
-	TimeZoneMountainTimetheUnitedStatesandCanada                         = 11
-	TimeZoneArizona                                                      = 12
-	TimeZoneEducate                                                      = 13
-	TimeZoneEasterIsland                                                 = 14
-	TimeZoneGuadalahara_MexicoCity_Monterey                              = 15
-	TimeZoneSaskhawin                                                    = 16
-	TimeZoneCentraltimetheUnitedStatesandCanada                          = 17
-	TimeZoneCentralAmerica                                               = 18
-	TimeZoneBogeDa_Lima_Kido_RioBronki                                   = 19
-	TimeZoneEasternTimetheUnitedStatesandCanada                          = 20
-	TimeZoneHavana                                                       = 21
-	TimeZoneHaiti                                                        = 22
-	TimeZoneChermal                                                      = 23
-	TimeZoneTaxandKaikosIslands                                          = 24
-	TimeZoneIndianAnaEastEast                                            = 25
-	TimeZoneAtlantictimeCanada                                           = 26
-	TimeZoneGalagas                                                      = 27
-	TimeZoneKaza                                                         = 28
-	TimeZoneGeorgeDun_Rabas_Aids_SanHuan                                 = 29
-	TimeZoneSanDiego                                                     = 30
-	TimeZoneYatongsen                                                    = 31
-	TimeZoneNuvenovenland                                                = 32
-	TimeZoneAlagua                                                       = 33
-	TimeZoneBrazilian                                                    = 34
-	TimeZoneBuenosAires                                                  = 35
-	TimeZoneCayenne_Fumausa                                              = 36
-	TimeZoneMontae                                                       = 37
-	TimeZonePuffaArenas                                                  = 38
-	TimeZoneSalvador                                                     = 39
-	TimeZoneStPielandMichigalIslands                                     = 40
-	TimeZoneGreenland                                                    = 41
-	TimeZoneWhencoordinatingtheworld_02                                  = 42
-	TimeZoneBuddhistislands                                              = 43
-	TimeZoneAcelIslands                                                  = 44
-	TimeZoneWhencoordinatingtheworld                                     = 45
-	TimeZoneDublin_Edinburgh_Lisbon_London                               = 46
-	TimeZoneMonrovia_Reykjavik                                           = 47
-	TimeZoneShengdomei                                                   = 48
-	TimeZoneCasablanka                                                   = 49
-	TimeZoneAmsterdam_Berlin_Berne_Rome_Stockholm_Vienna                 = 50
-	TimeZoneBelgrade_Bladisla_Budapest_Lulburia_Prague                   = 51
-	TimeZoneBrussels_Copenhagen_Madrid_Paris                             = 52
-	TimeZoneSarajewo_Skopry_Warsaw_Saglerb                               = 53
-	TimeZoneWesternChina                                                 = 54
-	TimeZoneBerut                                                        = 55
-	TimeZoneRipari                                                       = 56
-	TimeZoneHarary_Billeria                                              = 57
-	TimeZoneHelsinki_Kiev_Rica_Sorfiya_Tarin_Vernis                      = 58
-	TimeZoneKichinwu                                                     = 59
-	TimeZoneKalinrad                                                     = 60
-	TimeZoneGasha_Helima                                                 = 61
-	TimeZoneKagums                                                       = 62
-	TimeZoneCairo                                                        = 63
-	TimeZoneWinhehe                                                      = 64
-	TimeZoneAthens_Buccuster                                             = 65
-	TimeZoneJerusalem                                                    = 66
-	TimeZoneJuba                                                         = 67
-	TimeZoneAmman                                                        = 68
-	TimeZoneBaghdad                                                      = 69
-	TimeZoneDamascus                                                     = 70
-	TimeZoneVolgage                                                      = 71
-	TimeZoneKuwait_Riyadh                                                = 72
-	TimeZoneMinsk                                                        = 73
-	TimeZoneMoscow_StPetersburg                                          = 74
-	TimeZoneNairobi                                                      = 75
-	TimeZoneIstanbul                                                     = 76
-	TimeZoneTehran                                                       = 77
-	TimeZoneAbuDhabi_Maskat                                              = 78
-	TimeZoneAstraham_Uliyanovsk                                          = 79
-	TimeZoneErinewin                                                     = 80
-	TimeZonePakugu                                                       = 81
-	TimeZoneBilis                                                        = 82
-	TimeZoneLouisPort                                                    = 83
-	TimeZoneSalatov                                                      = 84
-	TimeZoneIlvsk_Samara                                                 = 85
-	TimeZoneKabul                                                        = 86
-	TimeZoneAshhabad_Tashgan                                             = 87
-	TimeZoneAstana                                                       = 88
-	TimeZoneYekaterinburg                                                = 89
-	TimeZoneIslamabad_Karachi                                            = 90
-	TimeZoneQinNai_Kolkata_Mumbai_NewDelhi                               = 91
-	TimeZoneSrigaWuldenPulala                                            = 92
-	TimeZoneKathmandu                                                    = 93
-	TimeZoneBishkek                                                      = 94
-	TimeZoneDarka                                                        = 95
-	TimeZoneEmuzk                                                        = 96
-	TimeZoneYangon                                                       = 97
-	TimeZoneBalube_GornoAltaysk                                          = 98
-	TimeZoneKobado                                                       = 99
-	TimeZoneKlasinoelsk                                                  = 100
-	TimeZoneBangkok_Hanoi_Jakarta                                        = 101
-	TimeZoneTomosk                                                       = 102
-	TimeZoneNewSiberia                                                   = 103
-	TimeZoneBeijing_Chongqing_HongKongSpecialAdministrativeRegion_Urumqi = 104
-	TimeZoneKualaLumpur_Singapore                                        = 105
-	TimeZonePerth                                                        = 106
-	TimeZoneTaipei                                                       = 107
-	TimeZoneUlanbato                                                     = 108
-	TimeZoneIrkutzk                                                      = 109
-	TimeZoneUkola                                                        = 110
-	TimeZoneChitaCity                                                    = 111
-	TimeZoneOsaka_Sapporo_Tokyo                                          = 112
-	TimeZonePyongyang                                                    = 113
-	TimeZoneSeoul                                                        = 114
-	TimeZoneYakuzk                                                       = 115
-	TimeZoneAdelaide                                                     = 116
-	TimeZoneDarwin                                                       = 117
-	TimeZoneBrisbane                                                     = 118
-	TimeZoneVladivostak                                                  = 119
-	TimeZoneGuam_MogzbiPort                                              = 120
-	TimeZoneHobart                                                       = 121
-	TimeZoneCanberra_Melbourne_Sydney                                    = 122
-	TimeZoneLordHaojima                                                  = 123
-	TimeZoneBukkovirIsland                                               = 124
-	TimeZoneMagatan                                                      = 125
-	TimeZoneNorfolkIsland                                                = 126
-	TimeZoneJacquidh                                                     = 127
-	TimeZoneSahalin                                                      = 128
-	TimeZoneSolomonIslands_NewCauritonia                                 = 129
-	TimeZoneAnader_KanshagaPeterRavorovsk                                = 130
-	TimeZoneAuckland_Wellington                                          = 131
-	TimeZoneFiji                                                         = 132
-	TimeZoneWhencoordinatingtheworld_12                                  = 133
-	TimeZoneCharthamIslands                                              = 134
-	TimeZoneNukuAlpha                                                    = 135
-	TimeZoneSamoaIslands                                                 = 136
-	TimeZoneWhencoordinatingtheworld_13                                  = 137
-	TimeZoneChristmasIsland                                              = 138
+import (
+	"fmt"
+	"strings"
+	"time"
 )
 
+type TimeZone uint16
+
 // TimeZones 是一组时区字符串，用于生成时区选择器。
-var TimeZones = []string{
-	"-12:00",
-	"-11:00",
-	"-10:00",
-	"-10:00",
-	"-09:30",
-	"-09:00",
-	"-09:00",
-	"-08:00",
-	"-08:00",
-	"-08:00",
-	"-07:00",
-	"-07:00",
-	"-07:00",
-	"-07:00",
-	"-06:00",
-	"-06:00",
-	"-06:00",
-	"-06:00",
-	"-06:00",
-	"-05:00",
-	"-05:00",
-	"-05:00",
-	"-05:00",
-	"-05:00",
-	"-05:00",
-	"-05:00",
-	"-04:00",
-	"-04:00",
-	"-04:00",
-	"-04:00",
-	"-04:00",
-	"-04:00",
-	"-03:30",
-	"-03:00",
-	"-03:00",
-	"-03:00",
-	"-03:00",
-	"-03:00",
-	"-03:00",
-	"-03:00",
-	"-03:00",
-	"-02:00",
-	"-02:00",
-	"-01:00",
-	"-01:00",
-	"+00:00",
-	"+00:00",
-	"+00:00",
-	"+00:00",
-	"+01:00",
-	"+01:00",
-	"+01:00",
-	"+01:00",
-	"+01:00",
-	"+01:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+02:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:00",
-	"+03:30",
-	"+04:00",
-	"+04:00",
-	"+04:00",
-	"+04:00",
-	"+04:00",
-	"+04:00",
-	"+04:00",
-	"+04:00",
-	"+04:30",
-	"+05:00",
-	"+05:00",
-	"+05:00",
-	"+05:00",
-	"+05:30",
-	"+05:30",
-	"+05:45",
-	"+06:00",
-	"+06:00",
-	"+06:00",
-	"+06:30",
-	"+07:00",
-	"+07:00",
-	"+07:00",
-	"+07:00",
-	"+07:00",
-	"+07:00",
-	"+08:00",
-	"+08:00",
-	"+08:00",
-	"+08:00",
-	"+08:00",
-	"+08:00",
-	"+08:45",
-	"+09:00",
-	"+09:00",
-	"+09:00",
-	"+09:00",
-	"+09:00",
-	"+09:30",
-	"+09:30",
-	"+10:00",
-	"+10:00",
-	"+10:00",
-	"+10:00",
-	"+10:00",
-	"+10:30",
-	"+11:00",
-	"+11:00",
-	"+11:00",
-	"+11:00",
-	"+11:00",
-	"+11:00",
-	"+12:00",
-	"+12:00",
-	"+12:00",
-	"+12:00",
-	"+12:45",
-	"+13:00",
-	"+13:00",
-	"+13:00",
-	"+14:00",
+var TimeZones = []int32{
+	-43200000, // -12:00 International Date Change West
+	-39600000, // -11:00 When coordinating the world-11
+	-36000000, // -10:00 Alei Islands
+	-36000000, // -10:00 Hawaii
+	-30600000, // -09:30 Maxus Islands
+	-32400000, // -09:00 Alaska
+	-32400000, // -09:00 When coordinating the world -09
+	-28800000, // -08:00 Pacific Time (the United States and Canada)
+	-28800000, // -08:00 Lower Galifa
+	-28800000, // -08:00 Coordinating the World -08
+	-25200000, // -07:00 Labast, Mazartland
+	-25200000, // -07:00 Mountain Time (the United States and Canada)
+	-25200000, // -07:00 Arizona
+	-25200000, // -07:00 Educate
+	-21600000, // -06:00 Easter Island
+	-21600000, // -06:00 Guadalahara, Mexico City, Monterey
+	-21600000, // -06:00 Saskhawin
+	-21600000, // -06:00 Central time (the United States and Canada)
+	-21600000, // -06:00 Central America
+	-18000000, // -05:00 Boge Da, Lima, Kido, Rio Bronki
+	-18000000, // -05:00 Eastern Time (the United States and Canada)
+	-18000000, // -05:00 Havana
+	-18000000, // -05:00 Haiti
+	-18000000, // -05:00 Chermal
+	-18000000, // -05:00 Tax and Kaikos Islands
+	-18000000, // -05:00 Indian Ana (East) (East)
+	-14400000, // -04:00 Atlantic time (Canada)
+	-14400000, // -04:00 Galagas
+	-14400000, // -04:00 Kaza
+	-14400000, // -04:00 George Dun, Rabas, Aids, San Hu'an
+	-14400000, // -04:00 San Diego
+	-14400000, // -04:00 Yatongsen
+	-9000000,  // -03:30 Nuvenovenland
+	-10800000, // -03:00 Alagua
+	-10800000, // -03:00 Brazilian
+	-10800000, // -03:00 Buenos Aires
+	-10800000, // -03:00 Cayenne, Fumausa
+	-10800000, // -03:00 Montae
+	-10800000, // -03:00 Puffa Arenas
+	-10800000, // -03:00 Salvador
+	-10800000, // -03:00 St. Piel and Michigal Islands
+	-7200000,  // -02:00 Greenland
+	-7200000,  // -02:00 When coordinating the world -02
+	-3600000,  // -01:00 Buddhist islands
+	-3600000,  // -01:00 Acel Islands
+	0,         // +00:00 When coordinating the world
+	0,         // +00:00 Dublin, Edinburgh, Lisbon, London
+	0,         // +00:00 Monrovia, Reykjavik
+	0,         // +00:00 Shengdomei
+	3600000,   // +01:00 Casablanka
+	3600000,   // +01:00 Amsterdam, Berlin, Berne, Rome, Stockholm, Vienna
+	3600000,   // +01:00 Belgrade, Bladisla, Budapest, Lulburia, Prague
+	3600000,   // +01:00 Brussels, Copenhagen, Madrid, Paris
+	3600000,   // +01:00 Sarajewo, Skopry, Warsaw, Saglerb
+	3600000,   // +01:00 Western China
+	7200000,   // +02:00 Berut
+	7200000,   // +02:00 Ripari
+	7200000,   // +02:00 Harary, Billeria
+	7200000,   // +02:00 Helsinki, Kiev, Rica, Sorfiya, Tarin, Vernis
+	7200000,   // +02:00 Kichinwu
+	7200000,   // +02:00 Kalinrad
+	7200000,   // +02:00 Gasha, Helima
+	7200000,   // +02:00 Kagums
+	7200000,   // +02:00 Cairo
+	7200000,   // +02:00 Winhehe
+	7200000,   // +02:00 Athens, Buccuster
+	7200000,   // +02:00 Jerusalem
+	7200000,   // +02:00 Juba
+	10800000,  // +03:00 Amman
+	10800000,  // +03:00 Baghdad
+	10800000,  // +03:00 Damascus
+	10800000,  // +03:00 Volgage
+	10800000,  // +03:00 Kuwait, Riyadh
+	10800000,  // +03:00 Minsk
+	10800000,  // +03:00 Moscow, St. Petersburg
+	10800000,  // +03:00 Nairobi
+	10800000,  // +03:00 Istanbul
+	12600000,  // +03:30 Tehran
+	14400000,  // +04:00 Abu Dhabi, Maskat
+	14400000,  // +04:00 Astraham, Uliyanovsk
+	14400000,  // +04:00 Erinewin
+	14400000,  // +04:00 Pakugu
+	14400000,  // +04:00 Bilis
+	14400000,  // +04:00 Louis Port
+	14400000,  // +04:00 Salatov
+	14400000,  // +04:00 Ilvsk, Samara
+	16200000,  // +04:30 Kabul
+	18000000,  // +05:00 Ashhabad, Tashgan
+	18000000,  // +05:00 Astana
+	18000000,  // +05:00 Yekaterinburg
+	18000000,  // +05:00 Islamabad, Karachi
+	19800000,  // +05:30 Qin Nai, Kolkata, Mumbai, New Delhi
+	19800000,  // +05:30 Sriga Wulden Pulala
+	20700000,  // +05:45 Kathmandu
+	21600000,  // +06:00 Bishkek
+	21600000,  // +06:00 Darka
+	21600000,  // +06:00 Emuzk
+	23400000,  // +06:30 Yangon
+	25200000,  // +07:00 Balube, Gorno Altaysk
+	25200000,  // +07:00 Kobado
+	25200000,  // +07:00 Klasinoelsk
+	25200000,  // +07:00 Bangkok, Hanoi, Jakarta
+	25200000,  // +07:00 Tomosk
+	25200000,  // +07:00 New Siberia
+	28800000,  // +08:00 Beijing, Chongqing, Hong Kong Special Administrative Region, Urumqi
+	28800000,  // +08:00 Kuala Lumpur, Singapore
+	28800000,  // +08:00 Perth
+	28800000,  // +08:00 Taipei
+	28800000,  // +08:00 Ulanbato
+	28800000,  // +08:00 Irkutzk
+	31500000,  // +08:45 Ukola
+	32400000,  // +09:00 Chita City
+	32400000,  // +09:00 Osaka, Sapporo, Tokyo
+	32400000,  // +09:00 Pyongyang
+	32400000,  // +09:00 Seoul
+	32400000,  // +09:00 Yakuzk
+	34200000,  // +09:30 Adelaide
+	34200000,  // +09:30 Darwin
+	36000000,  // +10:00 Brisbane
+	36000000,  // +10:00 Vladivostak
+	36000000,  // +10:00 Guam, Mogzbi Port
+	36000000,  // +10:00 Hobart
+	36000000,  // +10:00 Canberra, Melbourne, Sydney
+	37800000,  // +10:30 Lord Haojima
+	39600000,  // +11:00 Bukkovir Island
+	39600000,  // +11:00 Magatan
+	39600000,  // +11:00 Norfolk Island
+	39600000,  // +11:00 Jacquidh
+	39600000,  // +11:00 Sahalin
+	39600000,  // +11:00 Solomon Islands, New Cauritonia
+	43200000,  // +12:00 Anader, Kanshaga Peter Ravorovsk
+	43200000,  // +12:00 Auckland, Wellington
+	43200000,  // +12:00 Fiji
+	43200000,  // +12:00 When coordinating the world +12
+	45900000,  // +12:45 Chartham Islands
+	46800000,  // +13:00 Nuku Alpha
+	46800000,  // +13:00 Samoa Islands
+	46800000,  // +13:00 When coordinating the world +13
+	50400000,  // +14:00 Christmas Island
 }
 
-var TimeZoneOffset = map[string]int{
-	"-12:00": -43200,
-	"-11:00": -39600,
-	"-10:00": -36000,
-	"-09:00": -32400,
-	"-09:30": -30600,
-	"-08:00": -28800,
-	"-07:00": -25200,
-	"-06:00": -21600,
-	"-05:00": -18000,
-	"-04:00": -14400,
-	"-03:00": -10800,
-	"-03:30": -9000,
-	"-02:00": -7200,
-	"-01:00": -3600,
-	"+00:00": 0,
-	"+01:00": 3600,
-	"+02:00": 7200,
-	"+03:00": 10800,
-	"+03:30": 12600,
-	"+04:00": 14400,
-	"+04:30": 16200,
-	"+05:00": 18000,
-	"+05:30": 19800,
-	"+05:45": 20700,
-	"+06:00": 21600,
-	"+06:30": 23400,
-	"+07:00": 25200,
-	"+08:00": 28800,
-	"+08:45": 31500,
-	"+09:00": 32400,
-	"+09:30": 34200,
-	"+10:00": 36000,
-	"+10:30": 37800,
-	"+11:00": 39600,
-	"+12:00": 43200,
-	"+12:45": 45900,
-	"+13:00": 46800,
-	"+14:00": 50400,
+func ZoneByOffset(offset int32) *time.Location {
+	var name strings.Builder
+	if offset < 0 {
+		name.WriteString("-")
+		offset = -offset
+	} else {
+		name.WriteString("+")
+	}
+	offset /= 1000
+	h := offset / 3600
+	m := (offset % 3600) / 60
+	name.WriteString(fmt.Sprintf("%02d:%02d", h, m))
+
+	return time.FixedZone(name.String(), int(offset))
 }
 
 // StartHour 返回给定时间所在小时的起始日期
