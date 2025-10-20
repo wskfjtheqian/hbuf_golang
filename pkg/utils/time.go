@@ -159,7 +159,7 @@ func ZoneByOffset(offset int) *time.Location {
 	}
 
 	h := offset / 3600000
-	m := (offset % 3600000) / 60
+	m := (offset % 3600) / 60000
 	name.WriteString(fmt.Sprintf("%02d:%02d", h, m))
 
 	return time.FixedZone(name.String(), offset)
