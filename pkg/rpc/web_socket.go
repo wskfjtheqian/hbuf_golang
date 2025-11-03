@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/gorilla/websocket"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"io"
 	ht "net/http"
 	"net/url"
@@ -103,7 +104,12 @@ func (w *WebSocketRpc) Run() {
 		for {
 			_, buffer, err := w.wsConn.ReadMessage()
 			if err != nil {
-				erro.PrintStack(err)
+				//不等于1001时打印日志
+				if websocket.IsCloseError(err, websocket.CloseGoingAway) {
+					hlog.Info(err.Error())
+				} else {
+					erro.PrintStack(err)
+				}
 				break
 			}
 			var data *WebSocketData
