@@ -44,12 +44,12 @@ func NewLocalLock(key string) Locker {
 
 // LocalLock 防止死锁，并确保同一时间只允许一个 goroutine 访问某个 key 的资源。
 // 加锁后，会将 key 存入 context，以便在子函数中判断是否已经加锁。
-func LocalLock(ctx context.Context, key string, f func(ctx context.Context) error) error {
+func LocalLock[T any](ctx context.Context, key string, f func(ctx context.Context) (*T, error)) (*T, error) {
 	if key == "" {
-		return herror.NewError("key is empty")
+		return nil, herror.NewError("key is empty")
 	}
 	if nil == ctx {
-		return herror.NewError("ctx is nil")
+		return nil, herror.NewError("ctx is nil")
 	}
 
 	if nil != ctx.Value("key_lock_key:"+key) {
@@ -61,11 +61,7 @@ func LocalLock(ctx context.Context, key string, f func(ctx context.Context) erro
 	ret.Lock()
 	defer ret.Unlock()
 
-	err := f(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
+	return f(ctx)
 }
 
 // localLock 是一个可重入锁。
@@ -96,18 +92,18 @@ func (k *localLock) TryLock() bool {
 }
 
 // LocalLockFallback 带有 fallback 函数的本地锁。
-func LocalLockFallback(ctx context.Context, key string, primary func(ctx context.Context) (bool, error), fallback func(ctx context.Context) error) error {
-	ret, err := primary(ctx)
+func LocalLockFallback[T any](ctx context.Context, key string, primary func(ctx context.Context) (*T, bool, error), fallback func(ctx context.Context) (*T, error)) (*T, error) {
+	val, ret, err := primary(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if ret {
-		return nil
+		return val, nil
 	}
 
-	err = LocalLock(ctx, key, fallback)
+	val, err = LocalLock(ctx, key, fallback)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return val, nil
 }
