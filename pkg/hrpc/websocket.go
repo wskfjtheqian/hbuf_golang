@@ -118,6 +118,7 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 		},
 		pingInterval: 5 * time.Second,
 		pongWait:     10 * time.Second,
+		ctx:          ctx,
 	}
 	write := make(chan *writeData)
 	ret.write.Store(&write)
@@ -345,25 +346,19 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	}
 
 	ctx := s.Context()
-	for key, values := range data.Header {
-		for _, value := range values {
-			AddHeader(ctx, key, value)
-		}
-	}
-
 	if notification {
-		err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
-			return s.response(ctx, path, writer, reader)
-		})(ctx, data.Path, response, data)
+		err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
+			return s.response(ctx, path, writer, reader, header)
+		})(ctx, data.Path, response, data, data.Header)
 		if err != nil {
 			herror.PrintStack(err)
 		}
 		return
 	}
 
-	err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
-		return s.response(ctx, path, writer, reader)
-	})(ctx, strings.TrimLeft(data.Path, "/"), response, data)
+	err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
+		return s.response(ctx, path, writer, reader, header)
+	})(ctx, strings.TrimLeft(data.Path, "/"), response, data, data.Header)
 	if err != nil {
 		err = s.encoder(response)(&Result[hbuf.Data]{
 			Code: http.StatusInternalServerError,

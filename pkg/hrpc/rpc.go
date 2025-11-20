@@ -6,6 +6,7 @@ import (
 	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hjson"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"io"
 	"net/http"
 	"reflect"
@@ -31,7 +32,7 @@ type Request func(ctx context.Context, path string, notification bool, callback 
 type RequestMiddleware func(next Request) Request
 
 // Response 是用于处理RPC响应的函数
-type Response func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error
+type Response func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error
 
 // ResponseMiddleware 用于对 Response 进行中间件处理。
 type ResponseMiddleware func(next Response) Response
@@ -45,10 +46,10 @@ type HandlerMiddleware func(next Handler) Handler
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // WithContext 创建一个新的Context
-func WithContext(ctx context.Context, method string) context.Context {
+func WithContext(ctx context.Context, method string, header http.Header) context.Context {
 	return &Context{
 		Context: ctx,
-		header:  http.Header{},
+		header:  header,
 		tags:    make(map[string][]string),
 		method:  method,
 	}
@@ -172,6 +173,10 @@ func (r *Result[T]) GetData() any {
 	return r.Data
 }
 
+func (r *Result[T]) Descriptors() hbuf.Descriptor {
+	return r.descriptor
+}
+
 func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
 	ret := &Result[T]{
 		Code: code,
@@ -198,10 +203,6 @@ func NewResultResponse[T hbuf.Data]() *Result[T] {
 	}
 	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
 	return ret
-}
-
-func (r *Result[T]) Descriptors() hbuf.Descriptor {
-	return r.descriptor
 }
 
 type Encoder func(writer io.Writer) func(v hbuf.Data, tag string) error
@@ -355,7 +356,7 @@ func (r *Server) Register(id int32, name string, init Init, methods ...*Method) 
 }
 
 // Response 处理RPC请求
-func (r *Server) Response(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+func (r *Server) Response(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
 	r.lock.RLock()
 	method, ok := r.methods[path]
 	r.lock.RUnlock()
@@ -381,7 +382,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		}
 	}
 
-	ctx = WithContext(ctx, method.Name)
+	ctx = WithContext(ctx, method.Name, header)
 	ctx = method.WithContext(ctx)
 	response, err := r.middleware(method.Handler)(ctx, in)
 	if val, ok := response.(io.Reader); ok {
@@ -401,8 +402,9 @@ func (r *Server) Init() {
 	ctx, cancelFunc := context.WithCancel(context.TODO())
 	defer cancelFunc()
 	_, _ = r.middleware(func(ctx context.Context, req any) (any, error) {
-		for _, init := range r.inits {
+		for key, init := range r.inits {
 			init.Init(ctx)
+			hlog.Info("finish init %s", strings.TrimRight(key, "/"))
 		}
 		return nil, nil
 	})(ctx, nil)

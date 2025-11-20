@@ -221,5 +221,6 @@ func Transaction(ctx context.Context, fn func(ctx context.Context) error) error 
 	if err != nil {
 		return err
 	}
+	tx.Commit()
 	return nil
 }

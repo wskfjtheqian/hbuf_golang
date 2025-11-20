@@ -178,9 +178,9 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	err := h.middleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
-		return h.server.Response(ctx, path, writer, reader)
-	})(r.Context(), r.URL.Path[len(h.pathPrefix):], w, r.Body)
+	err := h.middleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
+		return h.server.Response(ctx, path, writer, reader, header)
+	})(r.Context(), r.URL.Path[len(h.pathPrefix):], w, r.Body, r.Header)
 	if err != nil {
 		var e *Result[hbuf.Data]
 		if errors.As(err, &e) && e.Code == -1 {

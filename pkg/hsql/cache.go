@@ -72,5 +72,6 @@ func ClearCache(ctx context.Context, table string) error {
 		return nil
 	}
 	table = *db.GetConfig().DbName + "." + table
+
 	return db.GetCache().Del(ctx, table)
 }

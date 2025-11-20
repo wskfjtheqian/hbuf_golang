@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hsql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"time"
@@ -84,8 +83,21 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 	if !ok {
 		return herror.NewError("redis not found in context")
 	}
+
+	go func() {
+		time.Sleep(time.Second * 1)
+		err := d.del(context.TODO(), table, r.Get())
+		if err != nil {
+			herror.PrintStack(err)
+			return
+		}
+	}()
+	return d.del(ctx, table, r.Get())
+}
+
+func (d *DBCache) del(ctx context.Context, table string, c *redis.Client) error {
 	key := "db:cache:" + table
-	c := r.Get()
+
 	reply := c.HGetAll(ctx, key)
 	if err := reply.Err(); err != nil {
 		return herror.Wrap(err)
@@ -100,14 +112,6 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 	if err != nil {
 		return herror.Wrap(err)
 	}
-
-	go func() {
-		time.Sleep(1 * time.Second)
-		err := c.Del(context.TODO(), keys...).Err()
-		if err != nil {
-			hlog.Error("redis del error: %v", err)
-		}
-	}()
 	return nil
 }
 
