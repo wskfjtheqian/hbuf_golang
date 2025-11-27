@@ -54,3 +54,12 @@ func PrintStack(e error) {
 		_ = hlog.Output(2, hlog.ERROR, e.Error())
 	}
 }
+
+// UnWrap 用于获取底层错误。
+func UnWrap(err error) error {
+	var e *Error
+	if errors.As(err, &e) {
+		return e.Unwrap()
+	}
+	return err
+}
