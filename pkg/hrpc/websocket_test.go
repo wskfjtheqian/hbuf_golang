@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"io"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 )
 
 // 测试 TestWebsocket_RPC 方法
@@ -143,13 +144,13 @@ func TestWebsocket_Encrypt(t *testing.T) {
 	}
 
 	responseMiddleware := func(next hrpc.Response) hrpc.Response {
-		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
 
 			encoder := base64.NewEncoder(base64.StdEncoding, writer)
 			defer encoder.Close()
 
-			return next(ctx, path, encoder, decoder)
+			return next(ctx, path, encoder, decoder, header)
 		}
 	}
 

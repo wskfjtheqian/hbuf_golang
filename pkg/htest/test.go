@@ -3,13 +3,15 @@ package htest
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"testing"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
-	"testing"
 )
 
 var Context func() context.Context = func() context.Context {
-	return hrpc.WithContext(context.TODO(), "test")
+	return hrpc.WithContext(context.TODO(), "test", http.Header{})
 }
 
 func HTest(desc string, t *testing.T, call func(ctx context.Context) (any, error)) {

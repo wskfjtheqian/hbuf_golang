@@ -11,11 +11,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
-	"golang.org/x/net/http2"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"math/big"
 	"net"
@@ -25,6 +20,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
+	"golang.org/x/net/http2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type TestHbufService struct {
@@ -134,13 +135,11 @@ func TestHttpService_Encoder(t *testing.T) {
 	RegisterHbufService(rpcServer, &TestHbufService{})
 
 	server := hrpc.NewHttpServer("/rpc/", rpcServer, hrpc.WithResponseMiddleware(func(next hrpc.Response) hrpc.Response {
-		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader) error {
+		return func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
 			decoder := base64.NewDecoder(base64.StdEncoding, reader)
-
 			encoder := base64.NewEncoder(base64.StdEncoding, writer)
 			defer encoder.Close()
-
-			return next(ctx, path, encoder, decoder)
+			return next(ctx, path, encoder, decoder, header)
 		}
 	}))
 
