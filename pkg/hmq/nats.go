@@ -3,17 +3,18 @@ package hmq
 import (
 	"context"
 	"encoding/json"
+	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
-	"reflect"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 // WithContext 给上下文添加 NATS 连接
@@ -277,7 +278,7 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx 
 }
 
 // Subscribe 订阅指定的主题
-func Subscribe[T any](ctx context.Context, subject string, callback func(ctx context.Context, msg *T) error) (*nats.Subscription, error) {
+func Subscribe[T any](ctx context.Context, subject string, callback func(ctx context.Context, subject string, msg *T) error) (*nats.Subscription, error) {
 	n, ok := FromContext(ctx)
 	if !ok {
 		return nil, herror.NewError("nats not initialized")
@@ -289,7 +290,7 @@ func Subscribe[T any](ctx context.Context, subject string, callback func(ctx con
 		if err != nil {
 			return herror.Wrap(err)
 		}
-		return callback(ctx, &data)
+		return callback(ctx, msg.Subject, &data)
 	})
 	if err != nil {
 		return nil, err
@@ -469,7 +470,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 }
 
 // JetStreamSubscribe 订阅指定的主题
-func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg *T) error, options ...SubscribeOption) error {
+func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, subject, msgId string, msg *T) error, options ...SubscribeOption) error {
 	n, ok := FromContext(ctx)
 	if !ok {
 		return herror.NewError("nats not initialized")
@@ -481,7 +482,7 @@ func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable str
 		if err != nil {
 			return err
 		}
-		return callback(ctx, msgId, &data)
+		return callback(ctx, msg.Subject(), msgId, &data)
 	}, options...)
 	if err != nil {
 		return err
