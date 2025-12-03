@@ -5,15 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hip"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"net"
 	"net/http"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hip"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 type Http struct {
