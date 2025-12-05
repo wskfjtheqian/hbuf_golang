@@ -282,12 +282,12 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx con
 		return val.modify(ctx, key, call)
 	}
 
-	temp := &item[K, V]{
+	val = &item[K, V]{
 		minExpire: c.minExpire,
 		maxExpire: c.maxExpire,
 		call:      c.call,
 	}
-	_, err := temp.load(ctx, key)
+	_, err := val.load(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx con
 		return err
 	}
 
-	c.maps[key] = temp
+	c.maps[key] = val
 	return nil
 }
 

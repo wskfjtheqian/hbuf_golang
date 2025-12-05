@@ -233,7 +233,7 @@ func NewJsonDecode() Decoder {
 			if err != nil {
 				return err
 			}
-			err = hjson.Unmarshal(buffer, v, "")
+			err = hjson.Unmarshal(buffer, v, tag)
 			if err != nil {
 				return err
 			}
@@ -246,7 +246,7 @@ func NewJsonDecode() Decoder {
 func NewHBufEncode() Encoder {
 	return func(writer io.Writer) func(v hbuf.Data, tag string) error {
 		return func(v hbuf.Data, tag string) error {
-			buffer, err := hbuf.Marshal(v, "")
+			buffer, err := hbuf.Marshal(v, tag)
 			if err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func NewHBufDecode() Decoder {
 			if err != nil {
 				return err
 			}
-			err = hbuf.Unmarshal(buffer, v, "")
+			err = hbuf.Unmarshal(buffer, v, tag)
 			if err != nil {
 				return err
 			}

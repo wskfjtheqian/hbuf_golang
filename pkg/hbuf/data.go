@@ -165,8 +165,13 @@ type Data interface {
 	Descriptors() Descriptor
 }
 
-func Marshal(data Data, tag string) ([]byte, error) {
+func Marshal(data Data, tag string) (b []byte, err error) {
 	buf := make([]byte, 0, 128)
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
 	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), nil, tag), nil
 }
 
