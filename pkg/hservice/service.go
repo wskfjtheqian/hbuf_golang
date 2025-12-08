@@ -9,12 +9,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
-	"go.etcd.io/etcd/api/v3/mvccpb"
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"math/big"
 	rand2 "math/rand/v2"
 	"net"
@@ -25,6 +19,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // WithContext 创建一个新的Context
@@ -169,7 +170,8 @@ func (s *Service) SetConfig(cfg *Config) error {
 			s.rpcServer.Register(install.id, install.name, install.init, install.methods...)
 		}
 	}
-	s.rpcServer.Init()
+
+	s.rpcServer.Init(cfg.Server.List...)
 	return nil
 }
 

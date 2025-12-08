@@ -3,16 +3,17 @@ package hrpc
 import (
 	"context"
 	"errors"
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hjson"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"io"
 	"net/http"
 	"reflect"
 	"strings"
 	"sync"
 	"unsafe"
+
+	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hjson"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
 type Type int8
@@ -398,13 +399,22 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), "")
 }
 
-func (r *Server) Init() {
+func (r *Server) Init(list ...string) {
 	ctx, cancelFunc := context.WithCancel(context.TODO())
 	defer cancelFunc()
 	_, _ = r.middleware(func(ctx context.Context, req any) (any, error) {
-		for key, init := range r.inits {
-			init.Init(ctx)
-			hlog.Info("finish init %s", strings.TrimRight(key, "/"))
+		if len(list) > 0 {
+			for _, key := range list {
+				if init, ok := r.inits[key+"/"]; ok {
+					init.Init(ctx)
+					hlog.Info("finish init %s", strings.TrimRight(key, "/"))
+				}
+			}
+		} else {
+			for key, init := range r.inits {
+				init.Init(ctx)
+				hlog.Info("finish init %s", strings.TrimRight(key, "/"))
+			}
 		}
 		return nil, nil
 	})(ctx, nil)
