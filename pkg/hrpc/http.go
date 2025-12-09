@@ -5,15 +5,16 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"golang.org/x/net/http2"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"golang.org/x/net/http2"
 )
 
 // HttpClientOption  HttpClient 的选项。
@@ -70,6 +71,15 @@ func (h *HttpClient) Request(ctx context.Context, path string, notification bool
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.base+path, buffer)
 		if err != nil {
 			return nil, err
+		}
+
+		rpcCtx := FromContext(ctx)
+		if rpcCtx != nil {
+			for k, v := range rpcCtx.header {
+				for _, v2 := range v {
+					req.Header.Add(k, v2)
+				}
+			}
 		}
 
 		resp, err := h.client.Do(req)

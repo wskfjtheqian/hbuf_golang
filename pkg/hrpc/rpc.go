@@ -524,7 +524,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 		} else {
 			return reader, nil
 		}
-	})(ctx, request)
+	})(WithContext(ctx, name+method, http.Header{}), request)
 	if err != nil {
 		return nil, err
 	}
