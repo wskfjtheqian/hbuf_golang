@@ -372,7 +372,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		in = reader
 	} else {
 		in, err = method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
-			err := r.decode(reader)(v, method.Tag)
+			err := r.decode(reader)(v, "I"+method.Tag)
 			if err != nil {
 				return nil, err
 			}
@@ -396,7 +396,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		}
 		return err
 	}
-	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), "")
+	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), "O"+method.Tag)
 }
 
 func (r *Server) Init(list ...string) {

@@ -1,6 +1,9 @@
 package hutl
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Equal 比较两个相同类型的值，如果它们相等则返回 true，否则返回 false。
 func Equal[T comparable](value1, value2 *T) bool {
@@ -47,10 +50,11 @@ func Map[K comparable, V any, E any](m map[K]V, f func(K, V) E) map[K]E {
 }
 
 // SliceToMap 将一个切片转换为一个 map。
-func SliceToMap[T comparable, V any](list []T, f func(int, T) V) map[T]V {
-	result := make(map[T]V)
+func SliceToMap[K comparable, V any, E any](list []E, f func(int, E) (K, V)) map[K]V {
+	result := make(map[K]V)
 	for i, v := range list {
-		result[v] = f(i, v)
+		_k, _v := f(i, v)
+		result[_k] = _v
 	}
 	return result
 }
@@ -163,4 +167,11 @@ func UrlJoin(base string, paths ...string) string {
 		base += "/" + strings.Trim(path, "/")
 	}
 	return base
+}
+
+// Sort 对一个切片进行排序。
+func Sort[T any](list []T, less func(a, b T) bool) {
+	sort.Slice(list, func(i, j int) bool {
+		return less(list[i], list[j])
+	})
 }
