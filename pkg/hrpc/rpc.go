@@ -372,7 +372,11 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		in = reader
 	} else {
 		in, err = method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
-			err := r.decode(reader)(v, "I"+method.Tag)
+			temp := ""
+			if len(method.Tag) > 0 {
+				temp = "I" + method.Tag
+			}
+			err := r.decode(reader)(v, temp)
 			if err != nil {
 				return nil, err
 			}
@@ -396,7 +400,11 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		}
 		return err
 	}
-	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), "O"+method.Tag)
+	temp := ""
+	if len(method.Tag) > 0 {
+		temp = "O" + method.Tag
+	}
+	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), temp)
 }
 
 func (r *Server) Init(list ...string) {
@@ -484,7 +492,11 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 				_, err := io.Copy(writer, val)
 				return err
 			} else if val, ok := request.(hbuf.Data); ok {
-				return c.encode(writer)(val, "I"+tag)
+				temp := ""
+				if len(tag) > 0 {
+					temp = "I" + tag
+				}
+				return c.encode(writer)(val, temp)
 			} else {
 				return herror.NewError("request is not io.Reader or hbuf.Data")
 			}
@@ -495,7 +507,11 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 		if val, ok := response.(ResultI); ok {
 			defer reader.Close()
 
-			err = c.decode(reader)(val, "O"+tag)
+			temp := ""
+			if len(tag) > 0 {
+				temp = "O" + tag
+			}
+			err = c.decode(reader)(val, temp)
 			if err != nil {
 				return nil, err
 			}
