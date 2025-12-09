@@ -484,7 +484,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 				_, err := io.Copy(writer, val)
 				return err
 			} else if val, ok := request.(hbuf.Data); ok {
-				return c.encode(writer)(val, tag)
+				return c.encode(writer)(val, "I"+tag)
 			} else {
 				return herror.NewError("request is not io.Reader or hbuf.Data")
 			}
@@ -495,7 +495,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 		if val, ok := response.(ResultI); ok {
 			defer reader.Close()
 
-			err = c.decode(reader)(val, tag)
+			err = c.decode(reader)(val, "O"+tag)
 			if err != nil {
 				return nil, err
 			}
