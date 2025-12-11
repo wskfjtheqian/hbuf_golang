@@ -517,7 +517,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 			}
 
 			if val.GetCode() != 0 {
-				return nil, errors.New(val.Error())
+				return nil, val
 			}
 
 			return val.GetData(), nil

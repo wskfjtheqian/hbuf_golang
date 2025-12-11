@@ -134,7 +134,17 @@ func PKCS7UnPadding(origData []byte) []byte {
 	return origData[:(length - unpadding)]
 }
 
+// Md5  计算 MD5 值
 func Md5(value []byte) string {
 	data := md5.Sum(value)
 	return hex.EncodeToString(data[:])
+}
+
+// 生成一个随机的MD5值
+func RandomMd5() (string, error) {
+	data := make([]byte, 64)
+	if _, err := io.ReadFull(rand.Reader, data); err != nil {
+		return "", err
+	}
+	return Md5(data), nil
 }

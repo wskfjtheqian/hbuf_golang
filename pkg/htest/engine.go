@@ -26,7 +26,12 @@ type T struct {
 func (t *T) Call(info any, err error) {
 	if err != nil {
 		if t.T != nil {
-			t.T.Error(err)
+			marshal, err := json.MarshalIndent(err, "", "\t")
+			if err != nil {
+				t.T.Error(err)
+				return
+			}
+			t.T.Error(string(marshal))
 		}
 		t.success = false
 	} else {
@@ -44,6 +49,17 @@ func (t *T) Call(info any, err error) {
 
 func (t *T) IsSuccess() bool {
 	return t.success
+}
+
+func (t *T) Error(err error) {
+	if t.T != nil {
+		marshal, err := json.MarshalIndent(err, "", "\t")
+		if err != nil {
+			t.T.Error(err)
+			return
+		}
+		t.T.Error(string(marshal))
+	}
 }
 
 // API 定义
