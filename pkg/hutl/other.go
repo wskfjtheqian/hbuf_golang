@@ -175,3 +175,18 @@ func Sort[T any](list []T, less func(a, b T) bool) {
 		return less(list[i], list[j])
 	})
 }
+
+// Unique 对一个切片中的每个元素进行去重操作，并返回一个新的切片。
+func Unique[T any, E comparable](list []T, f func(T) E) []E {
+	seen := make(map[E]struct{}, len(list))
+	result := make([]E, 0, len(list))
+
+	for _, i := range list {
+		v := f(i)
+		if _, ok := seen[v]; !ok {
+			seen[v] = struct{}{}
+			result = append(result, v)
+		}
+	}
+	return result
+}
