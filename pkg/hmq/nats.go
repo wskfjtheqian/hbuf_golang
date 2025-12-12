@@ -440,7 +440,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 			return nil, callback(ctx, msgId, msg)
 		})(context.TODO(), nil)
 		if retErr != nil {
-			hlog.Error("callback failed, error: %s", err)
+			herror.PrintStack(retErr)
 			metadata, err := msg.Metadata()
 			if err != nil {
 				hlog.Error("metadata failed, error: %s", err)
