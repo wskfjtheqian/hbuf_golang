@@ -190,3 +190,13 @@ func Unique[T any, E comparable](list []T, f func(T) E) []E {
 	}
 	return result
 }
+
+// Group 根据一个切片中的元素的某个属性，将元素分组。
+func Group[T any, K comparable](list []T, key func(T) K) map[K][]T {
+	m := make(map[K][]T)
+	for _, item := range list {
+		k := key(item)
+		m[k] = append(m[k], item)
+	}
+	return m
+}

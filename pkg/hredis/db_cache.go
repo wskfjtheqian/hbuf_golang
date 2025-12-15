@@ -50,7 +50,9 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 
 	err = json.Unmarshal([]byte(cmd.Val()), out)
 	if err != nil {
-		return false, herror.Wrap(err)
+		d.Del(ctx, table)
+		herror.PrintStack(err)
+		return false, nil
 	}
 
 	c.Expire(ctx, key, expiration)
