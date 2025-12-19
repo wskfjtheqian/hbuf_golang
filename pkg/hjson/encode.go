@@ -701,8 +701,13 @@ FieldLoop:
 			}
 			fv = fv.Field(i)
 		}
-		if f.tags != nil && len(opts.tag) > 0 {
-			if _, ok := f.tags[opts.tag]; !ok {
+		if len(opts.tag) > 0 {
+			if f.tags == nil {
+				continue
+			}
+			_, ok1 := f.tags["O*"]
+			_, ok2 := f.tags[opts.tag]
+			if !(ok1 || ok2) {
 				continue
 			}
 		}

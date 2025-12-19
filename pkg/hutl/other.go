@@ -200,3 +200,22 @@ func Group[T any, K comparable](list []T, key func(T) K) map[K][]T {
 	}
 	return m
 }
+
+// SliceDiff 切片差集
+func SliceDiff[E any, T comparable](src []E, dsc []E, get func(v E) T) []E {
+	// 创建一个map来存储dsc中元素的键值
+	dscMap := make(map[T]struct{})
+	for _, v := range dsc {
+		dscMap[get(v)] = struct{}{}
+	}
+
+	// 创建一个切片来存储结果
+	var result []E
+	for _, v := range src {
+		key := get(v)
+		if _, exists := dscMap[key]; !exists {
+			result = append(result, v)
+		}
+	}
+	return result
+}

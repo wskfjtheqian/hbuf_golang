@@ -156,9 +156,9 @@ type ResultI interface {
 }
 
 type Result[T hbuf.Data] struct {
-	Code       int32  `json:"code"`
-	Msg        string `json:"msg"`
-	Data       T      `json:"data"`
+	Code       int32  `json:"code,filter:O*"`
+	Msg        string `json:"msg,filter:O*"`
+	Data       T      `json:"data,filter:O*"`
 	descriptor hbuf.Descriptor
 }
 

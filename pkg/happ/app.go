@@ -2,6 +2,7 @@ package happ
 
 import (
 	"context"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hmq"
@@ -112,8 +113,8 @@ func (a *App) Middlewares() []hrpc.HandlerMiddleware {
 }
 
 func (a *App) Goroutine(fn func(ctx context.Context) error) {
-	ctx, cancel := context.WithCancel(context.TODO())
 	go func() {
+		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
 
 		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
@@ -123,4 +124,17 @@ func (a *App) Goroutine(fn func(ctx context.Context) error) {
 			herror.PrintStack(err)
 		}
 	}()
+}
+
+func (a *App) Run(fn func(ctx context.Context) error) error {
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
+	_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
+		return nil, fn(ctx)
+	})(ctx, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
