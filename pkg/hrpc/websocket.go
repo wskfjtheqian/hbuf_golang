@@ -588,6 +588,8 @@ func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *W
 	return ret
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // WebSocketServer WebSocket服务器
 type WebSocketServer struct {
 	requestMiddleware  RequestMiddleware

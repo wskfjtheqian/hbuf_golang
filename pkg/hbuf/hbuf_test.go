@@ -1,10 +1,12 @@
 package hbuf_test
 
 import (
+	"reflect"
+	"time"
+	"unsafe"
+
 	"github.com/shopspring/decimal"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
-	"reflect"
-	"unsafe"
 )
 
 var hBufSubTest HBufSubTest
@@ -14,30 +16,30 @@ var hBufSubTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBu
 })
 
 type HBufSubTest struct {
-	A1 hbuf.Int64  `json:"a1,omitempty" hbuf:"1"` //
-	A2 *hbuf.Int64 `json:"a2,omitempty" hbuf:"2"` //
+	A1 int64  `json:"a1,omitempty" hbuf:"1"` //
+	A2 *int64 `json:"a2,omitempty" hbuf:"2"` //
 }
 
 func (g *HBufSubTest) Descriptors() hbuf.Descriptor {
 	return hBufSubTestDescriptor
 }
 
-func (g *HBufSubTest) GetA1() hbuf.Int64 {
+func (g *HBufSubTest) GetA1() int64 {
 	return g.A1
 }
 
-func (g *HBufSubTest) SetA1(val hbuf.Int64) {
+func (g *HBufSubTest) SetA1(val int64) {
 	g.A1 = val
 }
 
-func (g *HBufSubTest) GetA2() hbuf.Int64 {
+func (g *HBufSubTest) GetA2() int64 {
 	if nil == g.A2 {
-		return hbuf.Int64(0)
+		return int64(0)
 	}
 	return *g.A2
 }
 
-func (g *HBufSubTest) SetA2(val hbuf.Int64) {
+func (g *HBufSubTest) SetA2(val int64) {
 	g.A2 = &val
 }
 
@@ -81,16 +83,16 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	36:  hbuf.NewListDescriptor[*int16](unsafe.Offsetof(hBufTest.V36), hbuf.NewInt16Descriptor(0, true), false),
 	37:  hbuf.NewListDescriptor[int32](unsafe.Offsetof(hBufTest.V37), hbuf.NewInt32Descriptor(0, false), false),
 	38:  hbuf.NewListDescriptor[*int32](unsafe.Offsetof(hBufTest.V38), hbuf.NewInt32Descriptor(0, true), false),
-	39:  hbuf.NewListDescriptor[hbuf.Int64](unsafe.Offsetof(hBufTest.V39), hbuf.NewInt64Descriptor(0, false), false),
-	40:  hbuf.NewListDescriptor[*hbuf.Int64](unsafe.Offsetof(hBufTest.V40), hbuf.NewInt64Descriptor(0, true), false),
+	39:  hbuf.NewListDescriptor[int64](unsafe.Offsetof(hBufTest.V39), hbuf.NewInt64Descriptor(0, false), false),
+	40:  hbuf.NewListDescriptor[*int64](unsafe.Offsetof(hBufTest.V40), hbuf.NewInt64Descriptor(0, true), false),
 	41:  hbuf.NewListDescriptor[uint8](unsafe.Offsetof(hBufTest.V41), hbuf.NewUint8Descriptor(0, false), false),
 	42:  hbuf.NewListDescriptor[*uint8](unsafe.Offsetof(hBufTest.V42), hbuf.NewUint8Descriptor(0, true), false),
 	43:  hbuf.NewListDescriptor[uint16](unsafe.Offsetof(hBufTest.V43), hbuf.NewUint16Descriptor(0, false), false),
 	44:  hbuf.NewListDescriptor[*uint16](unsafe.Offsetof(hBufTest.V44), hbuf.NewUint16Descriptor(0, true), false),
 	45:  hbuf.NewListDescriptor[uint32](unsafe.Offsetof(hBufTest.V45), hbuf.NewUint32Descriptor(0, false), false),
 	46:  hbuf.NewListDescriptor[*uint32](unsafe.Offsetof(hBufTest.V46), hbuf.NewUint32Descriptor(0, true), false),
-	47:  hbuf.NewListDescriptor[hbuf.Uint64](unsafe.Offsetof(hBufTest.V47), hbuf.NewUint64Descriptor(0, false), false),
-	48:  hbuf.NewListDescriptor[*hbuf.Uint64](unsafe.Offsetof(hBufTest.V48), hbuf.NewUint64Descriptor(0, true), false),
+	47:  hbuf.NewListDescriptor[uint64](unsafe.Offsetof(hBufTest.V47), hbuf.NewUint64Descriptor(0, false), false),
+	48:  hbuf.NewListDescriptor[*uint64](unsafe.Offsetof(hBufTest.V48), hbuf.NewUint64Descriptor(0, true), false),
 	49:  hbuf.NewListDescriptor[bool](unsafe.Offsetof(hBufTest.V49), hbuf.NewBoolDescriptor(0, false), false),
 	50:  hbuf.NewListDescriptor[*bool](unsafe.Offsetof(hBufTest.V50), hbuf.NewBoolDescriptor(0, true), false),
 	51:  hbuf.NewListDescriptor[string](unsafe.Offsetof(hBufTest.V51), hbuf.NewStringDescriptor(0, false), false),
@@ -101,60 +103,60 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	56:  hbuf.NewListDescriptor[*float32](unsafe.Offsetof(hBufTest.V56), hbuf.NewFloatDescriptor(0, true), false),
 	57:  hbuf.NewListDescriptor[float64](unsafe.Offsetof(hBufTest.V57), hbuf.NewDoubleDescriptor(0, false), false),
 	58:  hbuf.NewListDescriptor[*float64](unsafe.Offsetof(hBufTest.V58), hbuf.NewDoubleDescriptor(0, true), false),
-	59:  hbuf.NewListDescriptor[hbuf.Time](unsafe.Offsetof(hBufTest.V59), hbuf.NewTimeDescriptor(0, false), false),
-	60:  hbuf.NewListDescriptor[*hbuf.Time](unsafe.Offsetof(hBufTest.V60), hbuf.NewTimeDescriptor(0, true), false),
+	59:  hbuf.NewListDescriptor[time.Time](unsafe.Offsetof(hBufTest.V59), hbuf.NewTimeDescriptor(0, false), false),
+	60:  hbuf.NewListDescriptor[*time.Time](unsafe.Offsetof(hBufTest.V60), hbuf.NewTimeDescriptor(0, true), false),
 	61:  hbuf.NewListDescriptor[decimal.Decimal](unsafe.Offsetof(hBufTest.V61), hbuf.NewDecimalDescriptor(0, false), false),
 	62:  hbuf.NewListDescriptor[*decimal.Decimal](unsafe.Offsetof(hBufTest.V62), hbuf.NewDecimalDescriptor(0, true), false),
 	63:  hbuf.NewListDescriptor[HBufSubTest](unsafe.Offsetof(hBufTest.V63), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
 	64:  hbuf.NewListDescriptor[*HBufSubTest](unsafe.Offsetof(hBufTest.V64), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, true), false),
-	65:  hbuf.NewMapDescriptor[hbuf.Int64, int8](unsafe.Offsetof(hBufTest.V65), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt8Descriptor(0, false), false),
-	66:  hbuf.NewMapDescriptor[hbuf.Int64, *int8](unsafe.Offsetof(hBufTest.V66), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt8Descriptor(0, true), false),
-	67:  hbuf.NewMapDescriptor[hbuf.Int64, int16](unsafe.Offsetof(hBufTest.V67), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt16Descriptor(0, false), false),
-	68:  hbuf.NewMapDescriptor[hbuf.Int64, *int16](unsafe.Offsetof(hBufTest.V68), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt16Descriptor(0, true), false),
-	69:  hbuf.NewMapDescriptor[hbuf.Int64, int32](unsafe.Offsetof(hBufTest.V69), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt32Descriptor(0, false), false),
-	70:  hbuf.NewMapDescriptor[hbuf.Int64, *int32](unsafe.Offsetof(hBufTest.V70), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt32Descriptor(0, true), false),
-	71:  hbuf.NewMapDescriptor[hbuf.Int64, hbuf.Int64](unsafe.Offsetof(hBufTest.V71), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, false), false),
-	72:  hbuf.NewMapDescriptor[hbuf.Int64, *hbuf.Int64](unsafe.Offsetof(hBufTest.V72), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, true), false),
-	73:  hbuf.NewMapDescriptor[hbuf.Int64, uint8](unsafe.Offsetof(hBufTest.V73), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint8Descriptor(0, false), false),
-	74:  hbuf.NewMapDescriptor[hbuf.Int64, *uint8](unsafe.Offsetof(hBufTest.V74), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint8Descriptor(0, true), false),
-	75:  hbuf.NewMapDescriptor[hbuf.Int64, uint16](unsafe.Offsetof(hBufTest.V75), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint16Descriptor(0, false), false),
-	76:  hbuf.NewMapDescriptor[hbuf.Int64, *uint16](unsafe.Offsetof(hBufTest.V76), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint16Descriptor(0, true), false),
-	77:  hbuf.NewMapDescriptor[hbuf.Int64, uint32](unsafe.Offsetof(hBufTest.V77), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint32Descriptor(0, false), false),
-	78:  hbuf.NewMapDescriptor[hbuf.Int64, *uint32](unsafe.Offsetof(hBufTest.V78), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint32Descriptor(0, true), false),
-	79:  hbuf.NewMapDescriptor[hbuf.Int64, hbuf.Uint64](unsafe.Offsetof(hBufTest.V79), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint64Descriptor(0, false), false),
-	80:  hbuf.NewMapDescriptor[hbuf.Int64, *hbuf.Uint64](unsafe.Offsetof(hBufTest.V80), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint64Descriptor(0, true), false),
-	81:  hbuf.NewMapDescriptor[hbuf.Int64, bool](unsafe.Offsetof(hBufTest.V81), hbuf.NewInt64Descriptor(0, false), hbuf.NewBoolDescriptor(0, false), false),
-	82:  hbuf.NewMapDescriptor[hbuf.Int64, *bool](unsafe.Offsetof(hBufTest.V82), hbuf.NewInt64Descriptor(0, false), hbuf.NewBoolDescriptor(0, true), false),
-	83:  hbuf.NewMapDescriptor[hbuf.Int64, string](unsafe.Offsetof(hBufTest.V83), hbuf.NewInt64Descriptor(0, false), hbuf.NewStringDescriptor(0, false), false),
-	84:  hbuf.NewMapDescriptor[hbuf.Int64, *string](unsafe.Offsetof(hBufTest.V84), hbuf.NewInt64Descriptor(0, false), hbuf.NewStringDescriptor(0, true), false),
-	85:  hbuf.NewMapDescriptor[hbuf.Int64, []byte](unsafe.Offsetof(hBufTest.V85), hbuf.NewInt64Descriptor(0, false), hbuf.NewBytesDescriptor(0, false), false),
-	86:  hbuf.NewMapDescriptor[hbuf.Int64, *[]byte](unsafe.Offsetof(hBufTest.V86), hbuf.NewInt64Descriptor(0, false), hbuf.NewBytesDescriptor(0, true), false),
-	87:  hbuf.NewMapDescriptor[hbuf.Int64, float32](unsafe.Offsetof(hBufTest.V87), hbuf.NewInt64Descriptor(0, false), hbuf.NewFloatDescriptor(0, false), false),
-	88:  hbuf.NewMapDescriptor[hbuf.Int64, *float32](unsafe.Offsetof(hBufTest.V88), hbuf.NewInt64Descriptor(0, false), hbuf.NewFloatDescriptor(0, true), false),
-	89:  hbuf.NewMapDescriptor[hbuf.Int64, float64](unsafe.Offsetof(hBufTest.V89), hbuf.NewInt64Descriptor(0, false), hbuf.NewDoubleDescriptor(0, false), false),
-	90:  hbuf.NewMapDescriptor[hbuf.Int64, *float64](unsafe.Offsetof(hBufTest.V90), hbuf.NewInt64Descriptor(0, false), hbuf.NewDoubleDescriptor(0, true), false),
-	91:  hbuf.NewMapDescriptor[hbuf.Int64, hbuf.Time](unsafe.Offsetof(hBufTest.V91), hbuf.NewInt64Descriptor(0, false), hbuf.NewTimeDescriptor(0, false), false),
-	92:  hbuf.NewMapDescriptor[hbuf.Int64, *hbuf.Time](unsafe.Offsetof(hBufTest.V92), hbuf.NewInt64Descriptor(0, false), hbuf.NewTimeDescriptor(0, true), false),
-	93:  hbuf.NewMapDescriptor[hbuf.Int64, decimal.Decimal](unsafe.Offsetof(hBufTest.V93), hbuf.NewInt64Descriptor(0, false), hbuf.NewDecimalDescriptor(0, false), false),
-	94:  hbuf.NewMapDescriptor[hbuf.Int64, *decimal.Decimal](unsafe.Offsetof(hBufTest.V94), hbuf.NewInt64Descriptor(0, false), hbuf.NewDecimalDescriptor(0, true), false),
-	95:  hbuf.NewMapDescriptor[hbuf.Int64, HBufSubTest](unsafe.Offsetof(hBufTest.V95), hbuf.NewInt64Descriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
-	96:  hbuf.NewMapDescriptor[hbuf.Int64, *HBufSubTest](unsafe.Offsetof(hBufTest.V96), hbuf.NewInt64Descriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, true), false),
+	65:  hbuf.NewMapDescriptor[int64, int8](unsafe.Offsetof(hBufTest.V65), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt8Descriptor(0, false), false),
+	66:  hbuf.NewMapDescriptor[int64, *int8](unsafe.Offsetof(hBufTest.V66), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt8Descriptor(0, true), false),
+	67:  hbuf.NewMapDescriptor[int64, int16](unsafe.Offsetof(hBufTest.V67), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt16Descriptor(0, false), false),
+	68:  hbuf.NewMapDescriptor[int64, *int16](unsafe.Offsetof(hBufTest.V68), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt16Descriptor(0, true), false),
+	69:  hbuf.NewMapDescriptor[int64, int32](unsafe.Offsetof(hBufTest.V69), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt32Descriptor(0, false), false),
+	70:  hbuf.NewMapDescriptor[int64, *int32](unsafe.Offsetof(hBufTest.V70), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt32Descriptor(0, true), false),
+	71:  hbuf.NewMapDescriptor[int64, int64](unsafe.Offsetof(hBufTest.V71), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, false), false),
+	72:  hbuf.NewMapDescriptor[int64, *int64](unsafe.Offsetof(hBufTest.V72), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt64Descriptor(0, true), false),
+	73:  hbuf.NewMapDescriptor[int64, uint8](unsafe.Offsetof(hBufTest.V73), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint8Descriptor(0, false), false),
+	74:  hbuf.NewMapDescriptor[int64, *uint8](unsafe.Offsetof(hBufTest.V74), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint8Descriptor(0, true), false),
+	75:  hbuf.NewMapDescriptor[int64, uint16](unsafe.Offsetof(hBufTest.V75), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint16Descriptor(0, false), false),
+	76:  hbuf.NewMapDescriptor[int64, *uint16](unsafe.Offsetof(hBufTest.V76), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint16Descriptor(0, true), false),
+	77:  hbuf.NewMapDescriptor[int64, uint32](unsafe.Offsetof(hBufTest.V77), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint32Descriptor(0, false), false),
+	78:  hbuf.NewMapDescriptor[int64, *uint32](unsafe.Offsetof(hBufTest.V78), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint32Descriptor(0, true), false),
+	79:  hbuf.NewMapDescriptor[int64, uint64](unsafe.Offsetof(hBufTest.V79), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint64Descriptor(0, false), false),
+	80:  hbuf.NewMapDescriptor[int64, *uint64](unsafe.Offsetof(hBufTest.V80), hbuf.NewInt64Descriptor(0, false), hbuf.NewUint64Descriptor(0, true), false),
+	81:  hbuf.NewMapDescriptor[int64, bool](unsafe.Offsetof(hBufTest.V81), hbuf.NewInt64Descriptor(0, false), hbuf.NewBoolDescriptor(0, false), false),
+	82:  hbuf.NewMapDescriptor[int64, *bool](unsafe.Offsetof(hBufTest.V82), hbuf.NewInt64Descriptor(0, false), hbuf.NewBoolDescriptor(0, true), false),
+	83:  hbuf.NewMapDescriptor[int64, string](unsafe.Offsetof(hBufTest.V83), hbuf.NewInt64Descriptor(0, false), hbuf.NewStringDescriptor(0, false), false),
+	84:  hbuf.NewMapDescriptor[int64, *string](unsafe.Offsetof(hBufTest.V84), hbuf.NewInt64Descriptor(0, false), hbuf.NewStringDescriptor(0, true), false),
+	85:  hbuf.NewMapDescriptor[int64, []byte](unsafe.Offsetof(hBufTest.V85), hbuf.NewInt64Descriptor(0, false), hbuf.NewBytesDescriptor(0, false), false),
+	86:  hbuf.NewMapDescriptor[int64, *[]byte](unsafe.Offsetof(hBufTest.V86), hbuf.NewInt64Descriptor(0, false), hbuf.NewBytesDescriptor(0, true), false),
+	87:  hbuf.NewMapDescriptor[int64, float32](unsafe.Offsetof(hBufTest.V87), hbuf.NewInt64Descriptor(0, false), hbuf.NewFloatDescriptor(0, false), false),
+	88:  hbuf.NewMapDescriptor[int64, *float32](unsafe.Offsetof(hBufTest.V88), hbuf.NewInt64Descriptor(0, false), hbuf.NewFloatDescriptor(0, true), false),
+	89:  hbuf.NewMapDescriptor[int64, float64](unsafe.Offsetof(hBufTest.V89), hbuf.NewInt64Descriptor(0, false), hbuf.NewDoubleDescriptor(0, false), false),
+	90:  hbuf.NewMapDescriptor[int64, *float64](unsafe.Offsetof(hBufTest.V90), hbuf.NewInt64Descriptor(0, false), hbuf.NewDoubleDescriptor(0, true), false),
+	91:  hbuf.NewMapDescriptor[int64, time.Time](unsafe.Offsetof(hBufTest.V91), hbuf.NewInt64Descriptor(0, false), hbuf.NewTimeDescriptor(0, false), false),
+	92:  hbuf.NewMapDescriptor[int64, *time.Time](unsafe.Offsetof(hBufTest.V92), hbuf.NewInt64Descriptor(0, false), hbuf.NewTimeDescriptor(0, true), false),
+	93:  hbuf.NewMapDescriptor[int64, decimal.Decimal](unsafe.Offsetof(hBufTest.V93), hbuf.NewInt64Descriptor(0, false), hbuf.NewDecimalDescriptor(0, false), false),
+	94:  hbuf.NewMapDescriptor[int64, *decimal.Decimal](unsafe.Offsetof(hBufTest.V94), hbuf.NewInt64Descriptor(0, false), hbuf.NewDecimalDescriptor(0, true), false),
+	95:  hbuf.NewMapDescriptor[int64, HBufSubTest](unsafe.Offsetof(hBufTest.V95), hbuf.NewInt64Descriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
+	96:  hbuf.NewMapDescriptor[int64, *HBufSubTest](unsafe.Offsetof(hBufTest.V96), hbuf.NewInt64Descriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, true), false),
 	97:  hbuf.NewMapDescriptor[string, int8](unsafe.Offsetof(hBufTest.V97), hbuf.NewStringDescriptor(0, false), hbuf.NewInt8Descriptor(0, false), false),
 	98:  hbuf.NewMapDescriptor[string, *int8](unsafe.Offsetof(hBufTest.V98), hbuf.NewStringDescriptor(0, false), hbuf.NewInt8Descriptor(0, true), false),
 	99:  hbuf.NewMapDescriptor[string, int16](unsafe.Offsetof(hBufTest.V99), hbuf.NewStringDescriptor(0, false), hbuf.NewInt16Descriptor(0, false), false),
 	100: hbuf.NewMapDescriptor[string, *int16](unsafe.Offsetof(hBufTest.V100), hbuf.NewStringDescriptor(0, false), hbuf.NewInt16Descriptor(0, true), false),
 	101: hbuf.NewMapDescriptor[string, int32](unsafe.Offsetof(hBufTest.V101), hbuf.NewStringDescriptor(0, false), hbuf.NewInt32Descriptor(0, false), false),
 	102: hbuf.NewMapDescriptor[string, *int32](unsafe.Offsetof(hBufTest.V102), hbuf.NewStringDescriptor(0, false), hbuf.NewInt32Descriptor(0, true), false),
-	103: hbuf.NewMapDescriptor[string, hbuf.Int64](unsafe.Offsetof(hBufTest.V103), hbuf.NewStringDescriptor(0, false), hbuf.NewInt64Descriptor(0, false), false),
-	104: hbuf.NewMapDescriptor[string, *hbuf.Int64](unsafe.Offsetof(hBufTest.V104), hbuf.NewStringDescriptor(0, false), hbuf.NewInt64Descriptor(0, true), false),
+	103: hbuf.NewMapDescriptor[string, int64](unsafe.Offsetof(hBufTest.V103), hbuf.NewStringDescriptor(0, false), hbuf.NewInt64Descriptor(0, false), false),
+	104: hbuf.NewMapDescriptor[string, *int64](unsafe.Offsetof(hBufTest.V104), hbuf.NewStringDescriptor(0, false), hbuf.NewInt64Descriptor(0, true), false),
 	105: hbuf.NewMapDescriptor[string, uint8](unsafe.Offsetof(hBufTest.V105), hbuf.NewStringDescriptor(0, false), hbuf.NewUint8Descriptor(0, false), false),
 	106: hbuf.NewMapDescriptor[string, *uint8](unsafe.Offsetof(hBufTest.V106), hbuf.NewStringDescriptor(0, false), hbuf.NewUint8Descriptor(0, true), false),
 	107: hbuf.NewMapDescriptor[string, uint16](unsafe.Offsetof(hBufTest.V107), hbuf.NewStringDescriptor(0, false), hbuf.NewUint16Descriptor(0, false), false),
 	108: hbuf.NewMapDescriptor[string, *uint16](unsafe.Offsetof(hBufTest.V108), hbuf.NewStringDescriptor(0, false), hbuf.NewUint16Descriptor(0, true), false),
 	109: hbuf.NewMapDescriptor[string, uint32](unsafe.Offsetof(hBufTest.V109), hbuf.NewStringDescriptor(0, false), hbuf.NewUint32Descriptor(0, false), false),
 	110: hbuf.NewMapDescriptor[string, *uint32](unsafe.Offsetof(hBufTest.V110), hbuf.NewStringDescriptor(0, false), hbuf.NewUint32Descriptor(0, true), false),
-	111: hbuf.NewMapDescriptor[string, hbuf.Uint64](unsafe.Offsetof(hBufTest.V111), hbuf.NewStringDescriptor(0, false), hbuf.NewUint64Descriptor(0, false), false),
-	112: hbuf.NewMapDescriptor[string, *hbuf.Uint64](unsafe.Offsetof(hBufTest.V112), hbuf.NewStringDescriptor(0, false), hbuf.NewUint64Descriptor(0, true), false),
+	111: hbuf.NewMapDescriptor[string, uint64](unsafe.Offsetof(hBufTest.V111), hbuf.NewStringDescriptor(0, false), hbuf.NewUint64Descriptor(0, false), false),
+	112: hbuf.NewMapDescriptor[string, *uint64](unsafe.Offsetof(hBufTest.V112), hbuf.NewStringDescriptor(0, false), hbuf.NewUint64Descriptor(0, true), false),
 	113: hbuf.NewMapDescriptor[string, bool](unsafe.Offsetof(hBufTest.V113), hbuf.NewStringDescriptor(0, false), hbuf.NewBoolDescriptor(0, false), false),
 	114: hbuf.NewMapDescriptor[string, *bool](unsafe.Offsetof(hBufTest.V114), hbuf.NewStringDescriptor(0, false), hbuf.NewBoolDescriptor(0, true), false),
 	115: hbuf.NewMapDescriptor[string, string](unsafe.Offsetof(hBufTest.V115), hbuf.NewStringDescriptor(0, false), hbuf.NewStringDescriptor(0, false), false),
@@ -165,8 +167,8 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	120: hbuf.NewMapDescriptor[string, *float32](unsafe.Offsetof(hBufTest.V120), hbuf.NewStringDescriptor(0, false), hbuf.NewFloatDescriptor(0, true), false),
 	121: hbuf.NewMapDescriptor[string, float64](unsafe.Offsetof(hBufTest.V121), hbuf.NewStringDescriptor(0, false), hbuf.NewDoubleDescriptor(0, false), false),
 	122: hbuf.NewMapDescriptor[string, *float64](unsafe.Offsetof(hBufTest.V122), hbuf.NewStringDescriptor(0, false), hbuf.NewDoubleDescriptor(0, true), false),
-	123: hbuf.NewMapDescriptor[string, hbuf.Time](unsafe.Offsetof(hBufTest.V123), hbuf.NewStringDescriptor(0, false), hbuf.NewTimeDescriptor(0, false), false),
-	124: hbuf.NewMapDescriptor[string, *hbuf.Time](unsafe.Offsetof(hBufTest.V124), hbuf.NewStringDescriptor(0, false), hbuf.NewTimeDescriptor(0, true), false),
+	123: hbuf.NewMapDescriptor[string, time.Time](unsafe.Offsetof(hBufTest.V123), hbuf.NewStringDescriptor(0, false), hbuf.NewTimeDescriptor(0, false), false),
+	124: hbuf.NewMapDescriptor[string, *time.Time](unsafe.Offsetof(hBufTest.V124), hbuf.NewStringDescriptor(0, false), hbuf.NewTimeDescriptor(0, true), false),
 	125: hbuf.NewMapDescriptor[string, decimal.Decimal](unsafe.Offsetof(hBufTest.V125), hbuf.NewStringDescriptor(0, false), hbuf.NewDecimalDescriptor(0, false), false),
 	126: hbuf.NewMapDescriptor[string, *decimal.Decimal](unsafe.Offsetof(hBufTest.V126), hbuf.NewStringDescriptor(0, false), hbuf.NewDecimalDescriptor(0, true), false),
 	127: hbuf.NewMapDescriptor[string, HBufSubTest](unsafe.Offsetof(hBufTest.V127), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
@@ -174,134 +176,134 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 })
 
 type HBufTest struct {
-	V1   int8                            `json:"v1,omitempty" hbuf:"1"`     //
-	V2   *int8                           `json:"v2,omitempty" hbuf:"2"`     //
-	V3   int16                           `json:"v3,omitempty" hbuf:"3"`     //
-	V4   *int16                          `json:"v4,omitempty" hbuf:"4"`     //
-	V5   int32                           `json:"v5,omitempty" hbuf:"5"`     //
-	V6   *int32                          `json:"v6,omitempty" hbuf:"6"`     //
-	V7   hbuf.Int64                      `json:"v7,omitempty" hbuf:"7"`     //
-	V8   *hbuf.Int64                     `json:"v8,omitempty" hbuf:"8"`     //
-	V9   uint8                           `json:"v9,omitempty" hbuf:"9"`     //
-	V10  *uint8                          `json:"v10,omitempty" hbuf:"10"`   //
-	V11  uint16                          `json:"v11,omitempty" hbuf:"11"`   //
-	V12  *uint16                         `json:"v12,omitempty" hbuf:"12"`   //
-	V13  uint32                          `json:"v13,omitempty" hbuf:"13"`   //
-	V14  *uint32                         `json:"v14,omitempty" hbuf:"14"`   //
-	V15  hbuf.Uint64                     `json:"v15,omitempty" hbuf:"15"`   //
-	V16  *hbuf.Uint64                    `json:"v16,omitempty" hbuf:"16"`   //
-	V17  bool                            `json:"v17,omitempty" hbuf:"17"`   //
-	V18  *bool                           `json:"v18,omitempty" hbuf:"18"`   //
-	V19  string                          `json:"v19,omitempty" hbuf:"19"`   //
-	V20  *string                         `json:"v20,omitempty" hbuf:"20"`   //
-	V21  []byte                          `json:"v21,omitempty" hbuf:"21"`   //
-	V22  *[]byte                         `json:"v22,omitempty" hbuf:"22"`   //
-	V23  float32                         `json:"v23,omitempty" hbuf:"23"`   //
-	V24  *float32                        `json:"v24,omitempty" hbuf:"24"`   //
-	V25  float64                         `json:"v25,omitempty" hbuf:"25"`   //
-	V26  *float64                        `json:"v26,omitempty" hbuf:"26"`   //
-	V27  hbuf.Time                       `json:"v27,omitempty" hbuf:"27"`   //
-	V28  *hbuf.Time                      `json:"v28,omitempty" hbuf:"28"`   //
-	V29  decimal.Decimal                 `json:"v29,omitempty" hbuf:"29"`   //
-	V30  *decimal.Decimal                `json:"v30,omitempty" hbuf:"30"`   //
-	V31  HBufSubTest                     `json:"v31,omitempty" hbuf:"31"`   //
-	V32  *HBufSubTest                    `json:"v32,omitempty" hbuf:"32"`   //
-	V33  []int8                          `json:"v33,omitempty" hbuf:"33"`   //
-	V34  []*int8                         `json:"v34,omitempty" hbuf:"34"`   //
-	V35  []int16                         `json:"v35,omitempty" hbuf:"35"`   //
-	V36  []*int16                        `json:"v36,omitempty" hbuf:"36"`   //
-	V37  []int32                         `json:"v37,omitempty" hbuf:"37"`   //
-	V38  []*int32                        `json:"v38,omitempty" hbuf:"38"`   //
-	V39  []hbuf.Int64                    `json:"v39,omitempty" hbuf:"39"`   //
-	V40  []*hbuf.Int64                   `json:"v40,omitempty" hbuf:"40"`   //
-	V41  []uint8                         `json:"v41,omitempty" hbuf:"41"`   //
-	V42  []*uint8                        `json:"v42,omitempty" hbuf:"42"`   //
-	V43  []uint16                        `json:"v43,omitempty" hbuf:"43"`   //
-	V44  []*uint16                       `json:"v44,omitempty" hbuf:"44"`   //
-	V45  []uint32                        `json:"v45,omitempty" hbuf:"45"`   //
-	V46  []*uint32                       `json:"v46,omitempty" hbuf:"46"`   //
-	V47  []hbuf.Uint64                   `json:"v47,omitempty" hbuf:"47"`   //
-	V48  []*hbuf.Uint64                  `json:"v48,omitempty" hbuf:"48"`   //
-	V49  []bool                          `json:"v49,omitempty" hbuf:"49"`   //
-	V50  []*bool                         `json:"v50,omitempty" hbuf:"50"`   //
-	V51  []string                        `json:"v51,omitempty" hbuf:"51"`   //
-	V52  []*string                       `json:"v52,omitempty" hbuf:"52"`   //
-	V53  [][]byte                        `json:"v53,omitempty" hbuf:"53"`   //
-	V54  []*[]byte                       `json:"v54,omitempty" hbuf:"54"`   //
-	V55  []float32                       `json:"v55,omitempty" hbuf:"55"`   //
-	V56  []*float32                      `json:"v56,omitempty" hbuf:"56"`   //
-	V57  []float64                       `json:"v57,omitempty" hbuf:"57"`   //
-	V58  []*float64                      `json:"v58,omitempty" hbuf:"58"`   //
-	V59  []hbuf.Time                     `json:"v59,omitempty" hbuf:"59"`   //
-	V60  []*hbuf.Time                    `json:"v60,omitempty" hbuf:"60"`   //
-	V61  []decimal.Decimal               `json:"v61,omitempty" hbuf:"61"`   //
-	V62  []*decimal.Decimal              `json:"v62,omitempty" hbuf:"62"`   //
-	V63  []HBufSubTest                   `json:"v63,omitempty" hbuf:"63"`   //
-	V64  []*HBufSubTest                  `json:"v64,omitempty" hbuf:"64"`   //
-	V65  map[hbuf.Int64]int8             `json:"v65,omitempty" hbuf:"65"`   //
-	V66  map[hbuf.Int64]*int8            `json:"v66,omitempty" hbuf:"66"`   //
-	V67  map[hbuf.Int64]int16            `json:"v67,omitempty" hbuf:"67"`   //
-	V68  map[hbuf.Int64]*int16           `json:"v68,omitempty" hbuf:"68"`   //
-	V69  map[hbuf.Int64]int32            `json:"v69,omitempty" hbuf:"69"`   //
-	V70  map[hbuf.Int64]*int32           `json:"v70,omitempty" hbuf:"70"`   //
-	V71  map[hbuf.Int64]hbuf.Int64       `json:"v71,omitempty" hbuf:"71"`   //
-	V72  map[hbuf.Int64]*hbuf.Int64      `json:"v72,omitempty" hbuf:"72"`   //
-	V73  map[hbuf.Int64]uint8            `json:"v73,omitempty" hbuf:"73"`   //
-	V74  map[hbuf.Int64]*uint8           `json:"v74,omitempty" hbuf:"74"`   //
-	V75  map[hbuf.Int64]uint16           `json:"v75,omitempty" hbuf:"75"`   //
-	V76  map[hbuf.Int64]*uint16          `json:"v76,omitempty" hbuf:"76"`   //
-	V77  map[hbuf.Int64]uint32           `json:"v77,omitempty" hbuf:"77"`   //
-	V78  map[hbuf.Int64]*uint32          `json:"v78,omitempty" hbuf:"78"`   //
-	V79  map[hbuf.Int64]hbuf.Uint64      `json:"v79,omitempty" hbuf:"79"`   //
-	V80  map[hbuf.Int64]*hbuf.Uint64     `json:"v80,omitempty" hbuf:"80"`   //
-	V81  map[hbuf.Int64]bool             `json:"v81,omitempty" hbuf:"81"`   //
-	V82  map[hbuf.Int64]*bool            `json:"v82,omitempty" hbuf:"82"`   //
-	V83  map[hbuf.Int64]string           `json:"v83,omitempty" hbuf:"83"`   //
-	V84  map[hbuf.Int64]*string          `json:"v84,omitempty" hbuf:"84"`   //
-	V85  map[hbuf.Int64][]byte           `json:"v85,omitempty" hbuf:"85"`   //
-	V86  map[hbuf.Int64]*[]byte          `json:"v86,omitempty" hbuf:"86"`   //
-	V87  map[hbuf.Int64]float32          `json:"v87,omitempty" hbuf:"87"`   //
-	V88  map[hbuf.Int64]*float32         `json:"v88,omitempty" hbuf:"88"`   //
-	V89  map[hbuf.Int64]float64          `json:"v89,omitempty" hbuf:"89"`   //
-	V90  map[hbuf.Int64]*float64         `json:"v90,omitempty" hbuf:"90"`   //
-	V91  map[hbuf.Int64]hbuf.Time        `json:"v91,omitempty" hbuf:"91"`   //
-	V92  map[hbuf.Int64]*hbuf.Time       `json:"v92,omitempty" hbuf:"92"`   //
-	V93  map[hbuf.Int64]decimal.Decimal  `json:"v93,omitempty" hbuf:"93"`   //
-	V94  map[hbuf.Int64]*decimal.Decimal `json:"v94,omitempty" hbuf:"94"`   //
-	V95  map[hbuf.Int64]HBufSubTest      `json:"v95,omitempty" hbuf:"95"`   //
-	V96  map[hbuf.Int64]*HBufSubTest     `json:"v96,omitempty" hbuf:"96"`   //
-	V97  map[string]int8                 `json:"v97,omitempty" hbuf:"97"`   //
-	V98  map[string]*int8                `json:"v98,omitempty" hbuf:"98"`   //
-	V99  map[string]int16                `json:"v99,omitempty" hbuf:"99"`   //
-	V100 map[string]*int16               `json:"v100,omitempty" hbuf:"100"` //
-	V101 map[string]int32                `json:"v101,omitempty" hbuf:"101"` //
-	V102 map[string]*int32               `json:"v102,omitempty" hbuf:"102"` //
-	V103 map[string]hbuf.Int64           `json:"v103,omitempty" hbuf:"103"` //
-	V104 map[string]*hbuf.Int64          `json:"v104,omitempty" hbuf:"104"` //
-	V105 map[string]uint8                `json:"v105,omitempty" hbuf:"105"` //
-	V106 map[string]*uint8               `json:"v106,omitempty" hbuf:"106"` //
-	V107 map[string]uint16               `json:"v107,omitempty" hbuf:"107"` //
-	V108 map[string]*uint16              `json:"v108,omitempty" hbuf:"108"` //
-	V109 map[string]uint32               `json:"v109,omitempty" hbuf:"109"` //
-	V110 map[string]*uint32              `json:"v110,omitempty" hbuf:"110"` //
-	V111 map[string]hbuf.Uint64          `json:"v111,omitempty" hbuf:"111"` //
-	V112 map[string]*hbuf.Uint64         `json:"v112,omitempty" hbuf:"112"` //
-	V113 map[string]bool                 `json:"v113,omitempty" hbuf:"113"` //
-	V114 map[string]*bool                `json:"v114,omitempty" hbuf:"114"` //
-	V115 map[string]string               `json:"v115,omitempty" hbuf:"115"` //
-	V116 map[string]*string              `json:"v116,omitempty" hbuf:"116"` //
-	V117 map[string][]byte               `json:"v117,omitempty" hbuf:"117"` //
-	V118 map[string]*[]byte              `json:"v118,omitempty" hbuf:"118"` //
-	V119 map[string]float32              `json:"v119,omitempty" hbuf:"119"` //
-	V120 map[string]*float32             `json:"v120,omitempty" hbuf:"120"` //
-	V121 map[string]float64              `json:"v121,omitempty" hbuf:"121"` //
-	V122 map[string]*float64             `json:"v122,omitempty" hbuf:"122"` //
-	V123 map[string]hbuf.Time            `json:"v123,omitempty" hbuf:"123"` //
-	V124 map[string]*hbuf.Time           `json:"v124,omitempty" hbuf:"124"` //
-	V125 map[string]decimal.Decimal      `json:"v125,omitempty" hbuf:"125"` //
-	V126 map[string]*decimal.Decimal     `json:"v126,omitempty" hbuf:"126"` //
-	V127 map[string]HBufSubTest          `json:"v127,omitempty" hbuf:"127"` //
-	V128 map[string]*HBufSubTest         `json:"v128,omitempty" hbuf:"128"` //
+	V1   int8                        `json:"v1,omitempty" hbuf:"1"`     //
+	V2   *int8                       `json:"v2,omitempty" hbuf:"2"`     //
+	V3   int16                       `json:"v3,omitempty" hbuf:"3"`     //
+	V4   *int16                      `json:"v4,omitempty" hbuf:"4"`     //
+	V5   int32                       `json:"v5,omitempty" hbuf:"5"`     //
+	V6   *int32                      `json:"v6,omitempty" hbuf:"6"`     //
+	V7   int64                       `json:"v7,omitempty" hbuf:"7"`     //
+	V8   *int64                      `json:"v8,omitempty" hbuf:"8"`     //
+	V9   uint8                       `json:"v9,omitempty" hbuf:"9"`     //
+	V10  *uint8                      `json:"v10,omitempty" hbuf:"10"`   //
+	V11  uint16                      `json:"v11,omitempty" hbuf:"11"`   //
+	V12  *uint16                     `json:"v12,omitempty" hbuf:"12"`   //
+	V13  uint32                      `json:"v13,omitempty" hbuf:"13"`   //
+	V14  *uint32                     `json:"v14,omitempty" hbuf:"14"`   //
+	V15  uint64                      `json:"v15,omitempty" hbuf:"15"`   //
+	V16  *uint64                     `json:"v16,omitempty" hbuf:"16"`   //
+	V17  bool                        `json:"v17,omitempty" hbuf:"17"`   //
+	V18  *bool                       `json:"v18,omitempty" hbuf:"18"`   //
+	V19  string                      `json:"v19,omitempty" hbuf:"19"`   //
+	V20  *string                     `json:"v20,omitempty" hbuf:"20"`   //
+	V21  []byte                      `json:"v21,omitempty" hbuf:"21"`   //
+	V22  *[]byte                     `json:"v22,omitempty" hbuf:"22"`   //
+	V23  float32                     `json:"v23,omitempty" hbuf:"23"`   //
+	V24  *float32                    `json:"v24,omitempty" hbuf:"24"`   //
+	V25  float64                     `json:"v25,omitempty" hbuf:"25"`   //
+	V26  *float64                    `json:"v26,omitempty" hbuf:"26"`   //
+	V27  time.Time                   `json:"v27,omitempty" hbuf:"27"`   //
+	V28  *time.Time                  `json:"v28,omitempty" hbuf:"28"`   //
+	V29  decimal.Decimal             `json:"v29,omitempty" hbuf:"29"`   //
+	V30  *decimal.Decimal            `json:"v30,omitempty" hbuf:"30"`   //
+	V31  HBufSubTest                 `json:"v31,omitempty" hbuf:"31"`   //
+	V32  *HBufSubTest                `json:"v32,omitempty" hbuf:"32"`   //
+	V33  []int8                      `json:"v33,omitempty" hbuf:"33"`   //
+	V34  []*int8                     `json:"v34,omitempty" hbuf:"34"`   //
+	V35  []int16                     `json:"v35,omitempty" hbuf:"35"`   //
+	V36  []*int16                    `json:"v36,omitempty" hbuf:"36"`   //
+	V37  []int32                     `json:"v37,omitempty" hbuf:"37"`   //
+	V38  []*int32                    `json:"v38,omitempty" hbuf:"38"`   //
+	V39  []int64                     `json:"v39,omitempty" hbuf:"39"`   //
+	V40  []*int64                    `json:"v40,omitempty" hbuf:"40"`   //
+	V41  []uint8                     `json:"v41,omitempty" hbuf:"41"`   //
+	V42  []*uint8                    `json:"v42,omitempty" hbuf:"42"`   //
+	V43  []uint16                    `json:"v43,omitempty" hbuf:"43"`   //
+	V44  []*uint16                   `json:"v44,omitempty" hbuf:"44"`   //
+	V45  []uint32                    `json:"v45,omitempty" hbuf:"45"`   //
+	V46  []*uint32                   `json:"v46,omitempty" hbuf:"46"`   //
+	V47  []uint64                    `json:"v47,omitempty" hbuf:"47"`   //
+	V48  []*uint64                   `json:"v48,omitempty" hbuf:"48"`   //
+	V49  []bool                      `json:"v49,omitempty" hbuf:"49"`   //
+	V50  []*bool                     `json:"v50,omitempty" hbuf:"50"`   //
+	V51  []string                    `json:"v51,omitempty" hbuf:"51"`   //
+	V52  []*string                   `json:"v52,omitempty" hbuf:"52"`   //
+	V53  [][]byte                    `json:"v53,omitempty" hbuf:"53"`   //
+	V54  []*[]byte                   `json:"v54,omitempty" hbuf:"54"`   //
+	V55  []float32                   `json:"v55,omitempty" hbuf:"55"`   //
+	V56  []*float32                  `json:"v56,omitempty" hbuf:"56"`   //
+	V57  []float64                   `json:"v57,omitempty" hbuf:"57"`   //
+	V58  []*float64                  `json:"v58,omitempty" hbuf:"58"`   //
+	V59  []time.Time                 `json:"v59,omitempty" hbuf:"59"`   //
+	V60  []*time.Time                `json:"v60,omitempty" hbuf:"60"`   //
+	V61  []decimal.Decimal           `json:"v61,omitempty" hbuf:"61"`   //
+	V62  []*decimal.Decimal          `json:"v62,omitempty" hbuf:"62"`   //
+	V63  []HBufSubTest               `json:"v63,omitempty" hbuf:"63"`   //
+	V64  []*HBufSubTest              `json:"v64,omitempty" hbuf:"64"`   //
+	V65  map[int64]int8              `json:"v65,omitempty" hbuf:"65"`   //
+	V66  map[int64]*int8             `json:"v66,omitempty" hbuf:"66"`   //
+	V67  map[int64]int16             `json:"v67,omitempty" hbuf:"67"`   //
+	V68  map[int64]*int16            `json:"v68,omitempty" hbuf:"68"`   //
+	V69  map[int64]int32             `json:"v69,omitempty" hbuf:"69"`   //
+	V70  map[int64]*int32            `json:"v70,omitempty" hbuf:"70"`   //
+	V71  map[int64]int64             `json:"v71,omitempty" hbuf:"71"`   //
+	V72  map[int64]*int64            `json:"v72,omitempty" hbuf:"72"`   //
+	V73  map[int64]uint8             `json:"v73,omitempty" hbuf:"73"`   //
+	V74  map[int64]*uint8            `json:"v74,omitempty" hbuf:"74"`   //
+	V75  map[int64]uint16            `json:"v75,omitempty" hbuf:"75"`   //
+	V76  map[int64]*uint16           `json:"v76,omitempty" hbuf:"76"`   //
+	V77  map[int64]uint32            `json:"v77,omitempty" hbuf:"77"`   //
+	V78  map[int64]*uint32           `json:"v78,omitempty" hbuf:"78"`   //
+	V79  map[int64]uint64            `json:"v79,omitempty" hbuf:"79"`   //
+	V80  map[int64]*uint64           `json:"v80,omitempty" hbuf:"80"`   //
+	V81  map[int64]bool              `json:"v81,omitempty" hbuf:"81"`   //
+	V82  map[int64]*bool             `json:"v82,omitempty" hbuf:"82"`   //
+	V83  map[int64]string            `json:"v83,omitempty" hbuf:"83"`   //
+	V84  map[int64]*string           `json:"v84,omitempty" hbuf:"84"`   //
+	V85  map[int64][]byte            `json:"v85,omitempty" hbuf:"85"`   //
+	V86  map[int64]*[]byte           `json:"v86,omitempty" hbuf:"86"`   //
+	V87  map[int64]float32           `json:"v87,omitempty" hbuf:"87"`   //
+	V88  map[int64]*float32          `json:"v88,omitempty" hbuf:"88"`   //
+	V89  map[int64]float64           `json:"v89,omitempty" hbuf:"89"`   //
+	V90  map[int64]*float64          `json:"v90,omitempty" hbuf:"90"`   //
+	V91  map[int64]time.Time         `json:"v91,omitempty" hbuf:"91"`   //
+	V92  map[int64]*time.Time        `json:"v92,omitempty" hbuf:"92"`   //
+	V93  map[int64]decimal.Decimal   `json:"v93,omitempty" hbuf:"93"`   //
+	V94  map[int64]*decimal.Decimal  `json:"v94,omitempty" hbuf:"94"`   //
+	V95  map[int64]HBufSubTest       `json:"v95,omitempty" hbuf:"95"`   //
+	V96  map[int64]*HBufSubTest      `json:"v96,omitempty" hbuf:"96"`   //
+	V97  map[string]int8             `json:"v97,omitempty" hbuf:"97"`   //
+	V98  map[string]*int8            `json:"v98,omitempty" hbuf:"98"`   //
+	V99  map[string]int16            `json:"v99,omitempty" hbuf:"99"`   //
+	V100 map[string]*int16           `json:"v100,omitempty" hbuf:"100"` //
+	V101 map[string]int32            `json:"v101,omitempty" hbuf:"101"` //
+	V102 map[string]*int32           `json:"v102,omitempty" hbuf:"102"` //
+	V103 map[string]int64            `json:"v103,omitempty" hbuf:"103"` //
+	V104 map[string]*int64           `json:"v104,omitempty" hbuf:"104"` //
+	V105 map[string]uint8            `json:"v105,omitempty" hbuf:"105"` //
+	V106 map[string]*uint8           `json:"v106,omitempty" hbuf:"106"` //
+	V107 map[string]uint16           `json:"v107,omitempty" hbuf:"107"` //
+	V108 map[string]*uint16          `json:"v108,omitempty" hbuf:"108"` //
+	V109 map[string]uint32           `json:"v109,omitempty" hbuf:"109"` //
+	V110 map[string]*uint32          `json:"v110,omitempty" hbuf:"110"` //
+	V111 map[string]uint64           `json:"v111,omitempty" hbuf:"111"` //
+	V112 map[string]*uint64          `json:"v112,omitempty" hbuf:"112"` //
+	V113 map[string]bool             `json:"v113,omitempty" hbuf:"113"` //
+	V114 map[string]*bool            `json:"v114,omitempty" hbuf:"114"` //
+	V115 map[string]string           `json:"v115,omitempty" hbuf:"115"` //
+	V116 map[string]*string          `json:"v116,omitempty" hbuf:"116"` //
+	V117 map[string][]byte           `json:"v117,omitempty" hbuf:"117"` //
+	V118 map[string]*[]byte          `json:"v118,omitempty" hbuf:"118"` //
+	V119 map[string]float32          `json:"v119,omitempty" hbuf:"119"` //
+	V120 map[string]*float32         `json:"v120,omitempty" hbuf:"120"` //
+	V121 map[string]float64          `json:"v121,omitempty" hbuf:"121"` //
+	V122 map[string]*float64         `json:"v122,omitempty" hbuf:"122"` //
+	V123 map[string]time.Time        `json:"v123,omitempty" hbuf:"123"` //
+	V124 map[string]*time.Time       `json:"v124,omitempty" hbuf:"124"` //
+	V125 map[string]decimal.Decimal  `json:"v125,omitempty" hbuf:"125"` //
+	V126 map[string]*decimal.Decimal `json:"v126,omitempty" hbuf:"126"` //
+	V127 map[string]HBufSubTest      `json:"v127,omitempty" hbuf:"127"` //
+	V128 map[string]*HBufSubTest     `json:"v128,omitempty" hbuf:"128"` //
 }
 
 func (g *HBufTest) Descriptors() hbuf.Descriptor {
@@ -365,22 +367,22 @@ func (g *HBufTest) SetV6(val int32) {
 	g.V6 = &val
 }
 
-func (g *HBufTest) GetV7() hbuf.Int64 {
+func (g *HBufTest) GetV7() int64 {
 	return g.V7
 }
 
-func (g *HBufTest) SetV7(val hbuf.Int64) {
+func (g *HBufTest) SetV7(val int64) {
 	g.V7 = val
 }
 
-func (g *HBufTest) GetV8() hbuf.Int64 {
+func (g *HBufTest) GetV8() int64 {
 	if nil == g.V8 {
-		return hbuf.Int64(0)
+		return int64(0)
 	}
 	return *g.V8
 }
 
-func (g *HBufTest) SetV8(val hbuf.Int64) {
+func (g *HBufTest) SetV8(val int64) {
 	g.V8 = &val
 }
 
@@ -441,22 +443,22 @@ func (g *HBufTest) SetV14(val uint32) {
 	g.V14 = &val
 }
 
-func (g *HBufTest) GetV15() hbuf.Uint64 {
+func (g *HBufTest) GetV15() uint64 {
 	return g.V15
 }
 
-func (g *HBufTest) SetV15(val hbuf.Uint64) {
+func (g *HBufTest) SetV15(val uint64) {
 	g.V15 = val
 }
 
-func (g *HBufTest) GetV16() hbuf.Uint64 {
+func (g *HBufTest) GetV16() uint64 {
 	if nil == g.V16 {
-		return hbuf.Uint64(0)
+		return uint64(0)
 	}
 	return *g.V16
 }
 
-func (g *HBufTest) SetV16(val hbuf.Uint64) {
+func (g *HBufTest) SetV16(val uint64) {
 	g.V16 = &val
 }
 
@@ -555,22 +557,22 @@ func (g *HBufTest) SetV26(val float64) {
 	g.V26 = &val
 }
 
-func (g *HBufTest) GetV27() hbuf.Time {
+func (g *HBufTest) GetV27() time.Time {
 	return g.V27
 }
 
-func (g *HBufTest) SetV27(val hbuf.Time) {
+func (g *HBufTest) SetV27(val time.Time) {
 	g.V27 = val
 }
 
-func (g *HBufTest) GetV28() hbuf.Time {
+func (g *HBufTest) GetV28() time.Time {
 	if nil == g.V28 {
-		return hbuf.Time{}
+		return time.Time{}
 	}
 	return *g.V28
 }
 
-func (g *HBufTest) SetV28(val hbuf.Time) {
+func (g *HBufTest) SetV28(val time.Time) {
 	g.V28 = &val
 }
 
@@ -660,19 +662,19 @@ func (g *HBufTest) SetV38(val []*int32) {
 	g.V38 = val
 }
 
-func (g *HBufTest) GetV39() []hbuf.Int64 {
+func (g *HBufTest) GetV39() []int64 {
 	return g.V39
 }
 
-func (g *HBufTest) SetV39(val []hbuf.Int64) {
+func (g *HBufTest) SetV39(val []int64) {
 	g.V39 = val
 }
 
-func (g *HBufTest) GetV40() []*hbuf.Int64 {
+func (g *HBufTest) GetV40() []*int64 {
 	return g.V40
 }
 
-func (g *HBufTest) SetV40(val []*hbuf.Int64) {
+func (g *HBufTest) SetV40(val []*int64) {
 	g.V40 = val
 }
 
@@ -724,19 +726,19 @@ func (g *HBufTest) SetV46(val []*uint32) {
 	g.V46 = val
 }
 
-func (g *HBufTest) GetV47() []hbuf.Uint64 {
+func (g *HBufTest) GetV47() []uint64 {
 	return g.V47
 }
 
-func (g *HBufTest) SetV47(val []hbuf.Uint64) {
+func (g *HBufTest) SetV47(val []uint64) {
 	g.V47 = val
 }
 
-func (g *HBufTest) GetV48() []*hbuf.Uint64 {
+func (g *HBufTest) GetV48() []*uint64 {
 	return g.V48
 }
 
-func (g *HBufTest) SetV48(val []*hbuf.Uint64) {
+func (g *HBufTest) SetV48(val []*uint64) {
 	g.V48 = val
 }
 
@@ -820,19 +822,19 @@ func (g *HBufTest) SetV58(val []*float64) {
 	g.V58 = val
 }
 
-func (g *HBufTest) GetV59() []hbuf.Time {
+func (g *HBufTest) GetV59() []time.Time {
 	return g.V59
 }
 
-func (g *HBufTest) SetV59(val []hbuf.Time) {
+func (g *HBufTest) SetV59(val []time.Time) {
 	g.V59 = val
 }
 
-func (g *HBufTest) GetV60() []*hbuf.Time {
+func (g *HBufTest) GetV60() []*time.Time {
 	return g.V60
 }
 
-func (g *HBufTest) SetV60(val []*hbuf.Time) {
+func (g *HBufTest) SetV60(val []*time.Time) {
 	g.V60 = val
 }
 
@@ -868,259 +870,259 @@ func (g *HBufTest) SetV64(val []*HBufSubTest) {
 	g.V64 = val
 }
 
-func (g *HBufTest) GetV65() map[hbuf.Int64]int8 {
+func (g *HBufTest) GetV65() map[int64]int8 {
 	return g.V65
 }
 
-func (g *HBufTest) SetV65(val map[hbuf.Int64]int8) {
+func (g *HBufTest) SetV65(val map[int64]int8) {
 	g.V65 = val
 }
 
-func (g *HBufTest) GetV66() map[hbuf.Int64]*int8 {
+func (g *HBufTest) GetV66() map[int64]*int8 {
 	return g.V66
 }
 
-func (g *HBufTest) SetV66(val map[hbuf.Int64]*int8) {
+func (g *HBufTest) SetV66(val map[int64]*int8) {
 	g.V66 = val
 }
 
-func (g *HBufTest) GetV67() map[hbuf.Int64]int16 {
+func (g *HBufTest) GetV67() map[int64]int16 {
 	return g.V67
 }
 
-func (g *HBufTest) SetV67(val map[hbuf.Int64]int16) {
+func (g *HBufTest) SetV67(val map[int64]int16) {
 	g.V67 = val
 }
 
-func (g *HBufTest) GetV68() map[hbuf.Int64]*int16 {
+func (g *HBufTest) GetV68() map[int64]*int16 {
 	return g.V68
 }
 
-func (g *HBufTest) SetV68(val map[hbuf.Int64]*int16) {
+func (g *HBufTest) SetV68(val map[int64]*int16) {
 	g.V68 = val
 }
 
-func (g *HBufTest) GetV69() map[hbuf.Int64]int32 {
+func (g *HBufTest) GetV69() map[int64]int32 {
 	return g.V69
 }
 
-func (g *HBufTest) SetV69(val map[hbuf.Int64]int32) {
+func (g *HBufTest) SetV69(val map[int64]int32) {
 	g.V69 = val
 }
 
-func (g *HBufTest) GetV70() map[hbuf.Int64]*int32 {
+func (g *HBufTest) GetV70() map[int64]*int32 {
 	return g.V70
 }
 
-func (g *HBufTest) SetV70(val map[hbuf.Int64]*int32) {
+func (g *HBufTest) SetV70(val map[int64]*int32) {
 	g.V70 = val
 }
 
-func (g *HBufTest) GetV71() map[hbuf.Int64]hbuf.Int64 {
+func (g *HBufTest) GetV71() map[int64]int64 {
 	return g.V71
 }
 
-func (g *HBufTest) SetV71(val map[hbuf.Int64]hbuf.Int64) {
+func (g *HBufTest) SetV71(val map[int64]int64) {
 	g.V71 = val
 }
 
-func (g *HBufTest) GetV72() map[hbuf.Int64]*hbuf.Int64 {
+func (g *HBufTest) GetV72() map[int64]*int64 {
 	return g.V72
 }
 
-func (g *HBufTest) SetV72(val map[hbuf.Int64]*hbuf.Int64) {
+func (g *HBufTest) SetV72(val map[int64]*int64) {
 	g.V72 = val
 }
 
-func (g *HBufTest) GetV73() map[hbuf.Int64]uint8 {
+func (g *HBufTest) GetV73() map[int64]uint8 {
 	return g.V73
 }
 
-func (g *HBufTest) SetV73(val map[hbuf.Int64]uint8) {
+func (g *HBufTest) SetV73(val map[int64]uint8) {
 	g.V73 = val
 }
 
-func (g *HBufTest) GetV74() map[hbuf.Int64]*uint8 {
+func (g *HBufTest) GetV74() map[int64]*uint8 {
 	return g.V74
 }
 
-func (g *HBufTest) SetV74(val map[hbuf.Int64]*uint8) {
+func (g *HBufTest) SetV74(val map[int64]*uint8) {
 	g.V74 = val
 }
 
-func (g *HBufTest) GetV75() map[hbuf.Int64]uint16 {
+func (g *HBufTest) GetV75() map[int64]uint16 {
 	return g.V75
 }
 
-func (g *HBufTest) SetV75(val map[hbuf.Int64]uint16) {
+func (g *HBufTest) SetV75(val map[int64]uint16) {
 	g.V75 = val
 }
 
-func (g *HBufTest) GetV76() map[hbuf.Int64]*uint16 {
+func (g *HBufTest) GetV76() map[int64]*uint16 {
 	return g.V76
 }
 
-func (g *HBufTest) SetV76(val map[hbuf.Int64]*uint16) {
+func (g *HBufTest) SetV76(val map[int64]*uint16) {
 	g.V76 = val
 }
 
-func (g *HBufTest) GetV77() map[hbuf.Int64]uint32 {
+func (g *HBufTest) GetV77() map[int64]uint32 {
 	return g.V77
 }
 
-func (g *HBufTest) SetV77(val map[hbuf.Int64]uint32) {
+func (g *HBufTest) SetV77(val map[int64]uint32) {
 	g.V77 = val
 }
 
-func (g *HBufTest) GetV78() map[hbuf.Int64]*uint32 {
+func (g *HBufTest) GetV78() map[int64]*uint32 {
 	return g.V78
 }
 
-func (g *HBufTest) SetV78(val map[hbuf.Int64]*uint32) {
+func (g *HBufTest) SetV78(val map[int64]*uint32) {
 	g.V78 = val
 }
 
-func (g *HBufTest) GetV79() map[hbuf.Int64]hbuf.Uint64 {
+func (g *HBufTest) GetV79() map[int64]uint64 {
 	return g.V79
 }
 
-func (g *HBufTest) SetV79(val map[hbuf.Int64]hbuf.Uint64) {
+func (g *HBufTest) SetV79(val map[int64]uint64) {
 	g.V79 = val
 }
 
-func (g *HBufTest) GetV80() map[hbuf.Int64]*hbuf.Uint64 {
+func (g *HBufTest) GetV80() map[int64]*uint64 {
 	return g.V80
 }
 
-func (g *HBufTest) SetV80(val map[hbuf.Int64]*hbuf.Uint64) {
+func (g *HBufTest) SetV80(val map[int64]*uint64) {
 	g.V80 = val
 }
 
-func (g *HBufTest) GetV81() map[hbuf.Int64]bool {
+func (g *HBufTest) GetV81() map[int64]bool {
 	return g.V81
 }
 
-func (g *HBufTest) SetV81(val map[hbuf.Int64]bool) {
+func (g *HBufTest) SetV81(val map[int64]bool) {
 	g.V81 = val
 }
 
-func (g *HBufTest) GetV82() map[hbuf.Int64]*bool {
+func (g *HBufTest) GetV82() map[int64]*bool {
 	return g.V82
 }
 
-func (g *HBufTest) SetV82(val map[hbuf.Int64]*bool) {
+func (g *HBufTest) SetV82(val map[int64]*bool) {
 	g.V82 = val
 }
 
-func (g *HBufTest) GetV83() map[hbuf.Int64]string {
+func (g *HBufTest) GetV83() map[int64]string {
 	return g.V83
 }
 
-func (g *HBufTest) SetV83(val map[hbuf.Int64]string) {
+func (g *HBufTest) SetV83(val map[int64]string) {
 	g.V83 = val
 }
 
-func (g *HBufTest) GetV84() map[hbuf.Int64]*string {
+func (g *HBufTest) GetV84() map[int64]*string {
 	return g.V84
 }
 
-func (g *HBufTest) SetV84(val map[hbuf.Int64]*string) {
+func (g *HBufTest) SetV84(val map[int64]*string) {
 	g.V84 = val
 }
 
-func (g *HBufTest) GetV85() map[hbuf.Int64][]byte {
+func (g *HBufTest) GetV85() map[int64][]byte {
 	return g.V85
 }
 
-func (g *HBufTest) SetV85(val map[hbuf.Int64][]byte) {
+func (g *HBufTest) SetV85(val map[int64][]byte) {
 	g.V85 = val
 }
 
-func (g *HBufTest) GetV86() map[hbuf.Int64]*[]byte {
+func (g *HBufTest) GetV86() map[int64]*[]byte {
 	return g.V86
 }
 
-func (g *HBufTest) SetV86(val map[hbuf.Int64]*[]byte) {
+func (g *HBufTest) SetV86(val map[int64]*[]byte) {
 	g.V86 = val
 }
 
-func (g *HBufTest) GetV87() map[hbuf.Int64]float32 {
+func (g *HBufTest) GetV87() map[int64]float32 {
 	return g.V87
 }
 
-func (g *HBufTest) SetV87(val map[hbuf.Int64]float32) {
+func (g *HBufTest) SetV87(val map[int64]float32) {
 	g.V87 = val
 }
 
-func (g *HBufTest) GetV88() map[hbuf.Int64]*float32 {
+func (g *HBufTest) GetV88() map[int64]*float32 {
 	return g.V88
 }
 
-func (g *HBufTest) SetV88(val map[hbuf.Int64]*float32) {
+func (g *HBufTest) SetV88(val map[int64]*float32) {
 	g.V88 = val
 }
 
-func (g *HBufTest) GetV89() map[hbuf.Int64]float64 {
+func (g *HBufTest) GetV89() map[int64]float64 {
 	return g.V89
 }
 
-func (g *HBufTest) SetV89(val map[hbuf.Int64]float64) {
+func (g *HBufTest) SetV89(val map[int64]float64) {
 	g.V89 = val
 }
 
-func (g *HBufTest) GetV90() map[hbuf.Int64]*float64 {
+func (g *HBufTest) GetV90() map[int64]*float64 {
 	return g.V90
 }
 
-func (g *HBufTest) SetV90(val map[hbuf.Int64]*float64) {
+func (g *HBufTest) SetV90(val map[int64]*float64) {
 	g.V90 = val
 }
 
-func (g *HBufTest) GetV91() map[hbuf.Int64]hbuf.Time {
+func (g *HBufTest) GetV91() map[int64]time.Time {
 	return g.V91
 }
 
-func (g *HBufTest) SetV91(val map[hbuf.Int64]hbuf.Time) {
+func (g *HBufTest) SetV91(val map[int64]time.Time) {
 	g.V91 = val
 }
 
-func (g *HBufTest) GetV92() map[hbuf.Int64]*hbuf.Time {
+func (g *HBufTest) GetV92() map[int64]*time.Time {
 	return g.V92
 }
 
-func (g *HBufTest) SetV92(val map[hbuf.Int64]*hbuf.Time) {
+func (g *HBufTest) SetV92(val map[int64]*time.Time) {
 	g.V92 = val
 }
 
-func (g *HBufTest) GetV93() map[hbuf.Int64]decimal.Decimal {
+func (g *HBufTest) GetV93() map[int64]decimal.Decimal {
 	return g.V93
 }
 
-func (g *HBufTest) SetV93(val map[hbuf.Int64]decimal.Decimal) {
+func (g *HBufTest) SetV93(val map[int64]decimal.Decimal) {
 	g.V93 = val
 }
 
-func (g *HBufTest) GetV94() map[hbuf.Int64]*decimal.Decimal {
+func (g *HBufTest) GetV94() map[int64]*decimal.Decimal {
 	return g.V94
 }
 
-func (g *HBufTest) SetV94(val map[hbuf.Int64]*decimal.Decimal) {
+func (g *HBufTest) SetV94(val map[int64]*decimal.Decimal) {
 	g.V94 = val
 }
 
-func (g *HBufTest) GetV95() map[hbuf.Int64]HBufSubTest {
+func (g *HBufTest) GetV95() map[int64]HBufSubTest {
 	return g.V95
 }
 
-func (g *HBufTest) SetV95(val map[hbuf.Int64]HBufSubTest) {
+func (g *HBufTest) SetV95(val map[int64]HBufSubTest) {
 	g.V95 = val
 }
 
-func (g *HBufTest) GetV96() map[hbuf.Int64]*HBufSubTest {
+func (g *HBufTest) GetV96() map[int64]*HBufSubTest {
 	return g.V96
 }
 
-func (g *HBufTest) SetV96(val map[hbuf.Int64]*HBufSubTest) {
+func (g *HBufTest) SetV96(val map[int64]*HBufSubTest) {
 	g.V96 = val
 }
 
@@ -1172,19 +1174,19 @@ func (g *HBufTest) SetV102(val map[string]*int32) {
 	g.V102 = val
 }
 
-func (g *HBufTest) GetV103() map[string]hbuf.Int64 {
+func (g *HBufTest) GetV103() map[string]int64 {
 	return g.V103
 }
 
-func (g *HBufTest) SetV103(val map[string]hbuf.Int64) {
+func (g *HBufTest) SetV103(val map[string]int64) {
 	g.V103 = val
 }
 
-func (g *HBufTest) GetV104() map[string]*hbuf.Int64 {
+func (g *HBufTest) GetV104() map[string]*int64 {
 	return g.V104
 }
 
-func (g *HBufTest) SetV104(val map[string]*hbuf.Int64) {
+func (g *HBufTest) SetV104(val map[string]*int64) {
 	g.V104 = val
 }
 
@@ -1236,19 +1238,19 @@ func (g *HBufTest) SetV110(val map[string]*uint32) {
 	g.V110 = val
 }
 
-func (g *HBufTest) GetV111() map[string]hbuf.Uint64 {
+func (g *HBufTest) GetV111() map[string]uint64 {
 	return g.V111
 }
 
-func (g *HBufTest) SetV111(val map[string]hbuf.Uint64) {
+func (g *HBufTest) SetV111(val map[string]uint64) {
 	g.V111 = val
 }
 
-func (g *HBufTest) GetV112() map[string]*hbuf.Uint64 {
+func (g *HBufTest) GetV112() map[string]*uint64 {
 	return g.V112
 }
 
-func (g *HBufTest) SetV112(val map[string]*hbuf.Uint64) {
+func (g *HBufTest) SetV112(val map[string]*uint64) {
 	g.V112 = val
 }
 
@@ -1332,19 +1334,19 @@ func (g *HBufTest) SetV122(val map[string]*float64) {
 	g.V122 = val
 }
 
-func (g *HBufTest) GetV123() map[string]hbuf.Time {
+func (g *HBufTest) GetV123() map[string]time.Time {
 	return g.V123
 }
 
-func (g *HBufTest) SetV123(val map[string]hbuf.Time) {
+func (g *HBufTest) SetV123(val map[string]time.Time) {
 	g.V123 = val
 }
 
-func (g *HBufTest) GetV124() map[string]*hbuf.Time {
+func (g *HBufTest) GetV124() map[string]*time.Time {
 	return g.V124
 }
 
-func (g *HBufTest) SetV124(val map[string]*hbuf.Time) {
+func (g *HBufTest) SetV124(val map[string]*time.Time) {
 	g.V124 = val
 }
 
@@ -1387,30 +1389,30 @@ var hBufBTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufB
 })
 
 type HBufBTest struct {
-	C1 hbuf.Int64  `json:"c1,omitempty" hbuf:"1"` //
-	C2 *hbuf.Int64 `json:"c2,omitempty" hbuf:"2"` //
+	C1 int64  `json:"c1,omitempty" hbuf:"1"` //
+	C2 *int64 `json:"c2,omitempty" hbuf:"2"` //
 }
 
 func (g *HBufBTest) Descriptors() hbuf.Descriptor {
 	return hBufBTestDescriptor
 }
 
-func (g *HBufBTest) GetC1() hbuf.Int64 {
+func (g *HBufBTest) GetC1() int64 {
 	return g.C1
 }
 
-func (g *HBufBTest) SetC1(val hbuf.Int64) {
+func (g *HBufBTest) SetC1(val int64) {
 	g.C1 = val
 }
 
-func (g *HBufBTest) GetC2() hbuf.Int64 {
+func (g *HBufBTest) GetC2() int64 {
 	if nil == g.C2 {
-		return hbuf.Int64(0)
+		return int64(0)
 	}
 	return *g.C2
 }
 
-func (g *HBufBTest) SetC2(val hbuf.Int64) {
+func (g *HBufBTest) SetC2(val int64) {
 	g.C2 = &val
 }
 
@@ -1429,29 +1431,29 @@ type HBufSub1Test struct {
 	HBufSubTest `hbuf:"2"`
 	HBufTest    `hbuf:"3"`
 
-	V1 hbuf.Int64  `json:"v1,omitempty" hbuf:"1"` //
-	V2 *hbuf.Int64 `json:"v2,omitempty" hbuf:"2"` //
+	V1 int64  `json:"v1,omitempty" hbuf:"1"` //
+	V2 *int64 `json:"v2,omitempty" hbuf:"2"` //
 }
 
 func (g *HBufSub1Test) Descriptors() hbuf.Descriptor {
 	return hBufSub1TestDescriptor
 }
 
-func (g *HBufSub1Test) GetV1() hbuf.Int64 {
+func (g *HBufSub1Test) GetV1() int64 {
 	return g.V1
 }
 
-func (g *HBufSub1Test) SetV1(val hbuf.Int64) {
+func (g *HBufSub1Test) SetV1(val int64) {
 	g.V1 = val
 }
 
-func (g *HBufSub1Test) GetV2() hbuf.Int64 {
+func (g *HBufSub1Test) GetV2() int64 {
 	if nil == g.V2 {
-		return hbuf.Int64(0)
+		return int64(0)
 	}
 	return *g.V2
 }
 
-func (g *HBufSub1Test) SetV2(val hbuf.Int64) {
+func (g *HBufSub1Test) SetV2(val int64) {
 	g.V2 = &val
 }

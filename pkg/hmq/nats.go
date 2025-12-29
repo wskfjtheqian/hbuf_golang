@@ -398,6 +398,12 @@ func WithSubscribeRateLimit(val uint64) SubscribeOption {
 	}
 }
 
+func WithSubscribeStartTime(val time.Time) SubscribeOption {
+	return func(config *jetstream.ConsumerConfig) {
+		config.OptStartTime = &val
+	}
+}
+
 // JetStreamSubscribe 订阅指定的主题
 func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg jetstream.Msg) error, options ...SubscribeOption) error {
 	err := n.checkStream(ctx, stream, subject)

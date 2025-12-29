@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 	"unicode/utf8"
 	_ "unsafe" // for linkname
@@ -371,6 +372,7 @@ func typeEncoder(t reflect.Type) encoderFunc {
 }
 
 var (
+	timeType          = reflect.TypeOf(&time.Time{})
 	marshalerType     = reflect.TypeFor[Marshaler]()
 	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
 )
@@ -384,6 +386,9 @@ func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
 	// allocation as we cast the value to an interface.
 	if t.Kind() != reflect.Pointer && allowAddr && reflect.PointerTo(t).Implements(marshalerType) {
 		return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
+	}
+	if t == timeType && allowAddr {
+		return timeEncoder
 	}
 	if t.Implements(marshalerType) {
 		return marshalerEncoder
@@ -513,6 +518,15 @@ func intEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	b := e.AvailableBuffer()
 	b = mayAppendQuote(b, opts.quoted)
 	b = strconv.AppendInt(b, v.Int(), 10)
+	b = mayAppendQuote(b, opts.quoted)
+	e.Write(b)
+}
+
+func timeEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	b := e.AvailableBuffer()
+	b = mayAppendQuote(b, opts.quoted)
+	t := v.Interface().(*time.Time)
+	b = strconv.AppendInt(b, t.UnixMilli(), 10)
 	b = mayAppendQuote(b, opts.quoted)
 	e.Write(b)
 }
@@ -1144,6 +1158,10 @@ func typeFields(t reflect.Type) structFields {
 
 				// Only strings, floats, integers, and booleans can be quoted.
 				quoted := false
+				switch ft.Kind() {
+				case reflect.Int64, reflect.Uint64:
+					quoted = true
+				}
 				if opts.Contains("string") {
 					switch ft.Kind() {
 					case reflect.Bool,

@@ -2,12 +2,13 @@ package hbuf
 
 import (
 	"errors"
-	"github.com/shopspring/decimal"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/shopspring/decimal"
 )
 
 type Descriptor interface {
@@ -1918,7 +1919,7 @@ func (d *TimeDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	}
 	if ptr == nil {
 		return true
-	} else if time.Time(*(*Time)(ptr)).IsZero() {
+	} else if (*(*time.Time)(ptr)).IsZero() {
 		return !d.isPtr
 	}
 	return false
@@ -1953,11 +1954,11 @@ func (d *TimeDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
 	var val uint64
 	if id != nil {
-		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || time.Time(*(*Time)(p)).IsZero())) {
+		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || (*(*time.Time)(p)).IsZero())) {
 			return buf
 		}
 
-		val = uint64(time.Time(*(*Time)(p)).UnixMicro())
+		val = uint64((*(*time.Time)(p)).UnixMicro())
 		buf = WriterType(buf, TUint, LengthId(*id), LengthUint(val))
 		buf = WriterId(buf, *id)
 	} else {
@@ -1968,8 +1969,8 @@ func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 			return WriterType(buf, TUint, 0, 1)
 		}
 
-		if d.isPtr || !time.Time(*(*Time)(p)).IsZero() {
-			val = uint64(time.Time(*(*Time)(p)).UnixMicro())
+		if d.isPtr || !(*(*time.Time)(p)).IsZero() {
+			val = uint64((*(*time.Time)(p)).UnixMicro())
 			buf = WriterType(buf, TUint, 1, LengthUint(val))
 		}
 	}
@@ -1986,10 +1987,10 @@ func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := Time(time.UnixMicro(int64(val)))
-			*(**Time)(p) = &temp
+			temp := time.UnixMicro(int64(val))
+			*(**time.Time)(p) = &temp
 		} else {
-			*(*Time)(p) = Time(time.UnixMicro(int64(val)))
+			*(*time.Time)(p) = time.UnixMicro(int64(val))
 		}
 	}
 	return buf, nil
