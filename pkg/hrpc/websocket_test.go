@@ -23,7 +23,7 @@ func TestWebsocket_RPC(t *testing.T) {
 	http.Handle("/socket", server)
 	go http.ListenAndServe(":8080", nil)
 
-	client := hrpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
+	client := hrpc.NewWebSocketClient("ws://localhost:8080/socketMap", nil)
 
 	err := client.Connect(context.Background())
 	if err != nil {
@@ -71,7 +71,7 @@ func TestWebsocket_MultipleRPC(t *testing.T) {
 		go func() {
 			t.Run("TestWebsocket_RPC", func(t *testing.T) {
 				defer waitGroup.Done()
-				client := hrpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
+				client := hrpc.NewWebSocketClient("ws://localhost:8080/socketMap", nil)
 
 				err := client.Connect(context.Background())
 				if err != nil {
@@ -102,7 +102,7 @@ func TestWebsocket_Listen(t *testing.T) {
 	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
 
-	client := hrpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
+	client := hrpc.NewWebSocketClient("ws://localhost:8080/socketMap", nil)
 
 	err := client.Connect(context.Background())
 	if err != nil {
@@ -161,7 +161,7 @@ func TestWebsocket_Encrypt(t *testing.T) {
 	go server.ListenAndServe(context.Background(), ":8080")
 	<-time.After(time.Second)
 
-	client := hrpc.NewWebSocketClient("ws://localhost:8080/socket", nil,
+	client := hrpc.NewWebSocketClient("ws://localhost:8080/socketMap", nil,
 		hrpc.WithWebSocketClientRequestMiddleware(requestMiddleware),
 		hrpc.WithWebSocketClientResponseMiddleware(responseMiddleware),
 	)

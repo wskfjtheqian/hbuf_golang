@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -383,6 +384,10 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	return
 }
 
+func (s *webSocket) Close() {
+
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // WebSocketClientOptions WebSocket客户端选项
@@ -594,24 +599,27 @@ func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *W
 type WebSocketServer struct {
 	requestMiddleware  RequestMiddleware
 	responseMiddleware ResponseMiddleware
-	socket             *webSocket
+	socketMap          sync.Map
 	response           Response
 	decode             Decoder
 	encode             Encoder
 	pingInterval       time.Duration
 	pongWait           time.Duration
 	isSendPing         bool
+	connId             atomic.Uint64
 }
 
 // Serve 启动WebSocket服务器
 func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	key := "http_" + strconv.FormatUint(w.connId.Add(1), 10)
+
 	conn, _, _, err := ws.UpgradeHTTP(request, writer)
 	if err != nil {
 		http.Error(writer, http.StatusText(http.StatusUpgradeRequired), http.StatusUpgradeRequired)
 		return
 	}
 
-	w.handleConnection(request.Context(), conn)
+	w.handleConnection(request.Context(), conn, key)
 }
 
 // ListenAndServe 监听WebSocket服务器
@@ -639,28 +647,63 @@ func (w *WebSocketServer) ListenAndServe(ctx context.Context, addr string) error
 		if err != nil {
 			return err
 		}
-
-		w.handleConnection(ctx, conn)
+		w.handleConnection(ctx, conn, "tcp_"+strconv.FormatUint(w.connId.Add(1), 10))
 	}
 }
 
 // handleConnection 处理WebSocket连接
-func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn) {
-	w.socket = newWebSocket(ctx, conn, w.response)
+func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, key any) {
+	socket := newWebSocket(ctx, conn, w.response)
 	if w.responseMiddleware != nil {
-		w.socket.responseMiddleware = w.responseMiddleware
+		socket.responseMiddleware = w.responseMiddleware
 	}
 	if w.requestMiddleware != nil {
-		w.socket.requestMiddleware = w.requestMiddleware
+		socket.requestMiddleware = w.requestMiddleware
 	}
 	if w.decode != nil {
-		w.socket.decoder = w.decode
+		socket.decoder = w.decode
 	}
 	if w.encode != nil {
-		w.socket.encoder = w.encode
+		socket.encoder = w.encode
 	}
-	w.socket.isSendPing = w.isSendPing
-	w.socket.pongWait = w.pongWait
-	w.socket.pingInterval = w.pingInterval
-	w.socket.run()
+	socket.isSendPing = w.isSendPing
+	socket.pongWait = w.pongWait
+	socket.pingInterval = w.pingInterval
+	socket.run()
+
+	old, ok := w.socketMap.Swap(key, socket)
+	if ok {
+		old.(*webSocket).Close()
+	}
+}
+
+var clientContextType = reflect.TypeOf(&Context{})
+
+func WithClientContext(context context.Context, keys ...any) *ClientContext {
+	return &ClientContext{Context: context, keys: keys}
+}
+
+type ClientContext struct {
+	context.Context
+	keys []any
+}
+
+func (w *WebSocketServer) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	path = "/" + path
+
+	a := ctx.Value(clientContextType)
+	if a == nil {
+		return nil, herror.NewError("client context is nil")
+	}
+	var read io.ReadCloser
+	var err error
+
+	for _, item := range a.(*ClientContext).keys {
+		value, ok := w.socketMap.Load(item)
+		if !ok {
+			return nil, herror.NewError("connection is closed")
+		}
+		read, err = value.(*webSocket).Request(ctx, path, notification, callback)
+	}
+	return read, err
 }
