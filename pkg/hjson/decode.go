@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -646,6 +647,9 @@ func (d *decodeState) object(v reflect.Value) error {
 			v.Set(reflect.MakeMap(t))
 		}
 	case reflect.Struct:
+		if v.Type() == timeType {
+			println(t)
+		}
 		fields = cachedTypeFields(t)
 		// ok
 	default:
@@ -861,6 +865,19 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	isNull := item[0] == 'n' // null
 	u, ut, pv := indirect(v, isNull)
 	if u != nil {
+		if v.Type() == timeType {
+			value, err := strconv.ParseInt(string(item), 10, 64)
+			if err != nil {
+				return err
+			}
+			val := time.UnixMilli(value)
+			if v.Kind() == reflect.Pointer {
+				v.Set(reflect.ValueOf(&val))
+			} else {
+				v.Set(reflect.ValueOf(val))
+			}
+			return nil
+		}
 		return u.UnmarshalJSON(item)
 	}
 	if ut != nil {
@@ -964,6 +981,37 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			} else {
 				d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type(), Offset: int64(d.readIndex())})
 			}
+		case reflect.Int64:
+			t := string(s)
+			if v.Type() == numberType && !isValidNumber(t) {
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
+			}
+			val, err := strconv.ParseInt(t, 10, 64)
+			if err != nil {
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into %v", item)
+			}
+			v.SetInt(val)
+		case reflect.Uint64:
+			t := string(s)
+			if v.Type() == numberType && !isValidNumber(t) {
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
+			}
+			val, err := strconv.ParseUint(t, 10, 64)
+			if err != nil {
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into %v", item)
+			}
+			v.SetUint(val)
+		case reflect.Float32, reflect.Float64:
+			t := string(s)
+			if v.Type() == numberType && !isValidNumber(t) {
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
+			}
+			n, err := strconv.ParseFloat(t, v.Type().Bits())
+			if err != nil || v.OverflowFloat(n) {
+				d.saveError(&UnmarshalTypeError{Value: "number " + string(item), Type: v.Type(), Offset: int64(d.readIndex())})
+				break
+			}
+			v.SetFloat(n)
 		}
 
 	default: // number

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"sync"
 	"time"
 )
@@ -106,21 +105,21 @@ func (p *SnowFlakeId) init(dataCenterId int64, workerId int64) {
 }
 
 // NextId 生成ID，注意此方法已经通过加锁来保证线程安全
-func (p *SnowFlakeId) NextId(ctx context.Context) (hbuf.Int64, error) {
+func (p *SnowFlakeId) NextId(ctx context.Context) (int64, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	return hbuf.Int64(p.next()), nil
+	return int64(p.next()), nil
 }
 
 // NextIds 批量生成ID，注意此方法已经通过加锁来保证线程安全
-func (p *SnowFlakeId) NextIds(ctx context.Context, count uint) ([]hbuf.Int64, error) {
+func (p *SnowFlakeId) NextIds(ctx context.Context, count uint) ([]int64, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	ids := make([]hbuf.Int64, count)
+	ids := make([]int64, count)
 	for i := 0; i < int(count); i++ {
-		ids[i] = hbuf.Int64(p.next())
+		ids[i] = int64(p.next())
 	}
 	return ids, nil
 }
