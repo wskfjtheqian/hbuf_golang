@@ -24,11 +24,13 @@ type Http struct {
 
 	init   chan bool
 	isInit bool
+	log    *hlog.Logger
 }
 
 func NewHttp() *Http {
 	ret := &Http{
 		init: make(chan bool, 1),
+		log:  hlog.NewLogger("", hlog.LstdFlags),
 	}
 	ret.mux.HandleFunc("/health", ret.health)
 	return ret
@@ -190,5 +192,5 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	//获得响应状态码
 	httpIP, _ := hip.GetHttpIP(request)
-	_ = hlog.Output(1, LogHTTP, fmt.Sprintln(t, httpIP, request.Method, request.Proto, w.status, hutl.Green(request.URL.String())))
+	_ = a.log.Output(1, LogHTTP, fmt.Sprintln(t, httpIP, request.Method, request.Proto, w.status, hutl.Green(request.URL.String())))
 }
