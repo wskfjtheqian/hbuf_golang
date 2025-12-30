@@ -22,8 +22,8 @@ const (
 	TypeRequest Type = iota
 	TypeResponse
 	TypeNotification
-	TypeAuthSuccess
-	TypeAuthFailure
+	TypePing
+	TypePong
 )
 
 // Request 是用于处理RPC请求的函数
@@ -487,7 +487,7 @@ type Client struct {
 func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, tag string, request any, response any) (any, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req any) (any, error) {
-		reader, err := c.request(ctx, name+method, false, func(writer io.Writer) error {
+		reader, err := c.request(ctx, name+method, response == nil, func(writer io.Writer) error {
 			if val, ok := request.(io.Reader); ok {
 				_, err := io.Copy(writer, val)
 				return err

@@ -17,11 +17,11 @@ import (
 	"unsafe"
 
 	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
-
-const WebSocketConnectId = "WebSocketConnectId"
 
 var now atomic.Pointer[time.Time]
 
@@ -93,19 +93,9 @@ func (w *WebSocketData) Descriptors() hbuf.Descriptor {
 
 type writeType int
 
-const (
-	writeTypeData writeType = iota
-	writeTypePong
-)
-
-type writeData struct {
-	Type writeType
-	Data *WebSocketData
-}
-
 // ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSocket {
+func newWebSocket(ctx context.Context, conn net.Conn, response Response, state ws.State) *webSocket {
 	ret := &webSocket{
 		conn:        conn,
 		encoder:     NewJsonEncode(),
@@ -122,7 +112,7 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response) *webSoc
 		pongWait:     10 * time.Second,
 		ctx:          ctx,
 	}
-	write := make(chan *writeData)
+	write := make(chan *WebSocketData)
 	ret.write.Store(&write)
 	return ret
 }
@@ -134,7 +124,7 @@ type webSocket struct {
 	encoder     Encoder
 	decoder     Decoder
 	responseMap map[uint64]chan *WebSocketData
-	write       atomic.Pointer[chan *writeData]
+	write       atomic.Pointer[chan *WebSocketData]
 
 	requestMiddleware  RequestMiddleware
 	response           Response
@@ -144,6 +134,8 @@ type webSocket struct {
 	pingInterval time.Duration
 	pongWait     time.Duration
 	isSendPing   bool
+	onClose      func()
+	state        ws.State
 }
 
 func (s *webSocket) Context() context.Context {
@@ -166,27 +158,26 @@ func (s *webSocket) run() {
 				herror.PrintStack(err)
 				break
 			}
-			frame, err := ws.ReadFrame(s.conn)
+
+			payload, opCode, err := wsutil.ReadData(s.conn, s.state)
 			if err != nil {
 				herror.PrintStack(err)
 				break
 			}
-
-			switch frame.Header.OpCode {
-			case ws.OpContinuation:
-				println("continuation")
-			case ws.OpPing:
-				*s.write.Load() <- &writeData{
-					Type: writeTypePong,
-					Data: nil,
-				}
+			switch opCode {
 			case ws.OpText:
-
 			case ws.OpBinary:
 				var data WebSocketData
-				err = s.decoder(bytes.NewBuffer(frame.Payload))(&data, "")
+				err = s.decoder(bytes.NewBuffer(payload))(&data, "")
 				if err != nil {
 					herror.PrintStack(err)
+				}
+				if data.Type == TypePing {
+					write := s.write.Load()
+					if write != nil {
+						*write <- &WebSocketData{Type: TypePong}
+					}
+					continue
 				}
 				if data.Type == TypeRequest || data.Type == TypeNotification {
 					go s.onResponse(&data, data.Type == TypeNotification)
@@ -198,8 +189,7 @@ func (s *webSocket) run() {
 						response <- &data
 					}
 				}
-			case ws.OpClose:
-				break
+
 			}
 		}
 
@@ -211,6 +201,9 @@ func (s *webSocket) run() {
 		if ticker != nil {
 			ticker.Stop()
 		}
+		if s.onClose != nil {
+			s.onClose()
+		}
 	}()
 
 	go func() {
@@ -219,43 +212,44 @@ func (s *webSocket) run() {
 			if write == nil {
 				break
 			}
-			data := <-*write
-			if data == nil {
-				break
-			}
-			if data.Type == writeTypeData {
+
+			writeData := func(data *WebSocketData) {
+
 				buf := bytes.NewBuffer(nil)
-				err := s.encoder(buf)(data.Data, "")
+				err := s.encoder(buf)(data, "")
 				if err != nil {
 					herror.PrintStack(err)
 				}
 
-				err = ws.WriteFrame(s.conn, ws.NewBinaryFrame(buf.Bytes()))
+				frame := ws.NewBinaryFrame(buf.Bytes())
+				if s.state == ws.StateClientSide {
+					frame = ws.MaskFrameInPlace(frame)
+				}
+				err = ws.WriteFrame(s.conn, frame)
 				if err != nil {
 					herror.PrintStack(err)
 					return
 				}
-			} else if data.Type == writeTypePong {
-				err := ws.WriteFrame(s.conn, ws.NewPingFrame(nil))
-				if err != nil {
-					herror.PrintStack(err)
-					return
+			}
+			if ticker != nil {
+				select {
+				case <-ticker.C:
+					writeData(&WebSocketData{Type: TypePing})
+				case data := <-*write:
+					if data == nil {
+						break
+					}
+					writeData(data)
 				}
+			} else {
+				data := <-*write
+				if data == nil {
+					break
+				}
+				writeData(data)
 			}
 		}
 	}()
-
-	if ticker != nil {
-		go func() {
-			for _ = range ticker.C {
-				err := ws.WriteFrame(s.conn, ws.NewPingFrame(nil))
-				if err != nil {
-					herror.PrintStack(err)
-					return
-				}
-			}
-		}()
-	}
 }
 
 // Request 发送请求
@@ -282,10 +276,7 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 			if write == nil {
 				return nil, errors.New("connection is closed")
 			}
-			*write <- &writeData{
-				Type: writeTypeData,
-				Data: data,
-			}
+			*write <- data
 			return nil, nil
 		}
 
@@ -308,10 +299,7 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 		if write == nil {
 			return nil, errors.New("connection is closed")
 		}
-		*write <- &writeData{
-			Type: writeTypeData,
-			Data: data,
-		}
+		*write <- data
 
 		timer := time.NewTimer(30 * time.Second)
 		defer timer.Stop()
@@ -340,10 +328,7 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 		if write == nil {
 			return
 		}
-		*write <- &writeData{
-			Type: writeTypeData,
-			Data: response,
-		}
+		*write <- response
 		return
 	}
 
@@ -377,15 +362,16 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	if write == nil {
 		return
 	}
-	*write <- &writeData{
-		Type: writeTypeData,
-		Data: response,
-	}
+	*write <- response
 	return
 }
 
 func (s *webSocket) Close() {
-
+	err := s.conn.Close()
+	if err != nil {
+		hlog.Error("close websocket error:%v", err)
+		return
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -488,7 +474,7 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 		return err
 	}
 
-	c.socket = newWebSocket(ctx, conn, c.response)
+	c.socket = newWebSocket(ctx, conn, c.response, ws.StateClientSide)
 	if c.responseMiddleware != nil {
 		c.socket.responseMiddleware = c.responseMiddleware
 	}
@@ -572,6 +558,12 @@ func WithWebSocketServerIsSendPing(isSendPing bool) WebSocketServerOptions {
 	}
 }
 
+func WithWebSocketServerProtocol(check func(s string) bool) WebSocketServerOptions {
+	return func(s *WebSocketServer) {
+		s.upgrader.Protocol = check
+	}
+}
+
 // NewWebSocketServer 创建一个WebSocket服务器
 func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *WebSocketServer {
 	ret := &WebSocketServer{
@@ -585,6 +577,7 @@ func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *W
 		isSendPing:   false,
 		pongWait:     60 * time.Second,
 		pingInterval: 30 * time.Second,
+		upgrader:     &ws.HTTPUpgrader{},
 	}
 
 	for _, option := range options {
@@ -607,13 +600,18 @@ type WebSocketServer struct {
 	pongWait           time.Duration
 	isSendPing         bool
 	connId             atomic.Uint64
+	upgrader           *ws.HTTPUpgrader
 }
 
 // Serve 启动WebSocket服务器
 func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	key := "http_" + strconv.FormatUint(w.connId.Add(1), 10)
+	var key any = "http_" + strconv.FormatUint(w.connId.Add(1), 10)
+	a := FromClientContext(request.Context())
+	if a != nil && len(a.keys) > 0 {
+		key = a.keys[0]
+	}
 
-	conn, _, _, err := ws.UpgradeHTTP(request, writer)
+	conn, _, _, err := w.upgrader.Upgrade(request, writer)
 	if err != nil {
 		http.Error(writer, http.StatusText(http.StatusUpgradeRequired), http.StatusUpgradeRequired)
 		return
@@ -653,7 +651,7 @@ func (w *WebSocketServer) ListenAndServe(ctx context.Context, addr string) error
 
 // handleConnection 处理WebSocket连接
 func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, key any) {
-	socket := newWebSocket(ctx, conn, w.response)
+	socket := newWebSocket(ctx, conn, w.response, ws.StateServerSide)
 	if w.responseMiddleware != nil {
 		socket.responseMiddleware = w.responseMiddleware
 	}
@@ -670,17 +668,28 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, k
 	socket.pongWait = w.pongWait
 	socket.pingInterval = w.pingInterval
 	socket.run()
-
 	old, ok := w.socketMap.Swap(key, socket)
 	if ok {
 		old.(*webSocket).Close()
 	}
+	socket.onClose = func() {
+		w.socketMap.CompareAndDelete(key, socket)
+	}
 }
 
-var clientContextType = reflect.TypeOf(&Context{})
+var clientContextType = reflect.TypeOf(&ClientContext{})
 
-func WithClientContext(context context.Context, keys ...any) *ClientContext {
-	return &ClientContext{Context: context, keys: keys}
+func WithClientContext(ctx context.Context, keys ...any) *ClientContext {
+	return &ClientContext{Context: ctx, keys: keys}
+}
+
+// FromContext 从Context中获取Context
+func FromClientContext(ctx context.Context) *ClientContext {
+	val := ctx.Value(clientContextType)
+	if val == nil {
+		return nil
+	}
+	return val.(*ClientContext)
 }
 
 type ClientContext struct {
@@ -688,17 +697,23 @@ type ClientContext struct {
 	keys []any
 }
 
-func (w *WebSocketServer) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
-	path = "/" + path
+func (d *ClientContext) Value(key any) any {
+	if reflect.TypeOf(d) == key {
+		return d
+	}
+	return d.Context.Value(key)
+}
 
-	a := ctx.Value(clientContextType)
+func (w *WebSocketServer) Request(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+	a := FromClientContext(ctx)
 	if a == nil {
 		return nil, herror.NewError("client context is nil")
 	}
 	var read io.ReadCloser
 	var err error
 
-	for _, item := range a.(*ClientContext).keys {
+	path = "/" + path
+	for _, item := range a.keys {
 		value, ok := w.socketMap.Load(item)
 		if !ok {
 			return nil, herror.NewError("connection is closed")
