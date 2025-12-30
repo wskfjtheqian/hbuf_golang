@@ -51,14 +51,14 @@ func (d *rawMessage) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-//func (d data) MarshalJSON() ([]byte, error) {
-//	return d, nil
-//}
-//
-//func (d *data) UnmarshalJSON(b []byte) error {
-//	*d = b
-//	return nil
-//}
+func (d rawMessage) MarshalJSON() ([]byte, error) {
+	return d, nil
+}
+
+func (d *rawMessage) UnmarshalJSON(b []byte) error {
+	*d = b
+	return nil
+}
 
 type WebSocketData struct {
 	Type   Type        `json:"type,omitempty"`
