@@ -5,15 +5,16 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 const (
@@ -135,10 +136,12 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 	if !ok {
 		return 0, herror.NewError("no database connection found in context")
 	}
+
 	db, err := sql.GetDB()
 	if err != nil {
 		return 0, herror.Wrap(err)
 	}
+
 	result, err := db.Query(s.text.String(), s.params...)
 	if err != nil {
 		return 0, herror.Wrap(err)

@@ -372,7 +372,8 @@ func typeEncoder(t reflect.Type) encoderFunc {
 }
 
 var (
-	timeType          = reflect.TypeOf(&time.Time{})
+	timeType          = reflect.TypeOf(time.Time{})
+	timePtrType       = reflect.TypeOf(&time.Time{})
 	marshalerType     = reflect.TypeFor[Marshaler]()
 	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
 )
@@ -387,7 +388,7 @@ func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
 	if t.Kind() != reflect.Pointer && allowAddr && reflect.PointerTo(t).Implements(marshalerType) {
 		return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
 	}
-	if t == timeType && allowAddr {
+	if (t == timeType || t == timePtrType) && allowAddr {
 		return timeEncoder
 	}
 	if t.Implements(marshalerType) {

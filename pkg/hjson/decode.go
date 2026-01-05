@@ -647,9 +647,6 @@ func (d *decodeState) object(v reflect.Value) error {
 			v.Set(reflect.MakeMap(t))
 		}
 	case reflect.Struct:
-		if v.Type() == timeType {
-			println(t)
-		}
 		fields = cachedTypeFields(t)
 		// ok
 	default:
@@ -865,7 +862,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	isNull := item[0] == 'n' // null
 	u, ut, pv := indirect(v, isNull)
 	if u != nil {
-		if v.Type() == timeType {
+		if v.Type() == timeType || v.Type() == timePtrType {
 			value, err := strconv.ParseInt(string(item), 10, 64)
 			if err != nil {
 				return err

@@ -112,7 +112,7 @@ func (a *App) Middlewares() []hrpc.HandlerMiddleware {
 	}
 }
 
-func (a *App) Goroutine(fn func(ctx context.Context) error) {
+func (a *App) Go(fn func(ctx context.Context) error) {
 	go func() {
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
