@@ -162,7 +162,7 @@ func ToAnyList[T any](list []T) []any {
 }
 
 func UrlJoin(base string, paths ...string) string {
-	base = strings.Trim(base, "/")
+	base = strings.TrimRight(base, "/")
 	for _, path := range paths {
 		base += "/" + strings.Trim(path, "/")
 	}

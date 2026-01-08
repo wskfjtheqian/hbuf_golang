@@ -3,13 +3,14 @@ package hsql
 import (
 	"context"
 	"database/sql"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"net/url"
 	"reflect"
 	"sync/atomic"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 )
 
 type Sql interface {
@@ -93,7 +94,7 @@ type Option func(*DB)
 
 func WithCache(cache DbCache) Option {
 	return func(db *DB) {
-		db.cache = cache
+		db.srcCache = cache
 	}
 }
 
@@ -106,9 +107,10 @@ func NewDB(option ...Option) *DB {
 }
 
 type DB struct {
-	config *Config
-	db     atomic.Pointer[sql.DB]
-	cache  DbCache
+	config   *Config
+	db       atomic.Pointer[sql.DB]
+	cache    DbCache
+	srcCache DbCache
 }
 
 func (d *DB) SetConfig(cfg *Config) error {
@@ -164,6 +166,9 @@ func (d *DB) SetConfig(cfg *Config) error {
 	}
 	if cfg.ConnMaxIdleTime != nil {
 		db.SetConnMaxIdleTime(*cfg.ConnMaxIdleTime)
+	}
+	if cfg.EnableCache {
+		d.cache = d.srcCache
 	}
 
 	if err := db.Ping(); err != nil {
@@ -221,6 +226,6 @@ func Transaction(ctx context.Context, fn func(ctx context.Context) error) error 
 	if err != nil {
 		return err
 	}
-	tx.Commit()
+	_ = tx.Commit()
 	return nil
 }

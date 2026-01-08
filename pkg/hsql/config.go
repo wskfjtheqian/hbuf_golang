@@ -1,107 +1,107 @@
 package hsql
 
 import (
+	"time"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
-	"time"
 )
 
 // Config 数据库配置
 type Config struct {
-	// SetMaxIdleConns sets the maximum number of connections in the idle
-	// connection pool.
+	// SetMaxIdleConns 设置空闲连接池中的最大连接数
 	//
-	// If MaxOpenConns is greater than 0 but less than the new MaxIdleConns,
-	// then the new MaxIdleConns will be reduced to match the MaxOpenConns limit.
+	// 如果 MaxOpenConns 大于0但小于新的 MaxIdleConns，
+	// 则新的 MaxIdleConns 将被减少以匹配 MaxOpenConns 限制
 	//
-	// If n <= 0, no idle connections are retained.
+	// 如果 n <= 0，则不保留空闲连接
 	//
-	// The default max idle connections is currently 2. This may change in
-	// a future release.
+	// 默认最大空闲连接数当前为2，未来版本可能会更改
 	MaxOpenConns *int `yaml:"MaxOpenConns"`
 
-	// SetMaxIdleConns sets the maximum number of connections in the idle
-	// connection pool.
+	// SetMaxIdleConns 设置空闲连接池中的最大连接数
 	//
-	// If MaxOpenConns is greater than 0 but less than the new MaxIdleConns,
-	// then the new MaxIdleConns will be reduced to match the MaxOpenConns limit.
+	// 如果 MaxOpenConns 大于0但小于新的 MaxIdleConns，
+	// 则新的 MaxIdleConns 将被减少以匹配 MaxOpenConns 限制
 	//
-	// If n <= 0, no idle connections are retained.
+	// 如果 n <= 0，则不保留空闲连接
 	//
-	// The default max idle connections is currently 2. This may change in
-	// a future release.
+	// 默认最大空闲连接数当前为2，未来版本可能会更改
 	MaxIdleConns *int `yaml:"MaxIdleConns"`
 
-	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
+	// SetConnMaxLifetime 设置连接可被重用的最长时间
 	//
-	// Expired connections may be closed lazily before reuse.
+	// 过期的连接可能会在重用前被延迟关闭
 	//
-	// If d <= 0, connections are not closed due to a connection's age.
+	// 如果 d <= 0，则不会因为连接的使用时间而关闭连接
 	ConnMaxLifetime *time.Duration `yaml:"ConnMaxLifetime"`
 
-	// SetConnMaxIdleTime sets the maximum amount of time a connection may be idle.
+	// SetConnMaxIdleTime 设置连接可处于空闲状态的最长时间
 	//
-	// Expired connections may be closed lazily before reuse.
+	// 过期的连接可能会在重用前被延迟关闭
 	//
-	// If d <= 0, connections are not closed due to a connection's idle time.
+	// 如果 d <= 0，则不会因为连接的空闲时间而关闭连接
 	ConnMaxIdleTime *time.Duration `yaml:"ConnMaxIdleTime"`
 
-	// SetType sets the type of database.
+	// SetType 设置数据库类型
 	//
-	// Currently supported types are:
+	// 当前支持的类型有：
 	// - mysql
 	Type *string `yaml:"Type"`
 
-	// SetUsername sets the username for the database.
+	// SetUsername 设置数据库用户名
 	Username *string `yaml:"Username"`
 
-	// SetPassword sets the password for the database.
+	// SetPassword 设置数据库密码
 	Password *string `yaml:"Password"`
 
-	// SetDbName sets the name of the database.
+	// SetDbName 设置数据库名称
 	DbName *string `yaml:"DbName"`
 
-	// SetCharset sets the charset for the database.
+	// SetCharset 设置数据库字符集
 	Network *string `yaml:"Network"`
 
-	// SetHost sets the host for the database.
+	// SetHost 设置数据库主机地址
 	Host *string `yaml:"Host"`
 
-	// SetPort sets the port for the database.
+	// SetPort 设置数据库端口
 	Params *string `yaml:"Params"`
+
+	//启用缓存
+	EnableCache bool `yaml:"EnableCache"`
 }
 
 // Validate 检查配置是否有效
 func (c *Config) Validate() bool {
 	if c == nil {
-		hlog.Error("not found database config")
+		hlog.Error("未找到数据库配置")
 		return false
 	}
 
 	var valid bool = true
 	if c.Type == nil || *c.Type == "" {
 		valid = false
-		hlog.Error("sql config type is empty")
+		hlog.Error("数据库配置类型为空")
 	}
 	if c.Username == nil || *c.Username == "" {
 		valid = false
-		hlog.Error("sql config username is empty")
+		hlog.Error("数据库配置用户名为空")
 	}
 	if c.Password == nil || *c.Password == "" {
 		valid = false
-		hlog.Error("sql config password is empty")
+		hlog.Error("数据库配置密码为空")
 	}
 	if c.DbName == nil || *c.DbName == "" {
 		valid = false
-		hlog.Error("sql config dbname is empty")
+		hlog.Error("数据库配置数据库名称为空")
 	}
 	if c.Network == nil || *c.Network == "" {
 		valid = false
-		hlog.Error("sql config network is empty")
+		hlog.Error("数据库配置网络类型为空")
 	}
 	if c.Host == nil || *c.Host == "" {
 		valid = false
-		hlog.Error("sql config host is empty")
+		hlog.Error("数据库配置主机地址为空")
 	}
 	if c.Params == nil {
 		c.Params = hutl.ToPointer("")
@@ -129,5 +129,6 @@ func (c *Config) Equal(other *Config) bool {
 		hutl.Equal(c.DbName, other.DbName) &&
 		hutl.Equal(c.Network, other.Network) &&
 		hutl.Equal(c.Host, other.Host) &&
-		hutl.Equal(c.Params, other.Params)
+		hutl.Equal(c.Params, other.Params) &&
+		c.EnableCache == other.EnableCache
 }
