@@ -2,9 +2,11 @@ package happ
 
 import (
 	"context"
+	"runtime/debug"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hmq"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hredis"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
@@ -114,6 +116,12 @@ func (a *App) Middlewares() []hrpc.HandlerMiddleware {
 
 func (a *App) Go(fn func(ctx context.Context) error) {
 	go func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				hlog.Error("%s \n", err, string(debug.Stack()))
+			}
+		}()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
 
