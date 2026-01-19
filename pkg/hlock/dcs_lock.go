@@ -107,3 +107,19 @@ func WithDcsLockGetOrPopulate[T any](ctx context.Context, key string, get func(c
 	}
 	return val, nil
 }
+
+// WithDcsLock 分布式控制系统加锁。
+func WithDcsLock[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
+	var val T
+	l, err := DcsLock(ctx, key)
+	if err != nil {
+		return val, err
+	}
+	defer l.Unlock()
+
+	val, err = fun(ctx)
+	if err != nil {
+		return val, err
+	}
+	return val, nil
+}
