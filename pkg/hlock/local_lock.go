@@ -2,10 +2,11 @@ package hlock
 
 import (
 	"context"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 // lockMap 一个以字符串为键的 localLocks 映射。
@@ -44,7 +45,7 @@ func NewLocalLock(key string) Locker {
 
 // LocalLock 防止死锁，并确保同一时间只允许一个 goroutine 访问某个 key 的资源。
 // 加锁后，会将 key 存入 context，以便在子函数中判断是否已经加锁。
-func LocalLock[T any](ctx context.Context, key string, f func(ctx context.Context) (*T, error)) (*T, error) {
+func LocalLock[T any](ctx context.Context, key string, primary func(ctx context.Context) (*T, error)) (*T, error) {
 	if key == "" {
 		return nil, herror.NewError("key is empty")
 	}
@@ -53,7 +54,7 @@ func LocalLock[T any](ctx context.Context, key string, f func(ctx context.Contex
 	}
 
 	if nil != ctx.Value("key_lock_key:"+key) {
-		return f(ctx)
+		return primary(ctx)
 	}
 	ctx = context.WithValue(ctx, "key_lock_key:"+key, true)
 
@@ -61,7 +62,7 @@ func LocalLock[T any](ctx context.Context, key string, f func(ctx context.Contex
 	ret.Lock()
 	defer ret.Unlock()
 
-	return f(ctx)
+	return primary(ctx)
 }
 
 // localLock 是一个可重入锁。
@@ -91,19 +92,43 @@ func (k *localLock) TryLock() bool {
 	return false
 }
 
-// LocalLockFallback 带有 fallback 函数的本地锁。
-func LocalLockFallback[T any](ctx context.Context, key string, primary func(ctx context.Context) (*T, bool, error), fallback func(ctx context.Context) (*T, error)) (*T, error) {
-	val, ret, err := primary(ctx)
+// WithLocalLockGetOrPopulate 带有 fallback 函数的sg加锁。
+func WithLocalLockGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
+	val, ret, err := get(ctx)
 	if err != nil {
-		return nil, err
+		return val, err
 	}
 	if ret {
 		return val, nil
 	}
 
-	val, err = LocalLock(ctx, key, fallback)
+	if key == "" {
+		return val, herror.NewError("key is empty")
+	}
+	if nil == ctx {
+		return val, herror.NewError("ctx is nil")
+	}
+
+	if nil != ctx.Value("key_lock_key:"+key) {
+		return populate(ctx)
+	}
+	ctx = context.WithValue(ctx, "key_lock_key:"+key, true)
+
+	l := NewLocalLock(key)
+	l.Lock()
+	defer l.Unlock()
+
+	val, ret, err = get(ctx)
 	if err != nil {
-		return nil, err
+		return val, err
+	}
+	if ret {
+		return val, nil
+	}
+
+	val, err = populate(ctx)
+	if err != nil {
+		return val, err
 	}
 	return val, nil
 }

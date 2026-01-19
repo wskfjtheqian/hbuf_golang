@@ -2,6 +2,7 @@ package hlock
 
 import (
 	"context"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -76,25 +77,33 @@ func (l *Mutex) Unlock() error {
 	return nil
 }
 
-// WithDcsLockFallback 带有 fallback 函数的分布式控制系统加锁。
-func WithDcsLockFallback(ctx context.Context, key string, primary func(ctx context.Context) (bool, error), fallback func(ctx context.Context) error) error {
-	ret, err := primary(ctx)
+// WithDcsLockGetOrPopulate 带有 fallback 函数的分布式控制系统加锁。
+func WithDcsLockGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
+	val, ret, err := get(ctx)
 	if err != nil {
-		return err
+		return val, err
 	}
 	if ret {
-		return nil
+		return val, nil
 	}
 
 	l, err := DcsLock(ctx, key)
 	if err != nil {
-		return err
+		return val, err
 	}
 	defer l.Unlock()
 
-	err = fallback(ctx)
+	val, ret, err = get(ctx)
 	if err != nil {
-		return err
+		return val, err
 	}
-	return nil
+	if ret {
+		return val, nil
+	}
+
+	val, err = populate(ctx)
+	if err != nil {
+		return val, err
+	}
+	return val, nil
 }
