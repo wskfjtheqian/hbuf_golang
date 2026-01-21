@@ -88,6 +88,20 @@ func TableName(ctx context.Context, name string) string {
 	return val.(*Context).tableNameFunc(ctx, name)
 }
 
+// TableName 获取表名的函数
+func BatchLimit(ctx context.Context) uint {
+	val := ctx.Value(contextType)
+	if val == nil {
+		return 500
+	}
+
+	limit := val.(*Context).db.config.BatchLimit
+	if limit != nil {
+		return max(*limit, 1)
+	}
+	return 500
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type Option func(*DB)

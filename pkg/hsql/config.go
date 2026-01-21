@@ -69,6 +69,9 @@ type Config struct {
 
 	//启用缓存
 	EnableCache bool `yaml:"EnableCache"`
+
+	//批量操作限制
+	BatchLimit *uint `yaml:"BatchLimit"`
 }
 
 // Validate 检查配置是否有效
@@ -130,5 +133,6 @@ func (c *Config) Equal(other *Config) bool {
 		hutl.Equal(c.Network, other.Network) &&
 		hutl.Equal(c.Host, other.Host) &&
 		hutl.Equal(c.Params, other.Params) &&
+		hutl.Equal(c.BatchLimit, other.BatchLimit) &&
 		c.EnableCache == other.EnableCache
 }

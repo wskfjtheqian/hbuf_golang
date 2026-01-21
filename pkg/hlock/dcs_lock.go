@@ -123,3 +123,19 @@ func WithDcsLock[T any](ctx context.Context, key string, fun func(ctx context.Co
 	}
 	return val, nil
 }
+
+// WithTryDcsLock 分布式控制系统尝试加锁。
+func WithTryDcsLock[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
+	var val T
+	l, err := TryDcsLock(ctx, key)
+	if err != nil {
+		return val, err
+	}
+	defer l.Unlock()
+
+	val, err = fun(ctx)
+	if err != nil {
+		return val, err
+	}
+	return val, nil
+}

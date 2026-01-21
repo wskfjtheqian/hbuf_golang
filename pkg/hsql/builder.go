@@ -110,14 +110,25 @@ func (s *Builder) L(question string, args ...any) *Builder {
 }
 
 func (s *Builder) removeStart(question string) string {
-	if strings.HasPrefix(question, s.del) {
-		question = question[len(s.del):]
+	if len(s.del) > 0 {
+		if 0 == strings.Index(question, s.del) {
+			question = question[len(s.del):]
+		}
+		s.del = ""
 	}
 	return question
 }
 
 func (s *Builder) Del(text string) {
 	s.del = text
+}
+
+func (s *Builder) Join(b *Builder) {
+	if b == nil {
+		return
+	}
+	s.text.WriteString(b.text.String())
+	s.params = append(s.params, b.params...)
 }
 
 func (s *Builder) ToText() string {

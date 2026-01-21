@@ -219,3 +219,15 @@ func SliceDiff[E any, T comparable](src []E, dsc []E, get func(v E) T) []E {
 	}
 	return result
 }
+
+// Batch 对一个切片进行分批处理。
+func Batch[E any](list []E, limit int, fun func(list []E) error) error {
+	for j := 0; j < len(list); j += limit {
+		end := min(j+limit, len(list))
+
+		if err := fun(list[j:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
