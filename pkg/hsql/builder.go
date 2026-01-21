@@ -66,7 +66,7 @@ func ToString(value interface{}) string {
 func NewBuilder() *Builder {
 	return &Builder{
 		text:   strings.Builder{},
-		params: []any{},
+		params: make([]any, 0, 128),
 	}
 }
 
@@ -110,11 +110,8 @@ func (s *Builder) L(question string, args ...any) *Builder {
 }
 
 func (s *Builder) removeStart(question string) string {
-	if len(s.del) > 0 {
-		if 0 == strings.Index(question, s.del) {
-			question = question[len(s.del):]
-		}
-		s.del = ""
+	if strings.HasPrefix(question, s.del) {
+		question = question[len(s.del):]
 	}
 	return question
 }
