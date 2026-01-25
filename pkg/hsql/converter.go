@@ -23,6 +23,9 @@ type ConverterJson struct {
 
 // Scan 实现了 sql.Scanner 接口的 Scan 方法
 func (t *ConverterJson) Scan(value any) error {
+	if value == nil {
+		return nil
+	}
 	switch v := value.(type) {
 	case []byte:
 		err := json.Unmarshal(v, t.data)
@@ -42,6 +45,9 @@ func (t *ConverterJson) Scan(value any) error {
 
 // Value 实现了 driver.Valuer 接口的 Value 方法
 func (t ConverterJson) Value() (driver.Value, error) {
+	if t.data == nil {
+		return nil, nil
+	}
 	marshal, err := json.Marshal(t.data)
 	if err != nil {
 		return nil, err
