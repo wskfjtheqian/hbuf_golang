@@ -6,10 +6,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"reflect"
-	"strconv"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -95,8 +96,9 @@ type writeType int
 
 // ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-func newWebSocket(ctx context.Context, conn net.Conn, response Response, state ws.State) *webSocket {
+func newWebSocket(ctx context.Context, conn net.Conn, response Response, key string) *webSocket {
 	ret := &webSocket{
+		key:         key,
 		conn:        conn,
 		encoder:     NewJsonEncode(),
 		decoder:     NewJsonDecode(),
@@ -136,6 +138,7 @@ type webSocket struct {
 	isSendPing   bool
 	onClose      func()
 	state        ws.State
+	key          string
 }
 
 func (s *webSocket) Context() context.Context {
@@ -474,7 +477,7 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 		return err
 	}
 
-	c.socket = newWebSocket(ctx, conn, c.response, ws.StateClientSide)
+	c.socket = newWebSocket(ctx, conn, c.response, "")
 	if c.responseMiddleware != nil {
 		c.socket.responseMiddleware = c.responseMiddleware
 	}
@@ -578,6 +581,7 @@ func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *W
 		pongWait:     60 * time.Second,
 		pingInterval: 30 * time.Second,
 		upgrader:     &ws.HTTPUpgrader{},
+		manager:      NewClientManager(0),
 	}
 
 	for _, option := range options {
@@ -592,32 +596,24 @@ func NewWebSocketServer(response Response, options ...WebSocketServerOptions) *W
 type WebSocketServer struct {
 	requestMiddleware  RequestMiddleware
 	responseMiddleware ResponseMiddleware
-	socketMap          sync.Map
+	manager            *ClientManager
 	response           Response
 	decode             Decoder
 	encode             Encoder
 	pingInterval       time.Duration
 	pongWait           time.Duration
 	isSendPing         bool
-	connId             atomic.Uint64
 	upgrader           *ws.HTTPUpgrader
 }
 
 // Serve 启动WebSocket服务器
-func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	var key any = "http_" + strconv.FormatUint(w.connId.Add(1), 10)
-	a := FromClientContext(request.Context())
-	if a != nil && len(a.keys) > 0 {
-		key = a.keys[0]
-	}
-
+func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Request, id string, onConnect func(), onClose func()) {
 	conn, _, _, err := w.upgrader.Upgrade(request, writer)
 	if err != nil {
 		http.Error(writer, http.StatusText(http.StatusUpgradeRequired), http.StatusUpgradeRequired)
 		return
 	}
-
-	w.handleConnection(request.Context(), conn, key)
+	w.handleConnection(request.Context(), conn, id, onConnect, onClose)
 }
 
 // ListenAndServe 监听WebSocket服务器
@@ -645,13 +641,13 @@ func (w *WebSocketServer) ListenAndServe(ctx context.Context, addr string) error
 		if err != nil {
 			return err
 		}
-		w.handleConnection(ctx, conn, "tcp_"+strconv.FormatUint(w.connId.Add(1), 10))
+		w.handleConnection(ctx, conn, "", nil, nil)
 	}
 }
 
 // handleConnection 处理WebSocket连接
-func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, key any) {
-	socket := newWebSocket(ctx, conn, w.response, ws.StateServerSide)
+func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, id string, onConnect func(), onClose func()) {
+	socket := newWebSocket(ctx, conn, w.response, id)
 	if w.responseMiddleware != nil {
 		socket.responseMiddleware = w.responseMiddleware
 	}
@@ -667,23 +663,58 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, k
 	socket.isSendPing = w.isSendPing
 	socket.pongWait = w.pongWait
 	socket.pingInterval = w.pingInterval
-	socket.run()
-	old, ok := w.socketMap.Swap(key, socket)
-	if ok {
-		old.(*webSocket).Close()
+
+	if onConnect != nil {
+		onConnect()
 	}
+	socket.run()
+
+	if len(id) > 0 {
+		old, ok := w.manager.Swap(id, socket)
+		if ok {
+			old.Close()
+			if onClose != nil {
+				onClose()
+			}
+		}
+	}
+
 	socket.onClose = func() {
-		w.socketMap.CompareAndDelete(key, socket)
+		if w.manager.CompareAndDelete(id, socket) && onClose != nil {
+			onClose()
+		} else if len(id) == 0 && onConnect != nil {
+			onConnect()
+		}
 	}
 }
 
 var clientContextType = reflect.TypeOf(&ClientContext{})
 
-func WithClientContext(ctx context.Context, keys ...any) *ClientContext {
-	return &ClientContext{Context: ctx, keys: keys}
+func WithClientContextKeys(ctx context.Context, keys ...string) *ClientContext {
+	return &ClientContext{
+		Context: ctx,
+		Range: func(manage *ClientManager, fun func(key string, socket *webSocket) bool) {
+			for _, key := range keys {
+				if socket, ok := manage.Get(key); ok {
+					if !fun(key, socket) {
+						break
+					}
+				}
+			}
+		},
+	}
 }
 
-// FromContext 从Context中获取Context
+func WithClientContextAll(ctx context.Context, manage ClientManager) *ClientContext {
+	return &ClientContext{
+		Context: ctx,
+		Range: func(manage *ClientManager, fun func(key string, socket *webSocket) bool) {
+			manage.Range(fun)
+		},
+	}
+}
+
+// FromClientContext 从Context中获取Context
 func FromClientContext(ctx context.Context) *ClientContext {
 	val := ctx.Value(clientContextType)
 	if val == nil {
@@ -694,7 +725,7 @@ func FromClientContext(ctx context.Context) *ClientContext {
 
 type ClientContext struct {
 	context.Context
-	keys []any
+	Range func(manage *ClientManager, fun func(key string, ws *webSocket) bool)
 }
 
 func (d *ClientContext) Value(key any) any {
@@ -713,12 +744,123 @@ func (w *WebSocketServer) Request(ctx context.Context, path string, notification
 	var err error
 
 	path = "/" + path
-	for _, item := range a.keys {
-		value, ok := w.socketMap.Load(item)
-		if !ok {
-			return nil, herror.NewError("connection is closed")
-		}
-		read, err = value.(*webSocket).Request(ctx, path, notification, callback)
-	}
+	a.Range(w.manager, func(key string, ws *webSocket) bool {
+		read, err = ws.Request(ctx, path, notification, callback)
+		return err == nil
+	})
 	return read, err
+}
+
+type ClientShard struct {
+	sync.RWMutex
+	clients map[string]*webSocket
+}
+
+func NewClientManager(shardCount int) *ClientManager {
+	if shardCount <= 0 {
+		shardCount = runtime.NumCPU() * 8
+	}
+
+	// 使用 2 的幂次，便于位运算
+	if shardCount&(shardCount-1) != 0 {
+		// 找到下一个2的幂次
+		shardCount = 1 << uint(math.Ceil(math.Log2(float64(shardCount))))
+	}
+
+	shards := make([]*ClientShard, shardCount)
+	for i := 0; i < shardCount; i++ {
+		shards[i] = &ClientShard{
+			clients: make(map[string]*webSocket, 1024), // 预分配容量
+		}
+	}
+
+	return &ClientManager{
+		shards: shards,
+		num:    shardCount,
+		hasher: func(key string) uint32 {
+			// 使用更快的哈希算法
+			h := uint32(2166136261)
+			for i := 0; i < len(key); i++ {
+				h = (h ^ uint32(key[i])) * 16777619
+			}
+			return h
+		},
+	}
+}
+
+type ClientManager struct {
+	shards []*ClientShard
+	num    int
+	hasher func(string) uint32
+}
+
+func (m *ClientManager) getShardIndex(key string) int {
+	// 因为是2的幂次，可以用位运算替代取模
+	return int(m.hasher(key) & uint32(m.num-1))
+}
+
+func (m *ClientManager) Get(key string) (*webSocket, bool) {
+	index := m.getShardIndex(key)
+	shard := m.shards[index]
+
+	shard.RLock()
+	defer shard.RUnlock()
+
+	client, ok := shard.clients[key]
+	return client, ok
+}
+
+func (m *ClientManager) Swap(key string, socket *webSocket) (*webSocket, bool) {
+	index := m.getShardIndex(key)
+	shard := m.shards[index]
+
+	shard.Lock()
+	defer shard.Unlock()
+	old, ok := shard.clients[key]
+	shard.clients[key] = socket
+	return old, ok
+}
+
+func (m *ClientManager) Del(key string) {
+	index := m.getShardIndex(key)
+	shard := m.shards[index]
+
+	shard.Lock()
+	defer shard.Unlock()
+
+	delete(shard.clients, key)
+}
+
+func (m *ClientManager) CompareAndDelete(key string, socket *webSocket) bool {
+	index := m.getShardIndex(key)
+	shard := m.shards[index]
+
+	shard.Lock()
+	defer shard.Unlock()
+
+	if val, ok := shard.clients[key]; ok && val == socket {
+		delete(shard.clients, key)
+		return true
+	}
+	return false
+}
+
+func (m *ClientManager) Range(f func(key string, client *webSocket) bool) {
+	for i := 0; i < m.num; i++ {
+		shard := m.shards[i]
+
+		shard.RLock()
+		shouldContinue := true
+		for key, client := range shard.clients {
+			if !f(key, client) {
+				shouldContinue = false
+				break
+			}
+		}
+		shard.RUnlock()
+
+		if !shouldContinue {
+			return
+		}
+	}
 }

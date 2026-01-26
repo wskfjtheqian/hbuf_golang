@@ -20,7 +20,9 @@ func TestWebsocket_RPC(t *testing.T) {
 
 	server := hrpc.NewWebSocketServer(rpcServer.Response)
 
-	http.Handle("/socket", server)
+	http.HandleFunc("/socket", func(writer http.ResponseWriter, request *http.Request) {
+		server.ServeHTTP(writer, request, "", nil, nil)
+	})
 	go http.ListenAndServe(":8080", nil)
 
 	client := hrpc.NewWebSocketClient("ws://localhost:8080/socketMap", nil)

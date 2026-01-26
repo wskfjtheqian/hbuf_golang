@@ -1235,7 +1235,7 @@ func typeFields(t reflect.Type) structFields {
 		return slices.Compare(a.index, b.index)
 	})
 
-	// Delete all fields that are hidden by the Go rules for embedded fields,
+	// Del all fields that are hidden by the Go rules for embedded fields,
 	// except that fields with JSON tags are promoted.
 
 	// The fields are sorted in primary order of name, secondary order
