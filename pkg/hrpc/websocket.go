@@ -705,7 +705,7 @@ func WithClientContextKeys(ctx context.Context, keys ...string) *ClientContext {
 	}
 }
 
-func WithClientContextAll(ctx context.Context, manage ClientManager) *ClientContext {
+func WithClientContextAll(ctx context.Context) *ClientContext {
 	return &ClientContext{
 		Context: ctx,
 		Range: func(manage *ClientManager, fun func(key string, socket *webSocket) bool) {

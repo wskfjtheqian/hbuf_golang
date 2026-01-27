@@ -1,5 +1,31 @@
 package hredis
 
+import "encoding/json"
+
+func NewRedisValue(data any) *RedisValue {
+	return &RedisValue{data: data}
+}
+
+type RedisValue struct {
+	data any
+}
+
+func (r RedisValue) MarshalBinary() (data []byte, err error) {
+	marshal, err := json.Marshal(r.data)
+	if err != nil {
+		return nil, err
+	}
+	return marshal, nil
+}
+
+func (r *RedisValue) UnmarshalBinary(data []byte) error {
+	err := json.Unmarshal(data, r.data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 //
 //import (
 //	"context"
