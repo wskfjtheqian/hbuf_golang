@@ -688,6 +688,14 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, i
 	}
 }
 
+// CloseClient 关闭客户端
+func (w *WebSocketServer) CloseClient(id string) {
+	client := w.manager.Del(id)
+	if client != nil {
+		client.Close()
+	}
+}
+
 var clientContextType = reflect.TypeOf(&ClientContext{})
 
 func WithClientContextKeys(ctx context.Context, keys ...string) *ClientContext {
@@ -821,14 +829,16 @@ func (m *ClientManager) Swap(key string, socket *webSocket) (*webSocket, bool) {
 	return old, ok
 }
 
-func (m *ClientManager) Del(key string) {
+func (m *ClientManager) Del(key string) *webSocket {
 	index := m.getShardIndex(key)
 	shard := m.shards[index]
 
 	shard.Lock()
 	defer shard.Unlock()
-
+	client := shard.clients[key]
 	delete(shard.clients, key)
+
+	return client
 }
 
 func (m *ClientManager) CompareAndDelete(key string, socket *webSocket) bool {
