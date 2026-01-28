@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -314,6 +315,59 @@ func WithPublishDurable(msgId string) PublishOption {
 	}
 }
 
+// KeepOnlyWildcards :
+// - 如果 subjects 里包含通配符（* 或 >），则只保留通配符 subject
+// - 如果存在 ">"，只保留包含 ">" 的（因为它覆盖更广）
+// - 否则只保留包含 "*" 的
+// - 同时去重、去空、去首尾空格、排序（保证稳定）
+func keepOnlyWildcards(subjects []string) []string {
+	if len(subjects) == 0 {
+		return nil
+	}
+
+	uniq := make(map[string]struct{}, len(subjects))
+	for _, s := range subjects {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		uniq[s] = struct{}{}
+	}
+
+	var all []string
+	for s := range uniq {
+		all = append(all, s)
+	}
+
+	// 找出 wildcard
+	var gtWildcards []string   // 包含 ">"
+	var starWildcards []string // 包含 "*"
+
+	for _, s := range all {
+		if strings.Contains(s, ">") {
+			gtWildcards = append(gtWildcards, s)
+		} else if strings.Contains(s, "*") {
+			starWildcards = append(starWildcards, s)
+		}
+	}
+
+	// 有 > 就只保留 >
+	if len(gtWildcards) > 0 {
+		sort.Strings(gtWildcards)
+		return gtWildcards
+	}
+
+	// 否则有 * 就只保留 *
+	if len(starWildcards) > 0 {
+		sort.Strings(starWildcards)
+		return starWildcards
+	}
+
+	// 没有通配符：原样返回（去重后）
+	sort.Strings(all)
+	return all
+}
+
 // JetStreamPublish 发布消息到指定的主题
 func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, data []byte, options ...PublishOption) (*jetstream.PubAck, error) {
 	err := n.checkStream(ctx, stream, subject)
@@ -337,6 +391,7 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 		hlog.Error("publish failed, error: %s", err)
 		return nil, err
 	}
+
 	return pubAck, nil
 }
 
@@ -514,16 +569,27 @@ func (n *Nats) checkStream(ctx context.Context, stream string, subject string) e
 
 	jetStream, err := n.GetJetStream()
 	if err != nil {
-		return err
+		return herror.Wrap(err)
 	}
+
+	info, err := jetStream.Stream(ctx, stream)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	streamInfo, err := info.Info(ctx)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+
+	subjects := keepOnlyWildcards(append(streamInfo.Config.Subjects, subject))
 
 	_, err = jetStream.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      stream,
-		Subjects:  []string{subject},
+		Subjects:  subjects,
 		Retention: jetstream.InterestPolicy,
 	})
 	if err != nil {
-		return err
+		return herror.Wrap(err)
 	}
 	n.stream[stream+"_"+subject] = struct{}{}
 	return nil
