@@ -567,21 +567,22 @@ func (n *Nats) checkStream(ctx context.Context, stream string, subject string) e
 		return nil
 	}
 
+	subjects := []string{subject}
+
 	jetStream, err := n.GetJetStream()
 	if err != nil {
 		return herror.Wrap(err)
 	}
 
 	info, err := jetStream.Stream(ctx, stream)
-	if err != nil {
-		return herror.Wrap(err)
-	}
-	streamInfo, err := info.Info(ctx)
-	if err != nil {
-		return herror.Wrap(err)
+	if err == nil {
+		streamInfo, err := info.Info(ctx)
+		if err == nil {
+			subjects = append(subjects, streamInfo.Config.Subjects...)
+		}
 	}
 
-	subjects := keepOnlyWildcards(append(streamInfo.Config.Subjects, subject))
+	subjects = keepOnlyWildcards(subjects)
 
 	_, err = jetStream.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      stream,
