@@ -613,6 +613,7 @@ func (w *WebSocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		http.Error(writer, http.StatusText(http.StatusUpgradeRequired), http.StatusUpgradeRequired)
 		return
 	}
+
 	w.handleConnection(request.Context(), conn, id, onConnect, onClose)
 }
 

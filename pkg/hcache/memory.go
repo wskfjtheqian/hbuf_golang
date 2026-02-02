@@ -111,7 +111,7 @@ func (i *item[K, V]) get(ctx context.Context, key K) (*V, error) {
 }
 
 // Modify 修改设置值
-func (i *item[K, V]) modify(ctx context.Context, key K, call func(ctx context.Context, key K, value V) (*V, error)) error {
+func (i *item[K, V]) modify(ctx context.Context, key K, call func(ctx context.Context, key K, value V) (*V, error)) (*V, error) {
 	expire := i.expire.Load()
 	if expire > -1 && expire < timestamp.Load() {
 		i.lock.Lock()
@@ -120,7 +120,7 @@ func (i *item[K, V]) modify(ctx context.Context, key K, call func(ctx context.Co
 			val, err := i.call(ctx, key)
 			if err != nil {
 				i.lock.Unlock()
-				return err
+				return nil, err
 			}
 			i.val = val
 		}
@@ -140,10 +140,10 @@ func (i *item[K, V]) modify(ctx context.Context, key K, call func(ctx context.Co
 	var err error
 	newVal, err := call(ctx, key, val)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	i.val = newVal
-	return nil
+	return newVal, nil
 }
 
 func (i *item[K, V]) set(val *V) {
@@ -266,7 +266,7 @@ func (c *MemoryCache[K, V]) Del(ctx context.Context, key K) error {
 }
 
 // Modify 修改指定KEY的内容
-func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx context.Context, key K, value V) (*V, error)) error {
+func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx context.Context, key K, value V) (*V, error)) (*V, error) {
 	c.lock.RLock()
 	val, ok := c.maps[key]
 	c.lock.RUnlock()
@@ -289,16 +289,16 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx con
 	}
 	_, err := val.load(ctx, key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = val.modify(ctx, key, call)
+	ret, err := val.modify(ctx, key, call)
 	if err != nil {
-		return err
+		return ret, err
 	}
 
 	c.maps[key] = val
-	return nil
+	return ret, nil
 }
 
 // Expire 设置有效期
