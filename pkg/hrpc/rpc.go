@@ -397,8 +397,6 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		var e *Result[hbuf.Data]
 		if errors.As(err, &e) && e.Code != -1 {
 			err = r.encode(writer)(e, method.Tag)
-		} else {
-			herror.PrintStack(err)
 		}
 		return err
 	}

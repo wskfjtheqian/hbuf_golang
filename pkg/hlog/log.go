@@ -197,7 +197,7 @@ func (l *Logger) writer(level Level, data []byte) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	if l.outErr.Load() {
-		os.Stderr.Write(data)
+		os.Stdout.Write(data)
 	}
 
 	if level < Level(l.outLevel.Load()) {

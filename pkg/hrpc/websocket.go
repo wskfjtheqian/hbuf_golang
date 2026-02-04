@@ -350,13 +350,18 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return s.response(ctx, path, writer, reader, header)
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data, data.Header)
 	if err != nil {
-		err = s.encoder(response)(&Result[hbuf.Data]{
-			Code: http.StatusInternalServerError,
-			Msg:  "Server error",
-		}, "")
-		if err != nil {
+		var e *Result[hbuf.Data]
+		if errors.As(err, &e) && e.Code == -1 {
+			err = s.encoder(response)(&Result[hbuf.Data]{
+				Code: http.StatusInternalServerError,
+				Msg:  "Server error",
+			}, "")
+			if err != nil {
+				herror.PrintStack(err)
+				return
+			}
+		} else {
 			herror.PrintStack(err)
-			return
 		}
 	} else {
 		response.Status = http.StatusOK
