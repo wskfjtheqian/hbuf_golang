@@ -398,6 +398,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		if errors.As(err, &e) && e.Code != -1 {
 			err = r.encode(writer)(e, method.Tag)
 		}
+		herror.PrintStack(err)
 		return err
 	}
 	temp := ""
