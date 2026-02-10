@@ -231,3 +231,18 @@ func Batch[E any](list []E, limit int, fun func(list []E) error) error {
 	}
 	return nil
 }
+
+// The 找到切片中之最的元素
+func The[T any](list []T, fun func(a, b T) bool) T {
+	var minItem T
+	if len(list) == 0 {
+		return minItem
+	}
+	minItem = list[0]
+	for i := 1; i < len(list); i++ {
+		if fun(list[i], minItem) {
+			minItem = list[i]
+		}
+	}
+	return minItem
+}
