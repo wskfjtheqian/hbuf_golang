@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime/debug"
 
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -31,7 +32,7 @@ func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 	}
 }
 
-func WithDbCache(cache hsql.DbCache) Option {
+func WithDbCache(cache hcache.Cache) Option {
 	return func(s *App) {
 		hsql.WithCache(cache)(s.sqlDb)
 	}
@@ -47,7 +48,7 @@ func NewApp(options ...Option) *App {
 	ret.nats = hmq.NewNats()
 	ret.etcd = hetcd.NewEtcd()
 	ret.redis = hredis.NewRedis()
-	ret.sqlDb = hsql.NewDB(hsql.WithCache(hredis.NewDBCache()))
+	ret.sqlDb = hsql.NewDB(hsql.WithCache(hredis.NewCache("db")))
 	ret.service = hservice.NewService(ret.etcd, hservice.WithMiddleware())
 
 	for _, option := range options {

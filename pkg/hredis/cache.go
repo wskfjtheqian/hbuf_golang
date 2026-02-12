@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/go-redis/redis/v8"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hsql"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"time"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
-func NewDBCache() hsql.DbCache {
-	return &DBCache{}
+func NewCache(prefix string) hcache.Cache {
+	return &DBCache{prefix: prefix}
 }
 
 type DBCache struct {
+	prefix string
 }
 
 func (d *DBCache) Lock(ctx context.Context, key string) error {
@@ -34,7 +36,7 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 	}
 
 	c := r.Get()
-	key = "db:cache:" + table + ":" + key
+	key = d.prefix + ":cache:" + table + ":" + key
 	cmd := c.Get(ctx, key)
 
 	err := cmd.Err()
@@ -70,13 +72,13 @@ func (d *DBCache) Set(ctx context.Context, key string, table string, sql string,
 	}
 
 	c := r.Get()
-	reply := c.Set(ctx, "db:cache:"+table+":"+key, bytes, expiration)
+	reply := c.Set(ctx, d.prefix+":cache:"+table+":"+key, bytes, expiration)
 	if err = reply.Err(); err != nil {
 		return herror.Wrap(err)
 	}
 
-	c.HSet(ctx, "db:cache:"+table, key, nil)
-	c.HSet(ctx, "db:cache", table, nil)
+	c.HSet(ctx, d.prefix+":cache:"+table, key, nil)
+	c.HSet(ctx, d.prefix+":cache", table, nil)
 	return nil
 }
 
@@ -98,14 +100,14 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 }
 
 func (d *DBCache) del(ctx context.Context, table string, c *redis.Client) error {
-	key := "db:cache:" + table
+	key := d.prefix + ":cache:" + table
 
 	reply := c.HGetAll(ctx, key)
 	if err := reply.Err(); err != nil {
 		return herror.Wrap(err)
 	}
 
-	keys := hutl.Slice(hutl.Keys(reply.Val()), func(v string) string {
+	keys := hutl.Slice(hutl.Keys(reply.Val()), func(i int, v string) string {
 		return key + ":" + v
 	})
 	keys = append(keys, key)
@@ -118,7 +120,7 @@ func (d *DBCache) del(ctx context.Context, table string, c *redis.Client) error 
 }
 
 // ClearExpired 清除过期缓存Key
-func ClearExpired(ctx context.Context) error {
+func ClearExpired(ctx context.Context, prefix string) error {
 	r, ok := FromContext(ctx)
 	if !ok {
 		return herror.NewError("redis not found in context")
@@ -128,13 +130,13 @@ func ClearExpired(ctx context.Context) error {
 		var keys []string
 		var cursor uint64
 		var err error
-		keys, cursor, err = c.HScan(ctx, "db:cache", cursor, "*", 1000).Result()
+		keys, cursor, err = c.HScan(ctx, prefix+":cache", cursor, "*", 1000).Result()
 		if err != nil {
 			return herror.Wrap(err)
 		}
 
 		for i := 0; i < len(keys); i += 2 {
-			err := clearTableExpired(ctx, c, keys[i])
+			err := clearTableExpired(ctx, c, keys[i], prefix)
 			if err != nil {
 				return err
 			}
@@ -146,21 +148,21 @@ func ClearExpired(ctx context.Context) error {
 	return nil
 }
 
-func clearTableExpired(ctx context.Context, c *redis.Client, key string) error {
+func clearTableExpired(ctx context.Context, c *redis.Client, key string, prefix string) error {
 	delKeys := make([]string, 0)
 
 	for {
 		var keys []string
 		var cursor uint64
 		var err error
-		keys, cursor, err = c.HScan(ctx, "db:cache:"+key, cursor, "*", 1000).Result()
+		keys, cursor, err = c.HScan(ctx, prefix+":cache:"+key, cursor, "*", 1000).Result()
 		if err != nil {
 			return herror.Wrap(err)
 		}
 
 		for i := 0; i < len(keys); i += 2 {
 			subKey := keys[i]
-			reply := c.Exists(ctx, "db:cache:"+subKey)
+			reply := c.Exists(ctx, prefix+":cache:"+subKey)
 			if err := reply.Err(); err != nil {
 				return herror.Wrap(err)
 			}

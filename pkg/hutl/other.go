@@ -21,10 +21,10 @@ func Equal[T comparable](value1, value2 *T) bool {
 }
 
 // Slice 对一个切片中的每个元素进行操作，并返回一个新的切片。
-func Slice[T any, E any](list []T, f func(T) E) []E {
+func Slice[T any, E any](list []T, f func(i int, v T) E) []E {
 	result := make([]E, len(list))
 	for i, v := range list {
-		result[i] = f(v)
+		result[i] = f(i, v)
 	}
 	return result
 }

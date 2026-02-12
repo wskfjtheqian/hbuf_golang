@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
@@ -66,7 +67,7 @@ func (d *Context) GetConfig() *Config {
 	return d.db.config
 }
 
-func (d *Context) GetCache() DbCache {
+func (d *Context) GetCache() hcache.Cache {
 	return d.db.cache
 }
 
@@ -106,7 +107,7 @@ func BatchLimit(ctx context.Context) uint {
 
 type Option func(*DB)
 
-func WithCache(cache DbCache) Option {
+func WithCache(cache hcache.Cache) Option {
 	return func(db *DB) {
 		db.srcCache = cache
 	}
@@ -123,8 +124,8 @@ func NewDB(option ...Option) *DB {
 type DB struct {
 	config   *Config
 	db       atomic.Pointer[sql.DB]
-	cache    DbCache
-	srcCache DbCache
+	cache    hcache.Cache
+	srcCache hcache.Cache
 }
 
 func (d *DB) SetConfig(cfg *Config) error {
