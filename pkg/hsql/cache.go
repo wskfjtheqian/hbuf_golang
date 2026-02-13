@@ -9,21 +9,22 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
-func SaveCache(ctx context.Context, table string, builder *Builder, val any, expiration time.Duration, fn func(ctx context.Context) (any, error)) error {
+func SaveCache[T any](ctx context.Context, table string, builder *Builder, expiration time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
+	var val T
 	db, ok := FromContext(ctx)
 	if !ok {
-		return herror.NewError("no db in context")
+		return val, herror.NewError("no db in context")
 	}
 	var err error
 	if db.GetCache() == nil {
 		_, err = fn(ctx)
-		return err
+		return val, err
 	}
 	table = *db.GetConfig().DbName + "." + table
 	sql := builder.ToText()
 	key := hutl.Md5([]byte(sql))
 
-	return hcache.SaveCache(ctx, db.GetCache(), table, key, val, expiration, fn)
+	return hcache.SaveCache(ctx, db.GetCache(), table, key, expiration, fn)
 
 }
 
