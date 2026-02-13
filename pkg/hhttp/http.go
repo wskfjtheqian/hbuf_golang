@@ -28,6 +28,8 @@ type Http struct {
 }
 
 func NewHttp() *Http {
+	hlog.SetLevelName(LogHTTP, "HTTP")
+
 	ret := &Http{
 		init: make(chan bool, 1),
 		log:  hlog.NewLogger("", hlog.LstdFlags),

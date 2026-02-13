@@ -15,10 +15,8 @@ func SaveCache[T any](ctx context.Context, table string, builder *Builder, expir
 	if !ok {
 		return val, herror.NewError("no db in context")
 	}
-	var err error
 	if db.GetCache() == nil {
-		_, err = fn(ctx)
-		return val, err
+		return fn(ctx)
 	}
 	table = *db.GetConfig().DbName + "." + table
 	sql := builder.ToText()
