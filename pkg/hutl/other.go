@@ -201,8 +201,8 @@ func Group[T any, K comparable](list []T, key func(T) K) map[K][]T {
 	return m
 }
 
-// SliceDiff 切片差集
-func SliceDiff[E any, T comparable](src []E, dsc []E, get func(v E) T) []E {
+// Diff 切片差集
+func Diff[E any, T comparable](src []E, dsc []E, get func(v E) T) []E {
 	// 创建一个map来存储dsc中元素的键值
 	dscMap := make(map[T]struct{})
 	for _, v := range dsc {
@@ -245,4 +245,31 @@ func The[T any](list []T, fun func(a, b T) bool) T {
 		}
 	}
 	return minItem
+}
+
+// Intersect 获得两个切片的交集
+func Intersect[T comparable](list1, list2 []T) []T {
+	var result []T
+	for _, v := range list1 {
+		if Contains(list2, v) {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// Union 获得两个切片的并集
+func Union[T comparable](list1, list2 []T) []T {
+	var result []T
+	for _, v := range list1 {
+		if !Contains(result, v) {
+			result = append(result, v)
+		}
+	}
+	for _, v := range list2 {
+		if !Contains(result, v) {
+			result = append(result, v)
+		}
+	}
+	return result
 }
