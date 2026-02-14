@@ -249,7 +249,7 @@ func The[T any](list []T, fun func(a, b T) bool) T {
 
 // Intersect 获得两个切片的交集
 func Intersect[T comparable](list1, list2 []T) []T {
-	var result []T
+	result := make([]T, 0, max(len(list1), len(list2)))
 	for _, v := range list1 {
 		if Contains(list2, v) {
 			result = append(result, v)
@@ -260,7 +260,7 @@ func Intersect[T comparable](list1, list2 []T) []T {
 
 // Union 获得两个切片的并集
 func Union[T comparable](list1, list2 []T) []T {
-	var result []T
+	result := make([]T, 0, min(len(list1), len(list2)))
 	for _, v := range list1 {
 		if !Contains(result, v) {
 			result = append(result, v)

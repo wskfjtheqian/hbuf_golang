@@ -151,7 +151,7 @@ func (t ConverterString) Value() (driver.Value, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return strconv.FormatUint(valueOf.Uint(), 10), nil
 	case reflect.Float32, reflect.Float64:
-		return strconv.FormatFloat(valueOf.Float(), 'g', -1, 64), nil
+		return strconv.FormatFloat(valueOf.Float(), 'f', -1, 64), nil
 	case reflect.Map, reflect.Slice, reflect.Struct:
 		if typ.Kind() == timeType.Kind() {
 			val := valueOf.Interface().(time.Time)

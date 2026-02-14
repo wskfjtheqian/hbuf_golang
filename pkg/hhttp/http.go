@@ -185,7 +185,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
 	old = time.Now().UnixMicro() - old
-	t := "[" + strconv.FormatFloat(float64(old)/1000, 'g', 3, 64) + "ms]"
+	t := "[" + strconv.FormatFloat(float64(old)/1000, 'f', 3, 64) + "ms]"
 	if 200000 > old {
 		t = hutl.Yellow(t)
 	} else {

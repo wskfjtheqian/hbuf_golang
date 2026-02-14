@@ -323,7 +323,7 @@ func (p *printLog) print() {
 		return
 	}
 	now := time.Now().UnixMicro() - p.now
-	t := "[" + strconv.FormatFloat(float64(now)/1000, 'g', 3, 64) + "ms]"
+	t := "[" + strconv.FormatFloat(float64(now)/1000, 'f', 3, 64) + "ms]"
 	if 200000 > now {
 		t = hutl.Yellow(t)
 	} else {
