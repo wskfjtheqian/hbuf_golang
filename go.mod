@@ -3,6 +3,7 @@ module github.com/wskfjtheqian/hbuf_golang
 go 1.24.11
 
 require (
+	github.com/RoaringBitmap/roaring v1.9.4
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gobwas/ws v1.4.0
@@ -18,6 +19,7 @@ require (
 )
 
 require (
+	github.com/bits-and-blooms/bitset v1.12.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
@@ -28,6 +30,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
+	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/nats-io/nkeys v0.4.12 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.6.6 // indirect
