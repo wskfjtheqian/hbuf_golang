@@ -140,7 +140,7 @@ func Md5(value []byte) string {
 	return hex.EncodeToString(data[:])
 }
 
-// 生成一个随机的MD5值
+// RandomMd5 生成一个随机的MD5值
 func RandomMd5() (string, error) {
 	data := make([]byte, 64)
 	if _, err := io.ReadFull(rand.Reader, data); err != nil {
