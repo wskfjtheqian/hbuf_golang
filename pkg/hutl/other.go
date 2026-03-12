@@ -273,3 +273,19 @@ func Union[T comparable](list1, list2 []T) []T {
 	}
 	return result
 }
+
+// PadRight 右对齐字符串
+func PadRight(str, pad string, width int) string {
+	for len(str) < width {
+		str += pad
+	}
+	return str
+}
+
+// PadLeft 左对齐字符串
+func PadLeft(str, pad string, width int) string {
+	for len(str) < width {
+		str = pad + str
+	}
+	return str
+}

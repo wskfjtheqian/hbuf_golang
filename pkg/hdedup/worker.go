@@ -2,7 +2,6 @@ package hdedup
 
 import (
 	"hash/fnv"
-	"sync"
 )
 
 // Event 表示一个事件，包含键和值
@@ -19,7 +18,6 @@ type Worker struct {
 	input chan Event
 
 	shards map[string]*Shard
-	mu     sync.Mutex
 }
 
 // NewWorker 创建一个新的 Worker 实例
@@ -39,7 +37,7 @@ func (w *Worker) loop() {
 	for e := range w.input {
 		hash := hash32(e.Value)
 
-		w.wal.Append(e.Key, hash)
+		_ = w.wal.Append(e.Key, hash)
 
 		shard, ok := w.shards[e.Key]
 		if !ok {
@@ -59,13 +57,13 @@ func (w *Worker) Add(key, value string) {
 // Flush 刷新所有分片数据到存储中
 func (w *Worker) Flush() {
 	for _, s := range w.shards {
-		s.Save()
+		_ = s.Save()
 	}
 }
 
 // hash32 计算字符串的 32 位哈希值
 func hash32(s string) uint32 {
 	h := fnv.New32a()
-	h.Write([]byte(s))
+	_, _ = h.Write([]byte(s))
 	return h.Sum32()
 }

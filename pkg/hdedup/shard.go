@@ -17,13 +17,12 @@ type Shard struct {
 
 // LoadShard 加载一个分片，如果该分片对应的文件不存在，则会创建一个新的位图
 func LoadShard(baseDir, key string) (*Shard, error) {
-	dir := filepath.Join(baseDir, key[:10])
-	err := os.MkdirAll(dir, 0755)
+	err := os.MkdirAll(baseDir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	path := filepath.Join(dir, key+".bitmap")
+	path := filepath.Join(baseDir, key+".bitmap")
 
 	bm := roaring.New()
 
@@ -43,14 +42,8 @@ func LoadShard(baseDir, key string) (*Shard, error) {
 }
 
 // Add 向分片的位图中添加一个值，如果位图发生变化则返回true，并标记分片为脏
-func (s *Shard) Add(v uint32) bool {
-	old := s.bitmap.GetCardinality()
+func (s *Shard) Add(v uint32) {
 	s.bitmap.Add(v)
-	if s.bitmap.GetCardinality() != old {
-		s.dirty = true
-		return true
-	}
-	return false
 }
 
 // Save 如果分片被标记为脏，则将位图保存到文件中
