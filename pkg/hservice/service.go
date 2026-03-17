@@ -26,6 +26,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 // WithContext 创建一个新的Context
@@ -82,11 +83,12 @@ func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 // NewService 创建一个新的Service实例
 func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 	ret := &Service{
-		etcd:       etcd,
-		install:    make(map[string]*ServerInfo),
-		servers:    make(map[string]*ServerInfo),
-		clients:    make(map[string][]hrpc.Init),
-		httpClient: make(map[string]*hrpc.Client),
+		etcd:          etcd,
+		install:       make(map[string]*ServerInfo),
+		servers:       make(map[string]*ServerInfo),
+		clients:       make(map[string][]hrpc.Init),
+		httpClient:    make(map[string]*hrpc.Client),
+		waitSubscribe: make(chan bool, 2),
 	}
 	ret.rpcServer = hrpc.NewServer(hrpc.WithServerMiddleware(), hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 
@@ -100,7 +102,7 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 type Service struct {
 	config    *Config
 	etcd      *hetcd.Etcd
-	lease     atomic.Pointer[clientv3.LeaseGrantResponse]
+	session   atomic.Pointer[concurrency.Session]
 	listen    atomic.Pointer[net.Listener]
 	rpcServer *hrpc.Server
 	install   map[string]*ServerInfo
@@ -109,6 +111,12 @@ type Service struct {
 	clients    map[string][]hrpc.Init
 	lock       sync.RWMutex
 	httpClient map[string]*hrpc.Client
+
+	onRegisterInfo func(info *RegisterInfo)
+	onDeleteInfo   func(info *RegisterInfo)
+
+	isSubscribe   bool
+	waitSubscribe chan bool
 }
 
 // SetConfig 设置配置
@@ -171,7 +179,9 @@ func (s *Service) SetConfig(cfg *Config) error {
 		}
 	}
 
+	<-s.waitSubscribe
 	s.rpcServer.Init(cfg.Server.List...)
+	close(s.waitSubscribe)
 	return nil
 }
 
@@ -192,23 +202,13 @@ func (s *Service) Register(ctx context.Context) error {
 		return err
 	}
 
-	lease := s.lease.Load()
-	if lease != nil {
-		_, err = client.Revoke(context.Background(), lease.ID)
-		if err != nil {
-			hlog.Error("revoke lease failed: %s", err)
-		}
-	}
-
 	leaseTime := s.config.Server.LeaseTime
 	if leaseTime == 0 {
-		leaseTime = 5
+		leaseTime = 30
 	}
-
-	//申请租约
-	lease, err = client.Grant(ctx, leaseTime)
+	session, err := concurrency.NewSession(client, concurrency.WithTTL(int(leaseTime)))
 	if err != nil {
-		return err
+		return herror.Wrap(err)
 	}
 
 	config := s.config.Server.Http
@@ -218,11 +218,12 @@ func (s *Service) Register(ctx context.Context) error {
 	}
 	path = "/" + strings.Trim(path, "/") + "/"
 
+	addr := s.GetServerAddr()
 	for key, _ := range s.install {
 		// 构造服务注册信息
 		info := &RegisterInfo{
 			Name: key,
-			Addr: s.GetServerAddr(),
+			Addr: addr,
 			Path: path,
 		}
 		name := ProtocolName + info.Addr + "/" + key
@@ -232,7 +233,7 @@ func (s *Service) Register(ctx context.Context) error {
 		}
 
 		// 注册服务到etcd
-		_, err = client.Put(ctx, name, string(value), clientv3.WithLease(lease.ID))
+		_, err = client.Put(ctx, name, string(value), clientv3.WithLease(session.Lease()))
 		if err != nil {
 			return err
 		}
@@ -240,17 +241,7 @@ func (s *Service) Register(ctx context.Context) error {
 		hlog.Info("register service success: %s", key)
 	}
 
-	// 保持租约
-	alive, err := client.KeepAlive(ctx, lease.ID)
-	if err != nil {
-		return err
-	}
-	go func() {
-		for range alive {
-		}
-	}()
-
-	s.lease.Store(lease)
+	s.session.Store(session)
 	return nil
 }
 
@@ -271,9 +262,9 @@ func (s *Service) Deregister(ctx context.Context) error {
 	hlog.Info("deregister service success")
 
 	// 释放租约
-	lease := s.lease.Load()
+	lease := s.session.Load()
 	if lease != nil {
-		_, err = client.Revoke(ctx, lease.ID)
+		err = lease.Close()
 		if err != nil {
 			hlog.Error("revoke lease failed: %s", err)
 		}
@@ -321,7 +312,10 @@ func (s *Service) Discovery(ctx context.Context) error {
 					hlog.Error("add client failed: %s", err)
 				}
 			} else if ev.Type == clientv3.EventTypeDelete {
-				hlog.Info("service deregister: %s", string(ev.Kv.Key))
+				err := s.parseDeleteInfo(ev.Kv)
+				if err != nil {
+					hlog.Error("delete client failed: %s", err)
+				}
 			}
 		}
 	}
@@ -442,9 +436,12 @@ func (s *Service) GetServerAddr() string {
 	if listen == nil {
 		return ""
 	}
-	_, port, err := net.SplitHostPort((*listen).Addr().String())
+	addr, port, err := net.SplitHostPort((*listen).Addr().String())
 	if err != nil {
 		return ""
+	}
+	if addr != "::" {
+		return addr + ":" + port
 	}
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -453,6 +450,20 @@ func (s *Service) GetServerAddr() string {
 	if len(addrs) == 0 {
 		return ""
 	}
+	for _, item := range addrs {
+		ipNet, ok := item.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		ip := ipNet.IP.To4()
+		if ip == nil || ip.String() == "127.0.0.1" {
+			continue
+		}
+
+		return ip.String() + ":" + port
+	}
+
 	return addrs[0].(*net.IPNet).IP.String() + ":" + port
 }
 
@@ -477,6 +488,48 @@ func (s *Service) parseRegisterInfo(v *mvccpb.KeyValue) error {
 	if err != nil {
 		return err
 	}
+
+	if s.onRegisterInfo != nil {
+		s.onRegisterInfo(info)
+	}
+	return nil
+}
+
+// parseDeleteInfo 解析服务删除信息
+func (s *Service) parseDeleteInfo(v *mvccpb.KeyValue) error {
+	info, err := url.Parse(string(v.Key)) //解析服务地址
+	if err != nil {
+		return err
+	}
+
+	//
+	//install, ok := s.install[info.Name]
+	//if !ok {
+	//	return nil
+	//}
+
+	err = s.delHttpClient(nil, info.Host)
+	if err != nil {
+		return err
+	}
+	//
+	//if s.onDeleteInfo != nil {
+	//	s.onDeleteInfo(info)
+	//}
+
+	return nil
+}
+
+// delHttpClient
+func (s *Service) delHttpClient(install *ServerInfo, host string) error {
+	s.lock.Lock()
+	//s.clients[install.name] = hutl.Filter(s.clients[install.name], func(init hrpc.Init) bool {
+	//	return "" != install.name
+	//})
+
+	delete(s.httpClient, host)
+	s.lock.Unlock()
+
 	return nil
 }
 
@@ -492,11 +545,11 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 		)
 		s.httpClient[addr.Host] = connect
 	}
-	s.lock.Unlock()
-	client := install.client(connect)
 
-	s.lock.Lock()
+	client := install.client(connect)
 	s.clients[install.name] = append(s.clients[install.name], client)
+
+	s.checkSubscribe()
 	s.lock.Unlock()
 	return nil
 }
@@ -505,6 +558,7 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 func (s *Service) addLocalClient(install *ServerInfo) {
 	s.lock.Lock()
 	s.clients[install.name] = append(s.clients[install.name], install.init)
+	s.checkSubscribe()
 	s.lock.Unlock()
 }
 
@@ -530,7 +584,24 @@ func (s *Service) GetClient(name string) hrpc.Init {
 	return clients[rand2.Int32N(int32(length))]
 }
 
-// 服务描述
+// 检测服务是否未完成订阅
+func (s *Service) checkSubscribe() {
+	if !s.isSubscribe {
+		temp := true
+		for key, _ := range s.install {
+			if _, ok := s.clients[key]; !ok {
+				temp = false
+				break
+			}
+		}
+		if temp {
+			s.isSubscribe = true
+			s.waitSubscribe <- true
+		}
+	}
+}
+
+// ServerInfo 服务描述
 type ServerInfo struct {
 	s       *Service
 	methods []*hrpc.Method

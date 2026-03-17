@@ -31,7 +31,7 @@ func Slice[T any, E any](list []T, f func(i int, v T) E) []E {
 
 // Filter 对一个切片中的每个元素进行操作，并返回一个新的切片，其中只包含满足条件的元素。
 func Filter[T any](list []T, f func(T) bool) []T {
-	result := make([]T, 0)
+	result := make([]T, 0, len(list))
 	for _, v := range list {
 		if f(v) {
 			result = append(result, v)
