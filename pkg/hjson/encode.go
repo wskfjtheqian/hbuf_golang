@@ -463,6 +463,10 @@ func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		e.WriteString("null")
 		return
 	}
+	if va.Type() == timePtrType {
+		timeEncoder(e, va, opts)
+		return
+	}
 	m := va.Interface().(Marshaler)
 	b, err := m.MarshalJSON()
 	if err == nil {
