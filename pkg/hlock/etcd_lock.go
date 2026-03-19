@@ -14,8 +14,8 @@ type Mutex struct {
 	ctx   context.Context
 }
 
-// DcsLock 分布式控制系统加锁
-func DcsLock(ctx context.Context, pfx string) (*Mutex, error) {
+// EtcdLock 分布式控制系统加锁
+func EtcdLock(ctx context.Context, pfx string) (*Mutex, error) {
 	e, ok := hetcd.FromContext(ctx)
 	if !ok {
 		return nil, herror.NewError("etcd not found in context")
@@ -39,8 +39,8 @@ func DcsLock(ctx context.Context, pfx string) (*Mutex, error) {
 	return l, nil
 }
 
-// TryDcsLock 分布式控制系统尝试加锁
-func TryDcsLock(ctx context.Context, pfx string) (*Mutex, error) {
+// TryEtcdLock 分布式控制系统尝试加锁
+func TryEtcdLock(ctx context.Context, pfx string) (*Mutex, error) {
 	e, ok := hetcd.FromContext(ctx)
 	if !ok {
 		return nil, herror.NewError("etcd not found in context")
@@ -77,8 +77,8 @@ func (l *Mutex) Unlock() error {
 	return nil
 }
 
-// WithDcsLockGetOrPopulate 带有 fallback 函数的分布式控制系统加锁。
-func WithDcsLockGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
+// WithEtcdLockGetOrPopulate 带有 fallback 函数的分布式控制系统加锁。
+func WithEtcdLockGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
 	val, ret, err := get(ctx)
 	if err != nil {
 		return val, err
@@ -87,7 +87,7 @@ func WithDcsLockGetOrPopulate[T any](ctx context.Context, key string, get func(c
 		return val, nil
 	}
 
-	l, err := DcsLock(ctx, key)
+	l, err := EtcdLock(ctx, key)
 	if err != nil {
 		return val, err
 	}
@@ -108,10 +108,10 @@ func WithDcsLockGetOrPopulate[T any](ctx context.Context, key string, get func(c
 	return val, nil
 }
 
-// WithDcsLock 分布式控制系统加锁。
-func WithDcsLock[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
+// WithEtcdLock 分布式控制系统加锁。
+func WithEtcdLock[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
 	var val T
-	l, err := DcsLock(ctx, key)
+	l, err := EtcdLock(ctx, key)
 	if err != nil {
 		return val, err
 	}
@@ -124,10 +124,10 @@ func WithDcsLock[T any](ctx context.Context, key string, fun func(ctx context.Co
 	return val, nil
 }
 
-// WithTryDcsLock 分布式控制系统尝试加锁。
-func WithTryDcsLock[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
+// WithTryEtcdLock 分布式控制系统尝试加锁。
+func WithTryEtcdLock[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
 	var val T
-	l, err := TryDcsLock(ctx, key)
+	l, err := TryEtcdLock(ctx, key)
 	if err != nil {
 		return val, err
 	}

@@ -29,18 +29,43 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-// WithContext 创建一个新的Context
-func WithContext(ctx context.Context, service *Service) context.Context {
-	return &Context{
-		Context: ctx,
-		service: service,
+type Dispatch func(list []hrpc.Init, index int32) (hrpc.Init, int32)
+
+type ContextOption func(c *Context)
+
+func WithContextService(service *Service) ContextOption {
+	return func(c *Context) {
+		c.service = service
 	}
+}
+func WithContextDispatch(dispatch Dispatch) ContextOption {
+	return func(c *Context) {
+		c.dispatch = dispatch
+	}
+}
+
+// WithContext 创建一个新的Context
+func WithContext(ctx context.Context, options ...ContextOption) context.Context {
+	ret := &Context{
+		Context: ctx,
+	}
+
+	val := ctx.Value(contextType)
+	if val != nil {
+		ret.service = val.(*Context).service
+		ret.dispatch = val.(*Context).dispatch
+	}
+	for _, option := range options {
+		option(ret)
+	}
+	return ret
 }
 
 // Context 是用于处理RPC请求的上下文
 type Context struct {
 	context.Context
-	service *Service
+	service  *Service
+	dispatch Dispatch
 }
 
 var contextType = reflect.TypeOf(&Context{})
@@ -72,6 +97,12 @@ type RegisterInfo struct {
 	Path string `json:"path"`
 }
 
+type client struct {
+	list     []hrpc.Init
+	dispatch Dispatch
+	index    atomic.Int32
+}
+
 type Option func(*Service)
 
 func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
@@ -86,11 +117,11 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 		etcd:          etcd,
 		install:       make(map[string]*ServerInfo),
 		servers:       make(map[string]*ServerInfo),
-		clients:       make(map[string][]hrpc.Init),
+		clients:       make(map[string]*client),
 		httpClient:    make(map[string]*hrpc.Client),
 		waitSubscribe: make(chan bool, 2),
 	}
-	ret.rpcServer = hrpc.NewServer(hrpc.WithServerMiddleware(), hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	ret.rpcServer = hrpc.NewServer(hrpc.WithServerMiddleware(), hrpc.WithServerEncoder(hrpc.NewJsonEncode()), hrpc.WithServerDecode(hrpc.NewJsonDecode()))
 
 	for _, option := range options {
 		option(ret)
@@ -108,7 +139,7 @@ type Service struct {
 	install   map[string]*ServerInfo
 
 	servers    map[string]*ServerInfo
-	clients    map[string][]hrpc.Init
+	clients    map[string]*client
 	lock       sync.RWMutex
 	httpClient map[string]*hrpc.Client
 
@@ -540,14 +571,21 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	if !ok {
 		connect = hrpc.NewClient(
 			hrpc.NewHttpClient(addr.String()).Request,
-			hrpc.WithClientEncoder(hrpc.NewHBufEncode()),
-			hrpc.WithClientDecode(hrpc.NewHBufDecode()),
+			hrpc.WithClientEncoder(hrpc.NewJsonEncode()),
+			hrpc.WithClientDecode(hrpc.NewJsonDecode()),
 		)
 		s.httpClient[addr.Host] = connect
 	}
 
-	client := install.client(connect)
-	s.clients[install.name] = append(s.clients[install.name], client)
+	c, ok := s.clients[install.name]
+	if !ok {
+		c = &client{
+			list:     make([]hrpc.Init, 0),
+			dispatch: NewDispatchRandom(),
+		}
+		s.clients[install.name] = c
+	}
+	c.list = append(c.list, install.client(connect))
 
 	s.checkSubscribe()
 	s.lock.Unlock()
@@ -557,7 +595,15 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 // addLocalClient 增加本地客户端
 func (s *Service) addLocalClient(install *ServerInfo) {
 	s.lock.Lock()
-	s.clients[install.name] = append(s.clients[install.name], install.init)
+	c, ok := s.clients[install.name]
+	if !ok {
+		c = &client{
+			list:     make([]hrpc.Init, 0),
+			dispatch: NewDispatchRandom(),
+		}
+		s.clients[install.name] = c
+	}
+	c.list = append(c.list, install.init)
 	s.checkSubscribe()
 	s.lock.Unlock()
 }
@@ -565,23 +611,28 @@ func (s *Service) addLocalClient(install *ServerInfo) {
 func (s *Service) NewMiddleware() hrpc.HandlerMiddleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
-			return next(WithContext(ctx, s), req)
+			return next(WithContext(ctx, WithContextService(s)), req)
 		}
 	}
 }
 
 // GetClient 获取客户端
-func (s *Service) GetClient(name string) hrpc.Init {
+func (s *Service) GetClient(name string, dispatch Dispatch) hrpc.Init {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	clients, ok := s.clients[name]
-	length := len(clients)
+	length := len(clients.list)
 	if !ok || length == 0 {
 		return nil
 	}
+	if dispatch == nil {
+		dispatch = clients.dispatch
+	}
 
-	return clients[rand2.Int32N(int32(length))]
+	c, index := dispatch(clients.list, clients.index.Load())
+	clients.index.Add(index)
+	return c
 }
 
 // 检测服务是否未完成订阅
@@ -625,9 +676,38 @@ func Register[T hrpc.Init](s *Service, init T, server func(r hrpc.ServerRegister
 }
 
 func GetClient(ctx context.Context, name string) hrpc.Init {
-	s := FromContext(ctx)
-	if s == nil {
+	val := ctx.Value(contextType)
+	if val == nil {
 		return nil
 	}
-	return s.GetClient(name)
+
+	c := val.(*Context)
+	return c.service.GetClient(name, c.dispatch)
+}
+
+// NewDispatchRandom 随机调度
+func NewDispatchRandom() Dispatch {
+	return func(list []hrpc.Init, index int32) (hrpc.Init, int32) {
+		index = rand2.Int32N(int32(len(list)))
+		return list[index], index
+	}
+}
+
+// NewDispatchRoundRobin 轮询调度
+func NewDispatchRoundRobin() Dispatch {
+	return func(list []hrpc.Init, index int32) (hrpc.Init, int32) {
+		index++
+		if index >= int32(len(list)) {
+			index = 0
+		}
+		return list[index], index
+	}
+}
+
+// NewDispatchHash 哈希调度
+func NewDispatchHash(hash uint64) Dispatch {
+	return func(list []hrpc.Init, index int32) (hrpc.Init, int32) {
+		index = int32(hash % uint64(len(list)))
+		return list[index], index
+	}
 }
