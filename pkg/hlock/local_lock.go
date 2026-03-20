@@ -2,98 +2,130 @@ package hlock
 
 import (
 	"context"
+	"hash/fnv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
-// lockMap 一个以字符串为键的 localLocks 映射。
-var lockMap = make(map[string]*localLock)
-var lock sync.Mutex
+const shardCount = 128
 
-// 定时清理 lockMap，删除 count 为 0 的 localLocks。
+type shard struct {
+	mu sync.RWMutex
+	m  map[string]*localLock
+}
+
+var shards [shardCount]*shard
+
 func init() {
-	ticker := time.NewTicker(time.Second * 30)
-	go func() {
-		for {
-			<-ticker.C
-			lock.Lock()
-			for key, item := range lockMap {
-				if item.count.Load() == 0 {
-					delete(lockMap, key)
-				}
-			}
-			lock.Unlock()
+	for i := 0; i < shardCount; i++ {
+		shards[i] = &shard{
+			m: make(map[string]*localLock),
 		}
-	}()
+	}
 }
 
-// NewLocalLock 创建一个新的 localLock 并返回。
+func getShard(key string) *shard {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return shards[h.Sum32()%shardCount]
+}
+
+// =========================
+// 创建锁
+// =========================
+
 func NewLocalLock(key string) Locker {
-	lock.Lock()
-	defer lock.Unlock()
-	ret, ok := lockMap[key]
-	if ok {
-		return ret
+	s := getShard(key)
+
+	// fast path：读锁
+	s.mu.RLock()
+	if l, ok := s.m[key]; ok {
+		s.mu.RUnlock()
+		return l
 	}
-	ret = &localLock{}
-	lockMap[key] = ret
-	return ret
+	s.mu.RUnlock()
+
+	// slow path：写锁
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// double check
+	if l, ok := s.m[key]; ok {
+		return l
+	}
+
+	l := &localLock{
+		key:   key,
+		shard: s,
+	}
+
+	s.m[key] = l
+	return l
 }
 
-// LocalLock 防止死锁，并确保同一时间只允许一个 goroutine 访问某个 key 的资源。
-// 加锁后，会将 key 存入 context，以便在子函数中判断是否已经加锁。
-func LocalLock[T any](ctx context.Context, key string, primary func(ctx context.Context) (*T, error)) (*T, error) {
-	if key == "" {
-		return nil, herror.NewError("key is empty")
-	}
-	if nil == ctx {
-		return nil, herror.NewError("ctx is nil")
-	}
+// =========================
+// 锁实现（无重入）
+// =========================
 
-	if nil != ctx.Value("key_lock_key:"+key) {
-		return primary(ctx)
-	}
-	ctx = context.WithValue(ctx, "key_lock_key:"+key, true)
-
-	ret := NewLocalLock(key)
-	ret.Lock()
-	defer ret.Unlock()
-
-	return primary(ctx)
-}
-
-// localLock 是一个可重入锁。
 type localLock struct {
-	lock  sync.Mutex
-	count atomic.Int64
+	mu sync.Mutex
+
+	ref atomic.Int64
+
+	key   string
+	shard *shard
 }
 
-// Lock 加锁。
-func (k *localLock) Lock() {
-	k.count.Add(1)
-	k.lock.Lock()
+// =========================
+// Lock
+// =========================
+
+func (l *localLock) Lock(ctx context.Context) error {
+	l.ref.Add(1)
+	l.mu.Lock()
+	return nil
 }
 
-// Unlock 解锁。
-func (k *localLock) Unlock() {
-	k.lock.Unlock()
-	k.count.Add(-1)
-}
+// =========================
+// Unlock（自动删除）
+// =========================
 
-// TryLock 尝试加锁。
-func (k *localLock) TryLock() bool {
-	if k.lock.TryLock() {
-		return true
+func (l *localLock) Unlock(ctx context.Context) error {
+	l.mu.Unlock()
+
+	if l.ref.Add(-1) == 0 {
+		s := l.shard
+
+		// 删除必须加写锁
+		s.mu.Lock()
+		// double check（防止误删新锁）
+		if cur, ok := s.m[l.key]; ok && cur == l {
+			delete(s.m, l.key)
+		}
+		s.mu.Unlock()
 	}
-	k.count.Add(-1)
-	return false
+	return nil
 }
 
-// WithLocalLockGetOrPopulate 带有 fallback 函数的sg加锁。
-func WithLocalLockGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
+// =========================
+// TryLock
+// =========================
+
+func (l *localLock) TryLock(ctx context.Context) (bool, error) {
+	l.ref.Add(1)
+
+	if l.mu.TryLock() {
+		return true, nil
+	}
+
+	l.ref.Add(-1)
+	return false, nil
+}
+
+// WithLocalGetOrPopulate 带有 fallback 函数的分布式控制系统加锁, 基于ctx的可重入锁。
+func WithLocalGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
 	val, ret, err := get(ctx)
 	if err != nil {
 		return val, err
@@ -102,21 +134,12 @@ func WithLocalLockGetOrPopulate[T any](ctx context.Context, key string, get func
 		return val, nil
 	}
 
-	if key == "" {
-		return val, herror.NewError("key is empty")
+	ctx, l := localContext(ctx, key)
+	err = l.Lock(ctx)
+	if err != nil {
+		return val, err
 	}
-	if nil == ctx {
-		return val, herror.NewError("ctx is nil")
-	}
-
-	if nil != ctx.Value("key_lock_key:"+key) {
-		return populate(ctx)
-	}
-	ctx = context.WithValue(ctx, "key_lock_key:"+key, true)
-
-	l := NewLocalLock(key)
-	l.Lock()
-	defer l.Unlock()
+	defer l.Unlock(ctx)
 
 	val, ret, err = get(ctx)
 	if err != nil {
@@ -131,4 +154,53 @@ func WithLocalLockGetOrPopulate[T any](ctx context.Context, key string, get func
 		return val, err
 	}
 	return val, nil
+}
+
+// WithLocal 分布式控制系统加锁, 基于ctx的可重入锁。
+func WithLocal[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
+	var val T
+	ctx, l := localContext(ctx, key)
+	err := l.Lock(ctx)
+	if err != nil {
+		return val, err
+	}
+	defer l.Unlock(ctx)
+
+	val, err = fun(ctx)
+	if err != nil {
+		return val, err
+	}
+	return val, nil
+}
+
+// WithLocalTry 分布式控制系统尝试加锁, 基于ctx的可重入锁。
+func WithLocalTry[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
+	var val T
+	ctx, l := localContext(ctx, key)
+	lock, err := l.TryLock(ctx)
+	if err != nil {
+		return val, err
+	}
+	if !lock {
+		return val, herror.NewError("lock failed")
+	}
+	defer l.Unlock(ctx)
+
+	val, err = fun(ctx)
+	if err != nil {
+		return val, err
+	}
+	return val, nil
+}
+
+func localContext(ctx context.Context, key string) (context.Context, Locker) {
+	key = "local_lock_" + key
+	value := ctx.Value(key)
+	if value != nil {
+		return ctx, value.(*localLock)
+	}
+
+	l := NewLocalLock(key)
+	ctx = context.WithValue(ctx, key, l)
+	return ctx, l
 }

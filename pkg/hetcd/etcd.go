@@ -2,10 +2,13 @@ package hetcd
 
 import (
 	"context"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
+
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -54,8 +57,9 @@ func NewEtcd() *Etcd {
 
 // Etcd 封装了Etcd的连接和操作
 type Etcd struct {
-	client atomic.Pointer[clientv3.Client]
-	config *Config
+	client  atomic.Pointer[clientv3.Client]
+	session atomic.Pointer[concurrency.Session]
+	config  *Config
 }
 
 // SetConfig 设置etcd的配置
@@ -65,15 +69,28 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 	}
 
 	old := e.client.Load()
+	oldSession := e.session.Load()
 	defer func() {
-		if old != nil {
+		if oldSession != nil || old != nil {
 			<-time.After(time.Second * 30)
+		}
+		if oldSession != nil {
+			_ = oldSession.Close()
+			hlog.Info("old etcd session closed")
+		}
+		if old != nil {
+
 			_ = old.Close()
 			hlog.Info("old etcd client closed")
 		}
 	}()
 
 	if cfg == nil {
+		if oldSession != nil {
+			session := e.session.Swap(nil)
+			_ = session.Close()
+			hlog.Info("old etcd session closed")
+		}
 		if old != nil {
 			conn := e.client.Swap(nil)
 			_ = conn.Close()
@@ -145,7 +162,15 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 		hlog.Info("etcd endpoint: %s, isLearner: %t", endpoint, status.IsLearner)
 	}
 	hlog.Info("etcd client connected")
+
 	e.client.Store(client)
+	session, err := concurrency.NewSession(client)
+	if err != nil {
+		_ = client.Close()
+		return err
+	}
+	e.session.Store(session)
+	go e.watchSession(client)
 	return err
 }
 
@@ -163,6 +188,29 @@ func (e *Etcd) NewMiddleware() hrpc.HandlerMiddleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, e), req)
+		}
+	}
+}
+
+func (e *Etcd) GetSession() (*concurrency.Session, error) {
+	session := e.session.Load()
+	if session == nil {
+		return nil, herror.NewError("not found etcd session")
+	}
+	return session, nil
+}
+
+func (e *Etcd) watchSession(client *clientv3.Client) {
+	for {
+		<-e.session.Load().Done()
+
+		for {
+			session, err := concurrency.NewSession(client)
+			if err == nil {
+				e.session.Store(session)
+				break
+			}
+			time.Sleep(time.Second)
 		}
 	}
 }

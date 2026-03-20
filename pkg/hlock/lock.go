@@ -1,8 +1,10 @@
 package hlock
 
-// Locker 是一个可重入锁。
+import "context"
+
+// Locker
 type Locker interface {
-	Lock()
-	Unlock()
-	TryLock() bool
+	Lock(ctx context.Context) error
+	Unlock(ctx context.Context) error
+	TryLock(ctx context.Context) (bool, error)
 }
