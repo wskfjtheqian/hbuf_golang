@@ -19,7 +19,7 @@ func SaveCache[T any](ctx context.Context, cache Cache, group string, key string
 	}
 
 	var val T
-	ok, err := cache.Get(ctx, key, group, val, expiration)
+	ok, err := cache.Get(ctx, key, group, &val, expiration)
 	if err != nil {
 		return val, err
 	}
@@ -33,7 +33,7 @@ func SaveCache[T any](ctx context.Context, cache Cache, group string, key string
 	}
 	defer cache.Unlock(ctx, group+":"+key)
 
-	ok, err = cache.Get(ctx, key, group, val, expiration)
+	ok, err = cache.Get(ctx, key, group, &val, expiration)
 	if err != nil {
 		return val, err
 	}

@@ -2,6 +2,7 @@ package hcache_test
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -135,14 +136,15 @@ func TestMemoryCache_Modify_Concurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 10000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			cache.Modify(context.Background(), "k1",
+			cache.Modify(context.Background(), "k1"+strconv.Itoa(i/10),
 				func(ctx context.Context, key string, old int) (*int, error) {
 					newVal := old + 1
 					value.Store(int64(newVal))
+					<-time.After(time.Millisecond)
 					return &newVal, nil
 				})
 		}()
