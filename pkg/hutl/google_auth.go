@@ -7,7 +7,6 @@ import (
 	"encoding/base32"
 	"fmt"
 	"strings"
-	"time"
 )
 
 // NewGoogleAuth 创建谷歌身份验证器
@@ -66,7 +65,7 @@ func (g *GoogleAuth) getCode(secret string, offset int64) int32 {
 		fmt.Println(err)
 		return 0
 	}
-	epochSeconds := time.Now().Unix() + offset
+	epochSeconds := NowTime().Unix() + offset
 	return int32(g.oneTimePassword(key, g.toBytes(epochSeconds/30)))
 }
 

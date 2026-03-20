@@ -27,7 +27,7 @@ func (f *fileWriter) Compare(call func(v1 Level, v2 Level) bool) {
 
 func newFileWriter(dir string, level Level) *fileWriter {
 	ret := &fileWriter{level: level, dir: dir}
-	ret.rotateFile(time.Now())
+	ret.rotateFile(*NowTime.Load())
 	return ret
 }
 
@@ -44,7 +44,7 @@ func (f *fileWriter) Write(level Level, p []byte) (n int, err error) {
 		return 0, err
 	}
 	if f.nbytes+uint64(len(p)) >= MaxSize {
-		if err := f.rotateFile(time.Now()); err != nil {
+		if err := f.rotateFile(*NowTime.Load()); err != nil {
 			return 0, err
 		}
 	}

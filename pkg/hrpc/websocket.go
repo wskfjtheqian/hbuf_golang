@@ -22,20 +22,8 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
-
-var now atomic.Pointer[time.Time]
-
-func init() {
-	t := time.Now()
-	now.Store(&t)
-	ticker := time.NewTicker(time.Second)
-	go func() {
-		for t = range ticker.C {
-			now.Store(&t)
-		}
-	}()
-}
 
 type rawMessage []byte
 
@@ -156,7 +144,7 @@ func (s *webSocket) run() {
 
 	go func() {
 		for {
-			err := s.conn.SetReadDeadline(now.Load().Add(s.pongWait))
+			err := s.conn.SetReadDeadline(hutl.NowTime().Add(s.pongWait))
 			if err != nil {
 				herror.PrintStack(err)
 				break

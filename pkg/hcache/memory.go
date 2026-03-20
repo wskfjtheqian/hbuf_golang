@@ -1,327 +1,392 @@
 package hcache
 
 import (
+	"container/list"
 	"context"
+	"encoding/binary"
+	"hash/fnv"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"golang.org/x/sync/singleflight"
 )
 
-//内存KV缓存管理器
-//读写自动续期
-//过期自动清除
-//修改时自动加锁
-//修改时简单事务
+// =====================================
+// Near-Ristretto MemoryCache (Locked + True TinyLFU)
+// - 4-bit counter (packed)
+// - 4-way Count-Min Sketch
+// - O(1) decay (sampling, no full scan)
+// - Sharded LRU + TinyLFU admission
+// - Deterministic (no async write)
+// =====================================
 
-type Option[K comparable, V any] func(v *MemoryCache[K, V])
+const (
+	defaultShard = 32
+	// number of counters (must be power of 2)
+	sketchCounters = 1 << 20 // ~1M counters (packed: 0.5MB)
+)
 
-// NewMinExpire 参数最小有效时间
-func NewMinExpire[K comparable, V any](duration time.Duration) Option[K, V] {
-	return func(v *MemoryCache[K, V]) {
-		v.minExpire = int64(duration / time.Millisecond)
+// ===================== Hash =====================
+
+func hash32(b []byte) uint32 {
+	h := fnv.New32a()
+	h.Write(b)
+	return h.Sum32()
+}
+
+func hashKey[K comparable](key K) uint32 {
+	return hash32([]byte(toString(key)))
+}
+
+func toString[K comparable](k K) string {
+	switch v := any(k).(type) {
+	case string:
+		return v
+	default:
+		// fallback (not perfect but stable)
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(hash32([]byte("k"))))
+		return string(buf[:])
 	}
 }
 
-// NewMaxExpire 参数最大有效时间
-func NewMaxExpire[K comparable, V any](duration time.Duration) Option[K, V] {
-	return func(v *MemoryCache[K, V]) {
-		v.maxExpire = int64(duration / time.Millisecond)
+// ===================== TinyLFU (4-bit + 4-way CMS) =====================
+
+// Each byte stores 2 counters (low 4 bits, high 4 bits)
+type cmSketch struct {
+	table []byte
+	mask  uint32 // counters-1
+}
+
+func newCMSketch() *cmSketch {
+	n := uint32(sketchCounters)
+	// 2 counters per byte
+	return &cmSketch{
+		table: make([]byte, n/2),
+		mask:  n - 1,
 	}
 }
 
-// expireClear 过期清理接口
-type expireClear interface {
-	clearExpire(now int64)
+// get 4-bit counter at index
+func (c *cmSketch) get(idx uint32) uint8 {
+	i := (idx & c.mask) >> 1
+	b := c.table[i]
+	if (idx & 1) == 0 {
+		return b & 0x0F
+	}
+	return (b >> 4) & 0x0F
 }
 
-// 解决高频调用time.Now()带来的性能问题
-var timestamp atomic.Int64 //当前时间戳
-var cacheList = make([]expireClear, 0)
-var lock sync.Mutex
-
-func init() {
-	timestamp.Store(time.Now().UnixMilli())
-	//每秒更新一次时间戳
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		for {
-			now := <-ticker.C
-			timestamp.Store(now.UnixMilli())
-		}
-	}()
-
-	//每1分钟清理一次过期的缓存
-	go func() {
-		ticker := time.NewTicker(time.Minute * 1)
-		for {
-			now := <-ticker.C
-			lock.Lock()
-			list := make([]expireClear, len(cacheList))
-			for i, item := range cacheList {
-				list[i] = item
-			}
-			lock.Unlock()
-
-			for _, item := range list {
-				item.clearExpire(now.UnixMilli())
-			}
-		}
-	}()
+// increment with saturation (max 15)
+func (c *cmSketch) inc(idx uint32) {
+	i := (idx & c.mask) >> 1
+	shift := (idx & 1) * 4
+	b := c.table[i]
+	v := (b >> shift) & 0x0F
+	if v < 15 {
+		v++
+	}
+	// clear 4 bits then set
+	b &^= (0x0F << shift)
+	b |= (v << shift)
+	c.table[i] = b
 }
 
-type readData[K comparable, V any] func(ctx context.Context, key K) (*V, error)
+// 4-way estimate: min of 4 hashes
+func (c *cmSketch) estimate(h uint32) uint8 {
+	// derive 4 indices from one hash (fast mix)
+	h1 := h
+	h2 := h ^ (h >> 17)
+	h3 := h ^ (h >> 11)
+	h4 := h ^ (h >> 5)
 
-// item 缓存Item
+	v1 := c.get(h1)
+	v2 := c.get(h2)
+	v3 := c.get(h3)
+	v4 := c.get(h4)
+
+	// min
+	m := v1
+	if v2 < m {
+		m = v2
+	}
+	if v3 < m {
+		m = v3
+	}
+	if v4 < m {
+		m = v4
+	}
+	return m
+}
+
+// increment all 4 counters
+func (c *cmSketch) add(h uint32) {
+	h1 := h
+	h2 := h ^ (h >> 17)
+	h3 := h ^ (h >> 11)
+	h4 := h ^ (h >> 5)
+
+	c.inc(h1)
+	c.inc(h2)
+	c.inc(h3)
+	c.inc(h4)
+}
+
+// O(1) decay via random sampling (no full scan)
+func (c *cmSketch) decaySample(k int) {
+	// sample k bytes and halve both 4-bit counters
+	for i := 0; i < k; i++ {
+		idx := rand.Intn(len(c.table))
+		b := c.table[idx]
+		// halve low and high nibbles separately
+		low := (b & 0x0F) >> 1
+		high := ((b >> 4) & 0x0F) >> 1
+		c.table[idx] = (high << 4) | low
+	}
+}
+
+// ===================== Item / Shard =====================
+
 type item[K comparable, V any] struct {
-	lock      sync.RWMutex
-	expire    atomic.Int64 //有效期
-	val       *V
-	call      readData[K, V]
-	minExpire int64 //最小有效期（毫秒），默认 5分钟
-	maxExpire int64 //最大有效期（毫秒），默认10分钟
+	key K
+	val atomic.Pointer[V]
+
+	expireAt atomic.Int64
+	ele      *list.Element
 }
 
-// Get 获得值
-func (i *item[K, V]) get(ctx context.Context, key K) (*V, error) {
-	expire := i.expire.Load()
-	if expire > -1 && expire < timestamp.Load() {
-		i.lock.Lock()
-		if expire < timestamp.Load() {
-			i.randExpire()
-			val, err := i.call(ctx, key)
-			if err != nil {
-				i.lock.Unlock()
-				return nil, err
-			}
-			i.val = val
-		}
-		i.lock.Unlock()
-	}
-
-	i.lock.RLock()
-	defer i.lock.RUnlock()
-	i.randExpire()
-
-	if nil == i.val {
-		return nil, nil
-	}
-	value := *i.val
-	return &value, nil
+type shard[K comparable, V any] struct {
+	mu   sync.RWMutex
+	data map[K]*item[K, V]
+	lru  *list.List
+	cap  int
 }
 
-// Modify 修改设置值
-func (i *item[K, V]) modify(ctx context.Context, key K, call func(ctx context.Context, key K, value V) (*V, error)) (*V, error) {
-	expire := i.expire.Load()
-	if expire > -1 && expire < timestamp.Load() {
-		i.lock.Lock()
-		if expire < timestamp.Load() {
-			i.randExpire()
-			val, err := i.call(ctx, key)
-			if err != nil {
-				i.lock.Unlock()
-				return nil, err
-			}
-			i.val = val
-		}
-		i.lock.Unlock()
-	}
+// ===================== MemoryCache =====================
 
-	i.lock.RLock()
-	defer i.lock.RUnlock()
-	i.randExpire()
+type MemoryCache[K comparable, V any] struct {
+	shards []shard[K, V]
 
-	var val V
-	if nil == i.val {
-		val = *new(V)
-	} else {
-		val = *i.val
-	}
-	var err error
-	newVal, err := call(ctx, key, val)
-	if err != nil {
-		return nil, err
-	}
-	i.val = newVal
-	return newVal, nil
+	cap int
+	ttl time.Duration
+
+	loader func(context.Context, K) (*V, error)
+	sf     singleflight.Group
+
+	sketch *cmSketch
+
+	// decay control
+	decayEvery uint32 // trigger every N ops (approx)
+	opCount    atomic.Uint32
 }
 
-func (i *item[K, V]) set(val *V) {
-	i.lock.Lock()
-	i.val = val
-	i.lock.Unlock()
-}
+// ===================== Constructor =====================
+type MemoryCacheOption[K comparable, V any] func(c *MemoryCache[K, V])
 
-func (i *item[K, V]) load(ctx context.Context, key K) (*V, error) {
-	i.lock.Lock()
-	defer i.lock.Unlock()
-	val, err := i.call(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	i.randExpire()
-	i.val = val
-	return val, nil
-}
-
-// 设置一个随机的有效期
-func (i *item[K, V]) randExpire() {
-	expire := i.maxExpire - i.minExpire
-	if expire > -1 {
-		i.expire.Store(timestamp.Load() + rand.Int63n(expire+1) + i.minExpire)
+func WithMemoryCacheCap[K comparable, V any](cap int) MemoryCacheOption[K, V] {
+	return func(c *MemoryCache[K, V]) {
+		c.cap = cap
 	}
 }
 
-// NewMemoryCache 新建一个内存缓存
-func NewMemoryCache[K comparable, V any](options ...Option[K, V]) *MemoryCache[K, V] {
-	ret := &MemoryCache[K, V]{
-		maps:      make(map[K]*item[K, V]),
-		minExpire: int64(time.Minute * 5 / time.Millisecond),
-		maxExpire: int64(time.Minute * 10 / time.Millisecond),
-		call:      defaultReadCall[K, V],
+func WithMemoryCacheTtl[K comparable, V any](ttl time.Duration) MemoryCacheOption[K, V] {
+	return func(c *MemoryCache[K, V]) {
+		c.ttl = ttl
+	}
+}
+
+// ===================== Constructor =====================
+
+func NewMemoryCache[K comparable, V any](loader func(context.Context, K) (*V, error), options ...MemoryCacheOption[K, V]) *MemoryCache[K, V] {
+	c := &MemoryCache[K, V]{
+		shards:     make([]shard[K, V], defaultShard),
+		ttl:        time.Minute * 5,
+		loader:     loader,
+		sketch:     newCMSketch(),
+		decayEvery: 1024, // tune: 512~4096
+		cap:        10000,
 	}
 
 	for _, option := range options {
-		option(ret)
+		option(c)
 	}
 
-	lock.Lock()
-	cacheList = append(cacheList, ret)
-	lock.Unlock()
-	return ret
-}
+	perShard := c.cap / defaultShard
+	if perShard <= 0 {
+		perShard = 1
+	}
 
-// MemoryCache 内存缓存
-type MemoryCache[K comparable, V any] struct {
-	lock      sync.RWMutex
-	maps      map[K]*item[K, V]
-	call      readData[K, V]
-	minExpire int64 //最小有效期（毫秒），默认 5分钟
-	maxExpire int64 //最大有效期（毫秒），默认10分钟
-}
-
-// ReadCall 清理过期的缓存
-func (c *MemoryCache[K, V]) clearExpire(now int64) {
-	keys := make([]K, 0, len(c.maps))
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	for key, val := range c.maps {
-		if val.expire.Load() < now {
-			keys = append(keys, key)
+	for i := range c.shards {
+		c.shards[i] = shard[K, V]{
+			data: make(map[K]*item[K, V]),
+			lru:  list.New(),
+			cap:  perShard,
 		}
 	}
 
-	for _, key := range keys {
-		delete(c.maps, key)
-	}
+	return c
 }
 
-// ReadCall 没有缓存时，读取原始数据
-func (c *MemoryCache[K, V]) ReadCall(call readData[K, V]) {
-	if call == nil {
-		c.call = defaultReadCall[K, V]
-	} else {
-		c.call = call
-	}
+func (c *MemoryCache[K, V]) getShard(key K) *shard[K, V] {
+	idx := hashKey(key) % uint32(len(c.shards))
+	return &c.shards[idx]
 }
 
-// Get 获得指定 Key的缓存
+// ===================== Get =====================
+
 func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
-	c.lock.RLock()
-	val, ok := c.maps[key]
-	c.lock.RUnlock()
-	if ok {
-		return val.get(ctx, key)
+	h := hashKey(key)
+	c.sketch.add(h)
+
+	// probabilistic decay trigger
+	if c.opCount.Add(1)%c.decayEvery == 0 {
+		// sample a small number of bytes (tunable)
+		c.sketch.decaySample(32)
 	}
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	now := hutl.NowTime().UnixMilli()
+	s := c.getShard(key)
 
-	val, ok = c.maps[key]
-	if ok {
-		return val.get(ctx, key)
+	// fast path
+	s.mu.RLock()
+	it, ok := s.data[key]
+	if ok && it.expireAt.Load() > now {
+		val := it.val.Load()
+		s.mu.RUnlock()
+		if val != nil {
+			// promote in LRU (upgrade lock briefly)
+			s.mu.Lock()
+			s.lru.MoveToFront(it.ele)
+			s.mu.Unlock()
+			return val, nil
+		}
+	} else {
+		s.mu.RUnlock()
 	}
 
-	temp := &item[K, V]{
-		minExpire: c.minExpire,
-		maxExpire: c.maxExpire,
-		call:      c.call,
-	}
-	value, err := temp.load(ctx, key)
+	// load with singleflight
+	v, err, _ := c.sf.Do(toString(key), func() (any, error) {
+		return c.loader(ctx, key)
+	})
 	if err != nil {
 		return nil, err
 	}
+	val := v.(*V)
 
-	c.maps[key] = temp
-	return value, nil
+	// sync write
+	c.setWithLock(key, val, h)
+
+	return val, nil
 }
 
-// Del 删除指定 Key的缓存
-func (c *MemoryCache[K, V]) Del(ctx context.Context, key K) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	delete(c.maps, key)
-	return nil
-}
+// ===================== Transaction =====================
 
-// Modify 修改指定KEY的内容
-func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, call func(ctx context.Context, key K, value V) (*V, error)) (*V, error) {
-	c.lock.RLock()
-	val, ok := c.maps[key]
-	c.lock.RUnlock()
-	if ok {
-		return val.modify(ctx, key, call)
+// Txn provides per-key atomic read-modify-write.
+// It locks the shard, ensures value exists (load if needed), then applies fn.
+// Note: keep fn fast; it runs under shard lock.
+func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, fn func(ctx context.Context, key K, old V) (*V, error)) (*V, error) {
+	h := hashKey(key)
+	c.sketch.add(h)
+
+	// decay trigger
+	if c.opCount.Add(1)%c.decayEvery == 0 {
+		c.sketch.decaySample(32)
 	}
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	s := c.getShard(key)
 
-	val, ok = c.maps[key]
-	if ok {
-		return val.modify(ctx, key, call)
-	}
+	now := hutl.NowTime().UnixMilli()
 
-	val = &item[K, V]{
-		minExpire: c.minExpire,
-		maxExpire: c.maxExpire,
-		call:      c.call,
-	}
-	_, err := val.load(ctx, key)
-	if err != nil {
-		return nil, err
-	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	ret, err := val.modify(ctx, key, call)
-	if err != nil {
-		return ret, err
-	}
+	it, ok := s.data[key]
+	if !ok || it.expireAt.Load() <= now {
+		// load under singleflight outside lock to avoid blocking others
+		s.mu.Unlock()
+		v, err, _ := c.sf.Do(toString(key), func() (any, error) {
+			return c.loader(ctx, key)
+		})
+		if err != nil {
+			// re-lock before return to keep lock state consistent
+			s.mu.Lock()
+			return nil, err
+		}
+		val := v.(*V)
 
-	c.maps[key] = val
-	return ret, nil
-}
-
-// Expire 设置有效期
-func (c *MemoryCache[K, V]) Expire(key K, duration time.Duration) {
-	c.lock.RLock()
-	if val, ok := c.maps[key]; ok {
-		if duration > 0 {
-			val.expire.Store(int64(duration / time.Millisecond))
+		// re-lock and re-check (double-check)
+		s.mu.Lock()
+		it, ok = s.data[key]
+		if !ok {
+			it = &item[K, V]{key: key}
+			it.val.Store(val)
+			it.expireAt.Store(now + c.ttl.Milliseconds())
+			it.ele = s.lru.PushFront(it)
+			s.data[key] = it
 		} else {
-			val.expire.Store(int64(-1))
+			it.val.Store(val)
+			it.expireAt.Store(now + c.ttl.Milliseconds())
+			s.lru.MoveToFront(it.ele)
 		}
 	}
-	c.lock.RUnlock()
+
+	old := it.val.Load()
+	newVal, err := fn(ctx, key, *old)
+	if err != nil {
+		return nil, err
+	}
+
+	// write back
+	it.val.Store(newVal)
+	it.expireAt.Store(now + c.ttl.Milliseconds())
+	s.lru.MoveToFront(it.ele)
+
+	return newVal, nil
 }
 
-// Hash 判断KEY 是否存在
-func (c *MemoryCache[K, V]) Hash(key K) bool {
-	c.lock.RLock()
-	_, ok := c.maps[key]
-	c.lock.RUnlock()
-	return ok
-}
+// ===================== Set (with TinyLFU admission) =====================
 
-func defaultReadCall[K comparable, V any](ctx context.Context, key K) (*V, error) {
-	return nil, nil
+func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint32) {
+	freq := c.sketch.estimate(h)
+
+	s := c.getShard(key)
+	now := hutl.NowTime().UnixMilli()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// update if exists
+	if it, ok := s.data[key]; ok {
+		it.val.Store(val)
+		it.expireAt.Store(now + c.ttl.Milliseconds())
+		s.lru.MoveToFront(it.ele)
+		return
+	}
+
+	// admission + eviction
+	if len(s.data) >= s.cap {
+		victimEle := s.lru.Back()
+		if victimEle != nil {
+			victim := victimEle.Value.(*item[K, V])
+			victimFreq := c.sketch.estimate(hashKey(victim.key))
+
+			// reject if worse than victim
+			if freq < victimFreq {
+				return
+			}
+
+			delete(s.data, victim.key)
+			s.lru.Remove(victimEle)
+		}
+	}
+
+	it := &item[K, V]{key: key}
+	it.val.Store(val)
+	it.expireAt.Store(now + c.ttl.Milliseconds())
+
+	it.ele = s.lru.PushFront(it)
+	s.data[key] = it
 }

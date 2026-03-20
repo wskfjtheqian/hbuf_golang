@@ -140,7 +140,7 @@ func NewEngine() *Engine {
 
 // 执行单个请求
 func (e *Engine) executeRequest(ctx context.Context, api API) {
-	start := time.Now()
+	start := hutl.NowTime()
 
 	// 记录请求开始时间（用于计算TPS）
 	e.requestTimesMu.Lock()
@@ -182,7 +182,7 @@ func (e *Engine) calculateCurrentTPS() float64 {
 		return 0
 	}
 
-	now := time.Now()
+	now := hutl.NowTime()
 	cutoff := now.Add(-e.tpsWindowSize)
 
 	// 统计窗口内的请求数
@@ -290,14 +290,14 @@ func (e *Engine) runStressTest(ctx context.Context) {
 	// 启动统计协程
 	go e.collectStats(ctx)
 
-	endTime := time.Now().Add(e.config.Duration)
+	endTime := hutl.NowTime().Add(e.config.Duration)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if time.Now().After(endTime) {
+			if hutl.NowTime().After(endTime) {
 				return
 			}
 
@@ -354,7 +354,7 @@ func (e *Engine) collectStats(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	lastTime := time.Now()
+	lastTime := hutl.NowTime()
 	lastCount := int64(0)
 
 	for {

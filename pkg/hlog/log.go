@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var NowTime atomic.Pointer[time.Time]
+
 type Level int
 
 func (l Level) String() string {
@@ -152,7 +154,7 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 		return nil
 	}
 
-	now := time.Now() // get this early.
+	now := *NowTime.Load() // get this early.
 
 	// Load prefix and flag once so that their value is consistent within
 	// this call regardless of any concurrent changes to their value.

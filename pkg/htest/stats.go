@@ -41,7 +41,7 @@ func (s *Statistics) Reset() {
 	s.requestCount.Store(0)
 	s.windowSuccess.Store(0)
 	s.windowFailure.Store(0)
-	s.windowStart.Store(time.Now().Unix())
+	s.windowStart.Store(hutl.NowTime().Unix())
 
 	s.apiStatsMu.Lock()
 	s.apiStats = make(map[string]*apiStat)
@@ -92,7 +92,7 @@ type StatsSnapshot struct {
 }
 
 func (s *Statistics) GetSnapshot() StatsSnapshot {
-	now := time.Now().Unix()
+	now := hutl.NowTime().Unix()
 	windowStart := s.windowStart.Load()
 
 	// 每秒重置窗口
