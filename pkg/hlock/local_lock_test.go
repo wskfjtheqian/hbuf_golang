@@ -209,7 +209,7 @@ func TestWithTryLocalLock(t *testing.T) {
 		return "value", nil
 	}
 
-	val, err := hlock.WithTryLocalLock(ctx, key, fun)
+	val, err := hlock.WithLocalTry(ctx, key, fun)
 	if err != nil {
 		t.Errorf("expected nil error, got %v", err)
 	}
@@ -227,7 +227,7 @@ func TestWithTryLocalLockError(t *testing.T) {
 		return "", errors.New("function error")
 	}
 
-	_, err := hlock.WithTryLocalLock(ctx, key, fun)
+	_, err := hlock.WithLocalTry(ctx, key, fun)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
