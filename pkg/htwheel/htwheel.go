@@ -14,8 +14,8 @@ import (
 
 type Task struct {
 	id       uint64
-	fn       func()
-	expire   int64 // 纳秒时间戳
+	fn       func(uint64, time.Time)
+	expire   int64 // 计划执行时间（纳秒）
 	canceled int32
 }
 
@@ -159,7 +159,7 @@ func (tw *TimingWheel) Stop() {
 
 /*
 ========================
-   添加（支持覆盖）
+   添加（覆盖语义）
 ========================
 */
 
@@ -177,14 +177,19 @@ func (tw *TimingWheel) add(task *Task) {
 
 	delay := task.expire - now
 
+	// 立即执行
 	if delay < int64(tw.tick) {
-		tw.wp.Submit(task.fn)
+		execTime := time.Unix(0, task.expire)
+		tw.wp.Submit(func() {
+			task.fn(task.id, execTime)
+		})
 		return
 	}
 
 	ticks := delay / int64(tw.tick)
 	pos := (tw.cursor + int(ticks)) % tw.size
 
+	// 多级时间轮
 	if ticks >= int64(tw.size) {
 		if tw.overflow == nil {
 			tw.overflow = NewTimingWheel(
@@ -205,7 +210,7 @@ func (tw *TimingWheel) add(task *Task) {
 
 /*
 ========================
-   Tick（含回流）
+   Tick（执行 + 回流）
 ========================
 */
 
@@ -221,9 +226,16 @@ func (tw *TimingWheel) onTick(now int64) {
 		}
 
 		if task.expire <= now {
-			tw.wp.Submit(task.fn)
+
+			// ✅ 使用 expire 作为执行时间
+			execTime := time.Unix(0, task.expire)
+
+			tw.wp.Submit(func() {
+				task.fn(task.id, execTime)
+			})
+
 		} else {
-			// 未到期 → 重新分配（关键）
+			// 未到期重新调度
 			tw.add(task)
 		}
 
@@ -268,7 +280,7 @@ func (tw *TimingWheel) cancel(id uint64) {
 
 /*
 ========================
-   查询能力（新增核心）
+   查询能力
 ========================
 */
 
@@ -299,7 +311,13 @@ func NewScheduler() *Scheduler {
 	return &Scheduler{tw: tw, wp: wp}
 }
 
-func (s *Scheduler) AfterFunc(id uint64, t time.Time, fn func()) {
+/*
+========================
+   API
+========================
+*/
+
+func (s *Scheduler) Schedule(id uint64, t time.Time, fn func(uint64, time.Time)) {
 	task := &Task{
 		id:     id,
 		fn:     fn,
@@ -308,17 +326,6 @@ func (s *Scheduler) AfterFunc(id uint64, t time.Time, fn func()) {
 	s.tw.addCh <- task
 }
 
-func (s *Scheduler) Cancel(id uint64) {
-	s.tw.cancelCh <- id
-}
-
-/*
-========================
-   新增 API
-========================
-*/
-
-// Update ：只更新 delay，不改 fn
 func (s *Scheduler) Update(id uint64, t time.Time) bool {
 	task, ok := s.tw.get(id)
 	if !ok {
@@ -335,12 +342,10 @@ func (s *Scheduler) Update(id uint64, t time.Time) bool {
 	return true
 }
 
-// Get ：查询任务
 func (s *Scheduler) Get(id uint64) (*Task, bool) {
 	return s.tw.get(id)
 }
 
-// TTL ：剩余时间
 func (s *Scheduler) TTL(id uint64) (time.Duration, bool) {
 	task, ok := s.tw.get(id)
 	if !ok {
@@ -352,6 +357,10 @@ func (s *Scheduler) TTL(id uint64) (time.Duration, bool) {
 		return 0, false
 	}
 	return ttl, true
+}
+
+func (s *Scheduler) Cancel(id uint64) {
+	s.tw.cancelCh <- id
 }
 
 func (s *Scheduler) Stop() {

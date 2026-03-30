@@ -15,7 +15,7 @@ func TestHtWheel(t *testing.T) {
 	fmt.Println("start:", time.Now())
 
 	// 添加任务
-	s.AfterFunc(1, hutl.NowTime().Add(5*time.Second), func() {
+	s.Schedule(1, hutl.NowTime().Add(5*time.Second), func(id uint64, t time.Time) {
 		fmt.Println("task1 executed:", time.Now())
 	})
 
