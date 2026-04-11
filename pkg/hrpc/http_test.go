@@ -399,7 +399,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 		}
 	})
 
-	rpcServer := hrpc.NewServer()
+	rpcServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 	RegisterHbufService(rpcServer, &TestHbufService{})
 
 	server := hrpc.NewHttpServer("/rpc/", rpcServer)
@@ -409,7 +409,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 	go http.ListenAndServe(":8080", mux)
 
 	client := hrpc.NewHttpClient("http://localhost:8080/rpc")
-	rpcClient := hrpc.NewClient(client.Request)
+	rpcClient := hrpc.NewClient(client.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
 	testClient := NewHbufServiceClient(rpcClient)
 
 	b.Run("HRPC_HTTP", func(b *testing.B) {
@@ -424,17 +424,17 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 		}
 	})
 
-	rpcServer1 := hrpc.NewServer()
+	rpcServer1 := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 	RegisterHbufService(rpcServer1, &TestHbufService{})
 
 	server1 := hrpc.NewHttpServer("/rpc/", rpcServer1)
 
 	mux1 := http.NewServeMux()
 	mux1.Handle("/rpc/", server1)
-	go http.ListenAndServeTLS(":8081", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux1)
+	go http.ListenAndServeTLS(":8081", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux1)
 
 	client1 := hrpc.NewHttpClient("https://localhost:8081/rpc")
-	rpcClient1 := hrpc.NewClient(client1.Request)
+	rpcClient1 := hrpc.NewClient(client1.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
 	testClient1 := NewHbufServiceClient(rpcClient1)
 
 	b.Run("HRPC_HTTPS", func(b *testing.B) {
@@ -452,13 +452,15 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 	rpcServer2 := hrpc.NewServer()
 	RegisterHbufService(rpcServer2, &TestHbufService{})
 
-	server2 := hrpc.NewWebSocketServer(rpcServer2.Response)
+	server2 := hrpc.NewWebSocketServer(rpcServer2.Response, hrpc.WithWebSocketServerEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketServerDecode(hrpc.NewHBufDecode()))
 
 	mux2 := http.NewServeMux()
-	mux2.Handle("/socket", server2)
+	mux2.HandleFunc("/socket", func(writer http.ResponseWriter, request *http.Request) {
+		server2.ServeHTTP(writer, request, "12", nil, nil)
+	})
 	go http.ListenAndServe(":8084", mux2)
 
-	client2 := hrpc.NewWebSocketClient("ws://localhost:8084/socketMap", nil)
+	client2 := hrpc.NewWebSocketClient("ws://localhost:8084/socket", nil, hrpc.WithWebSocketClientEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketClientDecode(hrpc.NewHBufDecode()))
 
 	err := client2.Connect(context.Background())
 	if err != nil {
@@ -485,10 +487,12 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 	server3 := hrpc.NewWebSocketServer(rpcServer3.Response)
 
 	mux3 := http.NewServeMux()
-	mux3.Handle("/socket", server3)
-	go http.ListenAndServeTLS(":8085", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux3)
+	mux3.HandleFunc("/socket", func(writer http.ResponseWriter, request *http.Request) {
+		server3.ServeHTTP(writer, request, "12", nil, nil)
+	})
+	go http.ListenAndServeTLS(":8085", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux3)
 
-	client3 := hrpc.NewWebSocketClient("wss://localhost:8085/socketMap", nil)
+	client3 := hrpc.NewWebSocketClient("wss://localhost:8085/socket", nil)
 
 	err = client3.Connect(context.Background())
 	if err != nil {
@@ -549,7 +553,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 		}
 	})
 
-	go http.ListenAndServeTLS(":8083", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	go http.ListenAndServeTLS(":8083", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := &HbufRequest{}
 		err := json.NewDecoder(r.Body).Decode(req)
 		if err != nil {
@@ -775,7 +779,8 @@ func Test_Concurrency(t *testing.T) {
 	RegisterHbufService(hRpcServer, hrpcService)
 	mux := http.NewServeMux()
 	mux.Handle("/rpc/", hrpc.NewHttpServer("/rpc/", hRpcServer))
-	go http.ListenAndServeTLS(":8081", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux)
+
+	go http.ListenAndServeTLS(":8081", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux)
 
 	httpClient := hrpc.NewHttpClient("https://localhost:8081/rpc")
 	rpcClient := hrpc.NewClient(httpClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
@@ -807,17 +812,19 @@ func Test_Concurrency(t *testing.T) {
 	wg1.Wait()
 	t.Log("HRPC_HTTP concurrency count: per second ", hrpcService.count.Load()/int32(timeLength))
 
-	func() {
+	{
 		// 测试 HRPC_WS 并发性能
 		wsService := &HbufServiceConcurrency{}
 		rpcServer3 := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 		RegisterHbufService(rpcServer3, wsService)
 
-		wsServer := hrpc.NewWebSocketServer(rpcServer3.Response)
+		wsServer := hrpc.NewWebSocketServer(rpcServer3.Response, hrpc.WithWebSocketServerEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketServerDecode(hrpc.NewHBufDecode()))
 
 		mux := http.NewServeMux()
-		mux.Handle("/socket", wsServer)
-		go http.ListenAndServeTLS(":8082", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.crt", "E:\\develop\\hbuf\\hbuf_golang\\pkg\\rpc\\server.key", mux)
+		mux.HandleFunc("/socket", func(writer http.ResponseWriter, request *http.Request) {
+			wsServer.ServeHTTP(writer, request, "12", nil, nil)
+		})
+		go http.ListenAndServeTLS(":8082", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux)
 
 		timeLength := 10
 		var wg sync.WaitGroup
@@ -825,7 +832,7 @@ func Test_Concurrency(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				wsClient := hrpc.NewWebSocketClient("wss://localhost:8082/socketMap", nil)
+				wsClient := hrpc.NewWebSocketClient("wss://localhost:8082/socket", nil, hrpc.WithWebSocketClientEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketClientDecode(hrpc.NewHBufDecode()))
 				wsRpcClient := hrpc.NewClient(wsClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
 				wsTestClient := NewHbufServiceClient(wsRpcClient)
 				err := wsClient.Connect(context.Background())
@@ -860,6 +867,6 @@ func Test_Concurrency(t *testing.T) {
 		}
 		wg.Wait()
 		t.Log("HRPC_WS concurrency count: per second ", wsService.count.Load()/int32(timeLength))
-	}()
+	}
 
 }
