@@ -24,6 +24,7 @@ func (d *DBCache) Lock(ctx context.Context, key string) error {
 
 	return nil
 }
+
 func (d *DBCache) Unlock(ctx context.Context, key string) error {
 
 	return nil
