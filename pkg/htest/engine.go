@@ -17,12 +17,16 @@ import (
 )
 
 func NewT(t *testing.T) *T {
-	return &T{T: t}
+	return &T{
+		Context: context.TODO(),
+		T:       t,
+	}
 }
 
 type T struct {
 	T       *testing.T
 	success bool
+	context.Context
 }
 
 func (t *T) Call(info any, err error) {
@@ -61,6 +65,17 @@ func (t *T) Error(err error) {
 			return
 		}
 		t.T.Error(string(marshal))
+	}
+}
+
+func (t *T) Log(err error) {
+	if t.T != nil {
+		marshal, err := json.MarshalIndent(err, "", "\t")
+		if err != nil {
+			t.T.Log(err)
+			return
+		}
+		t.T.Log(string(marshal))
 	}
 }
 
@@ -112,8 +127,9 @@ type Engine struct {
 	clientPool sync.Pool
 
 	// 调试模式
-	debugMode bool
-	logger    *log.Logger
+	debugMode   bool
+	logger      *log.Logger
+	WithContext func(ctx context.Context) context.Context
 }
 
 func NewEngine() *Engine {
@@ -160,8 +176,14 @@ func (e *Engine) executeRequest(ctx context.Context, api API) {
 
 	client := e.clientPool.Get().(*http.Client)
 	defer e.clientPool.Put(client)
+	if e.WithContext != nil {
+		ctx = e.WithContext(ctx)
+	}
 
-	t := &T{}
+	t := &T{
+		Context: ctx,
+	}
+
 	api.method(t)
 
 	latency := time.Since(start)
