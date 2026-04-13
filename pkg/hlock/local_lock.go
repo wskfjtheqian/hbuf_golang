@@ -4,7 +4,6 @@ import (
 	"context"
 	"hash/fnv"
 	"sync"
-	"sync/atomic"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
@@ -66,14 +65,11 @@ func NewLocalLock(key string) Locker {
 }
 
 // =========================
-// 锁实现（无重入）
+// 锁实现
 // =========================
 
 type localLock struct {
-	mu sync.Mutex
-
-	ref atomic.Int64
-
+	mu    sync.Mutex
 	key   string
 	shard *shard
 }
@@ -83,7 +79,6 @@ type localLock struct {
 // =========================
 
 func (l *localLock) Lock(ctx context.Context) error {
-	l.ref.Add(1)
 	l.mu.Lock()
 	return nil
 }
@@ -94,18 +89,17 @@ func (l *localLock) Lock(ctx context.Context) error {
 
 func (l *localLock) Unlock(ctx context.Context) error {
 	l.mu.Unlock()
+	s := l.shard
 
-	if l.ref.Add(-1) == 0 {
-		s := l.shard
+	// 删除必须加写锁
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-		// 删除必须加写锁
-		s.mu.Lock()
-		// double check（防止误删新锁）
-		if cur, ok := s.m[l.key]; ok && cur == l {
-			delete(s.m, l.key)
-		}
-		s.mu.Unlock()
+	// double check（防止误删新锁）
+	if cur, ok := s.m[l.key]; ok && cur == l {
+		delete(s.m, l.key)
 	}
+
 	return nil
 }
 
@@ -114,13 +108,10 @@ func (l *localLock) Unlock(ctx context.Context) error {
 // =========================
 
 func (l *localLock) TryLock(ctx context.Context) (bool, error) {
-	l.ref.Add(1)
 
 	if l.mu.TryLock() {
 		return true, nil
 	}
-
-	l.ref.Add(-1)
 	return false, nil
 }
 

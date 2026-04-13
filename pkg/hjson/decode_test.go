@@ -2625,12 +2625,12 @@ func TestDecoderFilter(t *testing.T) {
 	tests := StringFilter{}
 	err := Unmarshal([]byte(test), &tests, "")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	marshal, err := Marshal(tests, "")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	t.Log(string(marshal))
@@ -2638,12 +2638,12 @@ func TestDecoderFilter(t *testing.T) {
 	tests = StringFilter{}
 	err = Unmarshal([]byte(test), &tests, "a")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	marshal, err = Marshal(tests, "")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	t.Log(string(marshal))
@@ -2651,12 +2651,12 @@ func TestDecoderFilter(t *testing.T) {
 	tests = StringFilter{}
 	err = Unmarshal([]byte(test), &tests, "b")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	marshal, err = Marshal(tests, "")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	t.Log(string(marshal))

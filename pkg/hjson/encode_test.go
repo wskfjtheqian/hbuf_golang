@@ -1234,21 +1234,21 @@ func TestEncoderFilter(t *testing.T) {
 	}
 	marshal, err := Marshal(tests, "")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	t.Log(string(marshal))
 
 	marshal, err = Marshal(tests, "a")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	t.Log(string(marshal))
 
 	marshal, err = Marshal(tests, "b")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Errorf("%s", err.Error())
 		return
 	}
 	t.Log(string(marshal))

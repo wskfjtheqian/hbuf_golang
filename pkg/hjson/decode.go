@@ -985,7 +985,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 			val, err := strconv.ParseInt(t, 10, 64)
 			if err != nil {
-				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into %v", item)
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
 			}
 			v.SetInt(val)
 		case reflect.Uint64:
@@ -995,7 +995,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 			val, err := strconv.ParseUint(t, 10, 64)
 			if err != nil {
-				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into %v", item)
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
 			}
 			v.SetUint(val)
 		case reflect.Float32, reflect.Float64:

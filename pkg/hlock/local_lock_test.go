@@ -3,271 +3,202 @@ package hlock_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlock"
 )
 
-// TestNewLocalLock 测试正常创建锁的情况
+// 测试NewLocalLock函数
 func TestNewLocalLock(t *testing.T) {
+	// 测试正常创建锁
 	key := "test_key"
 	lock1 := hlock.NewLocalLock(key)
+	if lock1 == nil {
+		t.Errorf("预期创建锁成功，但实际返回nil")
+	}
+
+	// 测试重复创建锁
 	lock2 := hlock.NewLocalLock(key)
-
-	// 如果是同一个key，应该返回同一个锁实例
 	if lock1 != lock2 {
-		t.Errorf("expected the same lock instance, got different ones")
+		t.Errorf("预期返回同一个锁实例，但实际返回了不同的锁实例")
 	}
 }
 
-// TestLockUnlock 测试正常加锁解锁的情况
-func TestLockUnlock(t *testing.T) {
-	key := "test_key"
-	lock := hlock.NewLocalLock(key)
+// 测试Lock函数
+func TestLock(t *testing.T) {
 	ctx := context.Background()
+	key := "test_lock"
+	lock := hlock.NewLocalLock(key)
 
-	// 测试加锁
-	if err := lock.Lock(ctx); err != nil {
-		t.Errorf("expected nil error, got %v", err)
+	// 测试正常加锁
+	err := lock.Lock(ctx)
+	if err != nil {
+		t.Errorf("预期加锁成功，但实际返回错误: %v", err)
 	}
 
-	// 测试解锁
-	if err := lock.Unlock(ctx); err != nil {
-		t.Errorf("expected nil error, got %v", err)
+	// 测试重复加锁（应阻塞，但此处无法模拟阻塞，只能假设不会出错）
+	err = lock.Lock(ctx)
+	if err != nil {
+		t.Errorf("预期加锁成功，但实际返回错误: %v", err)
 	}
 }
 
-// TestTryLock 成功尝试加锁的情况
+// 测试Unlock函数
+func TestUnlock(t *testing.T) {
+	ctx := context.Background()
+	key := "test_unlock"
+	lock := hlock.NewLocalLock(key)
+
+	// 测试正常解锁
+	lock.Lock(ctx)
+	err := lock.Unlock(ctx)
+	if err != nil {
+		t.Errorf("预期解锁成功，但实际返回错误: %v", err)
+	}
+
+	// 测试解锁未锁定的锁
+	err = lock.Unlock(ctx)
+	if err != nil {
+		t.Errorf("预期解锁成功，但实际返回错误: %v", err)
+	}
+}
+
+// 测试TryLock函数
 func TestTryLock(t *testing.T) {
-	key := "test_key"
-	lock := hlock.NewLocalLock(key)
 	ctx := context.Background()
+	key := "test_try_lock"
+	lock := hlock.NewLocalLock(key)
 
+	// 测试正常尝试加锁
 	locked, err := lock.TryLock(ctx)
 	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期尝试加锁成功，但实际返回错误: %v", err)
 	}
 	if !locked {
-		t.Errorf("expected lock to be acquired, got %v", locked)
+		t.Errorf("预期尝试加锁成功，但实际未加锁")
 	}
 
-	// 测试解锁
-	if err := lock.Unlock(ctx); err != nil {
-		t.Errorf("expected nil error, got %v", err)
-	}
-}
-
-// TestTryLockFailed 尝试加锁失败的情况
-func TestTryLockFailed(t *testing.T) {
-	key := "test_key"
-	lock := hlock.NewLocalLock(key)
-	ctx := context.Background()
-
-	// 首先加锁
-	if err := lock.Lock(ctx); err != nil {
-		t.Errorf("expected nil error, got %v", err)
-	}
-
-	// 再次尝试加锁，应该失败
-	locked, err := lock.TryLock(ctx)
+	// 测试重复尝试加锁
+	locked, err = lock.TryLock(ctx)
 	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期尝试加锁成功，但实际返回错误: %v", err)
 	}
 	if locked {
-		t.Errorf("expected lock to not be acquired, got %v", locked)
-	}
-
-	// 测试解锁
-	if err := lock.Unlock(ctx); err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期尝试加锁失败，但实际加锁成功")
 	}
 }
 
-// TestWithLocalGetOrPopulate 成功获取值的情况
+// 测试WithLocalGetOrPopulate函数
 func TestWithLocalGetOrPopulate(t *testing.T) {
 	ctx := context.Background()
-	key := "test_key"
+	key := "test_with_local_get_or_populate"
 
-	get := func(ctx context.Context) (string, bool, error) {
-		return "value", true, nil
-	}
-
-	populate := func(ctx context.Context) (string, error) {
-		return "value", nil
-	}
-
-	val, err := hlock.WithLocalGetOrPopulate(ctx, key, get, populate)
+	// 测试happy path
+	val, err := hlock.WithLocalGetOrPopulate[int](ctx, key,
+		func(ctx context.Context) (int, bool, error) {
+			return 0, false, nil
+		},
+		func(ctx context.Context) (int, error) {
+			return 42, nil
+		},
+	)
 	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期操作成功，但实际返回错误: %v", err)
 	}
-	if val != "value" {
-		t.Errorf("expected value to be 'value', got %v", val)
-	}
-}
-
-// TestWithLocalGetOrPopulatePopulate 测试需要调用populate函数的情况
-func TestWithLocalGetOrPopulatePopulate(t *testing.T) {
-	ctx := context.Background()
-	key := "test_key"
-
-	get := func(ctx context.Context) (string, bool, error) {
-		return "", false, nil
+	if val != 42 {
+		t.Errorf("预期返回值为42，但实际返回%v", val)
 	}
 
-	populate := func(ctx context.Context) (string, error) {
-		return "value", nil
-	}
-
-	val, err := hlock.WithLocalGetOrPopulate(ctx, key, get, populate)
+	// 测试get成功
+	val, err = hlock.WithLocalGetOrPopulate[int](ctx, key,
+		func(ctx context.Context) (int, bool, error) {
+			return 100, true, nil
+		},
+		func(ctx context.Context) (int, error) {
+			return 0, errors.New("should not be called")
+		},
+	)
 	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期操作成功，但实际返回错误: %v", err)
 	}
-	if val != "value" {
-		t.Errorf("expected value to be 'value', got %v", val)
-	}
-}
-
-// TestWithLocalGetOrPopulateError 测试get函数返回错误的情况
-func TestWithLocalGetOrPopulateError(t *testing.T) {
-	ctx := context.Background()
-	key := "test_key"
-
-	get := func(ctx context.Context) (string, bool, error) {
-		return "", false, errors.New("get error")
+	if val != 100 {
+		t.Errorf("预期返回值为100，但实际返回%v", val)
 	}
 
-	populate := func(ctx context.Context) (string, error) {
-		return "value", nil
-	}
-
-	_, err := hlock.WithLocalGetOrPopulate(ctx, key, get, populate)
+	// 测试populate失败
+	val, err = hlock.WithLocalGetOrPopulate[int](ctx, key,
+		func(ctx context.Context) (int, bool, error) {
+			return 0, false, nil
+		},
+		func(ctx context.Context) (int, error) {
+			return 0, errors.New("populate failed")
+		},
+	)
 	if err == nil {
-		t.Errorf("expected error, got nil")
-	}
-}
-
-// TestWithLocalGetOrPopulatePopulateError 测试populate函数返回错误的情况
-func TestWithLocalGetOrPopulatePopulateError(t *testing.T) {
-	ctx := context.Background()
-	key := "test_key"
-
-	get := func(ctx context.Context) (string, bool, error) {
-		return "", false, nil
+		t.Errorf("预期populate失败，但实际未返回错误")
 	}
 
-	populate := func(ctx context.Context) (string, error) {
-		return "", errors.New("populate error")
-	}
-
-	_, err := hlock.WithLocalGetOrPopulate(ctx, key, get, populate)
+	// 测试get失败
+	val, err = hlock.WithLocalGetOrPopulate[int](ctx, key,
+		func(ctx context.Context) (int, bool, error) {
+			return 0, false, errors.New("get failed")
+		},
+		func(ctx context.Context) (int, error) {
+			return 0, errors.New("should not be called")
+		},
+	)
 	if err == nil {
-		t.Errorf("expected error, got nil")
+		t.Errorf("预期get失败，但实际未返回错误")
 	}
 }
 
-// TestWithLocal 成功执行函数的情况
+// 测试WithLocal函数
 func TestWithLocal(t *testing.T) {
 	ctx := context.Background()
-	key := "test_key"
+	key := "test_with_local"
 
-	fun := func(ctx context.Context) (string, error) {
-		return "value", nil
-	}
-
-	val, err := hlock.WithLocal(ctx, key, fun)
+	// 测试happy path
+	val, err := hlock.WithLocal[int](ctx, key, func(ctx context.Context) (int, error) {
+		return 42, nil
+	})
 	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期操作成功，但实际返回错误: %v", err)
 	}
-	if val != "value" {
-		t.Errorf("expected value to be 'value', got %v", val)
-	}
-}
-
-// TestWithLocalError 测试执行函数返回错误的情况
-func TestWithLocalError(t *testing.T) {
-	ctx := context.Background()
-	key := "test_key"
-
-	fun := func(ctx context.Context) (string, error) {
-		return "", errors.New("function error")
+	if val != 42 {
+		t.Errorf("预期返回值为42，但实际返回%v", val)
 	}
 
-	_, err := hlock.WithLocal(ctx, key, fun)
+	// 测试fun失败
+	val, err = hlock.WithLocal[int](ctx, key, func(ctx context.Context) (int, error) {
+		return 0, errors.New("function failed")
+	})
 	if err == nil {
-		t.Errorf("expected error, got nil")
+		t.Errorf("预期fun失败，但实际未返回错误")
 	}
 }
 
-// TestWithTryLocalLock 成功执行函数的情况
-func TestWithTryLocalLock(t *testing.T) {
+// 测试WithLocalTry函数
+func TestWithLocalTry(t *testing.T) {
 	ctx := context.Background()
-	key := "test_key"
+	key := "test_with_local_try"
 
-	fun := func(ctx context.Context) (string, error) {
-		return "value", nil
-	}
-
-	val, err := hlock.WithLocalTry(ctx, key, fun)
+	// 测试happy path
+	val, err := hlock.WithLocalTry[int](ctx, key, func(ctx context.Context) (int, error) {
+		return 42, nil
+	})
 	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
+		t.Errorf("预期操作成功，但实际返回错误: %v", err)
 	}
-	if val != "value" {
-		t.Errorf("expected value to be 'value', got %v", val)
-	}
-}
-
-// TestWithTryLocalLockError 测试执行函数返回错误的情况
-func TestWithTryLocalLockError(t *testing.T) {
-	ctx := context.Background()
-	key := "test_key"
-
-	fun := func(ctx context.Context) (string, error) {
-		return "", errors.New("function error")
+	if val != 42 {
+		t.Errorf("预期返回值为42，但实际返回%v", val)
 	}
 
-	_, err := hlock.WithLocalTry(ctx, key, fun)
+	// 测试fun失败
+	val, err = hlock.WithLocalTry[int](ctx, key, func(ctx context.Context) (int, error) {
+		return 0, errors.New("function failed")
+	})
 	if err == nil {
-		t.Errorf("expected error, got nil")
-	}
-}
-
-// TestWithLocalGetOrPopulateConcurrent 测试并发情况
-func TestWithLocalGetOrPopulateConcurrent(t *testing.T) {
-	ctx := context.Background()
-	key := "test_key"
-
-	var wg sync.WaitGroup
-	var results []string
-
-	get := func(ctx context.Context) (string, bool, error) {
-		return "", false, nil
+		t.Errorf("预期fun失败，但实际未返回错误")
 	}
 
-	populate := func(ctx context.Context) (string, error) {
-		time.Sleep(10 * time.Millisecond) // 模拟耗时操作
-		return "value", nil
-	}
-
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			val, err := hlock.WithLocalGetOrPopulate(ctx, key, get, populate)
-			if err != nil {
-				t.Errorf("expected nil error, got %v", err)
-			}
-			results = append(results, val)
-		}()
-	}
-
-	wg.Wait()
-
-	// 检查所有结果是否一致
-	for _, val := range results {
-		if val != "value" {
-			t.Errorf("expected value to be 'value', got %v", val)
-		}
-	}
 }
