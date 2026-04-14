@@ -71,6 +71,14 @@ func (d *Context) GetCache() hcache.Cache {
 	return d.db.cache
 }
 
+func (d *Context) Clone(ctx context.Context, tableNameFunc func(ctx context.Context, name string) string) *Context {
+	return &Context{
+		Context:       ctx,
+		db:            d.db,
+		tableNameFunc: tableNameFunc,
+	}
+}
+
 // FromContext 从上下文中获取 Builder 连接
 func FromContext(ctx context.Context) (n *Context, ok bool) {
 	val := ctx.Value(contextType)
