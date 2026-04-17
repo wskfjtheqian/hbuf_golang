@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
@@ -22,9 +23,10 @@ type Http struct {
 	http   *http.Server
 	config Config
 
-	init   chan bool
-	isInit bool
-	log    *hlog.Logger
+	init        chan bool
+	isInit      bool
+	log         *hlog.Logger
+	builderPool sync.Pool
 }
 
 func NewHttp() *Http {
@@ -33,6 +35,11 @@ func NewHttp() *Http {
 	ret := &Http{
 		init: make(chan bool, 1),
 		log:  hlog.NewLogger("", hlog.LstdFlags),
+		builderPool: sync.Pool{
+			New: func() any {
+				return &strings.Builder{}
+			},
+		},
 	}
 	ret.mux.HandleFunc("/health", ret.health)
 	return ret
@@ -186,13 +193,36 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
 	old = time.Now().UnixMicro() - old
 	t := "[" + strconv.FormatFloat(float64(old)/1000, 'f', 3, 64) + "ms]"
-	if 200000 > old {
-		t = hutl.Yellow(t)
-	} else {
-		t = hutl.Red(t)
-	}
 
+	text := a.builderPool.Get().(*strings.Builder)
+	text.Reset()
+	defer a.builderPool.Put(text)
+
+	if 200000 > old {
+		text.WriteString(hutl.Yellow(t))
+	} else {
+		text.WriteString(hutl.Red(t))
+	}
 	//获得响应状态码
 	httpIP, _ := hip.GetHttpIP(request)
-	_ = a.log.Output(1, LogHTTP, fmt.Sprintln(t, httpIP, request.Method, request.Proto, w.status, hutl.Green(request.URL.String())))
+
+	text.WriteString(" ")
+	text.WriteString(t)
+
+	text.WriteString(" ")
+	text.WriteString(httpIP)
+
+	text.WriteString(" ")
+	text.WriteString(request.Method)
+
+	text.WriteString(" ")
+	text.WriteString(request.Proto)
+
+	text.WriteString(" ")
+	text.WriteString(strconv.Itoa(w.status))
+
+	text.WriteString(" ")
+	text.WriteString(hutl.Green(request.URL.String()))
+
+	_ = a.log.Output(1, LogHTTP, text.String())
 }

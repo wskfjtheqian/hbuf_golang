@@ -323,13 +323,18 @@ func (p *printLog) print() {
 		return
 	}
 	now := time.Now().UnixMicro() - p.now
+
+	text := strings.Builder{}
 	t := "[" + strconv.FormatFloat(float64(now)/1000, 'f', 3, 64) + "ms]"
 	if 200000 > now {
-		t = hutl.Yellow(t)
+		text.WriteString(hutl.Yellow(t))
 	} else {
-		t = hutl.Red(t)
+		text.WriteString(hutl.Red(t))
 	}
-	_ = hlog.Output(3, LogSQL, fmt.Sprintln(t, hutl.Blue("[Rows:"+strconv.FormatInt(*p.count, 10)+"] "), hutl.Green(p.builder.ToText())))
+	text.WriteString(hutl.Blue("[Rows:" + strconv.FormatInt(*p.count, 10) + "] "))
+	text.WriteString(hutl.Green(p.builder.ToText()))
+
+	_ = hlog.Output(3, LogSQL, text.String())
 }
 
 func newPrintLog(builder *Builder, count *int64) *printLog {

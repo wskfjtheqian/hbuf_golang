@@ -425,7 +425,7 @@ func (r *Server) Init(list ...string) {
 			}
 		}
 		return nil, nil
-	})(ctx, nil)
+	})(WithContext(ctx, "init", http.Header{}), nil)
 }
 
 //////////////////////////////////////////////////////
