@@ -202,7 +202,7 @@ func (d *DB) SetConfig(cfg *Config) error {
 	return nil
 }
 
-func (d *DB) NewMiddleware() hrpc.HandlerMiddleware {
+func (d *DB) NewMiddleware() hrpc.Middleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, d, nil), req)

@@ -105,7 +105,7 @@ type client struct {
 
 type Option func(*Service)
 
-func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
+func WithMiddleware(middlewares ...hrpc.Middleware) Option {
 	return func(s *Service) {
 		hrpc.WithServerMiddleware(middlewares...)(s.rpcServer)
 	}
@@ -608,7 +608,7 @@ func (s *Service) addLocalClient(install *ServerInfo) {
 	s.lock.Unlock()
 }
 
-func (s *Service) NewMiddleware() hrpc.HandlerMiddleware {
+func (s *Service) NewMiddleware() hrpc.Middleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, WithContextService(s)), req)

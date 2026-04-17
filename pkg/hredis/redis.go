@@ -147,7 +147,7 @@ func (r *Redis) SetConfig(cfg *Config) error {
 }
 
 // NewMiddleware 创建中间件
-func (r *Redis) NewMiddleware() hrpc.HandlerMiddleware {
+func (r *Redis) NewMiddleware() hrpc.Middleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, r), req)

@@ -41,8 +41,8 @@ type ResponseMiddleware func(next Response) Response
 // Handler 是用于处理RPC请求
 type Handler func(ctx context.Context, req any) (any, error)
 
-// HandlerMiddleware 用于对 Handler 进行中间件处理。
-type HandlerMiddleware func(next Handler) Handler
+// Middleware 用于对 Handler 进行中间件处理。
+type Middleware func(next Handler) Handler
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -286,7 +286,7 @@ type Init interface {
 type ServerOption func(*Server)
 
 // WithServerMiddleware 设置Handler中间件
-func WithServerMiddleware(middleware ...HandlerMiddleware) ServerOption {
+func WithServerMiddleware(middleware ...Middleware) ServerOption {
 	return func(s *Server) {
 		s.middleware = func(next Handler) Handler {
 			for i := len(middleware) - 1; i >= 0; i-- {
@@ -339,7 +339,7 @@ type Server struct {
 	methods    map[string]*Method
 	decode     Decoder
 	encode     Encoder
-	middleware HandlerMiddleware
+	middleware Middleware
 }
 
 // Register 注册方法
@@ -434,7 +434,7 @@ func (r *Server) Init(list ...string) {
 type ClientOption func(*Client)
 
 // WithClientMiddleware 设置Handler中间件
-func WithClientMiddleware(middleware ...HandlerMiddleware) ClientOption {
+func WithClientMiddleware(middleware ...Middleware) ClientOption {
 	return func(c *Client) {
 		c.middleware = func(next Handler) Handler {
 			for i := len(middleware) - 1; i >= 0; i-- {
@@ -481,7 +481,7 @@ type Client struct {
 	request    Request
 	decode     Decoder
 	encode     Encoder
-	middleware HandlerMiddleware
+	middleware Middleware
 }
 
 func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, tag string, request any, response any) (any, error) {

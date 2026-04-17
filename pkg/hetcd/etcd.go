@@ -184,7 +184,7 @@ func (e *Etcd) GetClient() (*clientv3.Client, error) {
 }
 
 // NewMiddleware 创建中间件
-func (e *Etcd) NewMiddleware() hrpc.HandlerMiddleware {
+func (e *Etcd) NewMiddleware() hrpc.Middleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, e), req)

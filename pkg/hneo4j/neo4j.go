@@ -98,7 +98,7 @@ func (n *Neo4j) SetConfig(cfg *Config) error {
 }
 
 // NewMiddleware 创建中间件
-func (n *Neo4j) NewMiddleware() hrpc.HandlerMiddleware {
+func (n *Neo4j) NewMiddleware() hrpc.Middleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, n), req)

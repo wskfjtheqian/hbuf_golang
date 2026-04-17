@@ -52,11 +52,38 @@ func FromContext(ctx context.Context) (n *Nats, ok bool) {
 }
 
 // //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+type Handler func(ctx context.Context, msg *nats.Msg) error
+
+type Middleware func(next Handler) Handler
+
 type Option func(*Nats)
 
-func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
+func WithMiddleware(middlewares ...hrpc.Middleware) Option {
 	return func(s *Nats) {
 		s.middleware = func(next hrpc.Handler) hrpc.Handler {
+			for i := len(middlewares) - 1; i >= 0; i-- {
+				next = middlewares[i](next)
+			}
+			return next
+		}
+	}
+}
+
+func WithPublishMiddleware(middlewares ...Middleware) Option {
+	return func(s *Nats) {
+		s.publishMiddleware = func(next Handler) Handler {
+			for i := len(middlewares) - 1; i >= 0; i-- {
+				next = middlewares[i](next)
+			}
+			return next
+		}
+	}
+}
+
+func WithSubscribeMiddleware(middlewares ...Middleware) Option {
+	return func(s *Nats) {
+		s.subscribeMiddleware = func(next Handler) Handler {
 			for i := len(middlewares) - 1; i >= 0; i-- {
 				next = middlewares[i](next)
 			}
@@ -74,6 +101,12 @@ func NewNats(options ...Option) *Nats {
 		middleware: func(next hrpc.Handler) hrpc.Handler {
 			return next
 		},
+		publishMiddleware: func(next Handler) Handler {
+			return next
+		},
+		subscribeMiddleware: func(next Handler) Handler {
+			return next
+		},
 	}
 	for _, opt := range options {
 		opt(ret)
@@ -83,17 +116,19 @@ func NewNats(options ...Option) *Nats {
 
 // Nats 定义了 NATS 的连接
 type Nats struct {
-	conn       atomic.Pointer[nats.Conn]
-	js         atomic.Pointer[jetstream.JetStream]
-	stream     map[string]struct{}
-	lock       sync.RWMutex
-	cfg        *Config
-	ackWait    time.Duration // 未返回ack 30秒后重发
-	maxDeliver int           //	最大重试发送次数
-	ServerName string
-	Version    string
-	config     *Config
-	middleware func(next hrpc.Handler) hrpc.Handler
+	conn                atomic.Pointer[nats.Conn]
+	js                  atomic.Pointer[jetstream.JetStream]
+	stream              map[string]struct{}
+	lock                sync.RWMutex
+	cfg                 *Config
+	ackWait             time.Duration // 未返回ack 30秒后重发
+	maxDeliver          int           //	最大重试发送次数
+	ServerName          string
+	Version             string
+	config              *Config
+	middleware          hrpc.Middleware
+	publishMiddleware   Middleware
+	subscribeMiddleware Middleware
 }
 
 // SetConfig 设置配置
@@ -233,11 +268,10 @@ func (n *Nats) Publish(ctx context.Context, subject string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	err = conn.Publish(subject, data)
-	if err != nil {
-		return err
-	}
-	return nil
+
+	return n.publishMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+		return conn.PublishMsg(msg)
+	})(ctx, &nats.Msg{Subject: subject, Data: data, Header: nats.Header{}})
 }
 
 // Publish 发布消息到指定的主题
@@ -265,7 +299,9 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx 
 	}
 	subscription, err := conn.Subscribe(subject, func(msg *nats.Msg) {
 		_, err := n.middleware(func(ctx context.Context, req any) (any, error) {
-			return nil, callback(ctx, msg)
+			return nil, n.subscribeMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+				return callback(ctx, msg)
+			})(ctx, msg)
 		})(context.TODO(), nil)
 		if err != nil {
 			herror.PrintStack(err)
@@ -386,12 +422,15 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 		opt(&msg.Header)
 	}
 
-	pubAck, err := jetStream.PublishMsg(ctx, msg)
+	var pubAck *jetstream.PubAck
+	err = n.publishMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+		pubAck, err = jetStream.PublishMsg(ctx, msg)
+		return err
+	})(ctx, msg)
 	if err != nil {
 		hlog.Error("publish failed, error: %s", err)
 		return nil, err
 	}
-
 	return pubAck, nil
 }
 
@@ -498,7 +537,14 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		}
 		msgId := msg.Headers().Get(jetstream.MsgIDHeader)
 		_, retErr := n.middleware(func(ctx context.Context, req any) (any, error) {
-			return nil, callback(ctx, msgId, msg)
+			return nil, n.publishMiddleware(func(ctx context.Context, m *nats.Msg) error {
+				return callback(ctx, msgId, msg)
+			})(ctx, &nats.Msg{
+				Subject: msg.Subject(),
+				Reply:   msg.Reply(),
+				Header:  msg.Headers(),
+				Data:    msg.Data(),
+			})
 		})(context.TODO(), nil)
 		if retErr != nil {
 			herror.PrintStack(retErr)
@@ -706,7 +752,7 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 }
 
 // NewMiddleware 创建中间件
-func (n *Nats) NewMiddleware() hrpc.HandlerMiddleware {
+func (n *Nats) NewMiddleware() hrpc.Middleware {
 	return func(next hrpc.Handler) hrpc.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			return next(WithContext(ctx, n), req)

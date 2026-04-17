@@ -18,7 +18,7 @@ import (
 // Option 应用选项
 type Option func(*App)
 
-func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
+func WithMiddleware(middlewares ...hrpc.Middleware) Option {
 	return func(s *App) {
 		middlewares = append(s.Middlewares(), middlewares...)
 		s.middleware = func(next hrpc.Handler) hrpc.Handler {
@@ -29,6 +29,18 @@ func WithMiddleware(middlewares ...hrpc.HandlerMiddleware) Option {
 		}
 		hservice.WithMiddleware(middlewares...)(s.service)
 		hmq.WithMiddleware(middlewares...)(s.nats)
+	}
+}
+
+func WithMqPublishMiddleware(middlewares ...hmq.Middleware) Option {
+	return func(app *App) {
+		hmq.WithPublishMiddleware(middlewares...)(app.nats)
+	}
+}
+
+func WithMqSubscribeMiddleware(middlewares ...hmq.Middleware) Option {
+	return func(app *App) {
+		hmq.WithSubscribeMiddleware(middlewares...)(app.nats)
 	}
 }
 
@@ -105,8 +117,8 @@ func (a *App) Service() *hservice.Service {
 	return a.service
 }
 
-func (a *App) Middlewares() []hrpc.HandlerMiddleware {
-	return []hrpc.HandlerMiddleware{
+func (a *App) Middlewares() []hrpc.Middleware {
+	return []hrpc.Middleware{
 		a.nats.NewMiddleware(),
 		a.etcd.NewMiddleware(),
 		a.redis.NewMiddleware(),
