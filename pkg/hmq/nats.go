@@ -445,7 +445,7 @@ func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T
 	if err != nil {
 		return nil, err
 	}
-	pubAck, err := n.JetStreamPublish(context.TODO(), stream, subject, jsonData, options...)
+	pubAck, err := n.JetStreamPublish(ctx, stream, subject, jsonData, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +537,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		}
 		msgId := msg.Headers().Get(jetstream.MsgIDHeader)
 		_, retErr := n.middleware(func(ctx context.Context, req any) (any, error) {
-			return nil, n.publishMiddleware(func(ctx context.Context, m *nats.Msg) error {
+			return nil, n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
 				return callback(ctx, msgId, msg)
 			})(ctx, &nats.Msg{
 				Subject: msg.Subject(),
