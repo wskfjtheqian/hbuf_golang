@@ -127,7 +127,7 @@ func (a *App) Middlewares() []hrpc.Middleware {
 	}
 }
 
-func (a *App) Go(fn func(ctx context.Context) error) {
+func (a *App) Go(ctx context.Context, fn func(ctx context.Context) error) {
 	go func() {
 		defer func() {
 			err := recover()
@@ -135,7 +135,7 @@ func (a *App) Go(fn func(ctx context.Context) error) {
 				hlog.Error("%s \n", err, string(debug.Stack()))
 			}
 		}()
-		ctx, cancel := context.WithCancel(context.TODO())
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
 		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
@@ -147,8 +147,8 @@ func (a *App) Go(fn func(ctx context.Context) error) {
 	}()
 }
 
-func (a *App) Run(fn func(ctx context.Context) error) error {
-	ctx, cancel := context.WithCancel(context.TODO())
+func (a *App) Run(ctx context.Context, fn func(ctx context.Context) error) error {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	_, err := a.middleware(func(ctx context.Context, req any) (any, error) {

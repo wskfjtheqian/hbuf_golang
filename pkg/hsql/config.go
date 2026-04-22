@@ -72,6 +72,9 @@ type Config struct {
 
 	//批量操作限制
 	BatchLimit *uint `yaml:"BatchLimit"`
+
+	//Key添加表名
+
 }
 
 // Validate 检查配置是否有效
