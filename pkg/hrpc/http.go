@@ -86,6 +86,7 @@ func (h *HttpClient) Request(ctx context.Context, path string, notification bool
 		if err != nil {
 			return nil, err
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			return nil, errors.New(resp.Status)

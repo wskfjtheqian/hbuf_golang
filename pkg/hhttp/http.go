@@ -198,16 +198,15 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	text.Reset()
 	defer a.builderPool.Put(text)
 
+	//获得响应状态码
+	httpIP, _ := hip.GetHttpIP(request)
+
+	text.WriteString(" ")
 	if 200000 > old {
 		text.WriteString(hutl.Yellow(t))
 	} else {
 		text.WriteString(hutl.Red(t))
 	}
-	//获得响应状态码
-	httpIP, _ := hip.GetHttpIP(request)
-
-	text.WriteString(" ")
-	text.WriteString(t)
 
 	text.WriteString(" ")
 	text.WriteString(httpIP)
