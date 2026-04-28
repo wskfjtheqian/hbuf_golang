@@ -11,9 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-)
 
-var NowTime atomic.Pointer[time.Time]
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
+)
 
 type Level int
 
@@ -154,7 +154,7 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 		return nil
 	}
 
-	now := *NowTime.Load() // get this early.
+	now := htime.NowTime() // get this early.
 
 	// Load prefix and flag once so that their value is consistent within
 	// this call regardless of any concurrent changes to their value.

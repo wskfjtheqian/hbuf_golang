@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
 type Statistics struct {
@@ -43,7 +43,7 @@ func (s *Statistics) Reset() {
 	s.requestCount.Store(0)
 	s.windowSuccess.Store(0)
 	s.windowFailure.Store(0)
-	s.windowStart.Store(hutl.NowTime().Unix())
+	s.windowStart.Store(htime.NowTime().Unix())
 
 	s.apiStatsMu.Lock()
 	s.apiStats = make(map[string]*apiStat)
@@ -94,7 +94,7 @@ type StatsSnapshot struct {
 }
 
 func (s *Statistics) GetSnapshot() StatsSnapshot {
-	now := hutl.NowTime().Unix()
+	now := htime.NowTime().Unix()
 	windowStart := s.windowStart.Load()
 
 	// 每秒重置窗口

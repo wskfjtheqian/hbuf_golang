@@ -1,12 +1,10 @@
-package hutl
+package htime
 
 import (
 	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
 var nowTime atomic.Pointer[time.Time]
@@ -14,12 +12,10 @@ var nowTime atomic.Pointer[time.Time]
 func init() {
 	now := time.Now()
 	nowTime.Store(&now)
-	hlog.NowTime.Store(&now)
 	go func() {
 		ticker := time.NewTicker(time.Millisecond)
 		for now = range ticker.C {
 			nowTime.Store(&now)
-			hlog.NowTime.Store(&now)
 		}
 	}()
 }

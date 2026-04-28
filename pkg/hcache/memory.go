@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -247,7 +247,7 @@ func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
 		c.sketch.decaySample(32)
 	}
 
-	now := hutl.NowTime().UnixMilli()
+	now := htime.NowTime().UnixMilli()
 	s := c.getShard(key)
 
 	// fast path
@@ -298,7 +298,7 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, fn func(ctx conte
 
 	s := c.getShard(key)
 
-	now := hutl.NowTime().UnixMilli()
+	now := htime.NowTime().UnixMilli()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -353,7 +353,7 @@ func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint32) {
 	freq := c.sketch.estimate(h)
 
 	s := c.getShard(key)
-	now := hutl.NowTime().UnixMilli()
+	now := htime.NowTime().UnixMilli()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

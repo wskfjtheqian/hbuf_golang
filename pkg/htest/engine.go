@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
 func NewT(t *testing.T) *T {
@@ -158,7 +158,7 @@ func NewEngine() *Engine {
 
 // 执行单个请求
 func (e *Engine) executeRequest(ctx context.Context, api API) {
-	start := hutl.NowTime()
+	start := htime.NowTime()
 
 	// 记录请求开始时间（用于计算TPS）
 	e.requestTimesMu.Lock()
@@ -206,7 +206,7 @@ func (e *Engine) calculateCurrentTPS() float64 {
 		return 0
 	}
 
-	now := hutl.NowTime()
+	now := htime.NowTime()
 	cutoff := now.Add(-e.tpsWindowSize)
 
 	// 统计窗口内的请求数
@@ -314,14 +314,14 @@ func (e *Engine) runStressTest(ctx context.Context) {
 	// 启动统计协程
 	go e.collectStats(ctx)
 
-	endTime := hutl.NowTime().Add(e.config.Duration)
+	endTime := htime.NowTime().Add(e.config.Duration)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if hutl.NowTime().After(endTime) {
+			if htime.NowTime().After(endTime) {
 				return
 			}
 
@@ -378,7 +378,7 @@ func (e *Engine) collectStats(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	lastTime := hutl.NowTime()
+	lastTime := htime.NowTime()
 	lastCount := int64(0)
 
 	for {

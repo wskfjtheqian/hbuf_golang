@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htwheel"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 func TestHtWheel(t *testing.T) {
@@ -15,7 +15,7 @@ func TestHtWheel(t *testing.T) {
 	fmt.Println("start:", time.Now())
 
 	// 添加任务
-	s.Schedule(1, hutl.NowTime().Add(5*time.Second), func(id uint64, t time.Time) {
+	s.Schedule(1, htime.NowTime().Add(5*time.Second), func(id uint64, t time.Time) {
 		fmt.Println("task1 executed:", time.Now())
 	})
 
@@ -31,7 +31,7 @@ func TestHtWheel(t *testing.T) {
 
 	// 更新（提前执行）
 	time.Sleep(2 * time.Second)
-	s.Update(1, hutl.NowTime().Add(1*time.Second))
+	s.Update(1, htime.NowTime().Add(1*time.Second))
 
 	time.Sleep(5 * time.Second)
 	s.Stop()

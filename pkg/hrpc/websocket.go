@@ -22,7 +22,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
 type rawMessage []byte
@@ -144,7 +144,7 @@ func (s *webSocket) run() {
 
 	go func() {
 		for {
-			err := s.conn.SetReadDeadline(hutl.NowTime().Add(s.pongWait))
+			err := s.conn.SetReadDeadline(htime.NowTime().Add(s.pongWait))
 			if err != nil {
 				herror.PrintStack(err)
 				break

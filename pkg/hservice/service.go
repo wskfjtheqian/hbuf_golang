@@ -23,7 +23,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -436,8 +436,8 @@ func (s *Service) generateSelfSignedCert(privateKey *ecdsa.PrivateKey) (tls.Cert
 		Subject: pkix.Name{
 			Organization: []string{"Fitten Tech"},
 		},
-		NotBefore:             hutl.NowTime(),
-		NotAfter:              hutl.NowTime().AddDate(1, 0, 0),
+		NotBefore:             htime.NowTime(),
+		NotAfter:              htime.NowTime().AddDate(1, 0, 0),
 		SubjectKeyId:          []byte{1, 2, 3, 4, 6},
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},

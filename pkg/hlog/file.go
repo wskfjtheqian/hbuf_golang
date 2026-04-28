@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
 var MaxSize uint64 = 1024 * 1024 * 1800
@@ -27,7 +29,7 @@ func (f *fileWriter) Compare(call func(v1 Level, v2 Level) bool) {
 
 func newFileWriter(dir string, level Level) *fileWriter {
 	ret := &fileWriter{level: level, dir: dir}
-	ret.rotateFile(*NowTime.Load())
+	_ = ret.rotateFile(htime.NowTime())
 	return ret
 }
 
@@ -44,7 +46,7 @@ func (f *fileWriter) Write(level Level, p []byte) (n int, err error) {
 		return 0, err
 	}
 	if f.nbytes+uint64(len(p)) >= MaxSize {
-		if err := f.rotateFile(*NowTime.Load()); err != nil {
+		if err := f.rotateFile(htime.NowTime()); err != nil {
 			return 0, err
 		}
 	}

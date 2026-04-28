@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
 // 接口详细统计
@@ -63,7 +63,7 @@ func NewDetailedStats() *DetailedStats {
 func (ds *DetailedStats) RecordRequest(apiName string, success bool, latency time.Duration) {
 	stats := ds.getOrCreateAPIStats(apiName)
 
-	now := hutl.NowTime().Unix()
+	now := htime.NowTime().Unix()
 	windowStart := stats.windowStart.Load()
 
 	// 如果窗口过期（超过1秒），重置窗口计数
@@ -136,7 +136,7 @@ func (ds *DetailedStats) getOrCreateAPIStats(apiName string) *APIDetailedStats {
 		MinLatency: atomic.Int64{},
 		MaxLatency: atomic.Int64{},
 	}
-	stats.windowStart.Store(hutl.NowTime().Unix())
+	stats.windowStart.Store(htime.NowTime().Unix())
 	ds.apiStats[apiName] = stats
 
 	return stats
@@ -147,7 +147,7 @@ func (ds *DetailedStats) TakeSnapshot() AggregatedStats {
 	defer ds.mu.RUnlock()
 
 	snapshot := AggregatedStats{
-		Timestamp: hutl.NowTime(),
+		Timestamp: htime.NowTime(),
 		APIStats:  make(map[string]APISnapshot),
 	}
 

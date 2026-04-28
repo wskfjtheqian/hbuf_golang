@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gobwas/ws"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
 type StartRequest struct {
@@ -99,7 +99,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		"type":         "init",
 		"data":         detailedStats,
 		"distribution": apiDistribution,
-		"timestamp":    hutl.NowTime().Unix(),
+		"timestamp":    htime.NowTime().Unix(),
 	})
 	if err != nil {
 		return
@@ -119,7 +119,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer keepaliveTicker.Stop()
 
 	var lastResult TestResult
-	lastSent := hutl.NowTime()
+	lastSent := htime.NowTime()
 
 	for {
 		select {
@@ -131,7 +131,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			lastResult = result
 
 			// 只有当需要发送时才发送
-			currentTime := hutl.NowTime()
+			currentTime := htime.NowTime()
 			if currentTime.Sub(lastSent) >= 200*time.Millisecond {
 				s.sendResult(conn, result)
 				lastSent = currentTime
@@ -139,7 +139,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case <-statsTicker.C:
 			// 定期发送最新结果
-			currentTime := hutl.NowTime()
+			currentTime := htime.NowTime()
 			if currentTime.Sub(lastSent) >= 200*time.Millisecond {
 				s.sendResult(conn, lastResult)
 				lastSent = currentTime
@@ -163,7 +163,7 @@ func (s *Server) sendResult(conn net.Conn, result TestResult) {
 
 	// 确保时间戳是合理的（当前时间）
 	timestamp := result.Timestamp.Unix()
-	now := hutl.NowTime().Unix()
+	now := htime.NowTime().Unix()
 
 	// 如果时间戳不合理的旧或未来时间，使用当前时间
 	if timestamp <= 0 || timestamp > now+3600 || timestamp < now-3600 {
