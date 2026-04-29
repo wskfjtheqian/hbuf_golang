@@ -191,7 +191,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
-	old := time.Since(start) / time.Microsecond
+	old := time.Since(start) / time.Millisecond
 	t := "[" + strconv.FormatFloat(float64(old), 'f', 3, 64) + "ms]"
 
 	text := a.builderPool.Get().(*strings.Builder)

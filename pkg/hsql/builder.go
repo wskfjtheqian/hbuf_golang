@@ -322,11 +322,11 @@ func (p *printLog) print() {
 	if !PrintSQL {
 		return
 	}
-	dur := time.Since(p.now) / time.Microsecond
+	dur := time.Since(p.now) / time.Millisecond
 
 	text := strings.Builder{}
-	t := "[" + strconv.FormatFloat(float64(dur)/1000, 'f', 3, 64) + "ms]"
-	if 200000 > dur {
+	t := "[" + strconv.FormatFloat(float64(dur), 'f', 3, 64) + "ms]"
+	if 200 > dur {
 		text.WriteString(hutl.Yellow(t))
 	} else {
 		text.WriteString(hutl.Red(t))
