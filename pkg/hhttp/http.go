@@ -191,8 +191,8 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
-	old := time.Since(start)
-	t := "[" + strconv.FormatFloat(float64(old)/1000, 'f', 3, 64) + "ms]"
+	old := time.Since(start) / time.Microsecond
+	t := "[" + strconv.FormatFloat(float64(old), 'f', 3, 64) + "ms]"
 
 	text := a.builderPool.Get().(*strings.Builder)
 	text.Reset()
@@ -202,7 +202,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	httpIP, _ := hip.GetHttpIP(request)
 
 	text.WriteString(" ")
-	if 200000 > old {
+	if 200 > old {
 		text.WriteString(hutl.Yellow(t))
 	} else {
 		text.WriteString(hutl.Red(t))

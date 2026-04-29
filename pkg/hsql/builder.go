@@ -313,7 +313,7 @@ func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, a
 }
 
 type printLog struct {
-	now     int64
+	now     time.Time
 	count   *int64
 	builder *Builder
 }
@@ -322,11 +322,11 @@ func (p *printLog) print() {
 	if !PrintSQL {
 		return
 	}
-	now := time.Now().UnixMicro() - p.now
+	dur := time.Since(p.now) / time.Microsecond
 
 	text := strings.Builder{}
-	t := "[" + strconv.FormatFloat(float64(now)/1000, 'f', 3, 64) + "ms]"
-	if 200000 > now {
+	t := "[" + strconv.FormatFloat(float64(dur)/1000, 'f', 3, 64) + "ms]"
+	if 200000 > dur {
 		text.WriteString(hutl.Yellow(t))
 	} else {
 		text.WriteString(hutl.Red(t))
@@ -343,7 +343,7 @@ func newPrintLog(builder *Builder, count *int64) *printLog {
 		count:   count,
 	}
 	if PrintSQL {
-		ret.now = time.Now().UnixMicro()
+		ret.now = time.Now()
 	}
 	return ret
 }
