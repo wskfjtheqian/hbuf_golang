@@ -106,6 +106,13 @@ func WithRequestMiddleware(middleware ...RequestMiddleware) HttpClientOption {
 	}
 }
 
+// MaxIdleConnsPerHost 设置每个主机的最大空闲连接数限制
+func MaxIdleConnsPerHost(maxConns int) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport.(*http.Transport).MaxIdleConnsPerHost = maxConns
+	}
+}
+
 // WithTimeout 设置HttpClient的超时时间
 func WithTimeout(timeout time.Duration) HttpClientOption {
 	return func(h *HttpClient) {

@@ -184,14 +184,14 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	old := time.Now().UnixMicro()
+	start := time.Now()
 	w := &ResponseWriter{
 		writer: writer,
 		status: http.StatusOK,
 	}
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
-	old = time.Now().UnixMicro() - old
+	old := time.Since(start)
 	t := "[" + strconv.FormatFloat(float64(old)/1000, 'f', 3, 64) + "ms]"
 
 	text := a.builderPool.Get().(*strings.Builder)
