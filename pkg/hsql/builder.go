@@ -184,15 +184,15 @@ func (s *Builder) Exec(ctx context.Context) (int64, int64, error) {
 
 	result, err := d.Exec(s.text.String(), s.params...)
 	if err != nil {
-		return 0, 0, herror.Wrap(err)
+		return 0, 0, herror.NewError(err.Error() + "：" + s.ToText())
 	}
 	count, err = result.RowsAffected()
 	if err != nil {
-		return 0, 0, herror.Wrap(err)
+		return 0, 0, herror.NewError(err.Error() + "：" + s.ToText())
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, 0, herror.Wrap(err)
+		return 0, 0, herror.NewError(err.Error() + "：" + s.ToText())
 	}
 	return count, id, nil
 }
