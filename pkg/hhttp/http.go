@@ -201,7 +201,6 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	//获得响应状态码
 	httpIP, _ := hip.GetHttpIP(request)
 
-	text.WriteString(" ")
 	if 200 > old {
 		text.WriteString(hutl.Yellow(t))
 	} else {

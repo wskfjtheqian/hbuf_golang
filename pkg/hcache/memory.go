@@ -4,152 +4,67 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
-	"hash/fnv"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/wskfjtheqian/hbuf_golang/hsketch"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 	"golang.org/x/sync/singleflight"
 )
 
+/***
+🎯 主要功能
+  泛型内存缓存
+	支持任意类型的键值对存储（使用 Go 泛型）
+	提供线程安全的并发访问
+  智能缓存淘汰策略
+	分片 LRU：将缓存分成 32 个分片，减少锁竞争
+	TinyLFU 准入机制：使用频率过滤，只允许高频访问的数据进入缓存
+    4路 Count-Min Sketch：精确估算键的访问频率
+  高效的频率统计
+	4位计数器打包存储：每个字节存2个计数器，节省内存
+	O(1) 衰减算法：通过随机采样实现计数器衰减，无需全量扫描
+	饱和计数：计数器最大值为15，防止溢出
+  自动数据加载
+	支持传入 loader 函数，缓存未命中时自动加载数据
+	使用 singleflight 防止缓存击穿（同一时刻只加载一次相同key）
+  TTL 过期机制
+	支持自定义过期时间（默认5分钟）
+	每次访问时检查是否过期
+📦 核心组件
+  cmSketch：Count-Min Sketch 频率统计结构
+  shard：缓存分片，每个分片有独立的锁和 LRU 列表
+  item：缓存项，包含键、值、过期时间和 LRU 链表节点
+  MemoryCache：主缓存结构，管理所有分片和全局配置
+🔧 主要方法
+  Get()：获取缓存值，未命中时自动加载
+  Modify()：原子性的读-改-写操作，适合需要修改缓存值的场景
+  setWithLock()：内部方法，带 TinyLFU 准入控制的写入
+💡 设计亮点
+  高并发性能：32个分片减少锁竞争
+  内存优化：4位计数器打包，约0.5MB存储1M个计数器
+  防缓存污染：TinyLFU 确保只有热点数据才能进入缓存
+  确定性行为：无异步写入，所有操作同步完成
+  自适应衰减：每1024次操作触发一次计数器衰减
+  这是一个生产级别的高性能缓存实现，适合需要高吞吐、低延迟的场景。
+*/
+
 // =====================================
-// Near-Ristretto MemoryCache (Locked + True TinyLFU)
-// - 4-bit counter (packed)
-// - 4-way Count-Min Sketch
-// - O(1) decay (sampling, no full scan)
-// - Sharded LRU + TinyLFU admission
-// - Deterministic (no async write)
+// 近 Ristretto MemoryCache（加锁 + 真正的 TinyLFU）
+// - 4位计数器（打包存储）
+// - 4路 Count-Min Sketch
+// - O(1) 衰减（采样，无全量扫描）
+// - 分片 LRU + TinyLFU 准入机制
+// - 确定性（无异步写入）
 // =====================================
 
 const (
 	defaultShard = 32
-	// number of counters (must be power of 2)
-	sketchCounters = 1 << 20 // ~1M counters (packed: 0.5MB)
+	decaySample
 )
 
-// ===================== Hash =====================
-
-func hash32(b []byte) uint32 {
-	h := fnv.New32a()
-	h.Write(b)
-	return h.Sum32()
-}
-
-func hashKey[K comparable](key K) uint32 {
-	return hash32([]byte(toString(key)))
-}
-
-func toString[K comparable](k K) string {
-	switch v := any(k).(type) {
-	case string:
-		return v
-	default:
-		// fallback (not perfect but stable)
-		var buf [8]byte
-		binary.LittleEndian.PutUint64(buf[:], uint64(hash32([]byte("k"))))
-		return string(buf[:])
-	}
-}
-
-// ===================== TinyLFU (4-bit + 4-way CMS) =====================
-
-// Each byte stores 2 counters (low 4 bits, high 4 bits)
-type cmSketch struct {
-	table []byte
-	mask  uint32 // counters-1
-}
-
-func newCMSketch() *cmSketch {
-	n := uint32(sketchCounters)
-	// 2 counters per byte
-	return &cmSketch{
-		table: make([]byte, n/2),
-		mask:  n - 1,
-	}
-}
-
-// get 4-bit counter at index
-func (c *cmSketch) get(idx uint32) uint8 {
-	i := (idx & c.mask) >> 1
-	b := c.table[i]
-	if (idx & 1) == 0 {
-		return b & 0x0F
-	}
-	return (b >> 4) & 0x0F
-}
-
-// increment with saturation (max 15)
-func (c *cmSketch) inc(idx uint32) {
-	i := (idx & c.mask) >> 1
-	shift := (idx & 1) * 4
-	b := c.table[i]
-	v := (b >> shift) & 0x0F
-	if v < 15 {
-		v++
-	}
-	// clear 4 bits then set
-	b &^= (0x0F << shift)
-	b |= (v << shift)
-	c.table[i] = b
-}
-
-// 4-way estimate: min of 4 hashes
-func (c *cmSketch) estimate(h uint32) uint8 {
-	// derive 4 indices from one hash (fast mix)
-	h1 := h
-	h2 := h ^ (h >> 17)
-	h3 := h ^ (h >> 11)
-	h4 := h ^ (h >> 5)
-
-	v1 := c.get(h1)
-	v2 := c.get(h2)
-	v3 := c.get(h3)
-	v4 := c.get(h4)
-
-	// min
-	m := v1
-	if v2 < m {
-		m = v2
-	}
-	if v3 < m {
-		m = v3
-	}
-	if v4 < m {
-		m = v4
-	}
-	return m
-}
-
-// increment all 4 counters
-func (c *cmSketch) add(h uint32) {
-	h1 := h
-	h2 := h ^ (h >> 17)
-	h3 := h ^ (h >> 11)
-	h4 := h ^ (h >> 5)
-
-	c.inc(h1)
-	c.inc(h2)
-	c.inc(h3)
-	c.inc(h4)
-}
-
-// O(1) decay via random sampling (no full scan)
-func (c *cmSketch) decaySample(k int) {
-	// sample k bytes and halve both 4-bit counters
-	for i := 0; i < k; i++ {
-		idx := rand.Intn(len(c.table))
-		b := c.table[idx]
-		// halve low and high nibbles separately
-		low := (b & 0x0F) >> 1
-		high := ((b >> 4) & 0x0F) >> 1
-		c.table[idx] = (high << 4) | low
-	}
-}
-
 // ===================== Item / Shard =====================
-
 type item[K comparable, V any] struct {
 	key K
 	val atomic.Pointer[V]
@@ -176,14 +91,14 @@ type MemoryCache[K comparable, V any] struct {
 	loader func(context.Context, K) (*V, error)
 	sf     singleflight.Group
 
-	sketch *cmSketch
+	sketch *hsketch.CMSketch
 
-	// decay control
-	decayEvery uint32 // trigger every N ops (approx)
+	// 衰减控制
+	decayEvery uint32 // 每N次操作触发一次（近似）
 	opCount    atomic.Uint32
 }
 
-// ===================== Constructor =====================
+// MemoryCacheOption ===================== 构造函数 =====================
 type MemoryCacheOption[K comparable, V any] func(c *MemoryCache[K, V])
 
 func WithMemoryCacheCap[K comparable, V any](cap int) MemoryCacheOption[K, V] {
@@ -198,15 +113,15 @@ func WithMemoryCacheTtl[K comparable, V any](ttl time.Duration) MemoryCacheOptio
 	}
 }
 
-// ===================== Constructor =====================
+// ===================== 构造函数 =====================
 
 func NewMemoryCache[K comparable, V any](loader func(context.Context, K) (*V, error), options ...MemoryCacheOption[K, V]) *MemoryCache[K, V] {
 	c := &MemoryCache[K, V]{
 		shards:     make([]shard[K, V], defaultShard),
 		ttl:        time.Minute * 5,
 		loader:     loader,
-		sketch:     newCMSketch(),
-		decayEvery: 1024, // tune: 512~4096
+		sketch:     hsketch.NewCMSketch(),
+		decayEvery: 1024, // 可调：512~4096
 		cap:        10000,
 	}
 
@@ -231,33 +146,33 @@ func NewMemoryCache[K comparable, V any](loader func(context.Context, K) (*V, er
 }
 
 func (c *MemoryCache[K, V]) getShard(key K) *shard[K, V] {
-	idx := hashKey(key) % uint32(len(c.shards))
+	idx := hsketch.Hash(key) % uint64(len(c.shards))
 	return &c.shards[idx]
 }
 
-// ===================== Get =====================
+// ===================== 获取 =====================
 
 func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
-	h := hashKey(key)
-	c.sketch.add(h)
+	h := hsketch.Hash(key)
+	c.sketch.Add(h)
 
-	// probabilistic decay trigger
+	// 概率性衰减触发器
 	if c.opCount.Add(1)%c.decayEvery == 0 {
-		// sample a small number of bytes (tunable)
-		c.sketch.decaySample(32)
+		// 采样少量字节（可调）
+		c.sketch.DecaySample(decaySample)
 	}
 
 	now := htime.NowTime().UnixMilli()
 	s := c.getShard(key)
 
-	// fast path
+	// 快速路径
 	s.mu.RLock()
 	it, ok := s.data[key]
 	if ok && it.expireAt.Load() > now {
 		val := it.val.Load()
 		s.mu.RUnlock()
 		if val != nil {
-			// promote in LRU (upgrade lock briefly)
+			// 在LRU中提升（短暂升级锁）
 			s.mu.Lock()
 			s.lru.MoveToFront(it.ele)
 			s.mu.Unlock()
@@ -267,7 +182,7 @@ func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
 		s.mu.RUnlock()
 	}
 
-	// load with singleflight
+	// 使用singleflight加载
 	v, err, _ := c.sf.Do(toString(key), func() (any, error) {
 		return c.loader(ctx, key)
 	})
@@ -275,49 +190,46 @@ func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
 		return nil, err
 	}
 	val := v.(*V)
-
-	// sync write
+	// 同步写入
 	c.setWithLock(key, val, h)
-
 	return val, nil
 }
 
-// ===================== Transaction =====================
+// ===================== 事务 =====================
 
-// Txn provides per-key atomic read-modify-write.
-// It locks the shard, ensures value exists (load if needed), then applies fn.
-// Note: keep fn fast; it runs under shard lock.
+// Modify 提供每键原子读-改-写操作。
+// 它锁定分片，确保值存在（如果需要则加载），然后应用fn。
+// 注意：保持fn快速执行；它在分片锁下运行。
 func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, fn func(ctx context.Context, key K, old V) (*V, error)) (*V, error) {
-	h := hashKey(key)
-	c.sketch.add(h)
+	h := hsketch.Hash(key)
+	c.sketch.Add(h)
 
-	// decay trigger
+	// 衰减触发器
 	if c.opCount.Add(1)%c.decayEvery == 0 {
-		c.sketch.decaySample(32)
+		c.sketch.DecaySample(decaySample)
 	}
 
-	s := c.getShard(key)
-
 	now := htime.NowTime().UnixMilli()
+	s := c.getShard(key)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	it, ok := s.data[key]
 	if !ok || it.expireAt.Load() <= now {
-		// load under singleflight outside lock to avoid blocking others
+		// 在锁外使用singleflight加载以避免阻塞其他操作
 		s.mu.Unlock()
 		v, err, _ := c.sf.Do(toString(key), func() (any, error) {
 			return c.loader(ctx, key)
 		})
 		if err != nil {
-			// re-lock before return to keep lock state consistent
+			// 返回前重新加锁以保持锁状态一致
 			s.mu.Lock()
 			return nil, err
 		}
 		val := v.(*V)
 
-		// re-lock and re-check (double-check)
+		// 重新加锁并重新检查（双重检查）
 		s.mu.Lock()
 		it, ok = s.data[key]
 		if !ok {
@@ -339,7 +251,7 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, fn func(ctx conte
 		return nil, err
 	}
 
-	// write back
+	// 写回
 	it.val.Store(newVal)
 	it.expireAt.Store(now + c.ttl.Milliseconds())
 	s.lru.MoveToFront(it.ele)
@@ -347,10 +259,10 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, fn func(ctx conte
 	return newVal, nil
 }
 
-// ===================== Set (with TinyLFU admission) =====================
+// ===================== 设置（带TinyLFU准入机制）=====================
 
-func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint32) {
-	freq := c.sketch.estimate(h)
+func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint64) {
+	freq := c.sketch.Estimate(h)
 
 	s := c.getShard(key)
 	now := htime.NowTime().UnixMilli()
@@ -358,7 +270,7 @@ func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// update if exists
+	// 如果存在则更新
 	if it, ok := s.data[key]; ok {
 		it.val.Store(val)
 		it.expireAt.Store(now + c.ttl.Milliseconds())
@@ -366,14 +278,14 @@ func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint32) {
 		return
 	}
 
-	// admission + eviction
+	// 准入 + 驱逐
 	if len(s.data) >= s.cap {
 		victimEle := s.lru.Back()
 		if victimEle != nil {
 			victim := victimEle.Value.(*item[K, V])
-			victimFreq := c.sketch.estimate(hashKey(victim.key))
+			victimFreq := c.sketch.Estimate(hsketch.Hash(victim.key))
 
-			// reject if worse than victim
+			// 如果比被淘汰项差则拒绝
 			if freq < victimFreq {
 				return
 			}
@@ -389,4 +301,16 @@ func (c *MemoryCache[K, V]) setWithLock(key K, val *V, h uint32) {
 
 	it.ele = s.lru.PushFront(it)
 	s.data[key] = it
+}
+
+func toString[K comparable](k K) string {
+	switch v := any(k).(type) {
+	case string:
+		return v
+	default:
+		// fallback (not perfect but stable)
+		var buf [16]byte
+		binary.LittleEndian.PutUint64(buf[:], hsketch.Hash(k))
+		return string(buf[:])
+	}
 }
