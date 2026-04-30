@@ -209,49 +209,54 @@ func (c *MemoryCache[K, V]) Modify(ctx context.Context, key K, fn func(ctx conte
 		c.sketch.DecaySample(decaySample)
 	}
 
-	now := htime.NowTime().UnixMilli()
 	s := c.getShard(key)
+	now := htime.NowTime().UnixMilli()
 
+	// 第一阶段：确保缓存中存在有效数据
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	it, ok := s.data[key]
+
+	// 如果不存在或已过期，则释放锁去加载数据
 	if !ok || it.expireAt.Load() <= now {
-		// 在锁外使用singleflight加载以避免阻塞其他操作
 		s.mu.Unlock()
+
+		// 使用 singleflight 防止并发回源
 		v, err, _ := c.sf.Do(toString(key), func() (any, error) {
 			return c.loader(ctx, key)
 		})
 		if err != nil {
-			// 返回前重新加锁以保持锁状态一致
-			s.mu.Lock()
 			return nil, err
 		}
 		val := v.(*V)
 
-		// 重新加锁并重新检查（双重检查）
+		// 重新加锁并写入刚加载的数据（双重检查）
 		s.mu.Lock()
 		it, ok = s.data[key]
-		if !ok {
-			it = &item[K, V]{key: key}
+		if !ok || it.expireAt.Load() <= now {
+			// 创建新项或更新旧项
+			if !ok {
+				it = &item[K, V]{key: key}
+				it.ele = s.lru.PushFront(it)
+				s.data[key] = it
+			}
 			it.val.Store(val)
 			it.expireAt.Store(now + c.ttl.Milliseconds())
-			it.ele = s.lru.PushFront(it)
-			s.data[key] = it
 		} else {
-			it.val.Store(val)
-			it.expireAt.Store(now + c.ttl.Milliseconds())
+			// 如果在解锁期间有其他 goroutine 已经更新了，则刷新 LRU
 			s.lru.MoveToFront(it.ele)
 		}
 	}
 
-	old := it.val.Load()
-	newVal, err := fn(ctx, key, *old)
+	// 第二阶段：执行原子修改（此时一定持有锁且数据有效）
+	defer s.mu.Unlock()
+
+	oldVal := it.val.Load()
+	newVal, err := fn(ctx, key, *oldVal)
 	if err != nil {
 		return nil, err
 	}
 
-	// 写回
+	// 写回并重置 TTL
 	it.val.Store(newVal)
 	it.expireAt.Store(now + c.ttl.Milliseconds())
 	s.lru.MoveToFront(it.ele)
