@@ -293,6 +293,12 @@ func Publish[T any](ctx context.Context, subject string, msg *T) error {
 
 // Subscribe 订阅指定的主题
 func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx context.Context, msg *nats.Msg) error) (*nats.Subscription, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			hlog.Error("JetStreamSubscribe panic:%v", r)
+		}
+	}()
+
 	conn, err := n.GetConn()
 	if err != nil {
 		return nil, err
@@ -500,6 +506,12 @@ func WithSubscribeStartTime(val time.Time) SubscribeOption {
 
 // JetStreamSubscribe 订阅指定的主题
 func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg jetstream.Msg) error, options ...SubscribeOption) error {
+	defer func() {
+		if r := recover(); r != nil {
+			hlog.Error("JetStreamSubscribe panic:%v", r)
+		}
+	}()
+
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
 		return err
