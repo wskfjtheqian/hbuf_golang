@@ -2,9 +2,10 @@ package herror
 
 import (
 	"errors"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"reflect"
 	"runtime/debug"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
 // Error 是带有堆栈跟踪的错误包装器。
@@ -30,9 +31,8 @@ func Wrap(err error) *Error {
 }
 
 // PrintStack 打印错误的堆栈跟踪信息。
-func (e *Error) PrintStack() {
-	_ = hlog.Output(2, hlog.ERROR, e.Error())
-	_ = hlog.Output(2, hlog.ERROR, string(e.stack))
+func (e *Error) PrintStack(calldepth int) {
+	_ = hlog.Output(2, hlog.ERROR, e.Error()+"\n"+string(e.stack))
 }
 
 // Unwrap 返回错误的底层错误。
@@ -49,7 +49,7 @@ func IsError(err error) bool {
 func PrintStack(e error) {
 	var err *Error
 	if errors.As(e, &err) {
-		err.PrintStack()
+		err.PrintStack(3)
 	} else {
 		_ = hlog.Output(2, hlog.ERROR, e.Error())
 	}
