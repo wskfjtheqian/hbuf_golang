@@ -566,7 +566,15 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 				return
 			}
 			if int(metadata.NumDelivered) >= n.maxDeliver {
-				n.saveErrorMessage(ctx, stream, subject, durable, msgId, msg.Data(), retErr.Error())
+				_ = n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
+					n.saveErrorMessage(ctx, stream, subject, durable, msgId, msg.Data(), retErr.Error())
+					return nil
+				})(context.TODO(), &nats.Msg{
+					Subject: msg.Subject(),
+					Reply:   msg.Reply(),
+					Header:  msg.Headers(),
+					Data:    msg.Data(),
+				})
 				err = msg.Ack()
 				if err != nil {
 					hlog.Error("ack failed, error: %s", err)
@@ -694,7 +702,17 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 		hlog.Error("get jetstream failed, error: %s", err)
 		return
 	}
-	_, err = jetStream.Publish(ctx, ErrorMessage_Subject, jsonData, jetstream.WithMsgID(uuid.NewString()))
+
+	err = n.publishMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+		_, err := jetStream.PublishMsg(ctx, msg)
+		return err
+	})(ctx, &nats.Msg{
+		Subject: ErrorMessage_Subject,
+		Data:    jsonData,
+		Header: nats.Header{
+			jetstream.MsgIDHeader: []string{uuid.NewString()},
+		},
+	})
 	if err != nil {
 		hlog.Error("publish failed, error: %s", err)
 		return
@@ -731,16 +749,24 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 
 		msgId := msg.Headers().Get(jetstream.MsgIDHeader)
 		_, err = n.middleware(func(ctx context.Context, req any) (any, error) {
-			var data ErrorMessage
-			err := json.Unmarshal(msg.Data(), &data)
-			if err != nil {
-				return nil, herror.Wrap(err)
-			}
-			return nil, callback(ctx, msgId, &data)
+			return nil, n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
+				var data ErrorMessage
+				err := json.Unmarshal(msg.Data(), &data)
+				if err != nil {
+					return herror.Wrap(err)
+				}
+				return callback(ctx, msgId, &data)
+			})(ctx, &nats.Msg{
+				Subject: msg.Subject(),
+				Reply:   msg.Reply(),
+				Header:  msg.Headers(),
+				Data:    msg.Data(),
+			})
+
 		})(context.TODO(), nil)
 		if err != nil {
 			if int(metadata.NumDelivered) >= n.maxDeliver {
-				hlog.Error("callback failed, error: %s", string(msg.Data()))
+				herror.PrintStack(err)
 
 				err = msg.Ack()
 				if err != nil {
