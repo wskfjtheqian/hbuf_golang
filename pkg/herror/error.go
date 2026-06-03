@@ -30,6 +30,13 @@ func Wrap(err error) *Error {
 	}
 }
 
+func WrapMsg(err error, msg string) *Error {
+	return &Error{
+		error: err,
+		stack: []byte(msg + "\n" + string(debug.Stack())),
+	}
+}
+
 // PrintStack 打印错误的堆栈跟踪信息。
 func (e *Error) PrintStack(calldepth int) {
 	_ = hlog.Output(2, hlog.ERROR, e.Error()+"\n"+string(e.stack))

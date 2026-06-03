@@ -147,12 +147,12 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 
 	db, err := sql.GetDB()
 	if err != nil {
-		return 0, herror.NewError(err.Error() + "：" + s.ToText())
+		return 0, herror.WrapMsg(err, s.ToText())
 	}
 
 	result, err := db.Query(s.text.String(), s.params...)
 	if err != nil {
-		return 0, herror.NewError(err.Error() + "：" + s.ToText())
+		return 0, herror.WrapMsg(err, s.ToText())
 	}
 	defer result.Close()
 
@@ -162,7 +162,7 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 		if isScan {
 			isScan, err = scan(result)
 			if err != nil {
-				return 0, herror.NewError(err.Error() + "：" + s.ToText())
+				return 0, herror.WrapMsg(err, s.ToText())
 			}
 		}
 	}
@@ -184,15 +184,15 @@ func (s *Builder) Exec(ctx context.Context) (int64, int64, error) {
 
 	result, err := d.Exec(s.text.String(), s.params...)
 	if err != nil {
-		return 0, 0, herror.NewError(err.Error() + "：" + s.ToText())
+		return 0, 0, herror.WrapMsg(err, s.ToText())
 	}
 	count, err = result.RowsAffected()
 	if err != nil {
-		return 0, 0, herror.NewError(err.Error() + "：" + s.ToText())
+		return 0, 0, herror.WrapMsg(err, s.ToText())
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, 0, herror.NewError(err.Error() + "：" + s.ToText())
+		return 0, 0, herror.WrapMsg(err, s.ToText())
 	}
 	return count, id, nil
 }
