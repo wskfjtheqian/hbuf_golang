@@ -293,12 +293,6 @@ func Publish[T any](ctx context.Context, subject string, msg *T) error {
 
 // Subscribe 订阅指定的主题
 func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx context.Context, msg *nats.Msg) error) (*nats.Subscription, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			hlog.Error("JetStreamSubscribe panic:%v", r)
-		}
-	}()
-
 	conn, err := n.GetConn()
 	if err != nil {
 		return nil, err
@@ -328,6 +322,12 @@ func Subscribe[T any](ctx context.Context, subject string, callback func(ctx con
 	}
 
 	subscription, err := n.Subscribe(ctx, subject, func(ctx context.Context, msg *nats.Msg) error {
+		defer func() {
+			if r := recover(); r != nil {
+				hlog.Error("JetStreamSubscribe panic:%v", r)
+			}
+		}()
+
 		var data T
 		err := json.Unmarshal(msg.Data, &data)
 		if err != nil {
@@ -506,12 +506,6 @@ func WithSubscribeStartTime(val time.Time) SubscribeOption {
 
 // JetStreamSubscribe 订阅指定的主题
 func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable string, callback func(ctx context.Context, msgId string, msg jetstream.Msg) error, options ...SubscribeOption) error {
-	defer func() {
-		if r := recover(); r != nil {
-			hlog.Error("JetStreamSubscribe panic:%v", r)
-		}
-	}()
-
 	err := n.checkStream(ctx, stream, subject)
 	if err != nil {
 		return err
@@ -604,6 +598,12 @@ func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable str
 	}
 
 	err := n.JetStreamSubscribe(ctx, stream, subject, durable, func(ctx context.Context, msgId string, msg jetstream.Msg) error {
+		defer func() {
+			if r := recover(); r != nil {
+				hlog.Error("JetStreamSubscribe panic:%v", r)
+			}
+		}()
+
 		var data T
 		err := json.Unmarshal(msg.Data(), &data)
 		if err != nil {
