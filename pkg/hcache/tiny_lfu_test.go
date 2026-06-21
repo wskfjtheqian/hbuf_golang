@@ -250,7 +250,7 @@ func TestTinyLfu_EvictReturn(t *testing.T) {
 	if !ok {
 		t.Fatal("key 3 should be admitted")
 	}
-	if ek != 1 || ev != "a" {
+	if ek != 1 || *ev != "a" {
 		t.Fatalf("expected evicted (1, a), got (%v, %v)", ek, ev)
 	}
 }

@@ -43,8 +43,8 @@ func TestLru_Eviction(t *testing.T) {
 	if !ok {
 		t.Fatal("expected eviction")
 	}
-	if ek != 2 || ev != "b" {
-		t.Fatalf("expected evicted (2, b), got (%v, %v)", ek, ev)
+	if ek != 2 || *ev != "b" {
+		t.Fatalf("expected evicted (2, b), got (%v, %v)", ek, *ev)
 	}
 	if c.Len() != 3 {
 		t.Fatalf("expected len 3, got %d", c.Len())
@@ -71,8 +71,8 @@ func TestLru_EvictOldest(t *testing.T) {
 	c.Get(1) // promote 1 → order: 1,2
 
 	ek, ev, ok := c.Set(3, ptr("c")) // evict 2
-	if !ok || ek != 2 || ev != "b" {
-		t.Fatalf("expected evicted (2, b), got (%v, %v, %v)", ek, ev, ok)
+	if !ok || ek != 2 || *ev != "b" {
+		t.Fatalf("expected evicted (2, b), got (%v, %v, %v)", ek, *ev, ok)
 	}
 	if _, ok := c.Get(2); ok {
 		t.Fatal("key 2 should be evicted")
@@ -186,8 +186,8 @@ func TestLru_Cap1(t *testing.T) {
 	}
 
 	ek, ev, ok := c.Set(2, ptr("b")) // 应淘汰 1
-	if !ok || ek != 1 || ev != "a" {
-		t.Fatalf("expected evicted (1, a), got (%v, %v, %v)", ek, ev, ok)
+	if !ok || ek != 1 || *ev != "a" {
+		t.Fatalf("expected evicted (1, a), got (%v, %v, %v)", ek, *ev, ok)
 	}
 	if _, ok := c.Get(1); ok {
 		t.Fatal("key 1 should be evicted")

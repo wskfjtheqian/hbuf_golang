@@ -27,7 +27,7 @@ const (
 // tlfItem 是 TinyLFU 缓存中的条目，内嵌双向链表指针。
 type tlfItem[K comparable, V any] struct {
 	key      K
-	val      V
+	val      *V
 	expireAt int64
 	prev     *tlfItem[K, V]
 	next     *tlfItem[K, V]
@@ -116,7 +116,7 @@ func (c *TinyLfu[K, V]) Get(key K) (*V, bool) {
 
 	if it, ok := c.data[key]; ok && it.expireAt > now {
 		c.moveToFront(it)
-		return &it.val, true
+		return it.val, true
 	}
 
 	return nil, false
@@ -127,7 +127,7 @@ func (c *TinyLfu[K, V]) Peek(key K) (*V, bool) {
 	now := htime.NowTime().UnixMilli()
 
 	if it, ok := c.data[key]; ok && it.expireAt > now {
-		return &it.val, true
+		return it.val, true
 	}
 
 	return nil, false
@@ -139,13 +139,13 @@ func (c *TinyLfu[K, V]) Peek(key K) (*V, bool) {
 //   - 缓存未满：直接插入。
 //   - 缓存已满：比较新条目的频率与 LRU 尾部 victim 的频率，
 //     频率 ≥ victim 则淘汰 victim 并插入；否则拒绝，返回 (_, _, false)。
-func (c *TinyLfu[K, V]) Set(key K, val *V) (evictedKey K, evictedVal V, evicted bool) {
+func (c *TinyLfu[K, V]) Set(key K, val *V) (evictedKey K, evictedVal *V, evicted bool) {
 	freq := c.sketch.Estimate(hsketch.Hash(key))
 	now := htime.NowTime().UnixMilli()
 
 	// 已存在：直接更新
 	if it, ok := c.data[key]; ok {
-		it.val = *val
+		it.val = val
 		it.expireAt = now + c.ttl.Milliseconds()
 		c.moveToFront(it)
 		return
@@ -155,7 +155,7 @@ func (c *TinyLfu[K, V]) Set(key K, val *V) (evictedKey K, evictedVal V, evicted 
 	if len(c.data) < c.cap {
 		it := &tlfItem[K, V]{
 			key:      key,
-			val:      *val,
+			val:      val,
 			expireAt: now + c.ttl.Milliseconds(),
 		}
 		c.pushFront(it)
@@ -182,7 +182,7 @@ func (c *TinyLfu[K, V]) Set(key K, val *V) (evictedKey K, evictedVal V, evicted 
 
 	it := &tlfItem[K, V]{
 		key:      key,
-		val:      *val,
+		val:      val,
 		expireAt: now + c.ttl.Milliseconds(),
 	}
 	c.pushFront(it)

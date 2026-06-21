@@ -25,7 +25,7 @@ type TinyLfuCache[K comparable, V any] struct {
 	cap       int
 	ttl       time.Duration
 
-	onEvict  func(K, V)
+	onEvict  func(K, *V)
 	onLoader func(K) (*V, error)
 	sf       singleflight.Group
 }
@@ -46,7 +46,7 @@ func WithTinyLfuCacheTtl[K comparable, V any](ttl time.Duration) TinyLfuCacheOpt
 func WithTinyLfuCacheShards[K comparable, V any](n int) TinyLfuCacheOption[K, V] {
 	return func(c *TinyLfuCache[K, V]) { c.shardMask = uint64(n) - 1 }
 }
-func WithTinyLfuCacheOnEvict[K comparable, V any](fn func(K, V)) TinyLfuCacheOption[K, V] {
+func WithTinyLfuCacheOnEvict[K comparable, V any](fn func(K, *V)) TinyLfuCacheOption[K, V] {
 	return func(c *TinyLfuCache[K, V]) { c.onEvict = fn }
 }
 func WithTinyLfuCacheOnLoader[K comparable, V any](fn func(K) (*V, error)) TinyLfuCacheOption[K, V] {
@@ -122,7 +122,7 @@ func (c *TinyLfuCache[K, V]) Peek(key K) (*V, bool) {
 
 // Set 插入或更新一个键值对，带 TinyLFU 准入控制。
 // 若淘汰旧条目且配置了 onEvict，回调通知。
-func (c *TinyLfuCache[K, V]) Set(key K, val *V) (evictedKey K, evictedVal V, evicted bool) {
+func (c *TinyLfuCache[K, V]) Set(key K, val *V) (evictedKey K, evictedVal *V, evicted bool) {
 	s := c.shard(key)
 	s.mu.Lock()
 	ek, ev, ok := s.tlf.Set(key, val)

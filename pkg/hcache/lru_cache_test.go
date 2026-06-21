@@ -40,7 +40,7 @@ func TestLc_Eviction(t *testing.T) {
 	c.Get(1)
 
 	ek, ev, ok := c.Set(4, ptr("d"))
-	if !ok || ek != 2 || ev != "b" {
+	if !ok || ek != 2 || *ev != "b" {
 		t.Fatalf("expected evicted (2, b), got (%v, %v, %v)", ek, ev, ok)
 	}
 }
@@ -93,9 +93,9 @@ func TestLc_OnEvict(t *testing.T) {
 	c := hcache.NewLruCache[int, string](
 		hcache.WithLruCacheCap[int, string](2),
 		hcache.WithLruCacheShards[int, string](1),
-		hcache.WithLruCacheOnEvict[int, string](func(k int, v string) {
+		hcache.WithLruCacheOnEvict[int, string](func(k int, v *string) {
 			evictedKey = k
-			evictedVal = v
+			evictedVal = *v
 		}),
 	)
 
@@ -106,7 +106,7 @@ func TestLc_OnEvict(t *testing.T) {
 	if !ok {
 		t.Fatal("should evict")
 	}
-	if evictedKey != ek || evictedVal != ev {
+	if evictedKey != ek || evictedVal != *ev {
 		t.Fatalf("onEvict mismatch: callback (%v, %v), Set (%v, %v)",
 			evictedKey, evictedVal, ek, ev)
 	}
@@ -116,7 +116,7 @@ func TestLc_OnEvict_NotCalledOnUpdate(t *testing.T) {
 	var evictCalls int32
 	c := hcache.NewLruCache[string, int](
 		hcache.WithLruCacheCap[string, int](10),
-		hcache.WithLruCacheOnEvict[string, int](func(k string, v int) {
+		hcache.WithLruCacheOnEvict[string, int](func(k string, v *int) {
 			atomic.AddInt32(&evictCalls, 1)
 		}),
 	)

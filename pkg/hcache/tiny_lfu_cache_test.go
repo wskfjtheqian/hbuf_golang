@@ -99,12 +99,12 @@ func TestTlfCache_OnLoader_Error(t *testing.T) {
 
 func TestTlfCache_OnEvict(t *testing.T) {
 	var evictedKey int
-	var evictedVal string
+	var evictedVal *string
 
 	c := hcache.NewTinyLfuCache[int, string](
 		hcache.WithTinyLfuCacheCap[int, string](2),
 		hcache.WithTinyLfuCacheShards[int, string](1),
-		hcache.WithTinyLfuCacheOnEvict[int, string](func(k int, v string) {
+		hcache.WithTinyLfuCacheOnEvict[int, string](func(k int, v *string) {
 			evictedKey = k
 			evictedVal = v
 		}),
@@ -135,7 +135,7 @@ func TestTlfCache_OnEvict_NotCalledOnUpdate(t *testing.T) {
 	var evictCalls int32
 	c := hcache.NewTinyLfuCache[string, int](
 		hcache.WithTinyLfuCacheCap[string, int](10),
-		hcache.WithTinyLfuCacheOnEvict[string, int](func(k string, v int) {
+		hcache.WithTinyLfuCacheOnEvict[string, int](func(k string, v *int) {
 			atomic.AddInt32(&evictCalls, 1)
 		}),
 	)

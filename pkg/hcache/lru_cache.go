@@ -25,7 +25,7 @@ type LruCache[K comparable, V any] struct {
 	cap       int
 	ttl       time.Duration
 
-	onEvict  func(K, V)
+	onEvict  func(K, *V)
 	onLoader func(K) (*V, error)
 	sf       singleflight.Group
 }
@@ -46,7 +46,7 @@ func WithLruCacheTtl[K comparable, V any](ttl time.Duration) LruCacheOption[K, V
 func WithLruCacheShards[K comparable, V any](n int) LruCacheOption[K, V] {
 	return func(c *LruCache[K, V]) { c.shardMask = uint64(n) - 1 }
 }
-func WithLruCacheOnEvict[K comparable, V any](fn func(K, V)) LruCacheOption[K, V] {
+func WithLruCacheOnEvict[K comparable, V any](fn func(K, *V)) LruCacheOption[K, V] {
 	return func(c *LruCache[K, V]) { c.onEvict = fn }
 }
 func WithLruCacheOnLoader[K comparable, V any](fn func(K) (*V, error)) LruCacheOption[K, V] {
@@ -122,7 +122,7 @@ func (c *LruCache[K, V]) Peek(key K) (*V, bool) {
 }
 
 // Set 插入或更新一个键值对。若淘汰旧条目且配置了 onEvict，回调通知。
-func (c *LruCache[K, V]) Set(key K, val *V) (evictedKey K, evictedVal V, evicted bool) {
+func (c *LruCache[K, V]) Set(key K, val *V) (evictedKey K, evictedVal *V, evicted bool) {
 	s := c.shard(key)
 	s.mu.Lock()
 	ek, ev, ok := s.lru.Set(key, val)
