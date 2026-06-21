@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/hsketch"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hsketch"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 	"golang.org/x/sync/singleflight"
 )
