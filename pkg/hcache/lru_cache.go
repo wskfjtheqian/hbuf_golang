@@ -157,6 +157,17 @@ func (c *LruCache[K, V]) Len() int {
 	return total
 }
 
+// Keys 返回缓存中所有 key（遍历各分片，非原子快照）。
+func (c *LruCache[K, V]) Keys() []K {
+	var keys []K
+	for _, s := range c.shards {
+		s.mu.RLock()
+		keys = append(keys, s.lru.Keys()...)
+		s.mu.RUnlock()
+	}
+	return keys
+}
+
 func (c *LruCache[K, V]) Cap() int { return c.cap }
 
 func (c *LruCache[K, V]) Purge() {
@@ -201,9 +212,15 @@ func (c *LruCache[K, V]) Modify(key K, fn func(key K, old V) (*V, error)) (*V, e
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	l.Set(key, loaded)
 
-	newVal, err := fn(key, *loaded)
+	// 双重检查：锁外加载期间，其他 goroutine 可能已写入
+	v, ok = l.Get(key)
+	if !ok {
+		l.Set(key, loaded)
+		v = loaded
+	}
+
+	newVal, err := fn(key, *v)
 	if err != nil {
 		return nil, err
 	}

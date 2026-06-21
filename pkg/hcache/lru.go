@@ -162,6 +162,15 @@ func (c *Lru[K, V]) Len() int {
 	return len(c.data)
 }
 
+// Keys 返回缓存中所有 key（含已过期但尚未移除的）。
+func (c *Lru[K, V]) Keys() []K {
+	keys := make([]K, 0, len(c.data))
+	for k := range c.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // Cap 返回缓存的最大容量。
 func (c *Lru[K, V]) Cap() int {
 	return c.cap

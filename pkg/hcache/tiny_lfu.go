@@ -210,7 +210,14 @@ func (c *TinyLfu[K, V]) Len() int {
 	return len(c.data)
 }
 
-// Cap 返回缓存的最大容量。
+func (c *TinyLfu[K, V]) Keys() []K {
+	keys := make([]K, 0, len(c.data))
+	for k := range c.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 func (c *TinyLfu[K, V]) Cap() int {
 	return c.cap
 }

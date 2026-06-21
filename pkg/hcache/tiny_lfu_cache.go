@@ -157,6 +157,16 @@ func (c *TinyLfuCache[K, V]) Len() int {
 	return total
 }
 
+func (c *TinyLfuCache[K, V]) Keys() []K {
+	var keys []K
+	for _, s := range c.shards {
+		s.mu.RLock()
+		keys = append(keys, s.tlf.Keys()...)
+		s.mu.RUnlock()
+	}
+	return keys
+}
+
 func (c *TinyLfuCache[K, V]) Cap() int { return c.cap }
 
 func (c *TinyLfuCache[K, V]) Purge() {
@@ -201,9 +211,15 @@ func (c *TinyLfuCache[K, V]) Modify(key K, fn func(key K, old V) (*V, error)) (*
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	tlf.Set(key, loaded)
 
-	newVal, err := fn(key, *loaded)
+	// 双重检查：锁外加载期间，其他 goroutine 可能已写入
+	v, ok = tlf.Get(key)
+	if !ok {
+		tlf.Set(key, loaded)
+		v = loaded
+	}
+
+	newVal, err := fn(key, *v)
 	if err != nil {
 		return nil, err
 	}
