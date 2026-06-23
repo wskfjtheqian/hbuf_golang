@@ -16,7 +16,7 @@ import (
 频率统计：4-bit 计数器 × 4-way Count-Min Sketch（~0.5MB），
 每次 Get 累加频率，每 1024 次操作触发一次 O(1) 随机采样衰减。
 
-无锁设计，仅限单 goroutine 使用。如需并发安全，请使用 MemoryCache。
+无锁设计，仅限单 goroutine 使用。如需并发安全，请使用 TinyLfuCache。
 */
 
 const (

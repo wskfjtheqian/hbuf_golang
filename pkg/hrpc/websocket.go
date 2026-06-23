@@ -152,7 +152,7 @@ func (s *webSocket) run() {
 
 			payload, opCode, err := wsutil.ReadData(s.conn, s.state)
 			if err != nil {
-				hlog.Warn("read data error:%v", err)
+				hlog.Warn("read data :%v", err)
 				break
 			}
 			switch opCode {
