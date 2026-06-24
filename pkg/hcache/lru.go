@@ -60,17 +60,20 @@ func NewLru[K comparable, V any](options ...LruOption[K, V]) *Lru[K, V] {
 
 func (c *Lru[K, V]) Get(key K) (*V, bool) {
 	now := htime.NowTime().UnixMilli()
-	if it, ok := c.data[key]; ok && it.expireAt > now {
-		c.moveToFront(it)
-		return it.val, true
+	if it, ok := c.data[key]; ok {
+		if it.expireAt > now {
+			c.moveToFront(it)
+			return it.val, true
+		}
+		return it.val, false
 	}
 	return nil, false
 }
 
 func (c *Lru[K, V]) Peek(key K) (*V, bool) {
 	now := htime.NowTime().UnixMilli()
-	if it, ok := c.data[key]; ok && it.expireAt > now {
-		return it.val, true
+	if it, ok := c.data[key]; ok {
+		return it.val, it.expireAt > now
 	}
 	return nil, false
 }

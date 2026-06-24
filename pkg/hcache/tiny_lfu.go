@@ -114,22 +114,24 @@ func (c *TinyLfu[K, V]) Get(key K) (*V, bool) {
 
 	now := htime.NowTime().UnixMilli()
 
-	if it, ok := c.data[key]; ok && it.expireAt > now {
-		c.moveToFront(it)
-		return it.val, true
+	if it, ok := c.data[key]; ok {
+		if it.expireAt > now {
+			c.moveToFront(it)
+			return it.val, true
+		}
+		return it.val, false
 	}
 
 	return nil, false
 }
 
 // Peek 返回 key 对应的值，不改变 LRU 位置，不累加频率。
+// 即使过期也返回值，通过 bool 指示是否有效。
 func (c *TinyLfu[K, V]) Peek(key K) (*V, bool) {
 	now := htime.NowTime().UnixMilli()
-
-	if it, ok := c.data[key]; ok && it.expireAt > now {
-		return it.val, true
+	if it, ok := c.data[key]; ok {
+		return it.val, it.expireAt > now
 	}
-
 	return nil, false
 }
 
