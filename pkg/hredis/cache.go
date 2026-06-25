@@ -127,9 +127,9 @@ func ClearExpired(ctx context.Context, prefix string) error {
 		return herror.NewError("redis not found in context")
 	}
 	c := r.Get()
+	var cursor uint64
 	for {
 		var keys []string
-		var cursor uint64
 		var err error
 		keys, cursor, err = c.HScan(ctx, prefix+":cache", cursor, "*", 1000).Result()
 		if err != nil {
@@ -152,9 +152,9 @@ func ClearExpired(ctx context.Context, prefix string) error {
 func clearTableExpired(ctx context.Context, c *redis.Client, key string, prefix string) error {
 	delKeys := make([]string, 0)
 
+	var cursor uint64
 	for {
 		var keys []string
-		var cursor uint64
 		var err error
 		keys, cursor, err = c.HScan(ctx, prefix+":cache:"+key, cursor, "*", 1000).Result()
 		if err != nil {
