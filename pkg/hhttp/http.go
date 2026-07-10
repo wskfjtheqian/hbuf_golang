@@ -1,7 +1,6 @@
 package hhttp
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"net"
@@ -12,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hip"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
@@ -113,35 +111,13 @@ func (a *Http) health(writer http.ResponseWriter, request *http.Request) {
 }
 
 type ResponseWriter struct {
-	writer http.ResponseWriter
+	http.ResponseWriter
 	status int
-}
-
-func (r *ResponseWriter) Header() http.Header {
-	return r.writer.Header()
-}
-
-func (r *ResponseWriter) Write(bytes []byte) (int, error) {
-	return r.writer.Write(bytes)
 }
 
 func (r *ResponseWriter) WriteHeader(statusCode int) {
 	r.status = statusCode
-	r.writer.WriteHeader(statusCode)
-}
-
-func (r *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := r.writer.(http.Hijacker)
-	if !ok {
-		return nil, nil, herror.NewError("the writer doesn't support the Hijacker interface")
-	}
-	return h.Hijack()
-}
-
-func (r *ResponseWriter) Flush() {
-	if f, ok := r.writer.(http.Flusher); ok {
-		f.Flush()
-	}
+	r.ResponseWriter.WriteHeader(statusCode)
 }
 
 // WithContext 给上下文添加 HTTP 连接
@@ -192,8 +168,8 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	start := time.Now()
 	w := &ResponseWriter{
-		writer: writer,
-		status: http.StatusOK,
+		ResponseWriter: writer,
+		status:         http.StatusOK,
 	}
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
