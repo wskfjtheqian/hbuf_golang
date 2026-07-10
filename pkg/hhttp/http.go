@@ -138,6 +138,12 @@ func (r *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return h.Hijack()
 }
 
+func (r *ResponseWriter) Flush() {
+	if f, ok := r.writer.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // WithContext 给上下文添加 HTTP 连接
 func WithContext(ctx context.Context, writer http.ResponseWriter, request *http.Request) context.Context {
 	return &Context{
