@@ -622,8 +622,7 @@ func (s *Service) GetClient(name string, dispatch Dispatch) hrpc.Init {
 	defer s.lock.Unlock()
 
 	clients, ok := s.clients[name]
-	length := len(clients.list)
-	if !ok || length == 0 {
+	if !ok || len(clients.list) == 0 {
 		return nil
 	}
 	if dispatch == nil {
