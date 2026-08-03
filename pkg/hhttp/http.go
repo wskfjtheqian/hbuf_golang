@@ -61,7 +61,7 @@ func NewHttp(options ...Option) *Http {
 			Control: func(network, address string, c syscall.RawConn) error {
 				var opErr error
 				err := c.Control(func(fd uintptr) {
-					opErr = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+					opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 				})
 				if err != nil {
 					return err
@@ -70,7 +70,7 @@ func NewHttp(options ...Option) *Http {
 			},
 		},
 	}
-
+	ret.isInit.Store(hutl.ToPointer(false))
 	for _, option := range options {
 		option(ret)
 	}
@@ -80,7 +80,7 @@ func NewHttp(options ...Option) *Http {
 }
 
 func (a *Http) Init() {
-	a.isInit.S
+	a.isInit.Store(hutl.ToPointer(true))
 	a.init <- true
 }
 func (a *Http) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
@@ -112,7 +112,7 @@ func (a *Http) SetConfig(conf *Config) error {
 	}
 
 	go func() {
-		if !a.isInit {
+		if !*a.isInit.Load() {
 			<-a.init
 		}
 
