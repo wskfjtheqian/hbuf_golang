@@ -378,17 +378,26 @@ func EndDay(t time.Time) time.Time {
 }
 
 // StartWeek 返回给定时间所在周的起始日期，周一为起始日期
-// 例如: 给定时间为 2021-08-15 12:30:00，则返回 2021-08-09 00:00:00
 func StartWeek(t time.Time) time.Time {
+	// 计算到周一需要偏移的天数
+	// 周一=1, 周二=2, ..., 周日=0
+	offset := int(t.Weekday()) - 1
+	if offset < 0 {
+		offset = 6 // 周日需要往前推6天
+	}
 	year, month, day := t.Date()
-	return time.Date(year, month, day-int(t.Weekday())-6, 0, 0, 0, 0, t.Location())
+	return time.Date(year, month, day-offset, 0, 0, 0, 0, t.Location())
 }
 
-// EndWeek 返回给定时间所在周的结束日期, 周日为结束日期
-// 例如：给定时间为 2021-08-15 12:30:00，则返回 2021-08-15 23:59:59
+// EndWeek 返回给定时间所在周的结束日期，周日为结束日期
 func EndWeek(t time.Time) time.Time {
-	year, month, day := t.Date()
-	return time.Date(year, month, day-int(t.Weekday()), 23, 59, 59, 999999999, t.Location())
+	// 先获取周一
+	start := StartWeek(t)
+	// 周一加6天就是周日
+	return time.Date(
+		start.Year(), start.Month(), start.Day()+6,
+		23, 59, 59, 999999999, start.Location(),
+	)
 }
 
 // StartMonth 返回给定时间所在月的起始日期
