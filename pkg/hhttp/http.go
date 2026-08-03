@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
@@ -18,18 +20,33 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
-type Http struct {
-	mux    http.ServeMux
-	http   *http.Server
-	config Config
+type Option func(*Http)
 
-	init        chan bool
-	isInit      bool
-	log         *hlog.Logger
-	builderPool sync.Pool
+func WithNewContext(newContext func() context.Context) Option {
+	return func(s *Http) {
+		s.newContext = newContext
+	}
 }
 
-func NewHttp() *Http {
+func WithListenConfig(lc net.ListenConfig) Option {
+	return func(s *Http) {
+		s.lc = lc
+	}
+}
+
+type Http struct {
+	mux         http.ServeMux
+	http        atomic.Pointer[http.Server]
+	config      Config
+	lc          net.ListenConfig
+	init        chan bool
+	isInit      atomic.Pointer[bool]
+	log         *hlog.Logger
+	builderPool sync.Pool
+	newContext  func() context.Context
+}
+
+func NewHttp(options ...Option) *Http {
 	hlog.SetLevelName(LogHTTP, "HTTP")
 
 	ret := &Http{
@@ -40,13 +57,30 @@ func NewHttp() *Http {
 				return &strings.Builder{}
 			},
 		},
+		lc: net.ListenConfig{
+			Control: func(network, address string, c syscall.RawConn) error {
+				var opErr error
+				err := c.Control(func(fd uintptr) {
+					opErr = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+				})
+				if err != nil {
+					return err
+				}
+				return opErr
+			},
+		},
 	}
+
+	for _, option := range options {
+		option(ret)
+	}
+
 	ret.mux.HandleFunc("/health", ret.health)
 	return ret
 }
 
 func (a *Http) Init() {
-	a.isInit = true
+	a.isInit.S
 	a.init <- true
 }
 func (a *Http) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
@@ -62,38 +96,36 @@ func (a *Http) SetConfig(conf *Config) error {
 	if a.config.Equal(conf) {
 		return nil
 	}
-
-	if a.http != nil {
-		_ = a.http.Close()
-		hlog.Info("close old http connection")
-	}
-
 	if nil == conf {
-		a.http = nil
+		h := a.http.Swap(nil)
+		if h != nil {
+			_ = h.Close()
+			hlog.Info("close old http connection")
+		}
 		return nil
 	}
 
-	listener, err := net.Listen("tcp", *conf.Addr)
+	listener, err := a.lc.Listen(context.Background(), "tcp", *conf.Addr)
 	if err != nil {
 		hlog.Error("Listen server failed with '%s'\n", err)
 		return nil
-	}
-
-	a.http = &http.Server{
-		Handler: a,
 	}
 
 	go func() {
 		if !a.isInit {
 			<-a.init
 		}
+
+		h := &http.Server{
+			Handler: a,
+		}
 		var err error
 		if conf.Crt != nil && conf.Key != nil {
 			hlog.Info("Start https server, addr: %s", *conf.Addr)
-			err = a.http.ServeTLS(listener, *conf.Crt, *conf.Key)
+			err = h.ServeTLS(listener, *conf.Crt, *conf.Key)
 		} else {
 			hlog.Info("Start http server, addr: %s", *conf.Addr)
-			err = a.http.Serve(listener)
+			err = h.Serve(listener)
 		}
 		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
@@ -101,6 +133,13 @@ func (a *Http) SetConfig(conf *Config) error {
 			} else {
 				hlog.Error("Listen server failed with '%s'\n", err)
 			}
+			_ = listener.Close()
+			return
+		}
+
+		h = a.http.Swap(nil)
+		if h != nil {
+			_ = h.Close()
 		}
 	}()
 
@@ -196,7 +235,12 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		status: http.StatusOK,
 	}
 
-	a.mux.ServeHTTP(w, request.WithContext(WithContext(request.Context(), w, request)))
+	ctx := request.Context()
+	if a.newContext != nil {
+		ctx = a.newContext()
+	}
+
+	a.mux.ServeHTTP(w, request.WithContext(WithContext(ctx, w, request)))
 	old := time.Since(start) / time.Millisecond
 	t := "[" + strconv.FormatFloat(float64(old), 'f', 3, 64) + "ms]"
 
