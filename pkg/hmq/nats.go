@@ -284,11 +284,8 @@ func Publish[T any](ctx context.Context, subject string, msg *T) error {
 	if err != nil {
 		return err
 	}
-	conn, err := n.GetConn()
-	if err != nil {
-		return err
-	}
-	return conn.Publish(subject, jsonData)
+
+	return n.Publish(ctx, subject, jsonData)
 }
 
 // Subscribe 订阅指定的主题
