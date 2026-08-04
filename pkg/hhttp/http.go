@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
@@ -58,16 +57,7 @@ func NewHttp(options ...Option) *Http {
 			},
 		},
 		lc: net.ListenConfig{
-			Control: func(network, address string, c syscall.RawConn) error {
-				var opErr error
-				err := c.Control(func(fd uintptr) {
-					opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-				})
-				if err != nil {
-					return err
-				}
-				return opErr
-			},
+			Control: controlSocket,
 		},
 	}
 	ret.isInit.Store(hutl.ToPointer(false))
