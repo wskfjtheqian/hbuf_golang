@@ -36,7 +36,7 @@ func WithListenConfig(lc net.ListenConfig) Option {
 type Http struct {
 	mux         http.ServeMux
 	http        atomic.Pointer[http.Server]
-	config      Config
+	config      atomic.Pointer[Config]
 	lc          net.ListenConfig
 	init        chan bool
 	isInit      atomic.Pointer[bool]
@@ -69,6 +69,10 @@ func NewHttp(options ...Option) *Http {
 	return ret
 }
 
+func (a *Http) IsOpen() bool {
+	return a.config.Load() != nil
+}
+
 func (a *Http) Init() {
 	a.isInit.Store(hutl.ToPointer(true))
 	a.init <- true
@@ -83,7 +87,7 @@ func (a *Http) Handle(pattern string, handler http.Handler) {
 
 // SetConfig 设置配置
 func (a *Http) SetConfig(conf *Config) error {
-	if a.config.Equal(conf) {
+	if a.config.Load().Equal(conf) {
 		return nil
 	}
 	if nil == conf {
@@ -133,7 +137,7 @@ func (a *Http) SetConfig(conf *Config) error {
 		}
 	}()
 
-	a.config = *conf
+	a.config.Store(conf)
 	return nil
 }
 

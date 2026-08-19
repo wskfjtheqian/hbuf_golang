@@ -1,0 +1,38 @@
+version: '3'
+services:
+  doris-fe:
+    image: apache/doris:3.0.8-fe
+    container_name: doris-fe
+    hostname: doris-fe
+    environment:
+      - FE_SERVERS=fe1:127.0.0.1:9010
+      - FE_IP_ALLOW_NETWORKS=172.20.0.0/16
+    ports:
+      - "8030:8030" # Web UI 界面管理端口
+      - "9030:9030" # MySQL 协议连接查询端口（Go 代码 JDBC 连接此端口）
+    volumes:
+      - ./doris-meta:/opt/apache-doris/fe/doris-meta
+    networks:
+      - doris-net
+
+  doris-be:
+    image: apache/doris:3.0.8-be
+    container_name: doris-be
+    hostname: doris-be
+    environment:
+      - FE_SERVERS=fe1:doris-fe:9010
+      - BE_IP_ALLOW_NETWORKS=172.20.0.0/16
+    ports:
+      - "8040:8040" # Web UI
+    volumes:
+      - ./doris-storage:/opt/apache-doris/be/storage
+    depends_on:
+      - doris-fe
+    networks:
+      - doris-net
+
+networks:
+  doris-net:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

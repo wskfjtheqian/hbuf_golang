@@ -123,12 +123,13 @@ func (s *Builder) Del(text string) {
 	s.del = text
 }
 
-func (s *Builder) Join(b *Builder) {
+func (s *Builder) Join(b *Builder) *Builder {
 	if b == nil {
-		return
+		return s
 	}
 	s.text.WriteString(b.text.String())
 	s.params = append(s.params, b.params...)
+	return s
 }
 
 func (s *Builder) ToText() string {

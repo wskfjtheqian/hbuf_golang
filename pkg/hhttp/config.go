@@ -15,8 +15,7 @@ type Config struct {
 
 func (c *Config) Validate() bool {
 	if c == nil {
-		hlog.Error("not found http config")
-		return false
+		return true
 	}
 
 	valid := true
