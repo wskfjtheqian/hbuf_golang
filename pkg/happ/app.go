@@ -61,7 +61,7 @@ func NewApp(options ...Option) *App {
 	ret.etcd = hetcd.NewEtcd()
 	ret.redis = hredis.NewRedis()
 	ret.sqlDb = hsql.NewDB(hsql.WithCache(hredis.NewCache("db")))
-	ret.service = hservice.NewService(ret.etcd, hservice.WithMiddleware())
+	ret.service = hservice.NewService(ret.etcd)
 
 	for _, option := range options {
 		option(ret)

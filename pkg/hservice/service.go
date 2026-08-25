@@ -29,7 +29,12 @@ import (
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
-type Dispatch func(list []hrpc.Init, index int32) (hrpc.Init, int32)
+type Router struct {
+	hrpc.Init
+	IsLocal bool
+}
+
+type Dispatch func(list []Router, index int32) (hrpc.Init, int32)
 
 type ContextOption func(c *Context)
 
@@ -98,7 +103,7 @@ type RegisterInfo struct {
 }
 
 type client struct {
-	list     []hrpc.Init
+	list     []Router
 	dispatch Dispatch
 	index    atomic.Int32
 }
@@ -121,7 +126,7 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 		httpClient:    make(map[string]*hrpc.Client),
 		waitSubscribe: make(chan bool, 2),
 	}
-	ret.rpcServer = hrpc.NewServer(hrpc.WithServerMiddleware(), hrpc.WithServerEncoder(hrpc.NewJsonEncode()), hrpc.WithServerDecode(hrpc.NewJsonDecode()))
+	ret.rpcServer = hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewJsonEncode()), hrpc.WithServerDecode(hrpc.NewJsonDecode()))
 
 	for _, option := range options {
 		option(ret)
@@ -580,12 +585,15 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	c, ok := s.clients[install.name]
 	if !ok {
 		c = &client{
-			list:     make([]hrpc.Init, 0),
-			dispatch: NewDispatchRandom(),
+			list:     make([]Router, 0),
+			dispatch: NewDispatchPriorityLocal(NewDispatchRandom()),
 		}
 		s.clients[install.name] = c
 	}
-	c.list = append(c.list, install.client(connect))
+	c.list = append(c.list, Router{
+		Init:    install.client(connect),
+		IsLocal: false,
+	})
 
 	s.checkSubscribe()
 	s.lock.Unlock()
@@ -598,12 +606,15 @@ func (s *Service) addLocalClient(install *ServerInfo) {
 	c, ok := s.clients[install.name]
 	if !ok {
 		c = &client{
-			list:     make([]hrpc.Init, 0),
-			dispatch: NewDispatchRandom(),
+			list:     make([]Router, 0),
+			dispatch: NewDispatchPriorityLocal(NewDispatchRandom()),
 		}
 		s.clients[install.name] = c
 	}
-	c.list = append(c.list, install.init)
+	c.list = append(c.list, Router{
+		Init:    install.init,
+		IsLocal: true,
+	})
 	s.checkSubscribe()
 	s.lock.Unlock()
 }
@@ -686,27 +697,39 @@ func GetClient(ctx context.Context, name string) hrpc.Init {
 
 // NewDispatchRandom 随机调度
 func NewDispatchRandom() Dispatch {
-	return func(list []hrpc.Init, index int32) (hrpc.Init, int32) {
+	return func(list []Router, index int32) (hrpc.Init, int32) {
 		index = rand2.Int32N(int32(len(list)))
-		return list[index], index
+		return list[index].Init, index
 	}
 }
 
 // NewDispatchRoundRobin 轮询调度
 func NewDispatchRoundRobin() Dispatch {
-	return func(list []hrpc.Init, index int32) (hrpc.Init, int32) {
+	return func(list []Router, index int32) (hrpc.Init, int32) {
 		index++
 		if index >= int32(len(list)) {
 			index = 0
 		}
-		return list[index], index
+		return list[index].Init, index
 	}
 }
 
 // NewDispatchHash 哈希调度
 func NewDispatchHash(hash uint64) Dispatch {
-	return func(list []hrpc.Init, index int32) (hrpc.Init, int32) {
+	return func(list []Router, index int32) (hrpc.Init, int32) {
 		index = int32(hash % uint64(len(list)))
-		return list[index], index
+		return list[index].Init, index
+	}
+}
+
+// NewDispatchPriorityLocal 优先本地路由
+func NewDispatchPriorityLocal(dispatch Dispatch) Dispatch {
+	return func(list []Router, index int32) (hrpc.Init, int32) {
+		for _, router := range list {
+			if router.IsLocal {
+				return router.Init, index
+			}
+		}
+		return dispatch(list, index)
 	}
 }
