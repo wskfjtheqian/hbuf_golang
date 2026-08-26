@@ -14,7 +14,6 @@ import (
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"golang.org/x/net/http2"
 )
 
@@ -197,7 +196,6 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	ctx = hlog.WithContext(ctx, r.Header.Get("trace-Id"))
 	err := h.middleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
 		return h.server.Response(ctx, path, writer, reader, header)
 	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body, r.Header)

@@ -233,6 +233,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if a.newContext != nil {
 		ctx = a.newContext()
 	}
+	ctx = hlog.WithContext(ctx, request.Header.Get("X-Trace-Id"))
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(ctx, w, request)))
 	old := time.Since(start) / time.Millisecond
