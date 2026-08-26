@@ -270,6 +270,7 @@ func (n *Nats) Publish(ctx context.Context, subject string, data []byte) error {
 	}
 
 	return n.publishMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+		msg.Header.Set("X-Trace-Id", hlog.FromContext(ctx))
 		return conn.PublishMsg(msg)
 	})(ctx, &nats.Msg{Subject: subject, Data: data, Header: nats.Header{}})
 }
@@ -297,7 +298,7 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx 
 	subscription, err := conn.Subscribe(subject, func(msg *nats.Msg) {
 		_, err := n.middleware(func(ctx context.Context, req any) (any, error) {
 			return nil, n.subscribeMiddleware(func(ctx context.Context, msg *nats.Msg) error {
-				return callback(ctx, msg)
+				return callback(hlog.WithContext(ctx, msg.Header.Get("X-Trace-Id")), msg)
 			})(ctx, msg)
 		})(context.Background(), nil)
 		if err != nil {
@@ -427,6 +428,7 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 
 	var pubAck *jetstream.PubAck
 	err = n.publishMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+		msg.Header.Set("X-Trace-Id", hlog.FromContext(ctx))
 		pubAck, err = jetStream.PublishMsg(ctx, msg)
 		return err
 	})(ctx, msg)
@@ -541,7 +543,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		msgId := msg.Headers().Get(jetstream.MsgIDHeader)
 		_, retErr := n.middleware(func(ctx context.Context, req any) (any, error) {
 			return nil, n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
-				return callback(ctx, msgId, msg)
+				return callback(hlog.WithContext(ctx, m.Header.Get("X-Trace-Id")), msgId, msg)
 			})(ctx, &nats.Msg{
 				Subject: msg.Subject(),
 				Reply:   msg.Reply(),
@@ -558,7 +560,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 			}
 			if int(metadata.NumDelivered) >= n.maxDeliver {
 				_ = n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
-					n.saveErrorMessage(ctx, stream, subject, durable, msgId, msg.Data(), retErr.Error())
+					n.saveErrorMessage(hlog.WithContext(ctx, m.Header.Get("X-Trace-Id")), stream, subject, durable, msgId, msg.Data(), retErr.Error())
 					return nil
 				})(context.Background(), &nats.Msg{
 					Subject: msg.Subject(),
@@ -701,6 +703,7 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 	}
 
 	err = n.publishMiddleware(func(ctx context.Context, msg *nats.Msg) error {
+		msg.Header.Set("X-Trace-Id", hlog.FromContext(ctx))
 		_, err := jetStream.PublishMsg(ctx, msg)
 		return err
 	})(ctx, &nats.Msg{
@@ -752,7 +755,7 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 				if err != nil {
 					return herror.Wrap(err)
 				}
-				return callback(ctx, msgId, &data)
+				return callback(hlog.WithContext(ctx, m.Header.Get("X-Trace-Id")), msgId, &data)
 			})(ctx, &nats.Msg{
 				Subject: msg.Subject(),
 				Reply:   msg.Reply(),

@@ -135,10 +135,11 @@ func (a *App) Go(ctx context.Context, fn func(ctx context.Context) error) {
 				hlog.Error(ctx, "%s \n", err, string(debug.Stack()))
 			}
 		}()
-		ctx, cancel := context.WithCancel(ctx)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
 		defer cancel()
 
-		ctx = hlog.WithContext(ctx, "")
+		ctx = hlog.WithContext(ctx, hlog.FromContext(ctx))
 		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
 			return nil, fn(ctx)
 		})(ctx, nil)
