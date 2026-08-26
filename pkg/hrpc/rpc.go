@@ -409,8 +409,9 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), temp)
 }
 
-func (r *Server) Init(list ...string) {
-	ctx, cancelFunc := context.WithCancel(context.Background())
+func (r *Server) Init(ctx context.Context, list ...string) {
+	ctx, cancelFunc := context.WithCancel(ctx)
+
 	defer cancelFunc()
 	_, _ = r.middleware(func(ctx context.Context, req any) (any, error) {
 		if len(list) > 0 {

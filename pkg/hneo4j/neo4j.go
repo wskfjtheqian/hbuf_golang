@@ -57,8 +57,7 @@ type Neo4j struct {
 	driver atomic.Pointer[neo4j.DriverWithContext]
 }
 
-func (n *Neo4j) SetConfig(cfg *Config) error {
-	ctx := context.Background()
+func (n *Neo4j) SetConfig(ctx context.Context, cfg *Config) error {
 
 	if n.config.Equal(cfg) {
 		return nil

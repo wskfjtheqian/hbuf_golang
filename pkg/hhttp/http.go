@@ -73,7 +73,7 @@ func (a *Http) IsOpen() bool {
 	return a.config.Load() != nil
 }
 
-func (a *Http) Init() {
+func (a *Http) Init(ctx context.Context) {
 	a.isInit.Store(hutl.ToPointer(true))
 	a.init <- true
 }

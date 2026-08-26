@@ -215,7 +215,7 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 	}
 
 	<-s.waitSubscribe
-	s.rpcServer.Init(cfg.Server.List...)
+	s.rpcServer.Init(ctx, cfg.Server.List...)
 	close(s.waitSubscribe)
 	return nil
 }

@@ -3,12 +3,15 @@ package hlog
 import (
 	"context"
 	"encoding/binary"
-	"encoding/hex"
+	"math/big"
 	"math/rand/v2"
 	"reflect"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
+
+// 预定义 Base62 的字符集（共 62 个字符）
+const base62Chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 func NewTraceId() string {
 	bytes := make([]byte, 16)
@@ -16,7 +19,21 @@ func NewTraceId() string {
 	milli := uint64(htime.NowTime().UnixNano())
 	binary.BigEndian.PutUint64(bytes[0:8], milli)
 	binary.BigEndian.PutUint64(bytes[8:16], rand.Uint64())
-	return hex.EncodeToString(bytes)
+	// 3. 将 16 字节的 byte 数组转换为 big.Int
+	var num big.Int
+	num.SetBytes(bytes)
+
+	// 4. 执行 Base62 编码（128位整数转 Base62 刚好固定需要 22 位空间）
+	result := make([]byte, 22)
+	target := big.NewInt(62)
+	rem := new(big.Int)
+
+	for i := 21; i >= 0; i-- {
+		num.DivMod(&num, target, rem)
+		result[i] = base62Chars[rem.Int64()]
+	}
+
+	return string(result)
 }
 
 // WithContext 给上下文添加 HTTP 连接

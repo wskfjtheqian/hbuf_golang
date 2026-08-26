@@ -109,7 +109,7 @@ func (a *App) SetConfig(ctx context.Context, conf *Config) error {
 	return nil
 }
 
-func (a *App) Init() {
+func (a *App) Init(ctx context.Context) {
 
 }
 
