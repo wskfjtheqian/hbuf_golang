@@ -1,7 +1,9 @@
 package hservice
 
 import (
+	"context"
 	"crypto/tls"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
@@ -26,20 +28,20 @@ func (c *Config) Equal(other *Config) bool {
 }
 
 // Validate 检查配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
-		hlog.Error("not found server config")
+		hlog.Error(ctx, "not found server config")
 		return false
 	}
 
 	var valid = true
 	if c.Server == nil {
 		valid = false
-		hlog.Error("server config is nil")
+		hlog.Error(ctx, "server config is nil")
 	}
 	if c.Client == nil {
 		valid = false
-		hlog.Error("client config is nil")
+		hlog.Error(ctx, "client config is nil")
 	}
 	return valid
 }
@@ -54,28 +56,28 @@ type Http struct {
 }
 
 // Validate 检查配置是否有效
-func (h *Http) Validate() bool {
+func (h *Http) Validate(ctx context.Context) bool {
 	var valid = true
 	if h.Hostname == nil || *h.Hostname == "" {
 		valid = false
-		hlog.Error("hostname is nil")
+		hlog.Error(ctx, "hostname is nil")
 	}
 	if h.Address == nil || *h.Address == "" {
 		valid = false
-		hlog.Error("address is nil")
+		hlog.Error(ctx, "address is nil")
 	}
 
 	if h.Crt != nil && *h.Crt != "" && h.Key != nil && *h.Key != "" {
 		_, err := tls.LoadX509KeyPair(*h.Crt, *h.Key)
 		if err != nil {
-			hlog.Error("load x509 key pair error: %s", err.Error())
+			hlog.Error(ctx, "load x509 key pair error: %s", err.Error())
 			valid = false
 		}
 	}
 
 	if h.Path == nil {
 		valid = false
-		hlog.Error("path is nil")
+		hlog.Error(ctx, "path is nil")
 	}
 	return valid
 }
@@ -104,17 +106,17 @@ type Server struct {
 }
 
 // Validate 检查配置是否有效
-func (s *Server) Validate() bool {
+func (s *Server) Validate(ctx context.Context) bool {
 	var valid = true
 	if s.Http == nil {
 		valid = false
-		hlog.Error("http config is nil")
+		hlog.Error(ctx, "http config is nil")
 	} else {
-		valid = s.Http.Validate()
+		valid = s.Http.Validate(ctx)
 	}
 	if s.List == nil {
 		valid = false
-		hlog.Error("list is nil")
+		hlog.Error(ctx, "list is nil")
 	}
 	return valid
 }
@@ -143,11 +145,11 @@ type Client struct {
 	Server map[string][]string `yaml:"Server"`
 }
 
-func (c *Client) Validate() bool {
+func (c *Client) Validate(ctx context.Context) bool {
 	var valid = true
 	if c.Server == nil {
 		valid = false
-		hlog.Error("server is nil")
+		hlog.Error(ctx, "server is nil")
 	}
 	return valid
 }

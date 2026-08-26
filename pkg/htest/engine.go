@@ -18,7 +18,7 @@ import (
 
 func NewT(t *testing.T) *T {
 	return &T{
-		Context: context.TODO(),
+		Context: context.Background(),
 		T:       t,
 	}
 }

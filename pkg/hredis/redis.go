@@ -2,13 +2,14 @@ package hredis
 
 import (
 	"context"
+	"reflect"
+	"sync/atomic"
+	"time"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
-	"reflect"
-	"sync/atomic"
-	"time"
 )
 
 // WithContext 给上下文添加 REDIS 连接
@@ -58,7 +59,7 @@ type Redis struct {
 }
 
 // SetConfig 设置 Redis 配置
-func (r *Redis) SetConfig(cfg *Config) error {
+func (r *Redis) SetConfig(ctx context.Context, cfg *Config) error {
 	if r.config.Equal(cfg) {
 		return nil
 	}
@@ -67,7 +68,7 @@ func (r *Redis) SetConfig(cfg *Config) error {
 		if old != nil {
 			<-time.After(time.Second * 30)
 			_ = old.Close()
-			hlog.Info("old redis client closed")
+			hlog.Info(ctx, "old redis client closed")
 		}
 	}()
 
@@ -140,7 +141,7 @@ func (r *Redis) SetConfig(cfg *Config) error {
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		return herror.Wrap(err)
 	}
-	hlog.Info("redis client connected")
+	hlog.Info(ctx, "redis client connected")
 	r.conn.Store(client)
 
 	return nil

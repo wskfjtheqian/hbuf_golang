@@ -1,6 +1,8 @@
 package happ
 
 import (
+	"context"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hmq"
@@ -18,26 +20,26 @@ type Config struct {
 }
 
 // Validate 检查配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
-		hlog.Error("not found app config")
+		hlog.Error(ctx, "not found app config")
 		return false
 	}
 
 	valid := true
-	if !c.Nats.Validate() {
+	if !c.Nats.Validate(ctx) {
 		valid = false
 	}
-	if !c.Etcd.Validate() {
+	if !c.Etcd.Validate(ctx) {
 		valid = false
 	}
-	if !c.Redis.Validate() {
+	if !c.Redis.Validate(ctx) {
 		valid = false
 	}
-	if !c.Sql.Validate() {
+	if !c.Sql.Validate(ctx) {
 		valid = false
 	}
-	if !c.Service.Validate() {
+	if !c.Service.Validate(ctx) {
 		valid = false
 	}
 	return valid

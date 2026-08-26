@@ -410,20 +410,20 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 }
 
 func (r *Server) Init(list ...string) {
-	ctx, cancelFunc := context.WithCancel(context.TODO())
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
 	_, _ = r.middleware(func(ctx context.Context, req any) (any, error) {
 		if len(list) > 0 {
 			for _, key := range list {
 				if init, ok := r.inits[key+"/"]; ok {
 					init.Init(ctx)
-					hlog.Info("finish init %s", strings.TrimRight(key, "/"))
+					hlog.Info(ctx, "finish init %s", strings.TrimRight(key, "/"))
 				}
 			}
 		} else {
 			for key, init := range r.inits {
 				init.Init(ctx)
-				hlog.Info("finish init %s", strings.TrimRight(key, "/"))
+				hlog.Info(ctx, "finish init %s", strings.TrimRight(key, "/"))
 			}
 		}
 		return nil, nil

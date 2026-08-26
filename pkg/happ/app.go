@@ -81,28 +81,28 @@ type App struct {
 }
 
 // SetConfig 设置配置
-func (a *App) SetConfig(conf *Config) error {
-	err := a.nats.SetConfig(conf.Nats)
+func (a *App) SetConfig(ctx context.Context, conf *Config) error {
+	err := a.nats.SetConfig(ctx, conf.Nats)
 	if err != nil {
 		return err
 	}
 
-	err = a.etcd.SetConfig(conf.Etcd)
+	err = a.etcd.SetConfig(ctx, conf.Etcd)
 	if err != nil {
 		return err
 	}
 
-	err = a.redis.SetConfig(conf.Redis)
+	err = a.redis.SetConfig(ctx, conf.Redis)
 	if err != nil {
 		return err
 	}
 
-	err = a.sqlDb.SetConfig(conf.Sql)
+	err = a.sqlDb.SetConfig(ctx, conf.Sql)
 	if err != nil {
 		return err
 	}
 
-	err = a.service.SetConfig(conf.Service)
+	err = a.service.SetConfig(ctx, conf.Service)
 	if err != nil {
 		return err
 	}
@@ -132,17 +132,18 @@ func (a *App) Go(ctx context.Context, fn func(ctx context.Context) error) {
 		defer func() {
 			err := recover()
 			if err != nil {
-				hlog.Error("%s \n", err, string(debug.Stack()))
+				hlog.Error(ctx, "%s \n", err, string(debug.Stack()))
 			}
 		}()
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		ctx = hlog.WithContext(ctx, "")
 		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
 			return nil, fn(ctx)
 		})(ctx, nil)
 		if err != nil {
-			herror.PrintStack(err)
+			herror.PrintStack(ctx, err)
 		}
 	}()
 }

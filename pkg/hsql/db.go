@@ -136,7 +136,7 @@ type DB struct {
 	srcCache hcache.Cache
 }
 
-func (d *DB) SetConfig(cfg *Config) error {
+func (d *DB) SetConfig(ctx context.Context, cfg *Config) error {
 	if d.config.Equal(cfg) {
 		return nil
 	}
@@ -145,7 +145,7 @@ func (d *DB) SetConfig(cfg *Config) error {
 		if old != nil {
 			<-time.After(time.Second * 30)
 			_ = old.Close()
-			hlog.Info("old database client closed")
+			hlog.Info(ctx, "old database client closed")
 		}
 	}()
 
@@ -197,7 +197,7 @@ func (d *DB) SetConfig(cfg *Config) error {
 	if err := db.Ping(); err != nil {
 		return herror.Wrap(err)
 	}
-	hlog.Info("database client connected")
+	hlog.Info(ctx, "database client connected")
 	d.db.Store(db)
 	return nil
 }

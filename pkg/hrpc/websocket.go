@@ -143,16 +143,17 @@ func (s *webSocket) run() {
 	}
 
 	go func() {
+		ctx := hlog.NewContext()
 		for {
 			err := s.conn.SetReadDeadline(htime.NowTime().Add(s.pongWait))
 			if err != nil {
-				herror.PrintStack(err)
+				herror.PrintStack(ctx, err)
 				break
 			}
 
 			payload, opCode, err := wsutil.ReadData(s.conn, s.state)
 			if err != nil {
-				hlog.Warn("read data :%v", err)
+				hlog.Warn(ctx, "read data :%v", err)
 				break
 			}
 			switch opCode {
@@ -161,7 +162,7 @@ func (s *webSocket) run() {
 				var data WebSocketData
 				err = s.decoder(bytes.NewBuffer(payload))(&data, "")
 				if err != nil {
-					herror.PrintStack(err)
+					herror.PrintStack(ctx, err)
 				}
 				if data.Type == TypePing {
 					write := s.write.Load()
@@ -198,6 +199,7 @@ func (s *webSocket) run() {
 	}()
 
 	go func() {
+		ctx := hlog.NewContext()
 		for {
 			write := s.write.Load()
 			if write == nil {
@@ -209,7 +211,7 @@ func (s *webSocket) run() {
 				buf := bytes.NewBuffer(nil)
 				err := s.encoder(buf)(data, "")
 				if err != nil {
-					herror.PrintStack(err)
+					herror.PrintStack(ctx, err)
 				}
 
 				frame := ws.NewBinaryFrame(buf.Bytes())
@@ -218,7 +220,7 @@ func (s *webSocket) run() {
 				}
 				err = ws.WriteFrame(s.conn, frame)
 				if err != nil {
-					herror.PrintStack(err)
+					herror.PrintStack(ctx, err)
 					return
 				}
 			}
@@ -329,7 +331,7 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 			return s.response(ctx, path, writer, reader, header)
 		})(ctx, data.Path, response, data, data.Header)
 		if err != nil {
-			herror.PrintStack(err)
+			herror.PrintStack(ctx, err)
 		}
 		return
 	}
@@ -345,11 +347,11 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 				Msg:  "Server error",
 			}, "")
 			if err != nil {
-				herror.PrintStack(err)
+				herror.PrintStack(ctx, err)
 				return
 			}
 		} else {
-			herror.PrintStack(err)
+			herror.PrintStack(ctx, err)
 		}
 	} else {
 		response.Status = http.StatusOK
@@ -362,10 +364,10 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	return
 }
 
-func (s *webSocket) Close() {
+func (s *webSocket) Close(ctx context.Context) {
 	err := s.conn.Close()
 	if err != nil {
-		hlog.Error("close websocket error:%v", err)
+		hlog.Error(ctx, "close websocket error:%v", err)
 		return
 	}
 }
@@ -666,7 +668,7 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, i
 	if len(id) > 0 {
 		old, ok := w.manager.Swap(id, socket)
 		if ok {
-			old.Close()
+			old.Close(ctx)
 			if onClose != nil {
 				onClose()
 			}
@@ -683,10 +685,10 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, i
 }
 
 // CloseClient 关闭客户端
-func (w *WebSocketServer) CloseClient(id string) {
+func (w *WebSocketServer) CloseClient(ctx context.Context, id string) {
 	client := w.manager.Del(id)
 	if client != nil {
-		client.Close()
+		client.Close(ctx)
 	}
 }
 

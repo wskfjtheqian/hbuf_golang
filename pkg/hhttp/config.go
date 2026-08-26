@@ -1,6 +1,8 @@
 package hhttp
 
 import (
+	"context"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
@@ -13,7 +15,7 @@ type Config struct {
 	Key  *string `yaml:"Key"` //crt密钥
 }
 
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
 		return true
 	}
@@ -21,7 +23,7 @@ func (c *Config) Validate() bool {
 	valid := true
 	if c.Addr == nil || *c.Addr == "" {
 		valid = false
-		hlog.Error("Addr is empty")
+		hlog.Error(ctx, "Addr is empty")
 	}
 	return valid
 }

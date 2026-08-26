@@ -139,7 +139,7 @@ func (s *Builder) ToText() string {
 
 func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
 	var count int64 = 0
-	defer newPrintLog(s, &count).print()
+	defer newPrintLog(s, &count).print(ctx)
 
 	sql, ok := FromContext(ctx)
 	if !ok {
@@ -172,7 +172,7 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 
 func (s *Builder) Exec(ctx context.Context) (int64, int64, error) {
 	var count int64 = 0
-	defer newPrintLog(s, &count).print()
+	defer newPrintLog(s, &count).print(ctx)
 
 	db, ok := FromContext(ctx)
 	if !ok {
@@ -319,7 +319,7 @@ type printLog struct {
 	builder *Builder
 }
 
-func (p *printLog) print() {
+func (p *printLog) print(ctx context.Context) {
 	if !PrintSQL {
 		return
 	}
@@ -335,7 +335,7 @@ func (p *printLog) print() {
 	text.WriteString(hutl.Blue("[Rows:" + strconv.FormatInt(*p.count, 10) + "] "))
 	text.WriteString(hutl.Green(p.builder.ToText()))
 
-	_ = hlog.Output(3, LogSQL, text.String())
+	_ = hlog.Output(ctx, 3, LogSQL, text.String())
 }
 
 func newPrintLog(builder *Builder, count *int64) *printLog {

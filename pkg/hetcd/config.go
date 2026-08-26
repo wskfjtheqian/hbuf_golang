@@ -1,10 +1,12 @@
 package hetcd
 
 import (
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"context"
 	"sort"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 // Config 配置
@@ -63,9 +65,9 @@ type Config struct {
 }
 
 // Validate 验证配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
-		hlog.Error("not found etcd config")
+		hlog.Error(ctx, "not found etcd config")
 		return false
 	}
 
@@ -73,49 +75,49 @@ func (c *Config) Validate() bool {
 
 	if c.Endpoints == nil || len(c.Endpoints) == 0 {
 		valid = false
-		hlog.Error("etcd endpoints must not be empty")
+		hlog.Error(ctx, "etcd endpoints must not be empty")
 	}
 	for _, ep := range c.Endpoints {
 		if ep == "" {
 			valid = false
-			hlog.Error("etcd endpoint must not be empty")
+			hlog.Error(ctx, "etcd endpoint must not be empty")
 		}
 	}
 	if c.AutoSyncInterval != nil && *c.AutoSyncInterval <= 0 {
 		valid = false
-		hlog.Error("etcd auto-sync interval must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd auto-sync interval must be greater than or equal to 0")
 	}
 	if c.DialTimeout != nil && *c.DialTimeout <= 0 {
 		valid = false
-		hlog.Error("etcd dial timeout must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd dial timeout must be greater than or equal to 0")
 	}
 	if c.DialKeepAliveTime != nil && *c.DialKeepAliveTime <= 0 {
 		valid = false
-		hlog.Error("etcd dial keep-alive time must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd dial keep-alive time must be greater than or equal to 0")
 	}
 	if c.DialKeepAliveTimeout != nil && *c.DialKeepAliveTimeout <= 0 {
 		valid = false
-		hlog.Error("etcd dial keep-alive timeout must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd dial keep-alive timeout must be greater than or equal to 0")
 	}
 	if c.MaxCallSendMsgSize != nil && *c.MaxCallSendMsgSize < 0 {
 		valid = false
-		hlog.Error("etcd max call send message size must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd max call send message size must be greater than or equal to 0")
 	}
 	if c.MaxCallRecvMsgSize != nil && *c.MaxCallRecvMsgSize < 0 {
 		valid = false
-		hlog.Error("etcd max call receive message size must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd max call receive message size must be greater than or equal to 0")
 	}
 	if c.MaxUnaryRetries != nil && *c.MaxUnaryRetries < 0 {
 		valid = false
-		hlog.Error("etcd max unary retries must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd max unary retries must be greater than or equal to 0")
 	}
 	if c.BackoffWaitBetween != nil && *c.BackoffWaitBetween < 0 {
 		valid = false
-		hlog.Error("etcd backoff wait between must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd backoff wait between must be greater than or equal to 0")
 	}
 	if c.BackoffJitterFraction != nil && *c.BackoffJitterFraction < 0 {
 		valid = false
-		hlog.Error("etcd backoff jitter fraction must be greater than or equal to 0")
+		hlog.Error(ctx, "etcd backoff jitter fraction must be greater than or equal to 0")
 	}
 	return valid
 }

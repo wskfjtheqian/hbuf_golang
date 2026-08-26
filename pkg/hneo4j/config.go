@@ -1,8 +1,10 @@
 package hneo4j
 
 import (
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"context"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
 // 默认配置常量（参考 NATS DefaultTimeout 等设计）
@@ -32,27 +34,27 @@ type Config struct {
 }
 
 // Validate 检查配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	var valid = true
 	if c == nil {
-		hlog.Error("not found neo4j config")
+		hlog.Error(ctx, "not found neo4j config")
 		return false
 	}
 	if c.Addr == nil || *c.Addr == "" {
 		valid = false
-		hlog.Error("neo4j config Addr is empty")
+		hlog.Error(ctx, "neo4j config Addr is empty")
 	}
 	if c.Username == nil || *c.Username == "" {
 		valid = false
-		hlog.Error("neo4j config username is empty")
+		hlog.Error(ctx, "neo4j config username is empty")
 	}
 	if c.Password == nil || *c.Password == "" {
 		valid = false
-		hlog.Error("neo4j config password is empty")
+		hlog.Error(ctx, "neo4j config password is empty")
 	}
 	if c.Database == nil || *c.Database == "" {
 		valid = false
-		hlog.Error("neo4j config database is empty")
+		hlog.Error(ctx, "neo4j config database is empty")
 	}
 	return valid
 }

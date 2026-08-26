@@ -1,10 +1,12 @@
 package hmq
 
 import (
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
+	"context"
 	"sort"
 	"time"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 type Config struct {
@@ -141,78 +143,78 @@ type Config struct {
 }
 
 // Validate 检查配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
-		hlog.Error("not found nats config")
+		hlog.Error(ctx, "not found nats config")
 		return false
 	}
 
 	var valid bool = true
 	if c.Servers != nil && len(c.Servers) < 0 {
 		valid = false
-		hlog.Error("Servers is not allowed in Config")
+		hlog.Error(ctx, "Servers is not allowed in Config")
 	}
 	for _, s := range c.Servers {
 		if len(s) == 0 {
 			valid = false
-			hlog.Error("Empty server in Config")
+			hlog.Error(ctx, "Empty server in Config")
 		}
 	}
 	if c.MaxReconnect != nil && *c.MaxReconnect < 0 {
 		valid = false
-		hlog.Error("MaxReconnect must be positive in Config")
+		hlog.Error(ctx, "MaxReconnect must be positive in Config")
 	}
 	if c.ReconnectWait != nil && *c.ReconnectWait < 0 {
 		valid = false
-		hlog.Error("ReconnectWait must be positive in Config")
+		hlog.Error(ctx, "ReconnectWait must be positive in Config")
 	}
 	if c.ReconnectJitter != nil && *c.ReconnectJitter < 0 {
 		valid = false
-		hlog.Error("ReconnectJitter must be positive in Config")
+		hlog.Error(ctx, "ReconnectJitter must be positive in Config")
 	}
 	if c.ReconnectJitterTLS != nil && *c.ReconnectJitterTLS < 0 {
 		valid = false
-		hlog.Error("ReconnectJitterTLS must be positive in Config")
+		hlog.Error(ctx, "ReconnectJitterTLS must be positive in Config")
 	}
 	if c.Timeout != nil && *c.Timeout < 0 {
 		valid = false
-		hlog.Error("Timeout must be positive in Config")
+		hlog.Error(ctx, "Timeout must be positive in Config")
 	}
 	if c.DrainTimeout != nil && *c.DrainTimeout < 0 {
 		valid = false
-		hlog.Error("DrainTimeout must be positive in Config")
+		hlog.Error(ctx, "DrainTimeout must be positive in Config")
 	}
 	if c.FlusherTimeout != nil && *c.FlusherTimeout < 0 {
 		valid = false
-		hlog.Error("FlusherTimeout must be positive in Config")
+		hlog.Error(ctx, "FlusherTimeout must be positive in Config")
 	}
 	if c.PingInterval != nil && *c.PingInterval < 0 {
 		valid = false
-		hlog.Error("PingInterval must be positive in Config")
+		hlog.Error(ctx, "PingInterval must be positive in Config")
 	}
 	if c.MaxPingsOut != nil && *c.MaxPingsOut < 0 {
 		valid = false
-		hlog.Error("MaxPingsOut must be positive in Config")
+		hlog.Error(ctx, "MaxPingsOut must be positive in Config")
 	}
 	if c.ReconnectBufSize != nil && *c.ReconnectBufSize < 0 {
 		valid = false
-		hlog.Error("ReconnectBufSize must be positive in Config")
+		hlog.Error(ctx, "ReconnectBufSize must be positive in Config")
 	}
 	if c.SubChanLen != nil && *c.SubChanLen < 0 {
 		valid = false
-		hlog.Error("SubChanLen must be positive in Config")
+		hlog.Error(ctx, "SubChanLen must be positive in Config")
 	}
 	if c.User != nil && len(*c.User) < 0 {
 		valid = false
-		hlog.Error("User is not allowed in Config")
+		hlog.Error(ctx, "User is not allowed in Config")
 	}
 	if c.Password != nil && len(*c.Password) < 0 {
 		valid = false
-		hlog.Error("Password is not allowed in Config")
+		hlog.Error(ctx, "Password is not allowed in Config")
 	}
 	if c.Token != nil && len(*c.Token) < 0 {
 		valid = false
-		hlog.Error("Token is not allowed in Config")
+		hlog.Error(ctx, "Token is not allowed in Config")
 	}
 	return valid
 }

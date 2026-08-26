@@ -1,6 +1,7 @@
 package hservice_test
 
 import (
+	"context"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hservice"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
@@ -11,7 +12,7 @@ import (
 func TestService_RegisterAndDeregister(t *testing.T) {
 	// 创建一个 Etcd 客户端
 	e := hetcd.NewEtcd()
-	err := e.SetConfig(&hetcd.Config{
+	err := e.SetConfig(context.Background(), &hetcd.Config{
 		Endpoints: []string{"192.168.1.202:2379"},
 	})
 	if err != nil {
@@ -37,7 +38,7 @@ func TestService_RegisterAndDeregister(t *testing.T) {
 	}
 
 	// 设置服务配置
-	err = service.SetConfig(cfg)
+	err = service.SetConfig(nil, cfg)
 	if err != nil {
 		t.Error("设置服务配置失败", err)
 	}
@@ -49,7 +50,7 @@ func TestService_RegisterAndDeregister(t *testing.T) {
 func TestService_Deregister_NoRegistration(t *testing.T) {
 	// 创建一个 Etcd 客户端
 	e := hetcd.NewEtcd()
-	err := e.SetConfig(&hetcd.Config{
+	err := e.SetConfig(nil, &hetcd.Config{
 		Endpoints: []string{"192.168.1.202:2379"},
 	})
 	if err != nil {
@@ -75,7 +76,7 @@ func TestService_Deregister_NoRegistration(t *testing.T) {
 	}
 
 	// 设置服务配置
-	err = service.SetConfig(cfg)
+	err = service.SetConfig(nil, cfg)
 	if err != nil {
 		t.Error("设置服务配置失败", err)
 	}

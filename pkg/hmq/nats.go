@@ -132,7 +132,7 @@ type Nats struct {
 }
 
 // SetConfig 设置配置
-func (d *Nats) SetConfig(cfg *Config) error {
+func (d *Nats) SetConfig(ctx context.Context, cfg *Config) error {
 	if d.config.Equal(cfg) {
 		return nil
 	}
@@ -142,7 +142,7 @@ func (d *Nats) SetConfig(cfg *Config) error {
 		if old != nil {
 			<-time.After(time.Second * 30)
 			old.Close()
-			hlog.Info("old etcd client closed")
+			hlog.Info(ctx, "old etcd client closed")
 		}
 	}()
 
@@ -299,13 +299,13 @@ func (n *Nats) Subscribe(ctx context.Context, subject string, callback func(ctx 
 			return nil, n.subscribeMiddleware(func(ctx context.Context, msg *nats.Msg) error {
 				return callback(ctx, msg)
 			})(ctx, msg)
-		})(context.TODO(), nil)
+		})(context.Background(), nil)
 		if err != nil {
-			herror.PrintStack(err)
+			herror.PrintStack(ctx, err)
 		}
 	})
 	if err != nil {
-		hlog.Error("subscribe failed, error: %s", err)
+		hlog.Error(ctx, "subscribe failed, error: %s", err)
 		return nil, err
 	}
 	return subscription, nil
@@ -321,7 +321,7 @@ func Subscribe[T any](ctx context.Context, subject string, callback func(ctx con
 	subscription, err := n.Subscribe(ctx, subject, func(ctx context.Context, msg *nats.Msg) error {
 		defer func() {
 			if r := recover(); r != nil {
-				hlog.Error("JetStreamSubscribe panic:%v", r)
+				hlog.Error(ctx, "JetStreamSubscribe panic:%v", r)
 			}
 		}()
 
@@ -431,7 +431,7 @@ func (n *Nats) JetStreamPublish(ctx context.Context, stream, subject string, dat
 		return err
 	})(ctx, msg)
 	if err != nil {
-		hlog.Error("publish failed, error: %s", err)
+		hlog.Error(ctx, "publish failed, error: %s", err)
 		return nil, err
 	}
 	return pubAck, nil
@@ -533,7 +533,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		if len(durableHeader) > 0 && durableHeader != durable {
 			err = msg.Ack()
 			if err != nil {
-				hlog.Error("ack failed, error: %s", err)
+				hlog.Error(ctx, "ack failed, error: %s", err)
 				return
 			}
 			return
@@ -548,19 +548,19 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 				Header:  msg.Headers(),
 				Data:    msg.Data(),
 			})
-		})(context.TODO(), nil)
+		})(context.Background(), nil)
 		if retErr != nil {
-			herror.PrintStack(retErr)
+			herror.PrintStack(ctx, retErr)
 			metadata, err := msg.Metadata()
 			if err != nil {
-				hlog.Error("metadata failed, error: %s", err)
+				hlog.Error(ctx, "metadata failed, error: %s", err)
 				return
 			}
 			if int(metadata.NumDelivered) >= n.maxDeliver {
 				_ = n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
 					n.saveErrorMessage(ctx, stream, subject, durable, msgId, msg.Data(), retErr.Error())
 					return nil
-				})(context.TODO(), &nats.Msg{
+				})(context.Background(), &nats.Msg{
 					Subject: msg.Subject(),
 					Reply:   msg.Reply(),
 					Header:  msg.Headers(),
@@ -568,7 +568,7 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 				})
 				err = msg.Ack()
 				if err != nil {
-					hlog.Error("ack failed, error: %s", err)
+					hlog.Error(ctx, "ack failed, error: %s", err)
 					return
 				}
 			}
@@ -576,12 +576,12 @@ func (n *Nats) JetStreamSubscribe(ctx context.Context, stream, subject, durable 
 		}
 		err = msg.Ack()
 		if err != nil {
-			hlog.Error("ack failed, error: %s", err)
+			hlog.Error(ctx, "ack failed, error: %s", err)
 			return
 		}
 	})
 	if err != nil {
-		hlog.Error("commit failed, error: %s", err)
+		hlog.Error(ctx, "commit failed, error: %s", err)
 		return err
 	}
 	return nil
@@ -597,7 +597,7 @@ func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable str
 	err := n.JetStreamSubscribe(ctx, stream, subject, durable, func(ctx context.Context, msgId string, msg jetstream.Msg) error {
 		defer func() {
 			if r := recover(); r != nil {
-				hlog.Error("JetStreamSubscribe panic:%v", r)
+				hlog.Error(ctx, "JetStreamSubscribe panic:%v", r)
 			}
 		}()
 
@@ -690,13 +690,13 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 	}
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
-		hlog.Error("marshal failed, error: %s", err)
+		hlog.Error(ctx, "marshal failed, error: %s", err)
 		return
 	}
 
 	jetStream, err := n.GetJetStream()
 	if err != nil {
-		hlog.Error("get jetstream failed, error: %s", err)
+		hlog.Error(ctx, "get jetstream failed, error: %s", err)
 		return
 	}
 
@@ -711,7 +711,7 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 		},
 	})
 	if err != nil {
-		hlog.Error("publish failed, error: %s", err)
+		hlog.Error(ctx, "publish failed, error: %s", err)
 		return
 	}
 }
@@ -740,7 +740,7 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 	_, err = consumer.Consume(func(msg jetstream.Msg) {
 		metadata, err := msg.Metadata()
 		if err != nil {
-			hlog.Error("metadata failed, error: %s", err)
+			hlog.Error(ctx, "metadata failed, error: %s", err)
 			return
 		}
 
@@ -760,14 +760,14 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 				Data:    msg.Data(),
 			})
 
-		})(context.TODO(), nil)
+		})(context.Background(), nil)
 		if err != nil {
 			if int(metadata.NumDelivered) >= n.maxDeliver {
-				herror.PrintStack(err)
+				herror.PrintStack(ctx, err)
 
 				err = msg.Ack()
 				if err != nil {
-					hlog.Error("ack failed, error: %s", err)
+					hlog.Error(ctx, "ack failed, error: %s", err)
 					return
 				}
 			}
@@ -775,12 +775,12 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 		}
 		err = msg.Ack()
 		if err != nil {
-			hlog.Error("ack failed, error: %s", err)
+			hlog.Error(ctx, "ack failed, error: %s", err)
 			return
 		}
 	})
 	if err != nil {
-		hlog.Error("commit failed, error: %s", err)
+		hlog.Error(ctx, "commit failed, error: %s", err)
 		return err
 	}
 	return nil

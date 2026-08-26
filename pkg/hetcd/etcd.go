@@ -63,7 +63,7 @@ type Etcd struct {
 }
 
 // SetConfig 设置etcd的配置
-func (e *Etcd) SetConfig(cfg *Config) error {
+func (e *Etcd) SetConfig(ctx context.Context, cfg *Config) error {
 	if e.config.Equal(cfg) {
 		return nil
 	}
@@ -76,12 +76,12 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 		}
 		if oldSession != nil {
 			_ = oldSession.Close()
-			hlog.Info("old etcd session closed")
+			hlog.Info(ctx, "old etcd session closed")
 		}
 		if old != nil {
 
 			_ = old.Close()
-			hlog.Info("old etcd client closed")
+			hlog.Info(ctx, "old etcd client closed")
 		}
 	}()
 
@@ -89,7 +89,7 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 		if oldSession != nil {
 			session := e.session.Swap(nil)
 			_ = session.Close()
-			hlog.Info("old etcd session closed")
+			hlog.Info(ctx, "old etcd session closed")
 		}
 		if old != nil {
 			conn := e.client.Swap(nil)
@@ -152,16 +152,16 @@ func (e *Etcd) SetConfig(cfg *Config) error {
 		return herror.Wrap(err)
 	}
 
-	ctx := context.Background()
+	ctx = hlog.WithContext(context.Background(), hlog.FromContext(ctx))
 	for _, endpoint := range client.Endpoints() {
 		ctx1, _ := context.WithTimeout(ctx, time.Second*10)
 		status, err := client.Status(ctx1, endpoint)
 		if err != nil {
-			hlog.Exit("dial etcd failed: %s", err)
+			hlog.Exit(ctx, "dial etcd failed: %s", err)
 		}
-		hlog.Info("etcd endpoint: %s, isLearner: %t", endpoint, status.IsLearner)
+		hlog.Info(ctx, "etcd endpoint: %s, isLearner: %t", endpoint, status.IsLearner)
 	}
-	hlog.Info("etcd client connected")
+	hlog.Info(ctx, "etcd client connected")
 
 	e.client.Store(client)
 	session, err := concurrency.NewSession(client)

@@ -54,7 +54,7 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 	err = json.Unmarshal([]byte(cmd.Val()), out)
 	if err != nil {
 		d.Del(ctx, table)
-		herror.PrintStack(err)
+		herror.PrintStack(ctx, err)
 		return false, nil
 	}
 
@@ -91,9 +91,9 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 
 	go func() {
 		time.Sleep(time.Second * 1)
-		err := d.del(context.TODO(), table, r.Get())
+		err := d.del(context.Background(), table, r.Get())
 		if err != nil {
-			herror.PrintStack(err)
+			herror.PrintStack(ctx, err)
 			return
 		}
 	}()

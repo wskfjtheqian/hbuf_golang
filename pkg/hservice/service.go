@@ -156,15 +156,14 @@ type Service struct {
 }
 
 // SetConfig 设置配置
-func (s *Service) SetConfig(cfg *Config) error {
+func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 	if s.config.Equal(cfg) {
 		return nil
 	}
-	ctx := context.Background()
 	if cfg == nil {
 		err := s.Deregister(ctx)
 		if err != nil {
-			hlog.Error("deregister service failed: %s", err)
+			hlog.Error(ctx, "deregister service failed: %s", err)
 		}
 		s.config = nil
 		return nil
@@ -190,7 +189,7 @@ func (s *Service) SetConfig(cfg *Config) error {
 	}
 
 	s.config = cfg
-	err := s.startRpcServer()
+	err := s.startRpcServer(ctx)
 	if err != nil {
 		return err
 	}
@@ -204,7 +203,7 @@ func (s *Service) SetConfig(cfg *Config) error {
 		go func() {
 			err := s.Discovery(ctx)
 			if err != nil {
-				hlog.Error("discovery service failed: %s", err)
+				hlog.Error(ctx, "discovery service failed: %s", err)
 			}
 		}()
 	}
@@ -274,7 +273,7 @@ func (s *Service) Register(ctx context.Context) error {
 			return err
 		}
 
-		hlog.Info("register service success: %s", key)
+		hlog.Info(ctx, "register service success: %s", key)
 	}
 
 	s.session.Store(session)
@@ -295,14 +294,14 @@ func (s *Service) Deregister(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	hlog.Info("deregister service success")
+	hlog.Info(ctx, "deregister service success")
 
 	// 释放租约
 	lease := s.session.Load()
 	if lease != nil {
 		err = lease.Close()
 		if err != nil {
-			hlog.Error("revoke lease failed: %s", err)
+			hlog.Error(ctx, "revoke lease failed: %s", err)
 		}
 	}
 	return nil
@@ -334,7 +333,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 	for _, v := range resp.Kvs {
 		err := s.parseRegisterInfo(v)
 		if err != nil {
-			hlog.Error("add client failed: %s", err)
+			hlog.Error(ctx, "add client failed: %s", err)
 		}
 	}
 
@@ -345,12 +344,12 @@ func (s *Service) Discovery(ctx context.Context) error {
 			if ev.Type == clientv3.EventTypePut {
 				err := s.parseRegisterInfo(ev.Kv)
 				if err != nil {
-					hlog.Error("add client failed: %s", err)
+					hlog.Error(ctx, "add client failed: %s", err)
 				}
 			} else if ev.Type == clientv3.EventTypeDelete {
 				err := s.parseDeleteInfo(ev.Kv)
 				if err != nil {
-					hlog.Error("delete client failed: %s", err)
+					hlog.Error(ctx, "delete client failed: %s", err)
 				}
 			}
 		}
@@ -359,7 +358,7 @@ func (s *Service) Discovery(ctx context.Context) error {
 }
 
 // startRpcServer 启动RPC服务
-func (s *Service) startRpcServer() error {
+func (s *Service) startRpcServer(ctx context.Context) error {
 	if s.config == nil || s.config.Server == nil || s.config.Server.Http == nil {
 		return nil
 	}
@@ -383,7 +382,7 @@ func (s *Service) startRpcServer() error {
 		return err
 	}
 	s.listen.Store(&listen)
-	hlog.Info("start https rpc server: %s", listen.Addr())
+	hlog.Info(ctx, "start https rpc server: %s", listen.Addr())
 
 	go func() {
 		if config.Crt != nil && config.Key != nil && *config.Crt != "" && *config.Key != "" {
@@ -393,21 +392,21 @@ func (s *Service) startRpcServer() error {
 			}
 			err := server.ServeTLS(listen, *config.Crt, *config.Key)
 			if err != nil {
-				hlog.Error("start https rpc server failed: %s", err)
+				hlog.Error(ctx, "start https rpc server failed: %s", err)
 				return
 			}
 		} else {
 			// 1. 生成私钥
 			privateKey, err := s.generatePrivateKey()
 			if err != nil {
-				hlog.Error("generate private key failed: %s", err)
+				hlog.Error(ctx, "generate private key failed: %s", err)
 				return
 			}
 
 			// 5. 生成自签名证书
 			cert, err := s.generateSelfSignedCert(privateKey)
 			if err != nil {
-				hlog.Error("generate self signed cert failed: %s", err)
+				hlog.Error(ctx, "generate self signed cert failed: %s", err)
 				return
 			}
 
@@ -419,7 +418,7 @@ func (s *Service) startRpcServer() error {
 			}
 			err = server.ServeTLS(listen, "", "")
 			if err != nil {
-				hlog.Error("start https rpc server failed: %s", err)
+				hlog.Error(ctx, "start https rpc server failed: %s", err)
 				return
 			}
 

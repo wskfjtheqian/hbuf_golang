@@ -14,6 +14,7 @@ import (
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"golang.org/x/net/http2"
 )
 
@@ -195,9 +196,11 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	ctx := r.Context()
+	ctx = hlog.WithContext(ctx, r.Header.Get("trace-Id"))
 	err := h.middleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
 		return h.server.Response(ctx, path, writer, reader, header)
-	})(r.Context(), r.URL.Path[len(h.pathPrefix):], w, r.Body, r.Header)
+	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body, r.Header)
 	if err != nil {
 		var e *Result[hbuf.Data]
 		if errors.As(err, &e) && e.Code == -1 {
@@ -205,7 +208,7 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
-		herror.PrintStack(err)
+		herror.PrintStack(ctx, err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package hlog
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -355,7 +356,7 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 	}
 	*buf = append(*buf, '[')
 	*buf = append(*buf, []byte(level.String())...)
-	*buf = append(*buf, ']')
+	*buf = append(*buf, ']', ' ')
 	*buf = append(*buf, []byte("\x1b[0m")...)
 	*buf = append(*buf, ' ')
 
@@ -436,40 +437,58 @@ func SetPrefix(prefix string) {
 	std.SetPrefix(prefix)
 }
 
-func Debug(format string, v ...any) {
+func Debug(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, DEBUG, func(b []byte) []byte {
+		b = append(b, '[')
+		b = append(b, []byte(FromContext(ctx))...)
+		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Info(format string, v ...any) {
+func Info(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, INFO, func(b []byte) []byte {
+		b = append(b, '[')
+		b = append(b, []byte(FromContext(ctx))...)
+		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Warn(format string, v ...any) {
+func Warn(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, WARN, func(b []byte) []byte {
+		b = append(b, '[')
+		b = append(b, []byte(FromContext(ctx))...)
+		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Error(format string, v ...any) {
+func Error(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, ERROR, func(b []byte) []byte {
+		b = append(b, '[')
+		b = append(b, []byte(FromContext(ctx))...)
+		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
 	})
 }
 
-func Exit(format string, v ...any) {
+func Exit(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, EXIT, func(b []byte) []byte {
+		b = append(b, '[')
+		b = append(b, []byte(FromContext(ctx))...)
+		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
 	})
 	panic(fmt.Sprintf(format, v...))
 }
 
-func Output(calldepth int, level Level, s string) error {
+func Output(ctx context.Context, calldepth int, level Level, s string) error {
 	calldepth++ // +1 for this frame.
 	return std.output(0, calldepth, level, func(b []byte) []byte {
+		b = append(b, '[')
+		b = append(b, []byte(FromContext(ctx))...)
+		b = append(b, ']', ' ')
 		return append(b, s...)
 	})
 }

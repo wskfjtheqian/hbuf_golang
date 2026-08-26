@@ -1,6 +1,7 @@
 package hsql
 
 import (
+	"context"
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -78,36 +79,36 @@ type Config struct {
 }
 
 // Validate 检查配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
-		hlog.Error("未找到数据库配置")
+		hlog.Error(ctx, "未找到数据库配置")
 		return false
 	}
 
 	var valid bool = true
 	if c.Type == nil || *c.Type == "" {
 		valid = false
-		hlog.Error("数据库配置类型为空")
+		hlog.Error(ctx, "数据库配置类型为空")
 	}
 	if c.Username == nil || *c.Username == "" {
 		valid = false
-		hlog.Error("数据库配置用户名为空")
+		hlog.Error(ctx, "数据库配置用户名为空")
 	}
 	if c.Password == nil || *c.Password == "" {
 		valid = false
-		hlog.Error("数据库配置密码为空")
+		hlog.Error(ctx, "数据库配置密码为空")
 	}
 	if c.DbName == nil || *c.DbName == "" {
 		valid = false
-		hlog.Error("数据库配置数据库名称为空")
+		hlog.Error(ctx, "数据库配置数据库名称为空")
 	}
 	if c.Network == nil || *c.Network == "" {
 		valid = false
-		hlog.Error("数据库配置网络类型为空")
+		hlog.Error(ctx, "数据库配置网络类型为空")
 	}
 	if c.Host == nil || *c.Host == "" {
 		valid = false
-		hlog.Error("数据库配置主机地址为空")
+		hlog.Error(ctx, "数据库配置主机地址为空")
 	}
 	if c.Params == nil {
 		c.Params = hutl.ToPointer("")

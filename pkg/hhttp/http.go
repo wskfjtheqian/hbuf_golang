@@ -86,7 +86,7 @@ func (a *Http) Handle(pattern string, handler http.Handler) {
 }
 
 // SetConfig 设置配置
-func (a *Http) SetConfig(conf *Config) error {
+func (a *Http) SetConfig(ctx context.Context, conf *Config) error {
 	if a.config.Load().Equal(conf) {
 		return nil
 	}
@@ -94,14 +94,14 @@ func (a *Http) SetConfig(conf *Config) error {
 		h := a.http.Swap(nil)
 		if h != nil {
 			_ = h.Close()
-			hlog.Info("close old http connection")
+			hlog.Info(ctx, "close old http connection")
 		}
 		return nil
 	}
 
 	listener, err := a.lc.Listen(context.Background(), "tcp", *conf.Addr)
 	if err != nil {
-		hlog.Error("Listen server failed with '%s'\n", err)
+		hlog.Error(ctx, "Listen server failed with '%s'\n", err)
 		return nil
 	}
 
@@ -115,17 +115,17 @@ func (a *Http) SetConfig(conf *Config) error {
 		}
 		var err error
 		if conf.Crt != nil && conf.Key != nil {
-			hlog.Info("Start https server, addr: %s", *conf.Addr)
+			hlog.Info(ctx, "Start https server, addr: %s", *conf.Addr)
 			err = h.ServeTLS(listener, *conf.Crt, *conf.Key)
 		} else {
-			hlog.Info("Start http server, addr: %s", *conf.Addr)
+			hlog.Info(ctx, "Start http server, addr: %s", *conf.Addr)
 			err = h.Serve(listener)
 		}
 		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
-				hlog.Info("Server closed %s", *conf.Addr)
+				hlog.Info(ctx, "Server closed %s", *conf.Addr)
 			} else {
-				hlog.Error("Listen server failed with '%s'\n", err)
+				hlog.Error(ctx, "Listen server failed with '%s'\n", err)
 			}
 			_ = listener.Close()
 			return

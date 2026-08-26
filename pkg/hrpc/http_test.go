@@ -36,7 +36,7 @@ func (t TestHbufService) HbufStream(ctx context.Context, reader io.Reader) (io.R
 	if err != nil {
 		return nil, err
 	}
-	hlog.Info("receive data: %s", string(data))
+	hlog.Info(ctx, "receive data: %s", string(data))
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
@@ -334,14 +334,14 @@ func TestHttpService_Middleware2(t *testing.T) {
 		// 1. 生成私钥
 		privateKey, err := generatePrivateKey()
 		if err != nil {
-			hlog.Error("generate private key failed: %s", err)
+			hlog.Error(hlog.NewContext(), "generate private key failed: %s", err)
 			return
 		}
 
 		// 5. 生成自签名证书
 		cert, err := generateSelfSignedCert(privateKey)
 		if err != nil {
-			hlog.Error("generate self signed cert failed: %s", err)
+			hlog.Error(hlog.NewContext(), "generate self signed cert failed: %s", err)
 			return
 		}
 

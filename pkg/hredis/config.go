@@ -1,9 +1,11 @@
 package hredis
 
 import (
+	"context"
+	"time"
+
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
-	"time"
 )
 
 // Config redis配置
@@ -77,76 +79,76 @@ type Config struct {
 }
 
 // Validate 检查配置是否有效
-func (c *Config) Validate() bool {
+func (c *Config) Validate(ctx context.Context) bool {
 	if c == nil {
-		hlog.Error("not found redis config")
+		hlog.Error(ctx, "not found redis config")
 		return false
 	}
 
 	var valid bool = true
 	if c.Network != nil && *c.Network != "tcp" && *c.Network != "unix" {
 		valid = false
-		hlog.Error("redis network is invalid")
+		hlog.Error(ctx, "redis network is invalid")
 	}
 	if c.Addr == nil || *c.Addr == "" {
 		valid = false
-		hlog.Error("redis addr is invalid")
+		hlog.Error(ctx, "redis addr is invalid")
 	}
 	if c.DB != nil && *c.DB < 0 {
 		valid = false
-		hlog.Error("redis db is invalid")
+		hlog.Error(ctx, "redis db is invalid")
 	}
 	if c.MaxRetries != nil && *c.MaxRetries < -1 {
 		valid = false
-		hlog.Error("redis max retries is invalid")
+		hlog.Error(ctx, "redis max retries is invalid")
 	}
 	if c.MinRetryBackoff != nil && *c.MinRetryBackoff < 0 {
 		valid = false
-		hlog.Error("redis min retry backoff is invalid")
+		hlog.Error(ctx, "redis min retry backoff is invalid")
 	}
 	if c.MaxRetryBackoff != nil && *c.MaxRetryBackoff < -1 {
 		valid = false
-		hlog.Error("redis max retry backoff is invalid")
+		hlog.Error(ctx, "redis max retry backoff is invalid")
 	}
 	if c.DialTimeout != nil && *c.DialTimeout < 0 {
 		valid = false
-		hlog.Error("redis dial timeout is invalid")
+		hlog.Error(ctx, "redis dial timeout is invalid")
 	}
 	if c.ReadTimeout != nil && *c.ReadTimeout < -1 {
 		valid = false
-		hlog.Error("redis read timeout is invalid")
+		hlog.Error(ctx, "redis read timeout is invalid")
 	}
 	if c.WriteTimeout != nil && *c.WriteTimeout < 0 {
 		valid = false
-		hlog.Error("redis write timeout is invalid")
+		hlog.Error(ctx, "redis write timeout is invalid")
 	}
 	if c.PoolFIFO != nil && *c.PoolFIFO {
 		valid = false
-		hlog.Error("redis pool fifo is invalid")
+		hlog.Error(ctx, "redis pool fifo is invalid")
 	}
 	if c.PoolSize != nil && *c.PoolSize < 0 {
 		valid = false
-		hlog.Error("redis pool size is invalid")
+		hlog.Error(ctx, "redis pool size is invalid")
 	}
 	if c.MinIdleConns != nil && *c.MinIdleConns < 0 {
 		valid = false
-		hlog.Error("redis min idle conns is invalid")
+		hlog.Error(ctx, "redis min idle conns is invalid")
 	}
 	if c.MaxConnAge != nil && *c.MaxConnAge < 0 {
 		valid = false
-		hlog.Error("redis max conn age is invalid")
+		hlog.Error(ctx, "redis max conn age is invalid")
 	}
 	if c.PoolTimeout != nil && *c.PoolTimeout < 0 {
 		valid = false
-		hlog.Error("redis pool timeout is invalid")
+		hlog.Error(ctx, "redis pool timeout is invalid")
 	}
 	if c.IdleTimeout != nil && *c.IdleTimeout < -1 {
 		valid = false
-		hlog.Error("redis idle timeout is invalid")
+		hlog.Error(ctx, "redis idle timeout is invalid")
 	}
 	if c.IdleCheckFrequency != nil && *c.IdleCheckFrequency < -1 {
 		valid = false
-		hlog.Error("redis idle check frequency is invalid")
+		hlog.Error(ctx, "redis idle check frequency is invalid")
 	}
 
 	return valid

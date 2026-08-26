@@ -1,6 +1,7 @@
 package herror
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"runtime/debug"
@@ -38,8 +39,8 @@ func WrapMsg(err error, msg string) *Error {
 }
 
 // PrintStack 打印错误的堆栈跟踪信息。
-func (e *Error) PrintStack(calldepth int) {
-	_ = hlog.Output(2, hlog.ERROR, e.Error()+"\n"+string(e.stack))
+func (e *Error) PrintStack(ctx context.Context, calldepth int) {
+	_ = hlog.Output(ctx, 2, hlog.ERROR, e.Error()+"\n"+string(e.stack))
 }
 
 // Unwrap 返回错误的底层错误。
@@ -53,12 +54,12 @@ func IsError(err error) bool {
 }
 
 // PrintStack 打印一个错误的堆栈跟踪信息。
-func PrintStack(e error) {
+func PrintStack(ctx context.Context, e error) {
 	var err *Error
 	if errors.As(e, &err) {
-		err.PrintStack(3)
+		err.PrintStack(ctx, 3)
 	} else {
-		_ = hlog.Output(2, hlog.ERROR, e.Error())
+		_ = hlog.Output(ctx, 2, hlog.ERROR, e.Error())
 	}
 }
 

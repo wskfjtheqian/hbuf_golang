@@ -68,7 +68,7 @@ func (n *Neo4j) SetConfig(cfg *Config) error {
 		if old != nil {
 			<-time.After(time.Second * 30)
 			_ = (*old).Close(ctx)
-			hlog.Info("old neo4j client closed")
+			hlog.Info(ctx, "old neo4j client closed")
 		}
 	}()
 
@@ -115,7 +115,7 @@ func (n *Neo4j) SetConfig(cfg *Config) error {
 		return herror.Wrap(err)
 	}
 
-	hlog.Info("neo4j client connected")
+	hlog.Info(ctx, "neo4j client connected")
 	n.driver.Store(&driver)
 
 	return nil

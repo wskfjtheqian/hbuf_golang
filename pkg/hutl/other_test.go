@@ -46,7 +46,7 @@ func TestSlice(t *testing.T) {
 	// 测试正常情况
 	t.Run("正常情况", func(t *testing.T) {
 		list := []int{1, 2, 3}
-		result := Slice[int, int](list, func(v int) int {
+		result := Slice[int, int](list, func(i, v int) int {
 			return v * 2
 		})
 		expected := []int{2, 4, 6}
@@ -58,7 +58,7 @@ func TestSlice(t *testing.T) {
 	// 测试空切片
 	t.Run("空切片", func(t *testing.T) {
 		list := []int{}
-		result := Slice[int, int](list, func(v int) int {
+		result := Slice[int, int](list, func(i, v int) int {
 			return v * 2
 		})
 		if len(result) != 0 {
@@ -124,8 +124,8 @@ func TestSliceToMap(t *testing.T) {
 	// 测试正常情况
 	t.Run("正常情况", func(t *testing.T) {
 		list := []string{"a", "b", "c"}
-		result := SliceToMap[string, int](list, func(i int, v string) int {
-			return i + 1
+		result := SliceToMap[string, int](list, func(i int, v string) (string, int) {
+			return v, i + 1
 		})
 		expected := map[string]int{"a": 1, "b": 2, "c": 3}
 		if !equalMap(result, expected) {
@@ -136,8 +136,8 @@ func TestSliceToMap(t *testing.T) {
 	// 测试空切片
 	t.Run("空切片", func(t *testing.T) {
 		list := []string{}
-		result := SliceToMap[string, int](list, func(i int, v string) int {
-			return i + 1
+		result := SliceToMap[string, int](list, func(i int, v string) (string, int) {
+			return v, i + 1
 		})
 		if len(result) != 0 {
 			t.Error("空切片应该返回空 map")
