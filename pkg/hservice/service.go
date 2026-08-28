@@ -110,9 +110,17 @@ type client struct {
 
 type Option func(*Service)
 
-func WithMiddleware(middlewares ...hrpc.Middleware) Option {
+func WithServerOption(options ...hrpc.ServerOption) Option {
 	return func(s *Service) {
-		hrpc.WithServerMiddleware(middlewares...)(s.rpcServer)
+		for _, option := range options {
+			option(s.rpcServer)
+		}
+	}
+}
+
+func WithClientOption(options ...hrpc.ClientOption) Option {
+	return func(s *Service) {
+		s.clientOption = options
 	}
 }
 
@@ -153,6 +161,7 @@ type Service struct {
 
 	isSubscribe   bool
 	waitSubscribe chan bool
+	clientOption  []hrpc.ClientOption
 }
 
 // SetConfig 设置配置
@@ -578,6 +587,9 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 			hrpc.WithClientEncoder(hrpc.NewJsonEncode()),
 			hrpc.WithClientDecode(hrpc.NewJsonDecode()),
 		)
+		for _, option := range s.clientOption {
+			option(connect)
+		}
 		s.httpClient[addr.Host] = connect
 	}
 

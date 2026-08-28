@@ -4,7 +4,6 @@ import (
 	"context"
 	"runtime/debug"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -18,35 +17,30 @@ import (
 // Option 应用选项
 type Option func(*App)
 
+func WithServiceOption(options ...hservice.Option) Option {
+	return func(s *App) {
+		for _, option := range options {
+			option(s.service)
+		}
+	}
+}
+
+func WithMqOption(options ...hmq.Option) Option {
+	return func(s *App) {
+		for _, option := range options {
+			option(s.nats)
+		}
+	}
+}
+
 func WithMiddleware(middlewares ...hrpc.Middleware) Option {
 	return func(s *App) {
-		middlewares = append(s.Middlewares(), middlewares...)
 		s.middleware = func(next hrpc.Handler) hrpc.Handler {
 			for i := len(middlewares) - 1; i >= 0; i-- {
 				next = middlewares[i](next)
 			}
 			return next
 		}
-		hservice.WithMiddleware(middlewares...)(s.service)
-		hmq.WithMiddleware(middlewares...)(s.nats)
-	}
-}
-
-func WithMqPublishMiddleware(middlewares ...hmq.Middleware) Option {
-	return func(app *App) {
-		hmq.WithPublishMiddleware(middlewares...)(app.nats)
-	}
-}
-
-func WithMqSubscribeMiddleware(middlewares ...hmq.Middleware) Option {
-	return func(app *App) {
-		hmq.WithSubscribeMiddleware(middlewares...)(app.nats)
-	}
-}
-
-func WithDbCache(cache hcache.Cache) Option {
-	return func(s *App) {
-		hsql.WithCache(cache)(s.sqlDb)
 	}
 }
 
@@ -61,7 +55,7 @@ func NewApp(options ...Option) *App {
 	ret.etcd = hetcd.NewEtcd()
 	ret.redis = hredis.NewRedis()
 	ret.sqlDb = hsql.NewDB(hsql.WithCache(hredis.NewCache("db")))
-	ret.service = hservice.NewService(ret.etcd)
+	ret.service = hservice.NewService(ret.etcd, hservice.WithServerOption(hrpc.WithServerMiddleware(ret.Middlewares()...)))
 
 	for _, option := range options {
 		option(ret)
