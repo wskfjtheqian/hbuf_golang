@@ -214,3 +214,15 @@ func (e *Etcd) watchSession(client *clientv3.Client) {
 		}
 	}
 }
+
+func (e *Etcd) Shutdown(ctx context.Context) error {
+	client := e.client.Load()
+	if client == nil {
+		return nil
+	}
+	hlog.Info(ctx, "etcd client closing")
+	defer func() {
+		hlog.Info(ctx, "etcd client closed")
+	}()
+	return client.Close()
+}

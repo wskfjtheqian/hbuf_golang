@@ -14,31 +14,12 @@ type etcdConfig struct {
 	hostname  string
 	client    *clientv3.Client
 	value     string
-	onChange  func(ctx context.Context, c string)
+	onChange  OnChange
 	keyVal    map[string]any
 }
 
-func (c *etcdConfig) OnChange(ctx context.Context, call func(ctx context.Context, value string)) error {
-	if 0 == len(c.value) {
-		get, err := c.client.Get(ctx, c.hostname+"__config")
-		if err != nil {
-			return err
-		}
-		if 0 == len(get.Kvs) {
-			return herror.NewError("get config file error")
-		}
-		c.value = string(get.Kvs[0].Value)
-		if nil != call {
-			config, err := generateConfig(ctx, c.value, c.keyVal)
-			if err != nil {
-				herror.PrintStack(ctx, err)
-				return err
-			}
-			call(ctx, config)
-		}
-	}
-	c.onChange = call
-	return nil
+func (c *etcdConfig) OnChange(onChange OnChange) {
+	c.onChange = onChange
 }
 
 func NewEtcdConfig(ctx context.Context, hostname string, endpoints string, val map[string]any) Watch {
@@ -63,6 +44,28 @@ func (c *etcdConfig) Close(ctx context.Context) error {
 }
 
 func (c *etcdConfig) Watch(ctx context.Context) error {
+	if 0 == len(c.value) {
+		get, err := c.client.Get(ctx, c.hostname+"__config")
+		if err != nil {
+			return err
+		}
+		if 0 == len(get.Kvs) {
+			return herror.NewError("get config file error")
+		}
+		c.value = string(get.Kvs[0].Value)
+		if nil != c.onChange {
+			config, err := generateConfig(ctx, c.value, c.keyVal)
+			if err != nil {
+				herror.PrintStack(ctx, err)
+				return err
+			}
+			err = c.onChange(ctx, config)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	rch := c.client.Watch(ctx, "config")
 	for wResp := range rch {
 		ctx = hlog.WithContext(ctx, "")
@@ -86,6 +89,5 @@ func (c *etcdConfig) Watch(ctx context.Context) error {
 			c.value = value
 		}
 	}
-	hlog.Flush()
 	return nil
 }

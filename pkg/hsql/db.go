@@ -210,6 +210,18 @@ func (d *DB) NewMiddleware() hrpc.Middleware {
 	}
 }
 
+func (d *DB) Shutdown(ctx context.Context) error {
+	conn := d.db.Load()
+	if conn == nil {
+		return nil
+	}
+	hlog.Info(ctx, "hSql client closing")
+	defer func() {
+		hlog.Info(ctx, "hSql client closed")
+	}()
+	return conn.Close()
+}
+
 // Transaction 事务函数
 func Transaction(ctx context.Context, fn func(ctx context.Context) error) error {
 	val := ctx.Value(contextType)

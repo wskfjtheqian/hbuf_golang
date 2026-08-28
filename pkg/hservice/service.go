@@ -223,9 +223,13 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		}
 	}
 
-	<-s.waitSubscribe
-	s.rpcServer.Init(ctx, cfg.Server.List...)
-	close(s.waitSubscribe)
+	defer close(s.waitSubscribe)
+	select {
+	case <-s.waitSubscribe:
+		s.rpcServer.Init(ctx, cfg.Server.List...)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	return nil
 }
 
@@ -248,7 +252,7 @@ func (s *Service) Register(ctx context.Context) error {
 
 	leaseTime := s.config.Server.LeaseTime
 	if leaseTime == 0 {
-		leaseTime = 30
+		leaseTime = 5
 	}
 	session, err := concurrency.NewSession(client, concurrency.WithTTL(int(leaseTime)))
 	if err != nil {
@@ -305,15 +309,14 @@ func (s *Service) Deregister(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	hlog.Info(ctx, "deregister service success")
-
+	hlog.Info(ctx, "deregister service ")
+	defer func() {
+		hlog.Info(ctx, "deregister service success")
+	}()
 	// 释放租约
-	lease := s.session.Load()
-	if lease != nil {
-		err = lease.Close()
-		if err != nil {
-			hlog.Error(ctx, "revoke lease failed: %s", err)
-		}
+	session := s.session.Load()
+	if session != nil {
+		return session.Close()
 	}
 	return nil
 }
@@ -673,6 +676,14 @@ func (s *Service) checkSubscribe() {
 			s.waitSubscribe <- true
 		}
 	}
+}
+
+func (s *Service) Shutdown(ctx context.Context) error {
+	hlog.Info(ctx, " hrpc server closing")
+	defer func() {
+		hlog.Info(ctx, "hrpc server closed")
+	}()
+	return s.rpcServer.Shutdown(ctx)
 }
 
 // ServerInfo 服务描述

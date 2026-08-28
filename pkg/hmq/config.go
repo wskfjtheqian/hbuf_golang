@@ -109,8 +109,8 @@ type Config struct {
 	UseOldRequestStyle *bool `yaml:"UseOldRequestStyle"`
 
 	// NoCallbacksAfterClientClose allows preventing the invocation of
-	// callbacks after Close() is called. Client won't receive notifications
-	// when Close is invoked by user code. Default is to invoke the callbacks.
+	// callbacks after Shutdown() is called. Client won't receive notifications
+	// when Shutdown is invoked by user code. Default is to invoke the callbacks.
 	NoCallbacksAfterClientClose *bool `yaml:"NoCallbacksAfterClientClose"`
 
 	// RetryOnFailedConnect sets the connection in reconnecting state right

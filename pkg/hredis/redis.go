@@ -159,3 +159,15 @@ func (r *Redis) NewMiddleware() hrpc.Middleware {
 func (r *Redis) Get() *redis.Client {
 	return r.conn.Load()
 }
+
+func (r *Redis) Shutdown(ctx context.Context) error {
+	conn := r.conn.Load()
+	if conn == nil {
+		return nil
+	}
+	hlog.Info(ctx, "redis client closing")
+	defer func() {
+		hlog.Info(ctx, "redis client closed")
+	}()
+	return conn.Close()
+}

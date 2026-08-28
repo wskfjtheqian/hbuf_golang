@@ -254,12 +254,15 @@ func (d *Nats) SetConfig(ctx context.Context, cfg *Config) error {
 }
 
 // Close 关闭 NATS 连接
-func (n *Nats) Close() {
-	conn, err := n.GetConn()
-	if err != nil {
-		return
+func (n *Nats) Shutdown(ctx context.Context) error {
+	conn := n.conn.Load()
+	if conn == nil {
+		return nil
 	}
+	hlog.Info(ctx, "nats client closing")
 	conn.Close()
+	hlog.Info(ctx, "nats client closed")
+	return nil
 }
 
 // Publish 发布消息到指定的主题

@@ -130,5 +130,22 @@ func (n *Neo4j) NewMiddleware() hrpc.Middleware {
 }
 
 func (n *Neo4j) Get(ctx context.Context) neo4j.SessionWithContext {
-	return (*n.driver.Load()).NewSession(ctx, neo4j.SessionConfig{DatabaseName: *n.config.Database})
+	driver := n.driver.Load()
+	if driver == nil {
+		return nil
+	}
+	return (*driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: *n.config.Database})
+}
+
+func (n *Neo4j) Shutdown(ctx context.Context) error {
+	driver := n.driver.Load()
+	if driver == nil {
+		return nil
+	}
+
+	hlog.Info(ctx, "neo4j client closing")
+	defer func() {
+		hlog.Info(ctx, "neo4j client closed")
+	}()
+	return (*driver).Close(ctx)
 }

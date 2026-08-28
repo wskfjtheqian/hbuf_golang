@@ -342,27 +342,31 @@ type Server struct {
 	decode     Decoder
 	encode     Encoder
 	middleware Middleware
+	wait       sync.WaitGroup
 }
 
 // Register 注册方法
-func (r *Server) Register(id int32, name string, init Init, methods ...*Method) {
+func (s *Server) Register(id int32, name string, init Init, methods ...*Method) {
 	name = strings.Trim(name, "/") + "/"
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	r.inits[name] = init
+	s.inits[name] = init
 
 	for _, method := range methods {
 		key := strings.TrimLeft(method.Name, "/")
-		r.methods[name+key] = method
+		s.methods[name+key] = method
 	}
 }
 
 // Response 处理RPC请求
-func (r *Server) Response(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
-	r.lock.RLock()
-	method, ok := r.methods[path]
-	r.lock.RUnlock()
+func (s *Server) Response(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
+	s.wait.Add(1)
+	defer s.wait.Done()
+
+	s.lock.RLock()
+	method, ok := s.methods[path]
+	s.lock.RUnlock()
 
 	if !ok {
 		return NewResult[hbuf.Data](-1, "method not found", nil)
@@ -378,7 +382,7 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 			if len(method.Tag) > 0 {
 				temp = "I" + method.Tag
 			}
-			err := r.decode(reader)(v, temp)
+			err := s.decode(reader)(v, temp)
 			if err != nil {
 				return nil, err
 			}
@@ -399,14 +403,14 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 			ctx = hlog.WithContext(ctx, traceId)
 		}
 	}
-	response, err := r.middleware(method.Handler)(ctx, in)
+	response, err := s.middleware(method.Handler)(ctx, in)
 	if val, ok := response.(io.Reader); ok {
 		_, err = io.Copy(writer, val)
 		return err
 	} else if err != nil {
 		var e *Result[hbuf.Data]
 		if errors.As(err, &e) && e.Code != -1 {
-			err = r.encode(writer)(e, method.Tag)
+			err = s.encode(writer)(e, method.Tag)
 		}
 		return err
 	}
@@ -414,29 +418,34 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	if len(method.Tag) > 0 {
 		temp = "O" + method.Tag
 	}
-	return r.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), temp)
+	return s.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), temp)
 }
 
-func (r *Server) Init(ctx context.Context, list ...string) {
+func (s *Server) Init(ctx context.Context, list ...string) {
 	ctx, cancelFunc := context.WithCancel(ctx)
 
 	defer cancelFunc()
-	_, _ = r.middleware(func(ctx context.Context, req any) (any, error) {
+	_, _ = s.middleware(func(ctx context.Context, req any) (any, error) {
 		if len(list) > 0 {
 			for _, key := range list {
-				if init, ok := r.inits[key+"/"]; ok {
+				if init, ok := s.inits[key+"/"]; ok {
 					init.Init(ctx)
 					hlog.Info(ctx, "finish init %s", strings.TrimRight(key, "/"))
 				}
 			}
 		} else {
-			for key, init := range r.inits {
+			for key, init := range s.inits {
 				init.Init(ctx)
 				hlog.Info(ctx, "finish init %s", strings.TrimRight(key, "/"))
 			}
 		}
 		return nil, nil
 	})(WithContext(ctx, "init", http.Header{}), nil)
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.wait.Wait()
+	return nil
 }
 
 //////////////////////////////////////////////////////

@@ -10,10 +10,12 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
+type OnChange func(ctx context.Context, value string) error
+
 type Watch interface {
 	Watch(ctx context.Context) error
 	Close(ctx context.Context) error
-	OnChange(ctx context.Context, call func(ctx context.Context, value string)) error
+	OnChange(onChange OnChange)
 }
 
 type Value interface {

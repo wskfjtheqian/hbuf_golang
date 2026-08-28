@@ -99,7 +99,7 @@ func (a *Http) SetConfig(ctx context.Context, conf *Config) error {
 		return nil
 	}
 
-	listener, err := a.lc.Listen(context.Background(), "tcp", *conf.Addr)
+	listener, err := a.lc.Listen(ctx, "tcp", *conf.Addr)
 	if err != nil {
 		hlog.Error(ctx, "Listen server failed with '%s'\n", err)
 		return nil
@@ -271,4 +271,17 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	text.WriteString(hutl.Green(request.URL.String()))
 
 	_ = a.log.Output(1, LogHTTP, text.String())
+}
+
+// Shutdown 优雅关闭 HTTP 服务
+func (a *Http) Shutdown(ctx context.Context) error {
+	h := a.http.Load()
+	if h == nil {
+		return nil
+	}
+	hlog.Info(ctx, "http server closing")
+	defer func() {
+		hlog.Info(ctx, "http server closed")
+	}()
+	return h.Shutdown(ctx)
 }

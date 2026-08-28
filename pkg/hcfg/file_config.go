@@ -12,7 +12,7 @@ import (
 type fileConfig struct {
 	path     string
 	value    string
-	onChange func(ctx context.Context, c string)
+	onChange OnChange
 	hostname string
 	watcher  *fsnotify.Watcher
 	keyVal   map[string]any
@@ -26,24 +26,8 @@ func (c *fileConfig) CheckConfig() int {
 	return 0
 }
 
-func (c *fileConfig) OnChange(ctx context.Context, call func(ctx context.Context, value string)) error {
-	if 0 == len(c.value) {
-		buffer, err := os.ReadFile(c.path)
-		if err != nil {
-			hlog.Error(ctx, "config file read error: %s", err)
-		}
-		c.value = string(buffer)
-		if nil != call {
-			config, err := generateConfig(ctx, c.value, c.keyVal)
-			if err != nil {
-				herror.PrintStack(ctx, err)
-				return err
-			}
-			call(ctx, config)
-		}
-	}
-	c.onChange = call
-	return nil
+func (c *fileConfig) OnChange(onChange OnChange) {
+	c.onChange = onChange
 }
 
 func NewFileConfig(ctx context.Context, hostname string, path string, val map[string]any) Watch {
@@ -63,7 +47,23 @@ func (c *fileConfig) Close(ctx context.Context) error {
 }
 
 func (c *fileConfig) Watch(ctx context.Context) error {
-	done := make(chan bool)
+	if 0 == len(c.value) {
+		buffer, err := os.ReadFile(c.path)
+		if err != nil {
+			return herror.Wrap(err)
+		}
+		c.value = string(buffer)
+		if nil != c.onChange {
+			config, err := generateConfig(ctx, c.value, c.keyVal)
+			if err != nil {
+				return herror.Wrap(err)
+			}
+			err = c.onChange(ctx, config)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	go func() {
 		hlog.Info(ctx, "start watch config file: %s", c.path)
 		for {
@@ -96,6 +96,8 @@ func (c *fileConfig) Watch(ctx context.Context) error {
 					return
 				}
 				hlog.Error(ctx, "watch error: %s", err)
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
@@ -103,7 +105,5 @@ func (c *fileConfig) Watch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	<-done
-	hlog.Flush()
 	return nil
 }
