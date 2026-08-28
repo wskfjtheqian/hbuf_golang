@@ -391,6 +391,14 @@ func (r *Server) Response(ctx context.Context, path string, writer io.Writer, re
 
 	ctx = WithContext(ctx, method.Name, header)
 	ctx = method.WithContext(ctx)
+
+	traceId := hlog.FromContext(ctx)
+	if len(traceId) == 0 {
+		traceId = GetHeader(ctx, "X-Trace-Id")
+		if len(traceId) == 0 {
+			ctx = hlog.WithContext(ctx, traceId)
+		}
+	}
 	response, err := r.middleware(method.Handler)(ctx, in)
 	if val, ok := response.(io.Reader); ok {
 		_, err = io.Copy(writer, val)
@@ -490,6 +498,10 @@ type Client struct {
 func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, tag string, request any, response any) (any, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req any) (any, error) {
+		traceId := hlog.FromContext(ctx)
+		if len(traceId) > 0 {
+			AddHeader(ctx, "X-Trace-Id", traceId)
+		}
 		reader, err := c.request(ctx, name+method, response == nil, func(writer io.Writer) error {
 			if val, ok := request.(io.Reader); ok {
 				_, err := io.Copy(writer, val)

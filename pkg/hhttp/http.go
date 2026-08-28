@@ -244,7 +244,9 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	defer a.builderPool.Put(text)
 
 	//获得响应状态码
-	httpIP, _ := hip.GetHttpIP(request)
+	text.WriteString(" [")
+	text.WriteString(hlog.FromContext(ctx))
+	text.WriteString("] ")
 
 	if 200 > old {
 		text.WriteString(hutl.Yellow(t))
@@ -253,6 +255,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	text.WriteString(" ")
+	httpIP, _ := hip.GetHttpIP(request)
 	text.WriteString(httpIP)
 
 	text.WriteString(" ")

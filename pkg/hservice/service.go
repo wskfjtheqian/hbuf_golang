@@ -263,26 +263,28 @@ func (s *Service) Register(ctx context.Context) error {
 	path = "/" + strings.Trim(path, "/") + "/"
 
 	addr := s.GetServerAddr()
-	for key, _ := range s.install {
-		// 构造服务注册信息
-		info := &RegisterInfo{
-			Name: key,
-			Addr: addr,
-			Path: path,
-		}
-		name := ProtocolName + info.Addr + "/" + key
-		value, err := json.Marshal(info)
-		if err != nil {
-			return err
-		}
+	for _, key := range s.config.Server.List {
+		if _, ok := s.install[key]; ok {
+			// 构造服务注册信息
+			info := &RegisterInfo{
+				Name: key,
+				Addr: addr,
+				Path: path,
+			}
+			name := ProtocolName + info.Addr + "/" + key
+			value, err := json.Marshal(info)
+			if err != nil {
+				return err
+			}
 
-		// 注册服务到etcd
-		_, err = client.Put(ctx, name, string(value), clientv3.WithLease(session.Lease()))
-		if err != nil {
-			return err
-		}
+			// 注册服务到etcd
+			_, err = client.Put(ctx, name, string(value), clientv3.WithLease(session.Lease()))
+			if err != nil {
+				return err
+			}
 
-		hlog.Info(ctx, "register service success: %s", key)
+			hlog.Info(ctx, "register service success: %s", key)
+		}
 	}
 
 	s.session.Store(session)
