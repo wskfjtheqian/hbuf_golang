@@ -421,11 +421,11 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	return s.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), temp)
 }
 
-func (s *Server) Init(ctx context.Context, list ...string) {
+func (s *Server) Init(ctx context.Context, list ...string) error {
 	ctx, cancelFunc := context.WithCancel(ctx)
-
 	defer cancelFunc()
-	_, _ = s.middleware(func(ctx context.Context, req any) (any, error) {
+
+	_, err := s.middleware(func(ctx context.Context, req any) (any, error) {
 		if len(list) > 0 {
 			for _, key := range list {
 				if init, ok := s.inits[key+"/"]; ok {
@@ -441,6 +441,8 @@ func (s *Server) Init(ctx context.Context, list ...string) {
 		}
 		return nil, nil
 	})(WithContext(ctx, "init", http.Header{}), nil)
+
+	return err
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {

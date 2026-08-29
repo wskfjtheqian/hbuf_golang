@@ -2,6 +2,8 @@ package happ
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -63,6 +65,7 @@ func NewApp(options ...Option) *App {
 		},
 		ctx:           hlog.NewContext(),
 		closeDuration: 30 * time.Second,
+		health:        NewHealth(),
 	}
 	ret.nats = hmq.NewNats()
 	ret.etcd = hetcd.NewEtcd()
@@ -78,16 +81,16 @@ func NewApp(options ...Option) *App {
 
 // App 应用
 type App struct {
-	nats  *hmq.Nats
-	etcd  *hetcd.Etcd
-	redis *hredis.Redis
-	sqlDb *hsql.DB
-
+	nats          *hmq.Nats
+	etcd          *hetcd.Etcd
+	redis         *hredis.Redis
+	sqlDb         *hsql.DB
 	service       *hservice.Service
 	middleware    func(next hrpc.Handler) hrpc.Handler
 	ctx           context.Context
 	closeDuration time.Duration
 	onShutdown    []func(ctx context.Context) error
+	health        *Health
 }
 
 func (a *App) SetOnShutdown(onShutdown ...func(ctx context.Context) error) {
@@ -123,8 +126,29 @@ func (a *App) SetConfig(ctx context.Context, conf *Config) error {
 	return nil
 }
 
-func (a *App) Init(ctx context.Context) {
+func (a *App) Init(ctx context.Context, fn func(ctx context.Context) error) error {
+	// 1. 标记为"启动中"状态
+	a.health.SetLive(true)
+	a.health.SetReady(false)
+	a.health.SetStarted(false)
+	hlog.Info(ctx, "application initializing...")
 
+	// 2. 检查是否正在关闭
+	if a.health.IsShuttingDown() {
+		return fmt.Errorf("application is shutting down, cannot initialize")
+	}
+
+	// 3. 执行初始化函数
+	if err := fn(ctx); err != nil {
+		a.health.SetLive(false) // 初始化失败，标记为不健康
+		return fmt.Errorf("init function failed: %w", err)
+	}
+
+	// 5. 标记为"已启动"和"就绪"
+	a.health.SetStarted(true)
+	a.health.SetReady(true)
+	hlog.Info(ctx, "application initialized and ready")
+	return nil
 }
 
 func (a *App) Service() *hservice.Service {
@@ -147,7 +171,10 @@ func (a *App) Go(ctx context.Context, fn func(ctx context.Context) error) {
 		ctx, cancel = context.WithCancel(ctx)
 		defer cancel()
 
-		return fn(ctx)
+		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
+			return nil, fn(ctx)
+		})(ctx, nil)
+		return err
 	})
 }
 
@@ -190,6 +217,7 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 
 	<-ctx.Done()
 	hlog.Info(ctx, "waiting app to shutdown")
+	a.health.SetShuttingDown()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(hlog.WithContext(context.Background(), hlog.FromContext(a.ctx)), a.closeDuration)
 	defer shutdownCancel()
@@ -256,6 +284,7 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 		hlog.Error(a.ctx, "etcd close error: %v", err)
 	}
 
+	a.health.Shutdown()
 	hlog.Info(a.ctx, "shutdown completed")
 	return
 }
@@ -265,4 +294,9 @@ func (a *App) printRunningGoroutines() {
 	buf := make([]byte, 1<<20)
 	n := runtime.Stack(buf, true)
 	hlog.Warn(a.ctx, "running goroutines:\n%s", buf[:n])
+}
+
+// Health 健康检查接口
+func (a *App) Health(w http.ResponseWriter, r *http.Request) {
+	a.health.ServeHTTP(w, r)
 }

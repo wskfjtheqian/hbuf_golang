@@ -65,7 +65,6 @@ func NewHttp(options ...Option) *Http {
 		option(ret)
 	}
 
-	ret.mux.HandleFunc("/health", ret.health)
 	return ret
 }
 
@@ -139,10 +138,6 @@ func (a *Http) SetConfig(ctx context.Context, conf *Config) error {
 
 	a.config.Store(conf)
 	return nil
-}
-
-func (a *Http) health(writer http.ResponseWriter, request *http.Request) {
-	writer.WriteHeader(http.StatusOK)
 }
 
 type ResponseWriter struct {
