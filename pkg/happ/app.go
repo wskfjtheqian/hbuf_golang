@@ -219,6 +219,10 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 	hlog.Info(ctx, "waiting app to shutdown")
 	a.health.SetShuttingDown()
 
+	// 等待流量摘除（给 K8S 时间更新 Endpoint）
+	hlog.Info(ctx, "waiting %ss for traffic to drain...", a.closeDuration.String())
+	time.Sleep(a.closeDuration)
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(hlog.WithContext(context.Background(), hlog.FromContext(a.ctx)), a.closeDuration)
 	defer shutdownCancel()
 
@@ -250,7 +254,7 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 	case <-done:
 		hlog.Info(a.ctx, "all goroutines completed")
 	case <-shutdownCtx.Done():
-		hlog.Warn(a.ctx, "shutdown timeout after %v, forcing exit", a.closeDuration)
+		hlog.Warn(a.ctx, "shutdown timeout after %s, forcing exit", a.closeDuration.String())
 		a.printRunningGoroutines()
 	}
 
