@@ -161,7 +161,7 @@ func (r *Redis) Get() *redis.Client {
 }
 
 func (r *Redis) Shutdown(ctx context.Context) error {
-	conn := r.conn.Load()
+	conn := r.conn.Swap(nil)
 	if conn == nil {
 		return nil
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hgo"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
@@ -89,14 +90,10 @@ func (d *DBCache) Del(ctx context.Context, table string) error {
 		return herror.NewError("redis not found in context")
 	}
 
-	go func() {
+	hgo.Go(ctx, func(ctx context.Context) error {
 		time.Sleep(time.Second * 1)
-		err := d.del(context.Background(), table, r.Get())
-		if err != nil {
-			herror.PrintStack(ctx, err)
-			return
-		}
-	}()
+		return d.del(context.Background(), table, r.Get())
+	})
 	return d.del(ctx, table, r.Get())
 }
 

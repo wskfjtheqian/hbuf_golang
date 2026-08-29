@@ -211,7 +211,7 @@ func (d *DB) NewMiddleware() hrpc.Middleware {
 }
 
 func (d *DB) Shutdown(ctx context.Context) error {
-	conn := d.db.Load()
+	conn := d.db.Swap(nil)
 	if conn == nil {
 		return nil
 	}

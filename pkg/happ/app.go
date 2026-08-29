@@ -5,13 +5,12 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/debug"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hgo"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hmq"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hredis"
@@ -88,7 +87,6 @@ type App struct {
 	middleware    func(next hrpc.Handler) hrpc.Handler
 	ctx           context.Context
 	closeDuration time.Duration
-	wait          sync.WaitGroup
 	onShutdown    []func(ctx context.Context) error
 }
 
@@ -144,27 +142,13 @@ func (a *App) Middlewares() []hrpc.Middleware {
 }
 
 func (a *App) Go(ctx context.Context, fn func(ctx context.Context) error) {
-	a.wait.Add(1)
-	go func() {
-		defer func() {
-			err := recover()
-			if err != nil {
-				hlog.Error(ctx, "%s \n", err, string(debug.Stack()))
-			}
-			a.wait.Done()
-		}()
+	hgo.Go(ctx, func(ctx context.Context) error {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithCancel(ctx)
 		defer cancel()
 
-		ctx = hlog.WithContext(ctx, hlog.FromContext(ctx))
-		_, err := a.middleware(func(ctx context.Context, req any) (any, error) {
-			return nil, fn(ctx)
-		})(ctx, nil)
-		if err != nil {
-			herror.PrintStack(ctx, err)
-		}
-	}()
+		return fn(ctx)
+	})
 }
 
 func (a *App) Exec(ctx context.Context, fn func(ctx context.Context) error) error {
@@ -230,7 +214,7 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 
 	done := make(chan struct{})
 	go func() {
-		a.wait.Wait()
+		hgo.Wait()
 		close(done)
 	}()
 

@@ -162,6 +162,7 @@ type Service struct {
 	isSubscribe   bool
 	waitSubscribe chan bool
 	clientOption  []hrpc.ClientOption
+	httpServer    atomic.Pointer[http.Server]
 }
 
 // SetConfig 设置配置
@@ -404,6 +405,7 @@ func (s *Service) startRpcServer(ctx context.Context) error {
 			server := &http.Server{
 				Handler: mux,
 			}
+			s.httpServer.Store(server)
 			err := server.ServeTLS(listen, *config.Crt, *config.Key)
 			if err != nil {
 				hlog.Error(ctx, "start https rpc server failed: %s", err)
@@ -430,12 +432,12 @@ func (s *Service) startRpcServer(ctx context.Context) error {
 					Certificates: []tls.Certificate{cert},
 				},
 			}
+			s.httpServer.Store(server)
 			err = server.ServeTLS(listen, "", "")
 			if err != nil {
 				hlog.Error(ctx, "start https rpc server failed: %s", err)
 				return
 			}
-
 		}
 	}()
 	return nil
@@ -679,11 +681,16 @@ func (s *Service) checkSubscribe() {
 }
 
 func (s *Service) Shutdown(ctx context.Context) error {
+	server := s.httpServer.Swap(nil)
+	if server == nil {
+		return nil
+	}
+
 	hlog.Info(ctx, " hrpc server closing")
 	defer func() {
 		hlog.Info(ctx, "hrpc server closed")
 	}()
-	return s.rpcServer.Shutdown(ctx)
+	return server.Shutdown(ctx)
 }
 
 // ServerInfo 服务描述

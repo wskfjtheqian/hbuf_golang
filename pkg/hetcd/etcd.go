@@ -216,7 +216,7 @@ func (e *Etcd) watchSession(client *clientv3.Client) {
 }
 
 func (e *Etcd) Shutdown(ctx context.Context) error {
-	client := e.client.Load()
+	client := e.client.Swap(nil)
 	if client == nil {
 		return nil
 	}

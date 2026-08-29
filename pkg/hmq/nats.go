@@ -255,7 +255,7 @@ func (d *Nats) SetConfig(ctx context.Context, cfg *Config) error {
 
 // Close 关闭 NATS 连接
 func (n *Nats) Shutdown(ctx context.Context) error {
-	conn := n.conn.Load()
+	conn := n.conn.Swap(nil)
 	if conn == nil {
 		return nil
 	}
