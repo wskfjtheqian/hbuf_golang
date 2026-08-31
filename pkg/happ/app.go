@@ -64,7 +64,7 @@ func NewApp(options ...Option) *App {
 			return next
 		},
 		ctx:           hlog.NewContext(),
-		closeDuration: 30 * time.Second,
+		closeDuration: 10 * time.Second,
 		health:        NewHealth(),
 	}
 	ret.nats = hmq.NewNats()
@@ -220,7 +220,7 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 	a.health.SetShuttingDown()
 
 	// 等待流量摘除（给 K8S 时间更新 Endpoint）
-	hlog.Info(ctx, "waiting %ss for traffic to drain...", a.closeDuration.String())
+	hlog.Info(ctx, "waiting %s for traffic to drain...", a.closeDuration.String())
 	time.Sleep(a.closeDuration)
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(hlog.WithContext(context.Background(), hlog.FromContext(a.ctx)), a.closeDuration)
