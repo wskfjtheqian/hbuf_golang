@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"errors"
 	"math/big"
 	rand2 "math/rand/v2"
 	"net"
@@ -434,7 +435,7 @@ func (s *Service) startRpcServer(ctx context.Context) error {
 			}
 			s.httpServer.Store(server)
 			err = server.ServeTLS(listen, "", "")
-			if err != nil {
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				hlog.Error(ctx, "start https rpc server failed: %s", err)
 				return
 			}
