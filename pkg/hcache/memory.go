@@ -195,6 +195,56 @@ func (c *MemoryCache[K, V]) Get(ctx context.Context, key K) (*V, error) {
 	return val, nil
 }
 
+// ===================== 替换 =====================
+
+// Replace 如果存在就替换，不存在就返回
+func (c *MemoryCache[K, V]) Replace(ctx context.Context, key K, val *V) error {
+	s := c.getShard(key)
+	s.mu.Lock()
+	it, ok := s.data[key]
+	if ok {
+		h := hsketch.Hash(key)
+		c.sketch.Add(h)
+
+		// 衰减触发器
+		if c.opCount.Add(1)%c.decayEvery == 0 {
+			c.sketch.DecaySample(decaySample)
+		}
+
+		it.val.Store(val)
+		it.expireAt.Store(htime.NowTime().UnixMilli() + c.ttl.Milliseconds())
+		s.lru.MoveToFront(it.ele)
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+// ===================== 替换 =====================
+
+// Insert 插入
+func (c *MemoryCache[K, V]) Insert(ctx context.Context, key K, val *V) error {
+	h := hsketch.Hash(key)
+	c.sketch.Add(h)
+
+	// 衰减触发器
+	if c.opCount.Add(1)%c.decayEvery == 0 {
+		c.sketch.DecaySample(decaySample)
+	}
+
+	s := c.getShard(key)
+	s.mu.Lock()
+	it, ok := s.data[key]
+	if !ok {
+		it = &item[K, V]{key: key}
+		it.ele = s.lru.PushFront(it)
+		s.data[key] = it
+	}
+	it.val.Store(val)
+	it.expireAt.Store(htime.NowTime().UnixMilli() + c.ttl.Milliseconds())
+	s.mu.Unlock()
+	return nil
+}
+
 // ===================== 事务 =====================
 
 // Modify 提供每键原子读-改-写操作。
