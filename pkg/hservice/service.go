@@ -578,7 +578,7 @@ func (s *Service) delHttpClient(install *ServerInfo, host string) error {
 	s.lock.Lock()
 
 	s.clients[install.name].list = hutl.Filter(s.clients[install.name].list, func(router Router) bool {
-		return !router.isLocal && router.host != host
+		return !router.isLocal || router.host != host
 	})
 
 	delete(s.httpClient, host)
