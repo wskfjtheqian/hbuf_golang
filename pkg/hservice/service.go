@@ -25,6 +25,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -32,7 +33,8 @@ import (
 
 type Router struct {
 	hrpc.Init
-	IsLocal bool
+	isLocal bool
+	host    string
 }
 
 type Dispatch func(list []Router, index int32) (hrpc.Init, int32)
@@ -554,13 +556,12 @@ func (s *Service) parseDeleteInfo(v *mvccpb.KeyValue) error {
 		return err
 	}
 
-	//
-	//install, ok := s.install[info.Name]
-	//if !ok {
-	//	return nil
-	//}
+	install, ok := s.install[strings.Trim(info.Path, "/")]
+	if !ok {
+		return nil
+	}
 
-	err = s.delHttpClient(nil, info.Host)
+	err = s.delHttpClient(install, info.Host)
 	if err != nil {
 		return err
 	}
@@ -575,9 +576,10 @@ func (s *Service) parseDeleteInfo(v *mvccpb.KeyValue) error {
 // delHttpClient
 func (s *Service) delHttpClient(install *ServerInfo, host string) error {
 	s.lock.Lock()
-	//s.clients[install.name] = hutl.Filter(s.clients[install.name], func(init hrpc.Init) bool {
-	//	return "" != install.name
-	//})
+
+	s.clients[install.name].list = hutl.Filter(s.clients[install.name].list, func(router Router) bool {
+		return !router.isLocal && router.host != host
+	})
 
 	delete(s.httpClient, host)
 	s.lock.Unlock()
@@ -611,7 +613,8 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	}
 	c.list = append(c.list, Router{
 		Init:    install.client(connect),
-		IsLocal: false,
+		isLocal: false,
+		host:    addr.Host,
 	})
 
 	s.checkSubscribe()
@@ -632,7 +635,7 @@ func (s *Service) addLocalClient(install *ServerInfo) {
 	}
 	c.list = append(c.list, Router{
 		Init:    install.init,
-		IsLocal: true,
+		isLocal: true,
 	})
 	s.checkSubscribe()
 	s.lock.Unlock()
@@ -758,7 +761,7 @@ func NewDispatchHash(hash uint64) Dispatch {
 func NewDispatchPriorityLocal(dispatch Dispatch) Dispatch {
 	return func(list []Router, index int32) (hrpc.Init, int32) {
 		for _, router := range list {
-			if router.IsLocal {
+			if router.isLocal {
 				return router.Init, index
 			}
 		}

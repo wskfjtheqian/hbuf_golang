@@ -64,7 +64,7 @@ func NewApp(options ...Option) *App {
 			return next
 		},
 		ctx:           hlog.NewContext(),
-		closeDuration: 10 * time.Second,
+		closeDuration: 20 * time.Second,
 		health:        NewHealth(),
 	}
 	ret.nats = hmq.NewNats()
@@ -210,19 +210,15 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 		}
 	}()
 
-	err := fn(ctx)
+	mainCtx, mainCancel := context.WithCancel(a.ctx)
+	defer mainCancel()
+
+	err := fn(mainCtx)
 	if err != nil {
 		herror.PrintStack(a.ctx, err)
 	}
 
 	<-ctx.Done()
-	hlog.Info(ctx, "waiting app to shutdown")
-	a.health.SetShuttingDown()
-
-	// 等待流量摘除（给 K8S 时间更新 Endpoint）
-	hlog.Info(ctx, "waiting %s for traffic to drain...", a.closeDuration.String())
-	time.Sleep(a.closeDuration)
-
 	shutdownCtx, shutdownCancel := context.WithTimeout(hlog.WithContext(context.Background(), hlog.FromContext(a.ctx)), a.closeDuration)
 	defer shutdownCancel()
 
@@ -232,6 +228,15 @@ func (a *App) Run(fn func(ctx context.Context) error) {
 		hlog.Error(a.ctx, "Deregister failed: %v", err)
 	}
 
+	a.health.SetShuttingDown()
+
+	// 等待流量摘除（给 K8S 时间更新 Endpoint）
+	hlog.Info(ctx, "waiting %s for traffic to drain...", (a.closeDuration / 2).String())
+	time.Sleep((a.closeDuration / 2))
+
+	mainCancel()
+
+	hlog.Info(ctx, "waiting app to shutdown")
 	if len(a.onShutdown) > 0 && a.onShutdown[0] != nil {
 		err = a.onShutdown[0](shutdownCtx)
 		if err != nil {
