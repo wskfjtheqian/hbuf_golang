@@ -3,11 +3,14 @@ package hcdc
 import (
 	"context"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 type CanalConfig struct {
@@ -31,7 +34,7 @@ func NewCanal(cfg *CanalConfig) *Canal {
 
 type Canal struct {
 	cfg           *CanalConfig
-	canal         canal.Canal
+	canal         *canal.Canal
 	conn          *client.Conn
 	excludeDBs    []*regexp.Regexp
 	includeDBs    []*regexp.Regexp
@@ -175,4 +178,55 @@ func (c *Canal) GetColumns(ctx context.Context, schema Schema, table Table) ([]C
 		}
 	}
 	return columns, nil
+}
+
+func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, columns []ColumnInfo, start, end string, fn func(ctx context.Context, values [][]RawBytes) error) error {
+	key := "id"
+	for _, column := range columns {
+		if column.IsKey {
+			key = column.Name
+			break
+		}
+	}
+
+	batch := hutl.NewBatchProcess(500, func(values [][]RawBytes) error {
+		return fn(ctx, values)
+	})
+
+	query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + key + "` > " + start + " AND `" + key + "` <= " + end
+	var result mysql.Result
+	err := c.conn.ExecuteSelectStreaming(query, &result, func(row []mysql.FieldValue) error {
+		return batch.AddData(hutl.Slice(row, func(i int, v mysql.FieldValue) RawBytes {
+			switch v.Type {
+			case mysql.FieldValueTypeUnsigned:
+				return RawBytes(strconv.FormatUint(v.AsUint64(), 10))
+			case mysql.FieldValueTypeSigned:
+				return RawBytes(strconv.FormatInt(v.AsInt64(), 10))
+			case mysql.FieldValueTypeFloat:
+				return RawBytes(strconv.FormatFloat(v.AsFloat64(), 'f', -1, 64))
+			case mysql.FieldValueTypeString:
+				return RawBytes(v.AsString())
+			default:
+				return nil
+			}
+		}))
+	}, func(result *mysql.Result) error {
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return batch.Finish()
+}
+
+func (c *Canal) Close() {
+	if c.canal != nil {
+		c.canal.Close()
+		c.canal = nil
+	}
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
 }

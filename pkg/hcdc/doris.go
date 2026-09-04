@@ -119,7 +119,7 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 	if err != nil {
 		return err
 	}
-	parse.Path = fmt.Sprintf("/api/%s/%s_stream_load", schema, table)
+	parse.Path = fmt.Sprintf("/api/%s/%s/_stream_load", schema, table)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, parse.String(), value)
 	if err != nil {
 		return herror.Wrap(err)
@@ -154,7 +154,7 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 		return herror.Wrap(err)
 	}
 	if dorisResp.Status != "Success" {
-		return herror.NewError("doris stream load failed: " + dorisResp.Message)
+		return herror.NewError("doris stream load failed: " + string(body))
 	}
 	return nil
 }

@@ -256,3 +256,53 @@ func Test_DorisCreateTable(t *testing.T) {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
 }
+
+func Test_DorisCopyTable(t *testing.T) {
+	c := NewCanal(&CanalConfig{
+		Host:     "192.168.1.24:3316",
+		Username: "root",
+		Password: "123456",
+		Schema:   "game",
+	})
+	err := c.Open(t.Context())
+	if err != nil {
+		t.Fatalf("Open Canal failed: %v", err)
+	}
+	defer c.Close()
+
+	columns, err := c.GetColumns(t.Context(), "game_usa", "user_info")
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+
+	t.Logf("Columns: %v", columns)
+
+	d := NewDoris(&DorisConfig{
+		Host:     "192.168.1.24:9030",
+		LoadURL:  "http://192.168.1.24:8040/",
+		LogDir:   "E:\\develop\\hbuf\\hbuf_golang\\pkg\\hcdc\\logs",
+		Password: "",
+		Username: "admin",
+	})
+
+	d.RegisterWorker("game_usa", "user_info")
+
+	err = d.Open(t.Context())
+	if err != nil {
+		t.Fatalf("Open Doris failed: %v", err)
+	}
+	defer d.Close()
+
+	newColumns := hutl.Slice(columns, func(i int, v ColumnInfo) Column {
+		return Column(v.Name)
+	})
+
+	err = c.ReadData(t.Context(), "game_usa", "user_info", columns, "0", "2360005", func(ctx context.Context, values [][]RawBytes) error {
+		return d.AddData(ctx, "game_usa", "user_info", newColumns, values)
+	})
+	if err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	time.Sleep(30 * time.Second)
+}

@@ -140,7 +140,7 @@ func (t *Worker) createFileUnderLock(ctx context.Context) (*os.File, error) {
 	}
 
 	// ✨ 核心机制 2：在创建新文件的第一行，强行写入当前 Schema Header 加上系统扩展字段名
-	header := fmt.Sprintf("%s,%s,%s,instance_tag\n", t.columns, "source_schema", "source_table")
+	header := fmt.Sprintf("%s,__op\n", t.columns)
 	n, err := file.WriteString(header)
 	if err != nil {
 		_ = file.Close()
@@ -199,10 +199,6 @@ func (t *Worker) save(ctx context.Context, columns string, rows [][]RawBytes) er
 				sb.WriteString(s)
 			}
 		}
-		sb.WriteString(",")
-		sb.WriteString(string(t.schema))
-		sb.WriteString(",")
-		sb.WriteString(string(t.table))
 		sb.WriteString(",")
 		sb.WriteString("1\n")
 		t.countSize++
