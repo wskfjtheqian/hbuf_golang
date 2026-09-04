@@ -19,14 +19,24 @@ const (
 )
 
 type ColumnInfo struct {
-	Name    string
-	Type    string
-	Comment string
-	IsKey   bool
+	Name     string
+	Type     string
+	Args     string
+	Comment  string
+	KeyIndex int
+	IsNull   bool
+	Default  string
 }
 
 func (i ColumnInfo) String() string {
 	return i.Name + ":" + i.Type
+}
+
+type TableInfo struct {
+	Columns        []ColumnInfo
+	Keys           []string
+	PartitionField string // 分区字段名
+	PartitionType  string // 分区类型，目前主流为 "RANGE"
 }
 
 type Config struct {
@@ -121,12 +131,21 @@ func (h *HCDC) setCanalCall(canal *Canal) {
 		}
 		return doris.AddData(ctx, schema, table, action, columns, values)
 	})
-	canal.setOnCreateTable(func(ctx context.Context, schema Schema, table Table, columns []ColumnInfo) error {
+
+	canal.setOnCreateSchema(func(ctx context.Context, schema Schema) error {
 		doris := h.doris.Load()
 		if doris == nil {
 			return nil
 		}
-		err := doris.CreateTable(ctx, schema, table, columns, PartitionInfo{})
+		return doris.CreateSchema(ctx, schema)
+	})
+
+	canal.setOnCreateTable(func(ctx context.Context, schema Schema, table Table, info *TableInfo) error {
+		doris := h.doris.Load()
+		if doris == nil {
+			return nil
+		}
+		err := doris.CreateTable(ctx, schema, table, info)
 		if err != nil {
 			return err
 		}

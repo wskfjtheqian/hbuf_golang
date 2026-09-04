@@ -17,14 +17,6 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
-// PartitionInfo 定义建表时的分区配置
-type PartitionInfo struct {
-	Enable        bool   // 是否启用分区
-	FieldName     string // 分区字段名，例如 "create_time" 或 "dt"
-	Type          string // 分区类型，目前主流为 "RANGE"
-	PreCreateDays int    // 预建多少天的分区（例如传 7，则自动建好未来 7 天每天的分区）
-}
-
 type DorisResponse struct {
 	TxnId                  int    `json:"TxnId"`
 	Label                  string `json:"Label"`
@@ -263,80 +255,47 @@ func (d *Doris) GetReplicationNum(ctx context.Context) int {
 }
 
 // CreateTable 增强版：支持动态主键、自适应副本及 Range 时间分区
-func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, columns []ColumnInfo, partInfo PartitionInfo) error {
+func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, info *TableInfo) error {
 	var s strings.Builder
-
-	// 1. 收集并确定主键 (Unique Keys)
-	var keyCols []string
-	hasPartitionFieldInKey := false
-
-	for _, col := range columns {
-		if col.IsKey {
-			keyCols = append(keyCols, fmt.Sprintf("`%s`", col.Name))
-			if partInfo.Enable && col.Name == partInfo.FieldName {
-				hasPartitionFieldInKey = true
-			}
-		}
-	}
-
-	// 兜底策略：如果没有任何主键，默认拿第一列
-	if len(keyCols) == 0 && len(columns) > 0 {
-		keyCols = append(keyCols, fmt.Sprintf("`%s`", columns[0].Name))
-		if partInfo.Enable && columns[0].Name == partInfo.FieldName {
-			hasPartitionFieldInKey = true
-		}
-	}
-
-	// 🚨 核心逻辑规避：Doris 规定 Unique 模型的分区列必须包含在 Unique Key 中
-	if partInfo.Enable && !hasPartitionFieldInKey {
-		keyCols = append(keyCols, fmt.Sprintf("`%s`", partInfo.FieldName))
-		// 同时需要更新 columns 列表中该字段的 IsKey 属性，确保排序正确
-		for i := range columns {
-			if columns[i].Name == partInfo.FieldName {
-				columns[i].IsKey = true
-			}
-		}
-	}
 
 	// 2. 拼接字段定义
 	s.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` (\n", string(schema), string(table)))
-	for i, col := range columns {
-		s.WriteString(fmt.Sprintf("  `%s` %s COMMENT '%s'", col.Name, d.ToDorisType(col.Type), strings.ReplaceAll(col.Comment, "'", "\\'")))
-		if i < len(columns)-1 {
+	for i, col := range info.Columns {
+		s.WriteString(" `")
+		s.WriteString(col.Name)
+		s.WriteString("` ")
+		s.WriteString(d.ToDorisType(col))
+		if col.IsNull {
+			s.WriteString(" NULL")
+		} else {
+			s.WriteString(" NOT NULL")
+		}
+		if col.Default != "NULL" && col.Default != "" {
+			s.WriteString(" DEFAULT ")
+			if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
+				s.WriteString(strings.ReplaceAll(col.Default, "0000-00-00", "1970-01-01"))
+			} else {
+				s.WriteString(col.Default)
+			}
+		}
+		s.WriteString(" COMMENT ")
+		s.WriteString("'")
+		s.WriteString(strings.ReplaceAll(col.Comment, "'", "\\'"))
+		s.WriteString("'")
+
+		if i < len(info.Columns)-1 {
 			s.WriteString(",\n")
 		}
 	}
 	s.WriteString("\n) ENGINE=OLAP\n")
 
 	// 3. 拼接 UNIQUE KEY (确保聚合/唯一键列排在前面)
-	keysStr := strings.Join(keyCols, ", ")
+	keysStr := strings.Join(info.Keys, ", ")
 	s.WriteString(fmt.Sprintf("UNIQUE KEY(%s)\n", keysStr))
 
 	// 4. 动态拼接 PARTITION BY RANGE 逻辑
-	if partInfo.Enable && partInfo.Type == "RANGE" {
-		s.WriteString(fmt.Sprintf("PARTITION BY RANGE(`%s`) (\n", partInfo.FieldName))
-
-		// 自动预建分区（以天为单位生成：从昨天开始，一直生成到未来 N 天）
-		now := time.Now()
-		daysToCreate := 7 // 默认预建一周
-		if partInfo.PreCreateDays > 0 {
-			daysToCreate = partInfo.PreCreateDays
-		}
-
-		var partLines []string
-		// 从昨天开始建，防止边界数据由于时区或延迟无法写入
-		for i := -1; i <= daysToCreate; i++ {
-			t := now.AddDate(0, 0, i)
-			pName := fmt.Sprintf("p%s", t.Format("20060102"))
-			pLower := t.Format("2006-01-02")
-			pUpper := t.AddDate(0, 0, 1).Format("2006-01-02")
-
-			// 转换为 Doris 语法：PARTITION p220260904 VALUES [('2026-09-04'), ('2026-09-05'))
-			line := fmt.Sprintf("  PARTITION %s VALUES [('%s 00:00:00'), ('%s 00:00:00'))", pName, pLower, pUpper)
-			partLines = append(partLines, line)
-		}
-		s.WriteString(strings.Join(partLines, ",\n"))
-		s.WriteString("\n)\n")
+	if info.PartitionType == "RANGE" {
+		s.WriteString(fmt.Sprintf("AUTO PARTITION BY RANGE (DATE_TRUNC(`%s`, 'DAY')) ()\n", info.PartitionField))
 	}
 
 	// 5. 拼接 DISTRIBUTED BY
@@ -362,27 +321,15 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, col
 }
 
 // ToDorisType 将上游原始类型转换为合法的 Doris 字段类型
-func (d *Doris) ToDorisType(rawType string) string {
+func (d *Doris) ToDorisType(info ColumnInfo) string {
 	// 1. 统一转换为小写，去掉首尾空格
-	rt := strings.TrimSpace(strings.ToLower(rawType))
+	rt := strings.TrimSpace(info.Type)
 	if rt == "" {
 		return "VARCHAR(255)"
 	}
 
 	// 2. 提取括号中的参数（例如 "decimal(10,2)" -> "(10,2)", "bigint" -> ""）
-	var args string
-	if idx := strings.Index(rt, "("); idx != -1 {
-		if endIdx := strings.Index(rt, ")"); endIdx != -1 && endIdx > idx {
-			args = rt[idx : endIdx+1]
-		}
-		// 截断 rt，只保留核心类型名称（例如 "decimal(10,2)" -> "decimal"）
-		rt = strings.TrimSpace(rt[:idx])
-	} else {
-		// 如果没有括号，剔除可能存在的修饰符（例如 "bigint unsigned" -> "bigint"）
-		if spaceIdx := strings.Index(rt, " "); spaceIdx != -1 {
-			rt = rt[:spaceIdx]
-		}
-	}
+	var args = info.Args
 
 	// 3. 核心类型映射匹配
 	switch rt {

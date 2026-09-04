@@ -3,7 +3,9 @@ package hcdc
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +20,8 @@ import (
 )
 
 type OnData func(ctx context.Context, schema Schema, table Table, action Action, columns []Column, values [][]RawBytes) error
-type onCreateTable func(ctx context.Context, schema Schema, table Table, columns []ColumnInfo) error
+type OnCreateTable func(ctx context.Context, schema Schema, table Table, info *TableInfo) error
+type OnCreateSchema func(ctx context.Context, schema Schema) error
 
 type CanalConfig struct {
 	Host          string   `yaml:"host"`          // 数据库主机地址
@@ -107,7 +110,8 @@ type Canal struct {
 	excludeTables           []*regexp.Regexp
 	includeTables           []*regexp.Regexp
 	onData                  OnData
-	onCreateTable           onCreateTable
+	onCreateTable           OnCreateTable
+	onCreateSchema          OnCreateSchema
 	schemas                 map[Schema]map[Table][]ColumnInfo
 	lock                    sync.Mutex
 }
@@ -116,8 +120,11 @@ func (c *Canal) setOnData(fn OnData) {
 	c.onData = fn
 }
 
-func (c *Canal) setOnCreateTable(fn onCreateTable) {
+func (c *Canal) setOnCreateTable(fn OnCreateTable) {
 	c.onCreateTable = fn
+}
+func (c *Canal) setOnCreateSchema(fn OnCreateSchema) {
+	c.onCreateSchema = fn
 }
 
 func (c *Canal) Open(ctx context.Context) error {
@@ -185,7 +192,7 @@ func (c *Canal) Open(ctx context.Context) error {
 
 // OnTableChanged 当表结构被修改，或者是由于 DDL 导致 Canal 内部缓存的元数据失效时触发。
 func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, table string) error {
-	// 当上游加字段减字段时触发，你可以在这里重新调用 c.GetColumns 获取最新结构
+	// 当上游加字段减字段时触发，你可以在这里重新调用 c.GetTableInfo 获取最新结构
 	// 并在 Doris 侧执行 "ALTER TABLE ... ADD COLUMN" 动态同步表结构变更
 	return nil
 }
@@ -394,24 +401,82 @@ func (c *Canal) FilterTable(name string) bool {
 	return false
 }
 
-// GetColumns 获得指定表的结构
-func (c *Canal) GetColumns(ctx context.Context, schema Schema, table Table) ([]ColumnInfo, error) {
-	query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+// GetKeys 获得指定表的主键
+func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
+	query := "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC "
 	result, err := c.conn.Execute(query, string(schema), string(table))
+	if err != nil {
+		return nil, herror.Wrap(err)
+	}
+	defer result.Close()
+	var keys = make(map[string]int)
+	for i, rows := range result.Values {
+		if string(rows[1].AsString()) == "PRIMARY" {
+			keys[string(rows[0].AsString())] = i + 1
+		}
+	}
+
+	return keys, nil
+}
+
+// GetTableInfo 获得指定表的结构
+func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*TableInfo, error) {
+	if table == "stats_bonus_report" {
+		println("table", table)
+	}
+	keys, err := c.GetKeys(ctx, schema, table)
+	if err != nil {
+		return nil, herror.Wrap(err)
+	}
+
+	query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+	result, err := c.conn.Execute(query, string(schema), string(table))
+	if err != nil {
+		return nil, herror.Wrap(err)
+	}
+	defer result.Close()
+
+	ret := &TableInfo{
+		Columns: make([]ColumnInfo, len(result.Values)),
+		Keys:    make([]string, 0),
+	}
+	for i, rows := range result.Values {
+		ret.Columns[i] = ColumnInfo{
+			Name:     string(rows[0].AsString()),
+			Type:     strings.ToLower(string(rows[5].AsString())),
+			Comment:  string(rows[2].AsString()),
+			KeyIndex: keys[string(rows[0].AsString())],
+			IsNull:   string(rows[3].AsString()) == "YES",
+			Args:     string(rows[1].AsString()[len(rows[5].AsString()):]),
+			Default:  string(rows[4].AsString()),
+		}
+	}
+
+	sort.Slice(ret.Columns, func(i, j int) bool {
+		return ret.Columns[i].KeyIndex > ret.Columns[j].KeyIndex
+	})
+
+	for _, column := range ret.Columns {
+		if column.KeyIndex > 0 {
+			ret.Keys = append(ret.Keys, column.Name)
+		}
+	}
+
+	ret.PartitionType, err = c.GetPartitionType(ctx, schema, table)
 	if err != nil {
 		return nil, err
 	}
-	defer result.Close()
-	var columns = make([]ColumnInfo, len(result.Values))
-	for i, rows := range result.Values {
-		columns[i] = ColumnInfo{
-			Name:    string(rows[0].AsString()),
-			Type:    string(rows[1].AsString()),
-			Comment: string(rows[2].AsString()),
-			IsKey:   string(rows[3].AsString()) == "PRI",
+	if ret.PartitionType == "RANGE" {
+		//查看一个时间类型的KEY做为分区 Field
+		for _, column := range ret.Columns {
+			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
+				ret.PartitionField = column.Name
+				break
+			}
 		}
 	}
-	return columns, nil
+
+	return ret, nil
 }
 
 func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, columns []ColumnInfo, start, end string) error {
@@ -421,7 +486,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, column
 
 	key := "id"
 	for _, column := range columns {
-		if column.IsKey {
+		if column.KeyIndex > 0 {
 			key = column.Name
 			break
 		}
@@ -484,6 +549,11 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 	})
 
 	for _, db := range dbs {
+		err = c.onCreateSchema(ctx, Schema(db))
+		if err != nil {
+			return err
+		}
+
 		tables, err := c.GetTables(ctx, Schema(db))
 		if err != nil {
 			return err
@@ -498,13 +568,13 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 		for _, table := range tables {
 			if c.FilterTable(table) {
 
-				columns, err := c.GetColumns(ctx, Schema(db), Table(table))
+				info, err := c.GetTableInfo(ctx, Schema(db), Table(table))
 				if err != nil {
 					return err
 				}
 
-				c.schemas[Schema(db)][Table(table)] = columns
-				err = c.onCreateTable(ctx, Schema(db), Table(table), columns)
+				c.schemas[Schema(db)][Table(table)] = info.Columns
+				err = c.onCreateTable(ctx, Schema(db), Table(table), info)
 				if err != nil {
 					return err
 				}
@@ -524,4 +594,22 @@ func (c *Canal) loadData(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// GetPartitionType 动态查询 MySQL 上游表的 RANGE 分区字段
+func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table) (string, error) {
+	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
+	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
+
+	result, err := c.conn.Execute(query, string(schema), string(table))
+	if err != nil {
+		return "", err
+	}
+	defer result.Close()
+
+	// 如果没有查询到分区记录，说明是普通表，不启用分区
+	if len(result.Values) == 0 {
+		return "", nil
+	}
+	return string(result.Values[0][0].AsString()), nil
 }

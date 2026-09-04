@@ -83,9 +83,9 @@ func Test_CanalGetColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open Canal failed: %v", err)
 	}
-	columns, err := c.GetColumns(t.Context(), "game_usa", "act_info")
+	columns, err := c.GetTableInfo(t.Context(), "game_usa", "game_record")
 	if err != nil {
-		t.Fatalf("GetColumns failed: %v", err)
+		t.Fatalf("GetTableInfo failed: %v", err)
 	}
 
 	t.Logf("Columns: %v", columns)
@@ -121,12 +121,12 @@ func Test_DorisCreateTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open Canal failed: %v", err)
 	}
-	columns, err := c.GetColumns(t.Context(), "game_usa", "user_info")
+	info, err := c.GetTableInfo(t.Context(), "game_usa", "user_info")
 	if err != nil {
-		t.Fatalf("GetColumns failed: %v", err)
+		t.Fatalf("GetTableInfo failed: %v", err)
 	}
 
-	t.Logf("Columns: %v", columns)
+	t.Logf("Columns: %v", info)
 
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
 		Host:     "192.168.1.24:9030",
@@ -141,12 +141,7 @@ func Test_DorisCreateTable(t *testing.T) {
 	}
 	defer d.Close()
 
-	err = d.CreateTable(t.Context(), "game_usa", "user_info", columns, hcdc.PartitionInfo{
-		Enable:        false,
-		FieldName:     "",
-		Type:          "",
-		PreCreateDays: 0,
-	})
+	err = d.CreateTable(t.Context(), "game_usa", "user_info", info)
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
@@ -165,12 +160,12 @@ func Test_DorisCopyTable(t *testing.T) {
 	}
 	defer c.Close()
 
-	columns, err := c.GetColumns(t.Context(), "game_usa", "user_info")
+	info, err := c.GetTableInfo(t.Context(), "game_usa", "user_info")
 	if err != nil {
-		t.Fatalf("GetColumns failed: %v", err)
+		t.Fatalf("GetTableInfo failed: %v", err)
 	}
 
-	t.Logf("Columns: %v", columns)
+	t.Logf("Columns: %v", info)
 
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
 		Host:     "192.168.1.24:9030",
@@ -188,7 +183,7 @@ func Test_DorisCopyTable(t *testing.T) {
 	}
 	defer d.Close()
 
-	err = c.ReadData(t.Context(), "game_usa", "user_info", columns, "0", "2360005")
+	err = c.ReadData(t.Context(), "game_usa", "user_info", info.Columns, "0", "2360005")
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
