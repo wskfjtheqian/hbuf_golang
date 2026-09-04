@@ -35,8 +35,12 @@ type DorisResponse struct {
 }
 
 type DorisConfig struct {
-	LogDir  string
-	LoadURL string
+	LogDir    string `yaml:"logDir"`
+	StreamUrl struct {
+		LoadURL  string `yaml:"loadURL"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	} `yaml:"streamUrl"`
 }
 
 type Doris struct {
@@ -84,7 +88,7 @@ func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, current
 }
 
 func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {
-	parse, err := url.Parse(d.cfg.LoadURL)
+	parse, err := url.Parse(d.cfg.StreamUrl.LoadURL)
 	if err != nil {
 		return err
 	}
@@ -94,7 +98,7 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 		return herror.Wrap(err)
 	}
 
-	req.SetBasicAuth("root", "")
+	req.SetBasicAuth(d.cfg.StreamUrl.Username, d.cfg.StreamUrl.Password)
 	req.Header.Set("Expect", "100-continue")
 	req.Header.Set("column_separator", ",")
 
@@ -139,8 +143,6 @@ func (d *Doris) loop(ctx context.Context) {
 		case <-ticker.C:
 			d.mu.RLock()
 			for _, worker := range d.workers {
-				_ = worker.checkAndRotate(ctx, true)
-
 				err := worker.readFile(ctx, func(ctx context.Context, columns string, reader io.Reader) error {
 					return d.StreamSave(ctx, worker.schema, worker.table, columns, reader)
 				})
