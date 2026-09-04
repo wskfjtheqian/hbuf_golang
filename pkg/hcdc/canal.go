@@ -18,7 +18,7 @@ import (
 )
 
 type OnData func(ctx context.Context, schema Schema, table Table, action Action, columns []Column, values [][]RawBytes) error
-type onCreateTable func(ctx context.Context, schema Schema, table Table, columns []Column) error
+type onCreateTable func(ctx context.Context, schema Schema, table Table, columns []ColumnInfo) error
 
 type CanalConfig struct {
 	Host          string   `yaml:"host"`          // 数据库主机地址
@@ -484,7 +484,12 @@ func (c *Canal) allTable(ctx context.Context) error {
 
 		for _, table := range tables {
 			if c.FilterTable(table) {
-				err = c.onCreateTable(ctx, Schema(db), Table(table), nil)
+
+				columns, err := c.GetColumns(ctx, Schema(db), Table(table))
+				if err != nil {
+					return err
+				}
+				err = c.onCreateTable(ctx, Schema(db), Table(table), columns)
 				if err != nil {
 					return err
 				}

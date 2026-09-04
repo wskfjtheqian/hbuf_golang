@@ -205,7 +205,7 @@ func Test_HCDC(t *testing.T) {
 				Password:      "123456",
 				Schema:        "game",
 				IncludeDBs:    []string{"game_usa"},
-				IncludeTables: []string{"user_info"},
+				IncludeTables: []string{"(.*)"},
 			},
 		},
 		Doris: &hcdc.DorisConfig{
