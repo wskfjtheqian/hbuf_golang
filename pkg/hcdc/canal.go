@@ -4,7 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strconv"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/canal"
@@ -91,7 +91,8 @@ func (c *CanalConfig) Equal(other *CanalConfig) bool {
 
 func NewCanal(cfg *CanalConfig) *Canal {
 	ret := &Canal{
-		cfg: cfg,
+		cfg:     cfg,
+		schemas: make(map[Schema]map[Table][]ColumnInfo),
 	}
 	return ret
 }
@@ -107,6 +108,8 @@ type Canal struct {
 	includeTables           []*regexp.Regexp
 	onData                  OnData
 	onCreateTable           onCreateTable
+	schemas                 map[Schema]map[Table][]ColumnInfo
+	lock                    sync.Mutex
 }
 
 func (c *Canal) setOnData(fn OnData) {
@@ -134,10 +137,15 @@ func (c *Canal) Open(ctx context.Context) error {
 		return herror.Wrap(err)
 	}
 
-	err = c.allTable(ctx)
+	err = c.createSchemaTable(ctx)
 	if err != nil {
 		return err
 	}
+
+	//err = c.loadData(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
 	cfg := canal.NewDefaultConfig()
 	if c.cfg.ServerID != nil {
@@ -388,7 +396,7 @@ func (c *Canal) FilterTable(name string) bool {
 
 // GetColumns 获得指定表的结构
 func (c *Canal) GetColumns(ctx context.Context, schema Schema, table Table) ([]ColumnInfo, error) {
-	query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+	query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
 	result, err := c.conn.Execute(query, string(schema), string(table))
 	if err != nil {
 		return nil, err
@@ -397,9 +405,10 @@ func (c *Canal) GetColumns(ctx context.Context, schema Schema, table Table) ([]C
 	var columns = make([]ColumnInfo, len(result.Values))
 	for i, rows := range result.Values {
 		columns[i] = ColumnInfo{
-			Name:    strings.Trim(rows[0].String(), "'"),
-			Type:    strings.Trim(rows[1].String(), "'"),
-			Comment: strings.Trim(rows[2].String(), "'"),
+			Name:    string(rows[0].AsString()),
+			Type:    string(rows[1].AsString()),
+			Comment: string(rows[2].AsString()),
+			IsKey:   string(rows[3].AsString()) == "PRI",
 		}
 	}
 	return columns, nil
@@ -463,7 +472,9 @@ func (c *Canal) Close() {
 	}
 }
 
-func (c *Canal) allTable(ctx context.Context) error {
+func (c *Canal) createSchemaTable(ctx context.Context) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	dbs, err := c.GetDatabases(ctx)
 	if err != nil {
 		return err
@@ -481,7 +492,9 @@ func (c *Canal) allTable(ctx context.Context) error {
 		tables = hutl.Filter(tables, func(v string) bool {
 			return c.FilterTable(v)
 		})
-
+		if _, ok := c.schemas[Schema(db)]; !ok {
+			c.schemas[Schema(db)] = make(map[Table][]ColumnInfo)
+		}
 		for _, table := range tables {
 			if c.FilterTable(table) {
 
@@ -489,10 +502,24 @@ func (c *Canal) allTable(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
+
+				c.schemas[Schema(db)][Table(table)] = columns
 				err = c.onCreateTable(ctx, Schema(db), Table(table), columns)
 				if err != nil {
 					return err
 				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Canal) loadData(ctx context.Context) error {
+	for schema, tables := range c.schemas {
+		for table := range tables {
+			err := c.ReadData(ctx, schema, table, c.schemas[schema][table], "0", "9223372036854775807")
+			if err != nil {
+				return err
 			}
 		}
 	}

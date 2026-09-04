@@ -211,7 +211,7 @@ func Test_HCDC(t *testing.T) {
 		Doris: &hcdc.DorisConfig{
 			Host:     "192.168.1.24:9030",
 			LoadURL:  "http://192.168.1.24:8040/",
-			LogDir:   "E:\\develop\\hbuf\\hbuf_golang\\pkg\\hcdc\\logs",
+			LogDir:   "./logs",
 			Password: "",
 			Username: "admin",
 		},
