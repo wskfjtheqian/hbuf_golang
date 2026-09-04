@@ -239,7 +239,7 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	defer a.builderPool.Put(text)
 
 	//获得响应状态码
-	text.WriteString(" [")
+	text.WriteString("[")
 	text.WriteString(hlog.FromContext(ctx))
 	text.WriteString("] ")
 
