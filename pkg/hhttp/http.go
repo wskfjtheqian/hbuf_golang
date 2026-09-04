@@ -114,10 +114,10 @@ func (a *Http) SetConfig(ctx context.Context, conf *Config) error {
 		}
 		var err error
 		if conf.Crt != nil && conf.Key != nil {
-			hlog.Info(ctx, "Start https server, addr: %s", *conf.Addr)
+			hlog.Info(ctx, "Open https server, addr: %s", *conf.Addr)
 			err = h.ServeTLS(listener, *conf.Crt, *conf.Key)
 		} else {
-			hlog.Info(ctx, "Start http server, addr: %s", *conf.Addr)
+			hlog.Info(ctx, "Open http server, addr: %s", *conf.Addr)
 			err = h.Serve(listener)
 		}
 		if err != nil {

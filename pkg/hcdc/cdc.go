@@ -7,8 +7,10 @@ type SchemaTable string
 type RawBytes []byte
 
 type ColumnInfo struct {
-	Name string
-	Type string
+	Name    string
+	Type    string
+	Comment string
+	IsKey   bool
 }
 
 func (i ColumnInfo) String() string {

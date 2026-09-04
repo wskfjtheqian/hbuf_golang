@@ -188,10 +188,71 @@ func Test_CanalGetColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open Canal failed: %v", err)
 	}
-	dbs, err := c.GetColumns(t.Context(), "game_usa", "act_info")
+	columns, err := c.GetColumns(t.Context(), "game_usa", "act_info")
 	if err != nil {
 		t.Fatalf("GetColumns failed: %v", err)
 	}
 
-	t.Logf("Columns: %v", dbs)
+	t.Logf("Columns: %v", columns)
+}
+
+func Test_DorisCreateSchema(t *testing.T) {
+	d := NewDoris(&DorisConfig{
+		Host:     "192.168.1.24:9030",
+		LoadURL:  "192.168.1.24:8040",
+		LogDir:   "/home/admin/logs/hcdc",
+		Password: "",
+		Username: "admin",
+	})
+	err := d.Open(t.Context())
+	if err != nil {
+		t.Fatalf("Open Doris failed: %v", err)
+	}
+	defer d.Close()
+	err = d.CreateSchema(t.Context(), "game_usa")
+	if err != nil {
+		t.Fatalf("CreateSchema failed: %v", err)
+	}
+}
+
+func Test_DorisCreateTable(t *testing.T) {
+	c := NewCanal(&CanalConfig{
+		Host:     "192.168.1.24:3316",
+		Username: "root",
+		Password: "123456",
+		Schema:   "game",
+	})
+	err := c.Open(t.Context())
+	if err != nil {
+		t.Fatalf("Open Canal failed: %v", err)
+	}
+	columns, err := c.GetColumns(t.Context(), "game_usa", "user_info")
+	if err != nil {
+		t.Fatalf("GetColumns failed: %v", err)
+	}
+
+	t.Logf("Columns: %v", columns)
+
+	d := NewDoris(&DorisConfig{
+		Host:     "192.168.1.24:9030",
+		LoadURL:  "192.168.1.24:8040",
+		LogDir:   "/home/admin/logs/hcdc",
+		Password: "",
+		Username: "admin",
+	})
+	err = d.Open(t.Context())
+	if err != nil {
+		t.Fatalf("Open Doris failed: %v", err)
+	}
+	defer d.Close()
+
+	err = d.CreateTable(t.Context(), "game_usa", "user_info", columns, PartitionInfo{
+		Enable:        false,
+		FieldName:     "",
+		Type:          "",
+		PreCreateDays: 0,
+	})
+	if err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
 }

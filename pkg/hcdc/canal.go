@@ -3,6 +3,7 @@ package hcdc
 import (
 	"context"
 	"regexp"
+	"strings"
 
 	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/client"
@@ -159,7 +160,7 @@ func (c *Canal) FilterTable(name string) bool {
 
 // GetColumns 获得指定表的结构
 func (c *Canal) GetColumns(ctx context.Context, schema Schema, table Table) ([]ColumnInfo, error) {
-	query := "SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+	query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
 	result, err := c.conn.Execute(query, string(schema), string(table))
 	if err != nil {
 		return nil, err
@@ -167,7 +168,11 @@ func (c *Canal) GetColumns(ctx context.Context, schema Schema, table Table) ([]C
 	defer result.Close()
 	var columns = make([]ColumnInfo, len(result.Values))
 	for i, rows := range result.Values {
-		columns[i] = ColumnInfo{Name: rows[0].String(), Type: rows[1].String()}
+		columns[i] = ColumnInfo{
+			Name:    strings.Trim(rows[0].String(), "'"),
+			Type:    strings.Trim(rows[1].String(), "'"),
+			Comment: strings.Trim(rows[2].String(), "'"),
+		}
 	}
 	return columns, nil
 }
