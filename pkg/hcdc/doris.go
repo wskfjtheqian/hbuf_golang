@@ -55,6 +55,20 @@ type DorisConfig struct {
 	LoadURL  string `yaml:"loadURL"`
 }
 
+func (c *DorisConfig) Validate(ctx context.Context) bool {
+	var valid bool = true
+	return valid
+}
+
+func (c *DorisConfig) Equal(other *DorisConfig) bool {
+	return c.Host == other.Host &&
+		c.Username == other.Username &&
+		c.Password == other.Password &&
+		c.Schema == other.Schema &&
+		c.LogDir == other.LogDir &&
+		c.LoadURL == other.LoadURL
+}
+
 type Doris struct {
 	cfg     *DorisConfig
 	workers map[SchemaTable]*Worker
@@ -71,13 +85,15 @@ func NewDoris(cfg *DorisConfig) *Doris {
 	}
 }
 
-func (d *Doris) RegisterWorker(schema Schema, table Table) *Worker {
+func (d *Doris) RegisterWorker(ctx context.Context, schema Schema, table Table) *Worker {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	key := SchemaTable(string(schema) + "." + string(table))
 	w := NewWorker(schema, table, d.cfg.LogDir)
 	d.workers[key] = w
+
+	go w.loop(ctx)
 	return w
 }
 
@@ -104,14 +120,14 @@ func (d *Doris) Open(ctx context.Context) error {
 	return nil
 }
 
-func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, currentCols []Column, values [][]RawBytes) error {
+func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, action Action, currentCols []Column, values [][]RawBytes) error {
 	d.mu.RLock()
 	val, ok := d.workers[SchemaTable(string(schema)+"."+string(table))]
 	d.mu.RUnlock()
 	if !ok {
 		return nil
 	}
-	return val.AddData(ctx, currentCols, values)
+	return val.AddData(ctx, action, currentCols, values)
 }
 
 func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {

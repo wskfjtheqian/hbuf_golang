@@ -20,6 +20,7 @@ type WorkerOption func(w *Worker)
 type AddData struct {
 	columns string
 	rows    [][]RawBytes
+	action  Action
 }
 
 func WithFlushDuration(d time.Duration) WorkerOption {
@@ -68,7 +69,7 @@ type Worker struct {
 	flushDuration time.Duration // 刷新间隔
 }
 
-func (t *Worker) AddData(ctx context.Context, columns []Column, rows [][]RawBytes) error {
+func (t *Worker) AddData(ctx context.Context, action Action, columns []Column, rows [][]RawBytes) error {
 	// 组装当前批次的列字符串
 	var sb strings.Builder
 	if len(columns) > 0 {
@@ -82,6 +83,7 @@ func (t *Worker) AddData(ctx context.Context, columns []Column, rows [][]RawByte
 	t.addData <- &AddData{
 		columns: sb.String(),
 		rows:    rows,
+		action:  action,
 	}
 	return nil
 }
@@ -104,7 +106,7 @@ func (t *Worker) loop(ctx context.Context) {
 		case <-flushTicker.C:
 			_ = t.checkAndRotate(ctx, true)
 		case data := <-t.addData:
-			err := t.save(ctx, data.columns, data.rows)
+			err := t.save(ctx, data.action, data.columns, data.rows)
 			if err != nil {
 				herror.PrintStack(ctx, err)
 				return
@@ -174,7 +176,7 @@ func (t *Worker) closeFileUnderLock(ctx context.Context) error {
 	return nil
 }
 
-func (t *Worker) save(ctx context.Context, columns string, rows [][]RawBytes) error {
+func (t *Worker) save(ctx context.Context, action Action, columns string, rows [][]RawBytes) error {
 	file := t.file
 	if file == nil || t.columns != columns {
 		t.columns = columns
@@ -200,7 +202,8 @@ func (t *Worker) save(ctx context.Context, columns string, rows [][]RawBytes) er
 			}
 		}
 		sb.WriteString(",")
-		sb.WriteString("1\n")
+		sb.WriteString(strconv.Itoa(int(action)))
+		sb.WriteString("\n")
 		t.countSize++
 	}
 
