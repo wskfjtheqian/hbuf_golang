@@ -124,7 +124,7 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 }
 
 func (h *HCDC) setCanalCall(canal *Canal) {
-	canal.SetOnData(func(ctx context.Context, schema Schema, table Table, action Action, columns []Column, values [][]RawBytes) error {
+	canal.SetOnData(func(ctx context.Context, schema Schema, table Table, action Action, columns []ColumnInfo, values [][]RawBytes) error {
 		doris := h.doris.Load()
 		if doris == nil {
 			return nil

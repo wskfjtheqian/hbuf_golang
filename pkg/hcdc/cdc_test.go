@@ -177,7 +177,7 @@ func Test_DorisCopyTable(t *testing.T) {
 	})
 
 	d.RegisterWorker(t.Context(), "game_usa", "user_info")
-	c.SetOnData(func(ctx context.Context, schema hcdc.Schema, table hcdc.Table, action hcdc.Action, columns []hcdc.Column, values [][]hcdc.RawBytes) error {
+	c.SetOnData(func(ctx context.Context, schema hcdc.Schema, table hcdc.Table, action hcdc.Action, columns []hcdc.ColumnInfo, values [][]hcdc.RawBytes) error {
 		return d.AddData(ctx, schema, table, action, columns, values)
 	})
 

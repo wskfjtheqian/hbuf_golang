@@ -13,12 +13,13 @@ import (
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 type WorkerOption func(w *Worker)
 
 type AddData struct {
-	columns string
+	columns []ColumnInfo
 	rows    [][]RawBytes
 	action  Action
 }
@@ -60,7 +61,7 @@ type Worker struct {
 	schema        Schema
 	table         Table
 	logDir        string
-	columns       string // 缓存当前 Schema 字符串
+	columns       []ColumnInfo
 	addData       chan *AddData
 	file          *os.File
 	writtenSize   int64
@@ -69,19 +70,9 @@ type Worker struct {
 	flushDuration time.Duration // 刷新间隔
 }
 
-func (t *Worker) AddData(ctx context.Context, action Action, columns []Column, rows [][]RawBytes) error {
-	// 组装当前批次的列字符串
-	var sb strings.Builder
-	if len(columns) > 0 {
-		sb.WriteString(string(columns[0]))
-		for _, col := range columns[1:] {
-			sb.WriteString(",")
-			sb.WriteString(string(col))
-		}
-	}
-
+func (t *Worker) AddData(ctx context.Context, action Action, columns []ColumnInfo, rows [][]RawBytes) error {
 	t.addData <- &AddData{
-		columns: sb.String(),
+		columns: columns,
 		rows:    rows,
 		action:  action,
 	}
@@ -142,8 +133,15 @@ func (t *Worker) createFileUnderLock(ctx context.Context) (*os.File, error) {
 	}
 
 	// ✨ 核心机制 2：在创建新文件的第一行，强行写入当前 Schema Header 加上系统扩展字段名
-	header := fmt.Sprintf("%s,__op\n", t.columns)
-	n, err := file.WriteString(header)
+	header := hutl.Slice(t.columns, func(i int, col ColumnInfo) string {
+		switch col.Type {
+		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint":
+			return string(col.Name)
+		}
+		return string(col.Name) + "_base"
+	})
+	header = append(header, "__op")
+	n, err := file.WriteString(strings.Join(header, ",") + "\n")
 	if err != nil {
 		_ = file.Close()
 		return nil, herror.Wrap(err)
@@ -176,9 +174,9 @@ func (t *Worker) closeFileUnderLock(ctx context.Context) error {
 	return nil
 }
 
-func (t *Worker) save(ctx context.Context, action Action, columns string, rows [][]RawBytes) error {
+func (t *Worker) save(ctx context.Context, action Action, columns []ColumnInfo, rows [][]RawBytes) error {
 	file := t.file
-	if file == nil || t.columns != columns {
+	if file == nil || !hutl.EqualSlice(t.columns, columns) {
 		t.columns = columns
 		var err error
 		file, err = t.createFileUnderLock(ctx)
@@ -217,7 +215,7 @@ func (t *Worker) save(ctx context.Context, action Action, columns string, rows [
 	return nil
 }
 
-func (t *Worker) readFile(ctx context.Context, fn func(ctx context.Context, columns string, reader io.Reader) error) error {
+func (t *Worker) readFile(ctx context.Context, fn func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error) error {
 	pattern := filepath.Join(t.logDir, string(t.schema), string(t.table), "*.active")
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
@@ -248,7 +246,7 @@ func (t *Worker) readFile(ctx context.Context, fn func(ctx context.Context, colu
 			}
 
 			// 把剥离了首行、剩下纯纯数据行的 bufReader 流直接喂给外部的 Doris 加载器
-			if err = fn(ctx, columns, bufReader); err != nil {
+			if err = fn(ctx, t.columns, columns, bufReader); err != nil {
 				return err
 			}
 			return nil

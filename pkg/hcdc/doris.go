@@ -113,7 +113,7 @@ func (d *Doris) Open(ctx context.Context) error {
 	return nil
 }
 
-func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, action Action, currentCols []Column, values [][]RawBytes) error {
+func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, action Action, currentCols []ColumnInfo, values [][]RawBytes) error {
 	d.mu.RLock()
 	val, ok := d.workers[SchemaTable(string(schema)+"."+string(table))]
 	d.mu.RUnlock()
@@ -123,7 +123,7 @@ func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, action 
 	return val.AddData(ctx, action, currentCols, values)
 }
 
-func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {
+func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, infos []ColumnInfo, columns string, value io.Reader) error {
 	parse, err := url.Parse(d.cfg.LoadURL)
 	if err != nil {
 		return err
@@ -134,6 +134,16 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 		return herror.Wrap(err)
 	}
 
+	decoders := hutl.Slice(hutl.Filter(infos, func(info ColumnInfo) bool {
+		switch info.Type {
+		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint":
+			return false
+		}
+		return true
+	}), func(i int, v ColumnInfo) string {
+		return string(v.Name) + "= from_base64(" + string(v.Name) + "_base)"
+	})
+	columns = columns + "," + strings.Join(decoders, ",")
 	req.SetBasicAuth(d.cfg.Username, d.cfg.Password)
 	req.Header.Set("Expect", "100-continue")
 	req.Header.Set("column_separator", ",")
@@ -179,8 +189,8 @@ func (d *Doris) loop(ctx context.Context) {
 		case <-ticker.C:
 			d.mu.RLock()
 			for _, worker := range d.workers {
-				err := worker.readFile(ctx, func(ctx context.Context, columns string, reader io.Reader) error {
-					return d.StreamSave(ctx, worker.schema, worker.table, columns, reader)
+				err := worker.readFile(ctx, func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error {
+					return d.StreamSave(ctx, worker.schema, worker.table, infos, columns, reader)
 				})
 				if err != nil {
 					herror.PrintStack(ctx, err)

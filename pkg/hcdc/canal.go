@@ -20,7 +20,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
-type OnData func(ctx context.Context, schema Schema, table Table, action Action, columns []Column, values [][]RawBytes) error
+type OnData func(ctx context.Context, schema Schema, table Table, action Action, columns []ColumnInfo, values [][]RawBytes) error
 type OnCreateTable func(ctx context.Context, schema Schema, table Table, info *TableInfo) error
 type OnCreateSchema func(ctx context.Context, schema Schema) error
 
@@ -230,8 +230,8 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 		return nil
 	}
 
-	columns := hutl.Slice(e.Table.Columns, func(i int, v schema.TableColumn) Column {
-		return Column(v.Name)
+	columns := hutl.Slice(e.Table.Columns, func(i int, v schema.TableColumn) ColumnInfo {
+		return c.schemas[Schema(e.Table.Schema)][Table(e.Table.Name)].Columns[Column(v.Name)]
 	})
 	if e.Action == "insert" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
@@ -498,7 +498,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 		}
 	}
 
-	fields := make([]Column, 0)
+	fields := make([]ColumnInfo, 0)
 	batch := hutl.NewBatchProcess(500, func(values [][]RawBytes) error {
 		return c.onData(ctx, schema, table, Insert, fields, values)
 	})
@@ -522,7 +522,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 		}))
 	}, func(result *mysql.Result) error {
 		for _, field := range result.Fields {
-			fields = append(fields, Column(field.Name))
+			fields = append(fields, info.Columns[Column(field.Name)])
 		}
 		return nil
 	})
