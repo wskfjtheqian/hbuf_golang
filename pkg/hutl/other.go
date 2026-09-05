@@ -29,6 +29,19 @@ func Slice[T any, E any](list []T, f func(i int, v T) E) []E {
 	return result
 }
 
+// EqualSlice 比较两个切片是否相等。
+func EqualSlice[T comparable](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // Filter 对一个切片中的每个元素进行操作，并返回一个新的切片，其中只包含满足条件的元素。
 func Filter[T any](list []T, f func(T) bool) []T {
 	result := make([]T, 0, len(list))

@@ -1,6 +1,7 @@
 package hcdc_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -95,7 +96,7 @@ func Test_DorisCreateSchema(t *testing.T) {
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
 		Host:     "192.168.1.24:9030",
 		LoadURL:  "192.168.1.24:8040",
-		LogDir:   "E:\\develop\\hbuf\\hbuf_golang\\pkg\\hcdc\\logs",
+		LogDir:   "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs",
 		Password: "",
 		Username: "admin",
 	})
@@ -131,7 +132,7 @@ func Test_DorisCreateTable(t *testing.T) {
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
 		Host:     "192.168.1.24:9030",
 		LoadURL:  "192.168.1.24:8040",
-		LogDir:   "E:\\develop\\hbuf\\hbuf_golang\\pkg\\hcdc\\logs",
+		LogDir:   "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs",
 		Password: "",
 		Username: "admin",
 	})
@@ -170,12 +171,15 @@ func Test_DorisCopyTable(t *testing.T) {
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
 		Host:     "192.168.1.24:9030",
 		LoadURL:  "http://192.168.1.24:8040/",
-		LogDir:   "E:\\develop\\hbuf\\hbuf_golang\\pkg\\hcdc\\logs",
+		LogDir:   "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs",
 		Password: "",
 		Username: "admin",
 	})
 
 	d.RegisterWorker(t.Context(), "game_usa", "user_info")
+	c.SetOnData(func(ctx context.Context, schema hcdc.Schema, table hcdc.Table, action hcdc.Action, columns []hcdc.Column, values [][]hcdc.RawBytes) error {
+		return d.AddData(ctx, schema, table, action, columns, values)
+	})
 
 	err = d.Open(t.Context())
 	if err != nil {
@@ -183,7 +187,7 @@ func Test_DorisCopyTable(t *testing.T) {
 	}
 	defer d.Close()
 
-	err = c.ReadData(t.Context(), "game_usa", "user_info", info.Columns, "0", "2360005")
+	err = c.ReadData(t.Context(), "game_usa", "user_info", *info, "0", "2360005")
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}

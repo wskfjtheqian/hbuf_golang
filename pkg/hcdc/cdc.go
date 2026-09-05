@@ -19,7 +19,7 @@ const (
 )
 
 type ColumnInfo struct {
-	Name     string
+	Name     Column
 	Type     string
 	Args     string
 	Comment  string
@@ -29,13 +29,13 @@ type ColumnInfo struct {
 }
 
 func (i ColumnInfo) String() string {
-	return i.Name + ":" + i.Type
+	return string(i.Name) + ":" + i.Type
 }
 
 type TableInfo struct {
-	Columns        []ColumnInfo
-	Keys           []string
-	PartitionField string // 分区字段名
+	Columns        map[Column]ColumnInfo
+	Keys           []Column
+	PartitionField Column // 分区字段名
 	PartitionType  string // 分区类型，目前主流为 "RANGE"
 }
 
@@ -124,7 +124,7 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 }
 
 func (h *HCDC) setCanalCall(canal *Canal) {
-	canal.setOnData(func(ctx context.Context, schema Schema, table Table, action Action, columns []Column, values [][]RawBytes) error {
+	canal.SetOnData(func(ctx context.Context, schema Schema, table Table, action Action, columns []Column, values [][]RawBytes) error {
 		doris := h.doris.Load()
 		if doris == nil {
 			return nil

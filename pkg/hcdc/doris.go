@@ -15,6 +15,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 type DorisResponse struct {
@@ -257,12 +258,16 @@ func (d *Doris) GetReplicationNum(ctx context.Context) int {
 // CreateTable 增强版：支持动态主键、自适应副本及 Range 时间分区
 func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, info *TableInfo) error {
 	var s strings.Builder
+	columns := hutl.Values(info.Columns)
+	hutl.Sort(columns, func(a, b ColumnInfo) bool {
+		return a.KeyIndex > b.KeyIndex
+	})
 
 	// 2. 拼接字段定义
 	s.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` (\n", string(schema), string(table)))
-	for i, col := range info.Columns {
+	for i, col := range columns {
 		s.WriteString(" `")
-		s.WriteString(col.Name)
+		s.WriteString(string(col.Name))
 		s.WriteString("` ")
 		s.WriteString(d.ToDorisType(col))
 		if col.IsNull {
@@ -290,7 +295,9 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 	s.WriteString("\n) ENGINE=OLAP\n")
 
 	// 3. 拼接 UNIQUE KEY (确保聚合/唯一键列排在前面)
-	keysStr := strings.Join(info.Keys, ", ")
+	keysStr := strings.Join(hutl.Slice(info.Keys, func(i int, v Column) string {
+		return string(v)
+	}), ", ")
 	s.WriteString(fmt.Sprintf("UNIQUE KEY(%s)\n", keysStr))
 
 	// 4. 动态拼接 PARTITION BY RANGE 逻辑

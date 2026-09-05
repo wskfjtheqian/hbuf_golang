@@ -2,6 +2,7 @@ package hcdc
 
 import (
 	"context"
+	"encoding/base64"
 	"regexp"
 	"sort"
 	"strconv"
@@ -95,7 +96,7 @@ func (c *CanalConfig) Equal(other *CanalConfig) bool {
 func NewCanal(cfg *CanalConfig) *Canal {
 	ret := &Canal{
 		cfg:     cfg,
-		schemas: make(map[Schema]map[Table][]ColumnInfo),
+		schemas: make(map[Schema]map[Table]TableInfo),
 	}
 	return ret
 }
@@ -112,11 +113,11 @@ type Canal struct {
 	onData                  OnData
 	onCreateTable           OnCreateTable
 	onCreateSchema          OnCreateSchema
-	schemas                 map[Schema]map[Table][]ColumnInfo
+	schemas                 map[Schema]map[Table]TableInfo
 	lock                    sync.Mutex
 }
 
-func (c *Canal) setOnData(fn OnData) {
+func (c *Canal) SetOnData(fn OnData) {
 	c.onData = fn
 }
 
@@ -282,11 +283,11 @@ func (c *Canal) toRawBytes(column schema.TableColumn, v any) RawBytes {
 	case float64:
 		return RawBytes(strconv.FormatFloat(v.(float64), 'f', -1, 64))
 	case []byte:
-		return RawBytes(v.([]byte))
+		return RawBytes(base64.StdEncoding.EncodeToString(v.([]byte)))
 	case string:
-		return RawBytes(v.(string))
+		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
 	default:
-		return RawBytes(v.(string))
+		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
 	}
 }
 
@@ -437,12 +438,12 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 	defer result.Close()
 
 	ret := &TableInfo{
-		Columns: make([]ColumnInfo, len(result.Values)),
-		Keys:    make([]string, 0),
+		Columns: make(map[Column]ColumnInfo, len(result.Values)),
+		Keys:    make([]Column, 0),
 	}
-	for i, rows := range result.Values {
-		ret.Columns[i] = ColumnInfo{
-			Name:     string(rows[0].AsString()),
+	for _, rows := range result.Values {
+		ret.Columns[Column(rows[0].AsString())] = ColumnInfo{
+			Name:     Column(rows[0].AsString()),
 			Type:     strings.ToLower(string(rows[5].AsString())),
 			Comment:  string(rows[2].AsString()),
 			KeyIndex: keys[string(rows[0].AsString())],
@@ -452,11 +453,12 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 		}
 	}
 
-	sort.Slice(ret.Columns, func(i, j int) bool {
-		return ret.Columns[i].KeyIndex > ret.Columns[j].KeyIndex
+	columns := hutl.Values(ret.Columns)
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i].KeyIndex > columns[j].KeyIndex
 	})
 
-	for _, column := range ret.Columns {
+	for _, column := range columns {
 		if column.KeyIndex > 0 {
 			ret.Keys = append(ret.Keys, column.Name)
 		}
@@ -479,27 +481,29 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 	return ret, nil
 }
 
-func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, columns []ColumnInfo, start, end string) error {
+func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info TableInfo, start, end string) error {
 	if c.onData == nil {
 		return nil
 	}
+	columns := hutl.Values(info.Columns)
 
-	key := "id"
+	hutl.Sort(columns, func(i, j ColumnInfo) bool {
+		return i.KeyIndex > j.KeyIndex
+	})
+	var key Column = "id"
 	for _, column := range columns {
 		if column.KeyIndex > 0 {
 			key = column.Name
 			break
 		}
 	}
-	newColumns := hutl.Slice(columns, func(i int, v ColumnInfo) Column {
-		return Column(v.Name)
-	})
 
+	fields := make([]Column, 0)
 	batch := hutl.NewBatchProcess(500, func(values [][]RawBytes) error {
-		return c.onData(ctx, schema, table, Insert, newColumns, values)
+		return c.onData(ctx, schema, table, Insert, fields, values)
 	})
 
-	query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + key + "` > " + start + " AND `" + key + "` <= " + end
+	query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + string(key) + "` > " + start + " AND `" + string(key) + "` <= " + end
 	var result mysql.Result
 	err := c.conn.ExecuteSelectStreaming(query, &result, func(row []mysql.FieldValue) error {
 		return batch.AddData(hutl.Slice(row, func(i int, value mysql.FieldValue) RawBytes {
@@ -511,12 +515,15 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, column
 			case mysql.FieldValueTypeFloat:
 				return RawBytes(strconv.FormatFloat(value.AsFloat64(), 'f', -1, 64))
 			case mysql.FieldValueTypeString:
-				return RawBytes(value.AsString())
+				return RawBytes(base64.StdEncoding.EncodeToString(value.AsString()))
 			default:
 				return nil
 			}
 		}))
 	}, func(result *mysql.Result) error {
+		for _, field := range result.Fields {
+			fields = append(fields, Column(field.Name))
+		}
 		return nil
 	})
 	if err != nil {
@@ -563,7 +570,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 			return c.FilterTable(v)
 		})
 		if _, ok := c.schemas[Schema(db)]; !ok {
-			c.schemas[Schema(db)] = make(map[Table][]ColumnInfo)
+			c.schemas[Schema(db)] = make(map[Table]TableInfo)
 		}
 		for _, table := range tables {
 			if c.FilterTable(table) {
@@ -573,7 +580,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 					return err
 				}
 
-				c.schemas[Schema(db)][Table(table)] = info.Columns
+				c.schemas[Schema(db)][Table(table)] = *info
 				err = c.onCreateTable(ctx, Schema(db), Table(table), info)
 				if err != nil {
 					return err
