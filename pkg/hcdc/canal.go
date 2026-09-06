@@ -150,10 +150,10 @@ func (c *Canal) Open(ctx context.Context) error {
 		return err
 	}
 
-	//err = c.loadData(ctx)
-	//if err != nil {
-	//	return err
-	//}
+	err = c.loadData(ctx)
+	if err != nil {
+		return err
+	}
 
 	cfg := canal.NewDefaultConfig()
 	if c.cfg.ServerID != nil {
@@ -469,8 +469,8 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 		return nil, err
 	}
 	if ret.PartitionType == "RANGE" {
-		//查看一个时间类型的KEY做为分区 Field
-		for _, column := range ret.Columns {
+		for _, key := range ret.Keys {
+			column := ret.Columns[key]
 			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
 				ret.PartitionField = column.Name
 				break

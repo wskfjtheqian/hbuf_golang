@@ -152,6 +152,7 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, info
 	req.Header.Set("columns", columns)
 	req.Header.Set("merge_type", "MERGE")
 	req.Header.Set("delete", "__op=2")
+	req.Header.Set("strict_mode", "false")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
