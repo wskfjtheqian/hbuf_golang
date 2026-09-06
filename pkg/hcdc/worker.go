@@ -136,11 +136,11 @@ func (t *Worker) createFileUnderLock(ctx context.Context) (*os.File, error) {
 	header := hutl.Slice(t.columns, func(i int, col ColumnInfo) string {
 		switch col.Type {
 		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint":
-			return string(col.Name)
+			return "`" + string(col.Name) + "`"
 		}
-		return string(col.Name) + "_base"
+		return "`" + string(col.Name) + "_base`"
 	})
-	header = append(header, "__op")
+	header = append(header, "`__op`")
 	n, err := file.WriteString(strings.Join(header, ",") + "\n")
 	if err != nil {
 		_ = file.Close()
@@ -215,7 +215,7 @@ func (t *Worker) save(ctx context.Context, action Action, columns []ColumnInfo, 
 	return nil
 }
 
-func (t *Worker) readFile(ctx context.Context, fn func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error) error {
+func (t *Worker) ScanFile(ctx context.Context, fn func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error) error {
 	pattern := filepath.Join(t.logDir, string(t.schema), string(t.table), "*.active")
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
@@ -223,35 +223,7 @@ func (t *Worker) readFile(ctx context.Context, fn func(ctx context.Context, info
 	}
 
 	for _, path := range paths {
-		var columns string
-
-		err := func() error {
-			file, err := os.Open(path)
-			if err != nil {
-				return herror.Wrap(err)
-			}
-			defer file.Close()
-
-			// ✨ 核心机制 3：使用 bufio 动态剥离第一行 Header
-			bufReader := bufio.NewReader(file)
-			headerLine, err := bufReader.ReadString('\n')
-			if err != nil {
-				return herror.Wrap(fmt.Errorf("read csv header failed: %v", err))
-			}
-
-			// 擦除末尾的换行符，拿到该文件专属性的 columns 字段集
-			columns = strings.TrimSpace(headerLine)
-			if columns == "" {
-				return herror.NewError("empty csv header in active file")
-			}
-
-			// 把剥离了首行、剩下纯纯数据行的 bufReader 流直接喂给外部的 Doris 加载器
-			if err = fn(ctx, t.columns, columns, bufReader); err != nil {
-				return err
-			}
-			return nil
-		}()
-
+		err = t.ReadFile(ctx, path, t.columns, fn)
 		if err != nil {
 			return err // 失败则保留文件，等下个周期重试
 		}
@@ -260,6 +232,33 @@ func (t *Worker) readFile(ctx context.Context, fn func(ctx context.Context, info
 		if err := os.Remove(path); err != nil {
 			return herror.Wrap(err)
 		}
+	}
+	return nil
+}
+
+func (t *Worker) ReadFile(ctx context.Context, path string, info []ColumnInfo, fn func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	defer file.Close()
+
+	// ✨ 核心机制 3：使用 bufio 动态剥离第一行 Header
+	bufReader := bufio.NewReader(file)
+	headerLine, err := bufReader.ReadString('\n')
+	if err != nil {
+		return herror.Wrap(fmt.Errorf("read csv header failed: %v", err))
+	}
+
+	// 擦除末尾的换行符，拿到该文件专属性的 columns 字段集
+	columns := strings.TrimSpace(headerLine)
+	if columns == "" {
+		return herror.NewError("empty csv header in active file")
+	}
+
+	// 把剥离了首行、剩下纯纯数据行的 bufReader 流直接喂给外部的 Doris 加载器
+	if err = fn(ctx, info, columns, bufReader); err != nil {
+		return err
 	}
 	return nil
 }

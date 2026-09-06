@@ -141,9 +141,11 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, info
 		}
 		return true
 	}), func(i int, v ColumnInfo) string {
-		return string(v.Name) + "= from_base64(" + string(v.Name) + "_base)"
+		return "`" + string(v.Name) + "`= from_base64(`" + string(v.Name) + "_base`)"
 	})
 	columns = columns + "," + strings.Join(decoders, ",")
+	hlog.Info(ctx, "doris stream save: %s.%s columns: %s", schema, table, columns)
+
 	req.SetBasicAuth(d.cfg.Username, d.cfg.Password)
 	req.Header.Set("Expect", "100-continue")
 	req.Header.Set("column_separator", ",")
@@ -190,7 +192,7 @@ func (d *Doris) loop(ctx context.Context) {
 		case <-ticker.C:
 			d.mu.RLock()
 			for _, worker := range d.workers {
-				err := worker.readFile(ctx, func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error {
+				err := worker.ScanFile(ctx, func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error {
 					return d.StreamSave(ctx, worker.schema, worker.table, infos, columns, reader)
 				})
 				if err != nil {
@@ -277,13 +279,14 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 		s.WriteString(" `")
 		s.WriteString(string(col.Name))
 		s.WriteString("` ")
-		s.WriteString(d.ToDorisType(col))
+		typ := d.ToDorisType(col)
+		s.WriteString(typ)
 		if col.IsNull == "YES" {
 			s.WriteString(" NULL")
 		} else {
 			s.WriteString(" NOT NULL")
 		}
-		if col.Default != nil && *col.Default != "NULL" {
+		if typ != "VARIANT" && col.Default != nil && *col.Default != "NULL" {
 			s.WriteString(" DEFAULT ")
 			if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
 				s.WriteString(strings.ReplaceAll(*col.Default, "0000-00-00", "1970-01-01"))
@@ -359,7 +362,7 @@ func (d *Doris) ToDorisType(info ColumnInfo) string {
 		return "VARCHAR" + args
 	case "text", "string", "longtext", "mediumtext", "tinytext":
 		return "STRING"
-	case "binary", "varbinary", "blob", "longblob":
+	case "binary", "varbinary", "blob", "longblob", "mediumblob":
 		// Doris 没有原生 BLOB，通常用 STRING 存放 Base64 或使用 VARIANT
 		return "VARIANT"
 

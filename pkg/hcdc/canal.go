@@ -3,6 +3,7 @@ package hcdc
 import (
 	"context"
 	"encoding/base64"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -156,11 +157,11 @@ func (c *Canal) Open(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	//
-	//err = c.loadData(ctx)
-	//if err != nil {
-	//	return err
-	//}
+
+	err = c.loadData(ctx)
+	if err != nil {
+		return err
+	}
 
 	cfg := canal.NewDefaultConfig()
 	if c.cfg.ServerID != nil {
@@ -250,26 +251,32 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	if e.Action == "insert" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(v)
+				return c.toRawBytes(&info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		})
 	} else if e.Action == "update" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[1], func(i int, v any) RawBytes {
-				return c.toRawBytes(v)
+				return c.toRawBytes(&info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		})
 	} else if e.Action == "delete" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(v)
+				return c.toRawBytes(&info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		})
 	}
 
 	return nil
 }
-func (c *Canal) toRawBytes(v any) RawBytes {
+func (c *Canal) toRawBytes(col *ColumnInfo, v any) RawBytes {
+	if v == nil {
+		return nil
+	}
+	if reflect.TypeOf(v).Kind() == reflect.Ptr {
+		v = reflect.ValueOf(v).Elem().Interface()
+	}
 	if v == nil {
 		return nil
 	}
@@ -297,8 +304,17 @@ func (c *Canal) toRawBytes(v any) RawBytes {
 	case float64:
 		return RawBytes(strconv.FormatFloat(v.(float64), 'f', -1, 64))
 	case []byte:
+		if col.Type == "decimal" {
+			return v.([]byte)
+		}
 		return RawBytes(base64.StdEncoding.EncodeToString(v.([]byte)))
 	case string:
+		val := v.(string)
+		if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
+			val = strings.ReplaceAll(val, "0000-00-00", "1970-01-01")
+		} else if col.Type == "decimal" {
+			return RawBytes(val)
+		}
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
 	default:
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
@@ -641,19 +657,21 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 	defer query.Close()
 	columns, err := query.Columns()
 	if err != nil {
-		return err
+		return herror.Wrap(err)
 	}
 	for _, field := range columns {
 		fields = append(fields, info.Columns[info.Index[Column(field)]])
 	}
 
 	for query.Next() {
-		var values = make([]any, len(fields))
-		if err := query.Scan(values); err != nil {
+		var values = hutl.Slice(make([]any, len(fields)), func(i int, v any) any {
+			return &v
+		})
+		if err := query.Scan(values...); err != nil {
 			return herror.Wrap(err)
 		}
 		if err := batch.AddData(hutl.Slice(values, func(i int, v any) RawBytes {
-			return c.toRawBytes(v)
+			return c.toRawBytes(&info.Columns[info.Index[Column(columns[i])]], v)
 		})); err != nil {
 			return herror.Wrap(err)
 		}
@@ -756,14 +774,14 @@ func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table
 	////////////////////////////////////////////
 	rows, err := c.sql.Query(query, string(schema), string(table))
 	if err != nil {
-		return "", err
+		return "", herror.Wrap(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var partitionMethod *string
 		err := rows.Scan(&partitionMethod)
 		if err != nil {
-			return "", err
+			return "", herror.Wrap(err)
 		}
 		if partitionMethod != nil {
 			return *partitionMethod, nil

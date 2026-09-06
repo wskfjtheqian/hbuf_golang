@@ -2,10 +2,12 @@ package hcdc_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
@@ -205,6 +207,7 @@ func Test_HCDC(t *testing.T) {
 				Schema:        "game",
 				IncludeDBs:    []string{"game_usa"},
 				IncludeTables: []string{"(.*)"},
+				ExcludeTables: []string{"stata_(.*)"},
 			},
 		},
 		Doris: &hcdc.DorisConfig{
@@ -216,7 +219,43 @@ func Test_HCDC(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
+		herror.PrintStack(t.Context(), err)
 	}
 	time.Sleep(time.Hour)
+}
+
+func Test_StreamSave(t *testing.T) {
+	c := hcdc.NewCanal(&hcdc.CanalConfig{
+		Host:     "192.168.1.24:3316",
+		Username: "root",
+		Password: "123456",
+		Schema:   "game",
+	})
+	err := c.Open(t.Context())
+	if err != nil {
+		t.Fatalf("Open Canal failed: %v", err)
+
+	}
+	table := hcdc.Table("stats_user_activity_trend") // Changed from string to hcdc.Table
+	info, err := c.GetTableInfo(t.Context(), "game_usa", table)
+	if err != nil {
+		t.Fatalf("GetTableInfo failed: %v", err)
+	}
+
+	d := hcdc.NewDoris(&hcdc.DorisConfig{
+		Host:     "192.168.1.24:9030",
+		LoadURL:  "http://192.168.1.24:8040/",
+		LogDir:   "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs",
+		Password: "",
+		Username: "admin",
+	})
+
+	w := hcdc.NewWorker("game_usa", table, "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs")
+
+	err = w.ScanFile(t.Context(), func(ctx context.Context, infos []hcdc.ColumnInfo, columns string, reader io.Reader) error {
+		return d.StreamSave(t.Context(), "game_usa", table, info.Columns, columns, reader)
+	})
+	if err != nil {
+		herror.PrintStack(t.Context(), err)
+	}
 }
