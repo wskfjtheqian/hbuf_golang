@@ -24,8 +24,8 @@ type ColumnInfo struct {
 	Args     string
 	Comment  string
 	KeyIndex int
-	IsNull   bool
-	Default  string
+	IsNull   string
+	Default  *string
 }
 
 func (i ColumnInfo) String() string {
@@ -33,7 +33,8 @@ func (i ColumnInfo) String() string {
 }
 
 type TableInfo struct {
-	Columns        map[Column]ColumnInfo
+	Columns        []ColumnInfo
+	Index          map[Column]int
 	Keys           []Column
 	PartitionField Column // 分区字段名
 	PartitionType  string // 分区类型，目前主流为 "RANGE"

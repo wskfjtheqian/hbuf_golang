@@ -269,10 +269,7 @@ func (d *Doris) GetReplicationNum(ctx context.Context) int {
 // CreateTable 增强版：支持动态主键、自适应副本及 Range 时间分区
 func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, info *TableInfo) error {
 	var s strings.Builder
-	columns := hutl.Values(info.Columns)
-	hutl.Sort(columns, func(a, b ColumnInfo) bool {
-		return a.KeyIndex > b.KeyIndex
-	})
+	columns := info.Columns
 
 	// 2. 拼接字段定义
 	s.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` (\n", string(schema), string(table)))
@@ -281,17 +278,17 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 		s.WriteString(string(col.Name))
 		s.WriteString("` ")
 		s.WriteString(d.ToDorisType(col))
-		if col.IsNull {
+		if col.IsNull == "YES" {
 			s.WriteString(" NULL")
 		} else {
 			s.WriteString(" NOT NULL")
 		}
-		if col.Default != "NULL" && col.Default != "" {
+		if col.Default != nil && *col.Default != "NULL" {
 			s.WriteString(" DEFAULT ")
 			if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
-				s.WriteString(strings.ReplaceAll(col.Default, "0000-00-00", "1970-01-01"))
+				s.WriteString(strings.ReplaceAll(*col.Default, "0000-00-00", "1970-01-01"))
 			} else {
-				s.WriteString(col.Default)
+				s.WriteString(*col.Default)
 			}
 		}
 		s.WriteString(" COMMENT ")
@@ -313,6 +310,9 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 
 	// 4. 动态拼接 PARTITION BY RANGE 逻辑
 	if info.PartitionType == "RANGE" {
+		if info.PartitionField == "" {
+			println("info.PartitionField is empty")
+		}
 		s.WriteString(fmt.Sprintf("AUTO PARTITION BY RANGE (DATE_TRUNC(`%s`, 'DAY')) ()\n", info.PartitionField))
 	}
 

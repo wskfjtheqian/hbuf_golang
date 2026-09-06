@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/base64"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"database/sql"
+
 	"github.com/go-mysql-org/go-mysql/canal"
-	"github.com/go-mysql-org/go-mysql/client"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
@@ -105,16 +106,17 @@ type Canal struct {
 	canal.DummyEventHandler // 嵌入空实现的事件处理器，按需覆盖
 	cfg                     *CanalConfig
 	canal                   *canal.Canal
-	conn                    *client.Conn
-	excludeDBs              []*regexp.Regexp
-	includeDBs              []*regexp.Regexp
-	excludeTables           []*regexp.Regexp
-	includeTables           []*regexp.Regexp
-	onData                  OnData
-	onCreateTable           OnCreateTable
-	onCreateSchema          OnCreateSchema
-	schemas                 map[Schema]map[Table]TableInfo
-	lock                    sync.Mutex
+	//conn                    *client.Conn
+	excludeDBs     []*regexp.Regexp
+	includeDBs     []*regexp.Regexp
+	excludeTables  []*regexp.Regexp
+	includeTables  []*regexp.Regexp
+	onData         OnData
+	onCreateTable  OnCreateTable
+	onCreateSchema OnCreateSchema
+	schemas        map[Schema]map[Table]TableInfo
+	lock           sync.Mutex
+	sql            *sql.DB
 }
 
 func (c *Canal) SetOnData(fn OnData) {
@@ -135,25 +137,30 @@ func (c *Canal) Open(ctx context.Context) error {
 	}
 
 	// 建立直连，用于执行查询和锁表操作
-	c.conn, err = client.Connect(
-		c.cfg.Host,
-		c.cfg.Username,
-		c.cfg.Password,
-		c.cfg.Schema,
-	)
+	//c.conn, err = client.Connect(
+	//	c.cfg.Host,
+	//	c.cfg.Username,
+	//	c.cfg.Password,
+	//	c.cfg.Schema,
+	//)
+	//if err != nil {
+	//	return herror.Wrap(err)
+	//}
+
+	c.sql, err = sql.Open("mysql", c.cfg.Username+":"+c.cfg.Password+"@tcp("+c.cfg.Host+")/"+c.cfg.Schema)
 	if err != nil {
-		return herror.Wrap(err)
+		return err
 	}
 
 	err = c.createSchemaTable(ctx)
 	if err != nil {
 		return err
 	}
-
-	err = c.loadData(ctx)
-	if err != nil {
-		return err
-	}
+	//
+	//err = c.loadData(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
 	cfg := canal.NewDefaultConfig()
 	if c.cfg.ServerID != nil {
@@ -229,33 +236,40 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	if c.onData == nil {
 		return nil
 	}
-
+	val, ok := c.schemas[Schema(e.Table.Schema)]
+	if !ok || val == nil {
+		return nil
+	}
+	info, ok := val[Table(e.Table.Name)]
+	if !ok {
+		return nil
+	}
 	columns := hutl.Slice(e.Table.Columns, func(i int, v schema.TableColumn) ColumnInfo {
-		return c.schemas[Schema(e.Table.Schema)][Table(e.Table.Name)].Columns[Column(v.Name)]
+		return info.Columns[info.Index[Column(v.Name)]]
 	})
 	if e.Action == "insert" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(e.Table.Columns[i], v)
+				return c.toRawBytes(v)
 			}),
 		})
 	} else if e.Action == "update" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[1], func(i int, v any) RawBytes {
-				return c.toRawBytes(e.Table.Columns[i], v)
+				return c.toRawBytes(v)
 			}),
 		})
 	} else if e.Action == "delete" {
 		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(e.Table.Columns[i], v)
+				return c.toRawBytes(v)
 			}),
 		})
 	}
 
 	return nil
 }
-func (c *Canal) toRawBytes(column schema.TableColumn, v any) RawBytes {
+func (c *Canal) toRawBytes(v any) RawBytes {
 	if v == nil {
 		return nil
 	}
@@ -339,15 +353,36 @@ func (c *Canal) initFilter(ctx context.Context) error {
 
 // GetDatabases 获得所有的库
 func (c *Canal) GetDatabases(ctx context.Context) ([]string, error) {
-	result, err := c.conn.Execute("SHOW DATABASES")
+	//result, err := c.conn.Execute("SHOW DATABASES")
+	//if err != nil {
+	//	return nil, herror.Wrap(err)
+	//}
+	//defer result.Close()
+	//
+	//var dbs []string
+	//for _, rows := range result.Values {
+	//	dbs = append(dbs, string(rows[0].AsString()))
+	//}
+
+	query, err := c.sql.Query("SHOW DATABASES")
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
-	defer result.Close()
+	defer query.Close()
 
 	var dbs []string
-	for _, rows := range result.Values {
-		dbs = append(dbs, string(rows[0].AsString()))
+	for query.Next() {
+		var db *string
+		if err := query.Scan(&db); err != nil {
+			return nil, herror.Wrap(err)
+		}
+		if db == nil {
+			continue
+		}
+		dbs = append(dbs, *db)
+	}
+	if err := query.Err(); err != nil {
+		return nil, herror.Wrap(err)
 	}
 	return dbs, nil
 }
@@ -370,20 +405,42 @@ func (c *Canal) FilterDatabase(name string) bool {
 // GetTables 获得所有的表
 func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]string, error) {
 	// 1. 将 schema 拼入 SQL，确保只查目标库。注意：如果 schema 包含特殊字符，建议用反引号包裹 `schema`
-	query := "SHOW TABLES FROM `" + string(schema) + "`"
-	result, err := c.conn.Execute(query)
+	//query := "SHOW TABLES FROM `" + string(schema) + "`"
+	//result, err := c.conn.Execute(query)
+	//if err != nil {
+	//	return nil, herror.Wrap(err)
+	//}
+	//defer result.Close()
+	//
+	//var tables []string
+	//for _, rows := range result.Values {
+	//	// 2. 增加防御性代码：确保这一行有数据，防止索引越界或空指针导致 panic
+	//	if len(rows) > 0 {
+	//		tables = append(tables, string(rows[0].AsString()))
+	//	}
+	//}
+
+	query, err := c.sql.Query("SHOW TABLES FROM `" + string(schema) + "`")
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
-	defer result.Close()
+	defer query.Close()
 
 	var tables []string
-	for _, rows := range result.Values {
-		// 2. 增加防御性代码：确保这一行有数据，防止索引越界或空指针导致 panic
-		if len(rows) > 0 {
-			tables = append(tables, string(rows[0].AsString()))
+	for query.Next() {
+		var table *string
+		if err := query.Scan(&table); err != nil {
+			return nil, herror.Wrap(err)
 		}
+		if table == nil {
+			continue
+		}
+		tables = append(tables, *table)
 	}
+	if err := query.Err(); err != nil {
+		return nil, herror.Wrap(err)
+	}
+
 	return tables, nil
 }
 
@@ -404,19 +461,40 @@ func (c *Canal) FilterTable(name string) bool {
 
 // GetKeys 获得指定表的主键
 func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
-	query := "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC "
-	result, err := c.conn.Execute(query, string(schema), string(table))
+	//query := "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC "
+	//result, err := c.conn.Execute(query, string(schema), string(table))
+	//if err != nil {
+	//	return nil, herror.Wrap(err)
+	//}
+	//defer result.Close()
+	//var keys = make(map[string]int)
+	//for i, rows := range result.Values {
+	//	if string(rows[1].AsString()) == "PRIMARY" {
+	//		keys[string(rows[0].AsString())] = i + 1
+	//	}
+	//}
+	query, err := c.sql.Query("SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC ", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
-	defer result.Close()
+	defer query.Close()
+
 	var keys = make(map[string]int)
-	for i, rows := range result.Values {
-		if string(rows[1].AsString()) == "PRIMARY" {
-			keys[string(rows[0].AsString())] = i + 1
+	for query.Next() {
+		var column, constraint *string
+		if err := query.Scan(&column, &constraint); err != nil {
+			return nil, herror.Wrap(err)
+		}
+		if constraint == nil || column == nil {
+			continue
+		}
+		if *constraint == "PRIMARY" {
+			keys[*column] = 1
 		}
 	}
-
+	if err := query.Err(); err != nil {
+		return nil, herror.Wrap(err)
+	}
 	return keys, nil
 }
 
@@ -430,35 +508,60 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 		return nil, herror.Wrap(err)
 	}
 
-	query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
-	result, err := c.conn.Execute(query, string(schema), string(table))
+	//query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+	//result, err := c.conn.Execute(query, string(schema), string(table))
+	//if err != nil {
+	//	return nil, herror.Wrap(err)
+	//}
+	//defer result.Close()
+	//
+	//ret := &TableInfo{
+	//	Columns: make([]ColumnInfo, len(result.Values)),
+	//	Keys:    make([]Column, 0),
+	//}
+	//for i, rows := range result.Values {
+	//	ret.Columns[i] = ColumnInfo{
+	//		Name:     Column(rows[0].AsString()),
+	//		Type:     strings.ToLower(string(rows[5].AsString())),
+	//		Comment:  string(rows[2].AsString()),
+	//		KeyIndex: keys[string(rows[0].AsString())],
+	//		IsNull:   string(rows[3].AsString()) == "YES",
+	//		Args:     string(rows[1].AsString()[len(rows[5].AsString()):]),
+	//		Default:  string(rows[4].AsString()),
+	//	}
+	//}
+
+	query, err := c.sql.Query("SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
-	defer result.Close()
-
-	ret := &TableInfo{
-		Columns: make(map[Column]ColumnInfo, len(result.Values)),
+	defer query.Close()
+	var ret = &TableInfo{
+		Columns: make([]ColumnInfo, 0),
 		Keys:    make([]Column, 0),
 	}
-	for _, rows := range result.Values {
-		ret.Columns[Column(rows[0].AsString())] = ColumnInfo{
-			Name:     Column(rows[0].AsString()),
-			Type:     strings.ToLower(string(rows[5].AsString())),
-			Comment:  string(rows[2].AsString()),
-			KeyIndex: keys[string(rows[0].AsString())],
-			IsNull:   string(rows[3].AsString()) == "YES",
-			Args:     string(rows[1].AsString()[len(rows[5].AsString()):]),
-			Default:  string(rows[4].AsString()),
+	for query.Next() {
+		var column ColumnInfo
+		var args string
+		if err := query.Scan(&column.Name, &args, &column.Comment, &column.IsNull, &column.Default, &column.Type); err != nil {
+			return nil, herror.Wrap(err)
 		}
+		column.Args = args[len(column.Type):]
+		column.KeyIndex = keys[string(column.Name)]
+		ret.Columns = append(ret.Columns, column)
+	}
+	if err := query.Err(); err != nil {
+		return nil, herror.Wrap(err)
 	}
 
-	columns := hutl.Values(ret.Columns)
-	sort.Slice(columns, func(i, j int) bool {
-		return columns[i].KeyIndex > columns[j].KeyIndex
+	hutl.Sort(ret.Columns, func(i, j ColumnInfo) bool {
+		return i.KeyIndex > j.KeyIndex
+	})
+	ret.Index = hutl.SliceToMap(ret.Columns, func(i int, column ColumnInfo) (Column, int) {
+		return column.Name, i
 	})
 
-	for _, column := range columns {
+	for _, column := range ret.Columns {
 		if column.KeyIndex > 0 {
 			ret.Keys = append(ret.Keys, column.Name)
 		}
@@ -466,15 +569,18 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 
 	ret.PartitionType, err = c.GetPartitionType(ctx, schema, table)
 	if err != nil {
-		return nil, err
+		return nil, herror.Wrap(err)
 	}
 	if ret.PartitionType == "RANGE" {
 		for _, key := range ret.Keys {
-			column := ret.Columns[key]
+			column := ret.Columns[ret.Index[key]]
 			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
 				ret.PartitionField = column.Name
 				break
 			}
+		}
+		if ret.PartitionField == "" {
+			println("table", table, "ret.PartitionField", ret.PartitionField)
 		}
 	}
 
@@ -485,13 +591,9 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 	if c.onData == nil {
 		return nil
 	}
-	columns := hutl.Values(info.Columns)
 
-	hutl.Sort(columns, func(i, j ColumnInfo) bool {
-		return i.KeyIndex > j.KeyIndex
-	})
 	var key Column = "id"
-	for _, column := range columns {
+	for _, column := range info.Columns {
 		if column.KeyIndex > 0 {
 			key = column.Name
 			break
@@ -503,31 +605,61 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 		return c.onData(ctx, schema, table, Insert, fields, values)
 	})
 
-	query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + string(key) + "` > " + start + " AND `" + string(key) + "` <= " + end
-	var result mysql.Result
-	err := c.conn.ExecuteSelectStreaming(query, &result, func(row []mysql.FieldValue) error {
-		return batch.AddData(hutl.Slice(row, func(i int, value mysql.FieldValue) RawBytes {
-			switch value.Type {
-			case mysql.FieldValueTypeUnsigned:
-				return RawBytes(strconv.FormatUint(value.AsUint64(), 10))
-			case mysql.FieldValueTypeSigned:
-				return RawBytes(strconv.FormatInt(value.AsInt64(), 10))
-			case mysql.FieldValueTypeFloat:
-				return RawBytes(strconv.FormatFloat(value.AsFloat64(), 'f', -1, 64))
-			case mysql.FieldValueTypeString:
-				return RawBytes(base64.StdEncoding.EncodeToString(value.AsString()))
-			default:
-				return nil
-			}
-		}))
-	}, func(result *mysql.Result) error {
-		for _, field := range result.Fields {
-			fields = append(fields, info.Columns[Column(field.Name)])
-		}
-		return nil
-	})
+	//query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + string(key) + "` > " + start + " AND `" + string(key) + "` <= " + end
+	//var result mysql.Result
+	//err := c.conn.ExecuteSelectStreaming(query, &result, func(row []mysql.FieldValue) error {
+	//	return batch.AddData(hutl.Slice(row, func(i int, value mysql.FieldValue) RawBytes {
+	//		switch value.Type {
+	//		case mysql.FieldValueTypeUnsigned:
+	//			return RawBytes(strconv.FormatUint(value.AsUint64(), 10))
+	//		case mysql.FieldValueTypeSigned:
+	//			return RawBytes(strconv.FormatInt(value.AsInt64(), 10))
+	//		case mysql.FieldValueTypeFloat:
+	//			return RawBytes(strconv.FormatFloat(value.AsFloat64(), 'f', -1, 64))
+	//		case mysql.FieldValueTypeString:
+	//			return RawBytes(base64.StdEncoding.EncodeToString(value.AsString()))
+	//		default:
+	//			return nil
+	//		}
+	//	}))
+	//}, func(result *mysql.Result) error {
+	//	for _, field := range result.Fields {
+	//		fields = append(fields, info.Columns[info.Index[Column(field.Name)]])
+	//	}
+	//	return nil
+	//})
+	//
+	//
+	//if err != nil {
+	//	return err
+	//}
+
+	query, err := c.sql.Query("SELECT * FROM `"+string(schema)+"`.`"+string(table)+"` WHERE `"+string(key)+"` > ? AND `"+string(key)+"` <= ?", start, end)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	defer query.Close()
+	columns, err := query.Columns()
 	if err != nil {
 		return err
+	}
+	for _, field := range columns {
+		fields = append(fields, info.Columns[info.Index[Column(field)]])
+	}
+
+	for query.Next() {
+		var values = make([]any, len(fields))
+		if err := query.Scan(values); err != nil {
+			return herror.Wrap(err)
+		}
+		if err := batch.AddData(hutl.Slice(values, func(i int, v any) RawBytes {
+			return c.toRawBytes(v)
+		})); err != nil {
+			return herror.Wrap(err)
+		}
+	}
+	if err := query.Err(); err != nil {
+		return herror.Wrap(err)
 	}
 
 	return batch.Finish()
@@ -538,9 +670,9 @@ func (c *Canal) Close() {
 		c.canal.Close()
 		c.canal = nil
 	}
-	if c.conn != nil {
-		c.conn.Close()
-		c.conn = nil
+	if c.sql != nil {
+		_ = c.sql.Close()
+		c.sql = nil
 	}
 }
 
@@ -608,15 +740,34 @@ func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table
 	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
 	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
 
-	result, err := c.conn.Execute(query, string(schema), string(table))
+	//result, err := c.conn.Execute(query, string(schema), string(table))
+	//if err != nil {
+	//	return "", err
+	//}
+	//defer result.Close()
+	//
+	//// 如果没有查询到分区记录，说明是普通表，不启用分区
+	//if len(result.Values) == 0 {
+	//	return "", nil
+	//}
+	//ret := string(result.Values[0][0].AsString())
+	//println("result", ret)
+
+	////////////////////////////////////////////
+	rows, err := c.sql.Query(query, string(schema), string(table))
 	if err != nil {
 		return "", err
 	}
-	defer result.Close()
-
-	// 如果没有查询到分区记录，说明是普通表，不启用分区
-	if len(result.Values) == 0 {
-		return "", nil
+	defer rows.Close()
+	for rows.Next() {
+		var partitionMethod *string
+		err := rows.Scan(&partitionMethod)
+		if err != nil {
+			return "", err
+		}
+		if partitionMethod != nil {
+			return *partitionMethod, nil
+		}
 	}
-	return string(result.Values[0][0].AsString()), nil
+	return "", nil
 }
