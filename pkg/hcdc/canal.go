@@ -304,10 +304,13 @@ func (c *Canal) toRawBytes(col *ColumnInfo, v any) RawBytes {
 	case float64:
 		return RawBytes(strconv.FormatFloat(v.(float64), 'f', -1, 64))
 	case []byte:
-		if col.Type == "decimal" {
-			return v.([]byte)
+		val := v.([]byte)
+		if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
+			val = []byte(strings.ReplaceAll(string(val), "0000-00-00", "1970-01-01"))
+		} else if col.Type == "decimal" {
+			return RawBytes(val)
 		}
-		return RawBytes(base64.StdEncoding.EncodeToString(v.([]byte)))
+		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	case string:
 		val := v.(string)
 		if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
@@ -315,7 +318,7 @@ func (c *Canal) toRawBytes(col *ColumnInfo, v any) RawBytes {
 		} else if col.Type == "decimal" {
 			return RawBytes(val)
 		}
-		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
+		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	default:
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
 	}

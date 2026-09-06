@@ -178,7 +178,8 @@ func Test_DorisCopyTable(t *testing.T) {
 		Username: "admin",
 	})
 
-	d.RegisterWorker(t.Context(), "game_usa", "user_info")
+	table := hcdc.Table("activity_list")
+	d.RegisterWorker(t.Context(), "game_usa", table)
 	c.SetOnData(func(ctx context.Context, schema hcdc.Schema, table hcdc.Table, action hcdc.Action, columns []hcdc.ColumnInfo, values [][]hcdc.RawBytes) error {
 		return d.AddData(ctx, schema, table, action, columns, values)
 	})
@@ -189,7 +190,7 @@ func Test_DorisCopyTable(t *testing.T) {
 	}
 	defer d.Close()
 
-	err = c.ReadData(t.Context(), "game_usa", "user_info", *info, "0", "2360005")
+	err = c.ReadData(t.Context(), "game_usa", table, *info, "0", "2360005")
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
