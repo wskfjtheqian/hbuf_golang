@@ -163,7 +163,8 @@ func Test_DorisCopyTable(t *testing.T) {
 	}
 	defer c.Close()
 
-	info, err := c.GetTableInfo(t.Context(), "game_usa", "user_info")
+	table := hcdc.Table("activity_list")
+	info, err := c.GetTableInfo(t.Context(), "game_usa", table)
 	if err != nil {
 		t.Fatalf("GetTableInfo failed: %v", err)
 	}
@@ -178,7 +179,6 @@ func Test_DorisCopyTable(t *testing.T) {
 		Username: "admin",
 	})
 
-	table := hcdc.Table("activity_list")
 	d.RegisterWorker(t.Context(), "game_usa", table)
 	c.SetOnData(func(ctx context.Context, schema hcdc.Schema, table hcdc.Table, action hcdc.Action, columns []hcdc.ColumnInfo, values [][]hcdc.RawBytes) error {
 		return d.AddData(ctx, schema, table, action, columns, values)

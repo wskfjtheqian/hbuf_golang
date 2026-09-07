@@ -135,7 +135,7 @@ func (t *Worker) createFileUnderLock(ctx context.Context) (*os.File, error) {
 	// ✨ 核心机制 2：在创建新文件的第一行，强行写入当前 Schema Header 加上系统扩展字段名
 	header := hutl.Slice(t.columns, func(i int, col ColumnInfo) string {
 		switch col.Type {
-		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint":
+		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint", "time", "date", "datetime", "timestamp", "year":
 			return "`" + string(col.Name) + "`"
 		}
 		return "`" + string(col.Name) + "_base`"

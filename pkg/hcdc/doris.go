@@ -136,14 +136,16 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, info
 
 	decoders := hutl.Slice(hutl.Filter(infos, func(info ColumnInfo) bool {
 		switch info.Type {
-		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint":
+		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint", "time", "date", "datetime", "timestamp":
 			return false
 		}
 		return true
 	}), func(i int, v ColumnInfo) string {
 		return "`" + string(v.Name) + "`= from_base64(`" + string(v.Name) + "_base`)"
 	})
-	columns = columns + "," + strings.Join(decoders, ",")
+	if len(decoders) > 0 {
+		columns += "," + strings.Join(decoders, ",")
+	}
 	hlog.Info(ctx, "doris stream save: %s.%s columns: %s", schema, table, columns)
 
 	req.SetBasicAuth(d.cfg.Username, d.cfg.Password)
@@ -307,7 +309,7 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 
 	// 3. 拼接 UNIQUE KEY (确保聚合/唯一键列排在前面)
 	keysStr := strings.Join(hutl.Slice(info.Keys, func(i int, v Column) string {
-		return string(v)
+		return "`" + string(v) + "`"
 	}), ", ")
 	s.WriteString(fmt.Sprintf("UNIQUE KEY(%s)\n", keysStr))
 
