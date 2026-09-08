@@ -17,6 +17,7 @@ const (
 	Insert Action = iota
 	Update
 	Delete
+	Create
 )
 
 type ColumnInfo struct {
@@ -34,6 +35,8 @@ func (i ColumnInfo) String() string {
 }
 
 type TableInfo struct {
+	Schema         Schema
+	Table          Table
 	Columns        []ColumnInfo
 	Index          map[Column]int
 	Keys           []Column
@@ -147,7 +150,7 @@ func (h *HCDC) setCanalCall(canal *Canal) {
 		if doris == nil {
 			return nil
 		}
-		err := doris.CreateTable(ctx, schema, table, info)
+		err := doris.createTable(ctx, info)
 		if err != nil {
 			return err
 		}

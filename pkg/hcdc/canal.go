@@ -205,21 +205,29 @@ func (c *Canal) Open(ctx context.Context) error {
 func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, table string) error {
 	// 当上游加字段减字段时触发，你可以在这里重新调用 c.GetTableInfo 获取最新结构
 	// 并在 Doris 侧执行 "ALTER TABLE ... ADD COLUMN" 动态同步表结构变更
+	ctx := hlog.NewContext()
+	info, err := c.GetTableInfo(ctx, Schema(schema), Table(table))
+	if err != nil {
+		return err
+	}
+	if info != nil {
+		err = c.onCreateTable(ctx, Schema(schema), Table(table), info)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE 等 SQL 语句时触发。
 func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent) error {
-	//sql := strings.ToLower(string(queryEvent.Query))
-	//schema := string(queryEvent.Schema)
-	//
-	//// 如果库不满足过滤条件，直接忽略
-	//if !c.FilterDatabase(schema) {
-	//	return nil
-	//}
-	//
-	//// 探测是否是创建新表 DDL (例如: "create table `test_table` ...")
-	//if strings.Contains(sql, "create table") {
+	// 如果库不满足过滤条件，直接忽略
+	if !c.FilterDatabase(string(queryEvent.Schema)) {
+		return nil
+	}
+
+	//// 探测是否是创建新表 DDL (例如: "change table `test_table` ...")
+	//if strings.Contains(sql, "change table") {
 	//	// 1. 简易正则或字符串解析出表名 (假设解析出来为 tableName)
 	//	tableName := "parsed_table_name"
 	//
@@ -232,6 +240,13 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 	//		}()
 	//	}
 	//}
+	return nil
+}
+
+// OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
+func (c *Canal) OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error {
+	// 伪代码：持久化当前的 binlog 位点
+	// c.savePositionToStorage(pos.Name, pos.Pos)
 	return nil
 }
 
@@ -368,13 +383,6 @@ func (c *Canal) bitmapToArrayString(ctx context.Context, val []byte, bitmap32 bo
 	return buffer
 }
 
-// OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
-func (c *Canal) OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error {
-	// 伪代码：持久化当前的 binlog 位点
-	// c.savePositionToStorage(pos.Name, pos.Pos)
-	return nil
-}
-
 // OnTableNotFound 作用： 当 Binlog 里存在某张表的数据变更，但是 Canal 试图去上游查询该表的元数据（列名、类型）时发现表已经不存在（可能被暴力 DROP 了）。业务实现： 应该捕获并记录高级别告警日志，防止程序 Panic，同时可在本地删除对应的 Doris Worker 映射。
 func (c *Canal) OnTableNotFound(header *replication.EventHeader, event *replication.RowsEvent) error {
 	// 打印告警：上游对应的表可能已经被物理删除
@@ -427,7 +435,7 @@ func (c *Canal) GetDatabases(ctx context.Context) ([]string, error) {
 	//	dbs = append(dbs, string(rows[0].AsString()))
 	//}
 
-	query, err := c.sql.Query("SHOW DATABASES")
+	query, err := c.sql.QueryContext(ctx, "SHOW DATABASES")
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
@@ -483,7 +491,7 @@ func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]string, error) 
 	//	}
 	//}
 
-	query, err := c.sql.Query("SHOW TABLES FROM `" + string(schema) + "`")
+	query, err := c.sql.QueryContext(ctx, "SHOW TABLES FROM `"+string(schema)+"`")
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
@@ -536,7 +544,7 @@ func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[st
 	//		keys[string(rows[0].AsString())] = i + 1
 	//	}
 	//}
-	query, err := c.sql.Query("SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC ", string(schema), string(table))
+	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC ", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
@@ -563,9 +571,6 @@ func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[st
 
 // GetTableInfo 获得指定表的结构
 func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*TableInfo, error) {
-	if table == "stats_bonus_report" {
-		println("table", table)
-	}
 	keys, err := c.GetKeys(ctx, schema, table)
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -594,12 +599,14 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 	//	}
 	//}
 
-	query, err := c.sql.Query("SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
+	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
 	defer query.Close()
 	var ret = &TableInfo{
+		Schema:  schema,
+		Table:   table,
 		Columns: make([]ColumnInfo, 0),
 		Keys:    make([]Column, 0),
 	}
@@ -611,6 +618,9 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 		}
 		column.Args = args[len(column.Type):]
 		column.KeyIndex = keys[string(column.Name)]
+		if column.Default != nil {
+			column.Default = hutl.ToPointer(strings.ToUpper(*column.Default))
+		}
 		ret.Columns = append(ret.Columns, column)
 	}
 	if err := query.Err(); err != nil {
@@ -697,7 +707,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 	//	return err
 	//}
 
-	query, err := c.sql.Query("SELECT * FROM `"+string(schema)+"`.`"+string(table)+"` WHERE `"+string(key)+"` > ? AND `"+string(key)+"` <= ?", start, end)
+	query, err := c.sql.QueryContext(ctx, "SELECT * FROM `"+string(schema)+"`.`"+string(table)+"` WHERE `"+string(key)+"` > ? AND `"+string(key)+"` <= ?", start, end)
 	if err != nil {
 		return herror.Wrap(err)
 	}
@@ -819,7 +829,7 @@ func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table
 	//println("result", ret)
 
 	////////////////////////////////////////////
-	rows, err := c.sql.Query(query, string(schema), string(table))
+	rows, err := c.sql.QueryContext(ctx, query, string(schema), string(table))
 	if err != nil {
 		return "", herror.Wrap(err)
 	}

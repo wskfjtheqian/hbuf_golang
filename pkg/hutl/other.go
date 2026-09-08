@@ -302,3 +302,10 @@ func PadLeft(str, pad string, width int) string {
 	}
 	return str
 }
+
+func ByPointer[T any](value *T) T {
+	if value == nil {
+		return *new(T)
+	}
+	return *value
+}

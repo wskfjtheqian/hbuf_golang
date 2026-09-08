@@ -114,7 +114,7 @@ func Test_DorisCreateSchema(t *testing.T) {
 }
 
 func Test_DorisCreateTable(t *testing.T) {
-	table := hcdc.Table("stats_agent_reward_report")
+	table := hcdc.Table("activity_week_card_detail")
 
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
 		Host:     "192.168.1.24:3316",
@@ -146,10 +146,8 @@ func Test_DorisCreateTable(t *testing.T) {
 	}
 	defer d.Close()
 
-	err = d.CreateTable(t.Context(), "game_usa", table, info)
-	if err != nil {
-		t.Fatalf("CreateTable failed: %v", err)
-	}
+	d.ChangeTables(t.Context(), []hcdc.TableInfo{*info})
+	time.Sleep(30 * time.Second)
 }
 
 func Test_DorisCopyTable(t *testing.T) {
@@ -194,7 +192,7 @@ func Test_DorisCopyTable(t *testing.T) {
 
 	err = c.ReadData(t.Context(), "game_usa", table, *info, "0", "2360005")
 	if err != nil {
-		t.Fatalf("CreateTable failed: %v", err)
+		t.Fatalf("createTable failed: %v", err)
 	}
 
 	time.Sleep(30 * time.Second)
