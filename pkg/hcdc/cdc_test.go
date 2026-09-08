@@ -114,6 +114,8 @@ func Test_DorisCreateSchema(t *testing.T) {
 }
 
 func Test_DorisCreateTable(t *testing.T) {
+	table := hcdc.Table("stats_agent_reward_report")
+
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
 		Host:     "192.168.1.24:3316",
 		Username: "root",
@@ -124,7 +126,7 @@ func Test_DorisCreateTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open Canal failed: %v", err)
 	}
-	info, err := c.GetTableInfo(t.Context(), "game_usa", "user_info")
+	info, err := c.GetTableInfo(t.Context(), "game_usa", table)
 	if err != nil {
 		t.Fatalf("GetTableInfo failed: %v", err)
 	}
@@ -144,7 +146,7 @@ func Test_DorisCreateTable(t *testing.T) {
 	}
 	defer d.Close()
 
-	err = d.CreateTable(t.Context(), "game_usa", "user_info", info)
+	err = d.CreateTable(t.Context(), "game_usa", table, info)
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
@@ -163,7 +165,7 @@ func Test_DorisCopyTable(t *testing.T) {
 	}
 	defer c.Close()
 
-	table := hcdc.Table("activity_list")
+	table := hcdc.Table("stats_agent_reward_report")
 	info, err := c.GetTableInfo(t.Context(), "game_usa", table)
 	if err != nil {
 		t.Fatalf("GetTableInfo failed: %v", err)
@@ -174,7 +176,7 @@ func Test_DorisCopyTable(t *testing.T) {
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
 		Host:     "192.168.1.24:9030",
 		LoadURL:  "http://192.168.1.24:8040/",
-		LogDir:   "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs",
+		LogDir:   "./logs",
 		Password: "",
 		Username: "admin",
 	})
@@ -208,7 +210,6 @@ func Test_HCDC(t *testing.T) {
 				Schema:        "game",
 				IncludeDBs:    []string{"game_usa"},
 				IncludeTables: []string{"(.*)"},
-				ExcludeTables: []string{"stata_(.*)"},
 			},
 		},
 		Doris: &hcdc.DorisConfig{

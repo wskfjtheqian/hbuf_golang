@@ -141,6 +141,10 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, info
 		}
 		return true
 	}), func(i int, v ColumnInfo) string {
+		typ := GetColumnType(&v)
+		if typ == "bitmap32" || typ == "bitmap64" {
+			return "`" + string(v.Name) + "`= bitmap_from_string(from_base64(`" + string(v.Name) + "_base`))"
+		}
 		return "`" + string(v.Name) + "`= from_base64(`" + string(v.Name) + "_base`)"
 	})
 	if len(decoders) > 0 {
@@ -283,7 +287,7 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 		s.WriteString("` ")
 		typ := d.ToDorisType(col)
 		s.WriteString(typ)
-		if col.IsNull == "YES" {
+		if col.IsNull == "YES" && typ != "BITMAP" {
 			s.WriteString(" NULL")
 		} else {
 			s.WriteString(" NOT NULL")
@@ -346,7 +350,7 @@ func (d *Doris) CreateTable(ctx context.Context, schema Schema, table Table, inf
 // ToDorisType 将上游原始类型转换为合法的 Doris 字段类型
 func (d *Doris) ToDorisType(info ColumnInfo) string {
 	// 1. 统一转换为小写，去掉首尾空格
-	rt := strings.TrimSpace(info.Type)
+	rt := strings.TrimSpace(GetColumnType(&info))
 	if rt == "" {
 		return "VARCHAR(255)"
 	}
@@ -364,8 +368,9 @@ func (d *Doris) ToDorisType(info ColumnInfo) string {
 		return "VARCHAR" + args
 	case "text", "string", "longtext", "mediumtext", "tinytext":
 		return "STRING"
+	case "bitmap64", "bitmap32":
+		return "BITMAP"
 	case "binary", "varbinary", "blob", "longblob", "mediumblob":
-		// Doris 没有原生 BLOB，通常用 STRING 存放 Base64 或使用 VARIANT
 		return "VARIANT"
 
 	// --- 整数类型 ---
@@ -437,6 +442,6 @@ func (d *Doris) ToDorisType(info ColumnInfo) string {
 
 	// --- 兜底策略 ---
 	default:
-		return "VARCHAR(255)"
+		return "VARIANT"
 	}
 }

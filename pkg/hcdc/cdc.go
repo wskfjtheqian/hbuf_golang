@@ -2,6 +2,7 @@ package hcdc
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 )
 
@@ -153,4 +154,16 @@ func (h *HCDC) setCanalCall(canal *Canal) {
 		doris.RegisterWorker(ctx, schema, table)
 		return nil
 	})
+}
+
+func GetColumnType(col *ColumnInfo) string {
+	if col.Type == "binary" || col.Type == "varbinary" || col.Type == "blob" || col.Type == "longblob" || col.Type == "mediumblob" {
+		if strings.Contains(col.Comment, "CustomType=Bitmap64") {
+			return "bitmap64"
+		} else if strings.Contains(col.Comment, "CustomType=Bitmap32") {
+			return "bitmap32"
+		}
+
+	}
+	return col.Type
 }

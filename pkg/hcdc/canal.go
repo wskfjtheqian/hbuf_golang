@@ -12,6 +12,8 @@ import (
 
 	"database/sql"
 
+	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
@@ -248,29 +250,31 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	columns := hutl.Slice(e.Table.Columns, func(i int, v schema.TableColumn) ColumnInfo {
 		return info.Columns[info.Index[Column(v.Name)]]
 	})
+
+	ctx := hlog.NewContext()
 	if e.Action == "insert" {
-		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
+		return c.onData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(&info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
+				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		})
 	} else if e.Action == "update" {
-		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
+		return c.onData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[1], func(i int, v any) RawBytes {
-				return c.toRawBytes(&info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
+				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		})
 	} else if e.Action == "delete" {
-		return c.onData(hlog.NewContext(), Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
+		return c.onData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(&info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
+				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		})
 	}
 
 	return nil
 }
-func (c *Canal) toRawBytes(col *ColumnInfo, v any) RawBytes {
+func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes {
 	if v == nil {
 		return nil
 	}
@@ -305,23 +309,63 @@ func (c *Canal) toRawBytes(col *ColumnInfo, v any) RawBytes {
 		return RawBytes(strconv.FormatFloat(v.(float64), 'f', -1, 64))
 	case []byte:
 		val := v.([]byte)
-		if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
+		typ := GetColumnType(col)
+		if typ == "date" || typ == "datetime" || typ == "timestamp" {
 			return RawBytes(strings.ReplaceAll(string(val), "0000-00-00", "1970-01-01"))
-		} else if col.Type == "decimal" || col.Type == "time" {
+		} else if typ == "decimal" || typ == "time" {
 			return val
+		} else if typ == "bitmap32" || typ == "bitmap64" {
+			val = c.bitmapToArrayString(ctx, val, strings.Contains(col.Comment, "CustomType=Bitmap32"))
 		}
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	case string:
 		val := v.(string)
-		if col.Type == "date" || col.Type == "datetime" || col.Type == "timestamp" {
+		typ := GetColumnType(col)
+		if typ == "date" || typ == "datetime" || typ == "timestamp" {
 			return RawBytes(strings.ReplaceAll(val, "0000-00-00", "1970-01-01"))
-		} else if col.Type == "decimal" || col.Type == "time" {
+		} else if typ == "decimal" || typ == "time" {
 			return RawBytes(val)
+		} else if typ == "bitmap32" || typ == "bitmap64" {
+			val = string(c.bitmapToArrayString(ctx, []byte(val), strings.Contains(col.Comment, "CustomType=Bitmap32")))
 		}
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	default:
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(v.(string))))
 	}
+}
+
+// 转换 Bitmap
+func (c *Canal) bitmapToArrayString(ctx context.Context, val []byte, bitmap32 bool) RawBytes {
+	buffer := make([]byte, 0, 512)
+	if bitmap32 {
+		bitmap := roaring.NewBitmap()
+		_, err := bitmap.FromUnsafeBytes(val)
+		if err != nil {
+			hlog.Error(ctx, "bitmap from bytes error: %v", err)
+			return nil
+		}
+		iterator := bitmap.Iterator()
+		for iterator.HasNext() {
+			buffer = append(buffer, strconv.FormatUint(uint64(iterator.Next()), 10)...)
+			buffer = append(buffer, ',')
+		}
+	} else {
+		bitmap := roaring64.NewBitmap()
+		_, err := bitmap.FromUnsafeBytes(val)
+		if err != nil {
+			hlog.Error(ctx, "bitmap from bytes error: %v", err)
+			return nil
+		}
+		iterator := bitmap.Iterator()
+		for iterator.HasNext() {
+			buffer = append(buffer, strconv.FormatUint(iterator.Next(), 10)...)
+			buffer = append(buffer, ',')
+		}
+	}
+	if len(buffer) > 0 {
+		buffer = buffer[:len(buffer)-1]
+	}
+	return buffer
 }
 
 // OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
@@ -674,7 +718,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 			return herror.Wrap(err)
 		}
 		if err := batch.AddData(hutl.Slice(values, func(i int, v any) RawBytes {
-			return c.toRawBytes(&info.Columns[info.Index[Column(columns[i])]], v)
+			return c.toRawBytes(ctx, &info.Columns[info.Index[Column(columns[i])]], v)
 		})); err != nil {
 			return herror.Wrap(err)
 		}
