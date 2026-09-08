@@ -114,7 +114,7 @@ func Test_DorisCreateSchema(t *testing.T) {
 }
 
 func Test_DorisCreateTable(t *testing.T) {
-	table := hcdc.Table("activity_week_card_detail")
+	table := hcdc.Table("act_info")
 
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
 		Host:     "192.168.1.24:3316",

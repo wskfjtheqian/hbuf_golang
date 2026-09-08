@@ -25,7 +25,7 @@ import (
 )
 
 type OnData func(ctx context.Context, schema Schema, table Table, action Action, columns []ColumnInfo, values [][]RawBytes) error
-type OnCreateTable func(ctx context.Context, schema Schema, table Table, info *TableInfo) error
+type OnCreateTable func(ctx context.Context, infos []TableInfo) error
 type OnCreateSchema func(ctx context.Context, schema Schema) error
 
 type CanalConfig struct {
@@ -211,7 +211,7 @@ func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, t
 		return err
 	}
 	if info != nil {
-		err = c.onCreateTable(ctx, Schema(schema), Table(table), info)
+		err = c.onCreateTable(ctx, []TableInfo{*info})
 		if err != nil {
 			return err
 		}
@@ -571,6 +571,7 @@ func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[st
 
 // GetTableInfo 获得指定表的结构
 func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*TableInfo, error) {
+	hlog.Info(ctx, "get table info: %s.%s", schema, table)
 	keys, err := c.GetKeys(ctx, schema, table)
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -762,6 +763,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 		return c.FilterDatabase(v)
 	})
 
+	infos := make([]TableInfo, 0)
 	for _, db := range dbs {
 		err = c.onCreateSchema(ctx, Schema(db))
 		if err != nil {
@@ -786,16 +788,17 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-
-				c.schemas[Schema(db)][Table(table)] = *info
-				err = c.onCreateTable(ctx, Schema(db), Table(table), info)
-				if err != nil {
-					return err
+				if info != nil {
+					c.schemas[Schema(db)][Table(table)] = *info
+					infos = append(infos, *info)
 				}
 			}
 		}
 	}
-	return nil
+	if len(infos) == 0 {
+		return nil
+	}
+	return c.onCreateTable(ctx, infos)
 }
 
 func (c *Canal) loadData(ctx context.Context) error {

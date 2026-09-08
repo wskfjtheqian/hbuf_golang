@@ -8,12 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/client"
+	//"github.com/go-mysql-org/go-mysql/client"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
@@ -71,9 +70,9 @@ type Doris struct {
 	workers map[SchemaTable]*Worker
 	client  *http.Client
 	mu      sync.RWMutex
-	conn    *client.Conn
-	sql     *sql.DB
-	change  chan []TableInfo
+	//conn    *client.Conn
+	sql    *sql.DB
+	change chan []TableInfo
 }
 
 func NewDoris(cfg *DorisConfig) *Doris {
@@ -154,8 +153,8 @@ func (d *Doris) loop(ctx context.Context) {
 		}
 	}
 }
-func (d *Doris) ChangeTables(ctx context.Context, info []TableInfo) {
-	d.change <- info
+func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
+	d.change <- infos
 }
 func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, action Action, currentCols []ColumnInfo, values [][]RawBytes) error {
 	d.mu.RLock()
@@ -233,8 +232,8 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, info
 
 // Close 关闭 Doris 连接
 func (d *Doris) Close() error {
-	if d.conn != nil {
-		return d.conn.Close()
+	if d.sql != nil {
+		return d.sql.Close()
 	}
 	return nil
 }
@@ -245,54 +244,36 @@ func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
 	s.WriteString(string(schema))
 
 	hlog.Info(ctx, "doris change schema: %s", s.String())
-	result, err := d.conn.Execute(s.String())
+	_, err := d.sql.ExecContext(ctx, s.String())
 	if err != nil {
 		return err
 	}
-	defer result.Close()
 	return nil
 }
 
 // GetReplicationNum 动态探测并计算最安全的副本数
 func (d *Doris) GetReplicationNum(ctx context.Context) int {
 	// 1. 默认降级策略为 1
-	defaultNum := 1
+	var defaultNum *int
 
 	// 2. 查出健康的 BE (Backend) 节点数量
-	res, err := d.conn.Execute("SHOW BACKENDS")
+	query, err := d.sql.QueryContext(ctx, "SELECT COUNT(*) AS available_be_count FROM BACKENDS() WHERE `Alive` = true;")
 	if err != nil {
-		return defaultNum
-	}
-	defer res.Close()
-
-	aliveCount := 0
-	for range res.Values {
-		// 假设在你的驱动中，Alive 状态列是可解析的字符串。
-		// 或者是根据行数：通常一行代表一个 BE 节点
-		aliveCount++
-	}
-
-	// 3. 查出 FE 全局默认的副本设置
-	feRes, err := d.conn.Execute("ADMIN SHOW FRONTEND CONFIG LIKE '%default_replication_num%'")
-	if err == nil && len(feRes.Values) > 0 {
-		// 假设第 2 列是配置的值（依据不同版本，通常格式为 Key, Value）
-		if len(feRes.Values[0]) >= 2 {
-			valStr := feRes.Values[0][1].String()
-			if num, err := strconv.Atoi(valStr); err == nil {
-				defaultNum = num
-			}
-		}
-		feRes.Close()
-	}
-
-	// 4. 终极防御：副本数绝对不能大于当前存活的 BE 节点总数，否则 Doris 建表会报错
-	if aliveCount > 0 && defaultNum > aliveCount {
-		return aliveCount
-	}
-	if defaultNum < 1 {
 		return 1
 	}
-	return defaultNum
+	defer query.Close()
+
+	for query.Next() {
+		query.Scan(&defaultNum)
+	}
+
+	if defaultNum == nil {
+		return 1
+	}
+	if *defaultNum > 3 {
+		return 3
+	}
+	return *defaultNum
 }
 func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 	newInfo := d.ToDorisTable(info)
@@ -378,12 +359,10 @@ func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
 
 	// 7. 执行 SQL
 	hlog.Info(ctx, "doris change table: %s", s.String())
-	result, err := d.conn.Execute(s.String())
+	_, err := d.sql.ExecContext(ctx, s.String())
 	if err != nil {
 		return fmt.Errorf("failed to execute partitioning DDL: %w. SQL: %s", err, s.String())
 	}
-	defer result.Close()
-
 	return nil
 }
 
@@ -413,28 +392,19 @@ func (d *Doris) ToDorisType(info ColumnInfo) (string, string) {
 
 	// --- 整数类型 ---
 	case "tinyint":
-		if args == "" {
-			return "TINYINT", "3"
-		}
-		return "TINYINT", args
+		return "TINYINT", "(4)"
 	case "smallint":
 		if args == "" {
-			return "SMALLINT", "5"
+			return "SMALLINT", "(5)"
 		}
 		return "SMALLINT", args
 	case "int", "integer", "mediumint":
-		if args == "" {
-			return "INT", "11"
-		}
-		return "INT", args
+		return "INT", "(11)"
 	case "bigint":
-		if args == "" {
-			return "BIGINT", "20"
-		}
-		return "BIGINT", args
+		return "BIGINT", "(20)"
 	case "largeint":
 		if args == "" {
-			return "LARGEINT", "20"
+			return "LARGEINT", "(20)"
 		}
 		return "LARGEINT", args
 
@@ -615,6 +585,9 @@ func (c *Doris) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 	if err := query.Err(); err != nil {
 		return nil, herror.Wrap(err)
 	}
+	if len(ret.Columns) == 0 {
+		return nil, nil
+	}
 
 	hutl.Sort(ret.Columns, func(i, j ColumnInfo) bool {
 		return i.KeyIndex > j.KeyIndex
@@ -734,9 +707,7 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 			if oldColumn.Type != newColumn.Type ||
 				oldColumn.Args != newColumn.Args ||
 				oldColumn.Comment != newColumn.Comment ||
-				oldColumn.IsNull != newColumn.IsNull ||
-				!hutl.Equal(oldColumn.Default, newColumn.Default) {
-
+				oldColumn.IsNull != newColumn.IsNull {
 				modifyList = append(modifyList, newColumn)
 			}
 		} else {
@@ -745,6 +716,11 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 	}
 	var s strings.Builder
 	for _, info := range addList {
+		err := c.waitSchemaChangeComplete(ctx, newInfo.Schema, newInfo.Table)
+		if err != nil {
+			return err
+		}
+
 		s.Reset()
 		s.WriteString("ALTER TABLE `")
 		s.WriteString(string(newInfo.Schema))
@@ -771,17 +747,18 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 			s.WriteString("'")
 		}
 		hlog.Info(ctx, "modifyTable: %s", s.String())
-		_, err := c.sql.ExecContext(ctx, s.String())
+		_, err = c.sql.ExecContext(ctx, s.String())
 		if err != nil {
 			return herror.Wrap(err)
-		}
-		err = c.waitSchemaChangeComplete(ctx, newInfo.Schema, newInfo.Table)
-		if err != nil {
-			return err
 		}
 	}
 
 	for _, info := range modifyList {
+		err := c.waitSchemaChangeComplete(ctx, newInfo.Schema, newInfo.Table)
+		if err != nil {
+			return err
+		}
+
 		s.Reset()
 		s.WriteString("ALTER TABLE `")
 		s.WriteString(string(newInfo.Schema))
@@ -808,13 +785,9 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 			s.WriteString("'")
 		}
 		hlog.Info(ctx, "modifyTable %s", s.String())
-		_, err := c.sql.ExecContext(ctx, s.String())
+		_, err = c.sql.ExecContext(ctx, s.String())
 		if err != nil {
 			return herror.Wrap(err)
-		}
-		err = c.waitSchemaChangeComplete(ctx, newInfo.Schema, newInfo.Table)
-		if err != nil {
-			return err
 		}
 	}
 	return nil
@@ -845,12 +818,13 @@ func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, tab
 			values[i] = new(any)
 			maps[strings.ToLower(columns[i])] = i
 		}
+		if !rows.Next() {
+			return nil
+		}
 
-		for rows.Next() {
-			err := rows.Scan(values...)
-			if err != nil {
-				return herror.Wrap(err)
-			}
+		err = rows.Scan(values...)
+		if err != nil {
+			return herror.Wrap(err)
 		}
 		state := values[maps["state"]]
 		if state != nil {

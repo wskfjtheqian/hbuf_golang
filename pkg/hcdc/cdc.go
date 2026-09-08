@@ -145,16 +145,16 @@ func (h *HCDC) setCanalCall(canal *Canal) {
 		return doris.CreateSchema(ctx, schema)
 	})
 
-	canal.setOnCreateTable(func(ctx context.Context, schema Schema, table Table, info *TableInfo) error {
+	canal.setOnCreateTable(func(ctx context.Context, infos []TableInfo) error {
 		doris := h.doris.Load()
 		if doris == nil {
 			return nil
 		}
-		err := doris.createTable(ctx, info)
-		if err != nil {
-			return err
+		doris.ChangeTables(ctx, infos)
+		for _, tableInfo := range infos {
+			doris.RegisterWorker(ctx, tableInfo.Schema, tableInfo.Table)
 		}
-		doris.RegisterWorker(ctx, schema, table)
+
 		return nil
 	})
 }
