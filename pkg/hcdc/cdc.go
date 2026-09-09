@@ -28,6 +28,8 @@ type ColumnInfo struct {
 	KeyIndex int
 	IsNull   string
 	Default  *string
+	Action   string
+	OldName  Column
 }
 
 func (i ColumnInfo) String() string {
@@ -42,6 +44,10 @@ type TableInfo struct {
 	Keys           []Column
 	PartitionField Column // 分区字段名
 	PartitionType  string // 分区类型，目前主流为 "RANGE"
+	Action         string
+	IsCreate       bool
+	IsAlter        bool
+	IsDrop         bool
 }
 
 type Config struct {

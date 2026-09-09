@@ -222,25 +222,16 @@ func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, t
 // OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE 等 SQL 语句时触发。
 func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent) error {
 	// 如果库不满足过滤条件，直接忽略
-	if !c.FilterDatabase(string(queryEvent.Schema)) {
+	if !c.FilterDatabase(Schema(queryEvent.Schema)) {
 		return nil
 	}
 
-	//// 探测是否是创建新表 DDL (例如: "change table `test_table` ...")
-	//if strings.Contains(sql, "change table") {
-	//	// 1. 简易正则或字符串解析出表名 (假设解析出来为 tableName)
-	//	tableName := "parsed_table_name"
-	//
-	//	if c.FilterTable(tableName) {
-	//		ctx := context.Background()
-	//		// 2. 实时触发：直接调用我们之前写好的初始化函数（Doris 建表 + 注册 Worker）
-	//		go func() {
-	//			_ = c.initNewTableSync(ctx, Schema(schema), Table(tableName))
-	//			c.activeTables.Store(schema+"."+tableName, true)
-	//		}()
-	//	}
-	//}
-	return nil
+	ddl := ParseDDL(Schema(queryEvent.Schema), string(queryEvent.Query))
+	if ddl == nil || !c.FilterTable(ddl.Table) {
+		return nil
+	}
+
+	return c.onCreateTable(hlog.NewContext(), []TableInfo{*ddl})
 }
 
 // OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
@@ -423,7 +414,7 @@ func (c *Canal) initFilter(ctx context.Context) error {
 }
 
 // GetDatabases 获得所有的库
-func (c *Canal) GetDatabases(ctx context.Context) ([]string, error) {
+func (c *Canal) GetDatabases(ctx context.Context) ([]Schema, error) {
 	//result, err := c.conn.Execute("SHOW DATABASES")
 	//if err != nil {
 	//	return nil, herror.Wrap(err)
@@ -441,9 +432,9 @@ func (c *Canal) GetDatabases(ctx context.Context) ([]string, error) {
 	}
 	defer query.Close()
 
-	var dbs []string
+	var dbs []Schema
 	for query.Next() {
-		var db *string
+		var db *Schema
 		if err := query.Scan(&db); err != nil {
 			return nil, herror.Wrap(err)
 		}
@@ -459,14 +450,14 @@ func (c *Canal) GetDatabases(ctx context.Context) ([]string, error) {
 }
 
 // FilterDatabase 过滤库
-func (c *Canal) FilterDatabase(name string) bool {
+func (c *Canal) FilterDatabase(name Schema) bool {
 	for _, exclude := range c.excludeDBs {
-		if exclude.MatchString(name) {
+		if exclude.MatchString(string(name)) {
 			return false
 		}
 	}
 	for _, include := range c.includeDBs {
-		if include.MatchString(name) {
+		if include.MatchString(string(name)) {
 			return true
 		}
 	}
@@ -474,7 +465,7 @@ func (c *Canal) FilterDatabase(name string) bool {
 }
 
 // GetTables 获得所有的表
-func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]string, error) {
+func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]Table, error) {
 	// 1. 将 schema 拼入 SQL，确保只查目标库。注意：如果 schema 包含特殊字符，建议用反引号包裹 `schema`
 	//query := "SHOW TABLES FROM `" + string(schema) + "`"
 	//result, err := c.conn.Execute(query)
@@ -497,9 +488,9 @@ func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]string, error) 
 	}
 	defer query.Close()
 
-	var tables []string
+	var tables []Table
 	for query.Next() {
-		var table *string
+		var table *Table
 		if err := query.Scan(&table); err != nil {
 			return nil, herror.Wrap(err)
 		}
@@ -516,14 +507,14 @@ func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]string, error) 
 }
 
 // FilterTable 过滤库
-func (c *Canal) FilterTable(name string) bool {
+func (c *Canal) FilterTable(name Table) bool {
 	for _, exclude := range c.excludeTables {
-		if exclude.MatchString(name) {
+		if exclude.MatchString(string(name)) {
 			return false
 		}
 	}
 	for _, include := range c.includeTables {
-		if include.MatchString(name) {
+		if include.MatchString(string(name)) {
 			return true
 		}
 	}
@@ -532,18 +523,6 @@ func (c *Canal) FilterTable(name string) bool {
 
 // GetKeys 获得指定表的主键
 func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
-	//query := "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC "
-	//result, err := c.conn.Execute(query, string(schema), string(table))
-	//if err != nil {
-	//	return nil, herror.Wrap(err)
-	//}
-	//defer result.Close()
-	//var keys = make(map[string]int)
-	//for i, rows := range result.Values {
-	//	if string(rows[1].AsString()) == "PRIMARY" {
-	//		keys[string(rows[0].AsString())] = i + 1
-	//	}
-	//}
 	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC ", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -759,7 +738,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	dbs = hutl.Filter(dbs, func(v string) bool {
+	dbs = hutl.Filter(dbs, func(v Schema) bool {
 		return c.FilterDatabase(v)
 	})
 
@@ -775,7 +754,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 			return err
 		}
 
-		tables = hutl.Filter(tables, func(v string) bool {
+		tables = hutl.Filter(tables, func(v Table) bool {
 			return c.FilterTable(v)
 		})
 		if _, ok := c.schemas[Schema(db)]; !ok {

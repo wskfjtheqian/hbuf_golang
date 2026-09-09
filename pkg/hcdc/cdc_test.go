@@ -41,7 +41,7 @@ func Test_CanalGetDatabase(t *testing.T) {
 		t.Fatalf("GetDatabases failed: %v", err)
 	}
 
-	dbs = hutl.Filter(dbs, func(db string) bool {
+	dbs = hutl.Filter(dbs, func(db hcdc.Schema) bool {
 		return c.FilterDatabase(db)
 	})
 
@@ -68,7 +68,7 @@ func Test_CanalGetTable(t *testing.T) {
 		t.Fatalf("GetTable failed: %v", err)
 	}
 
-	dbs = hutl.Filter(dbs, func(db string) bool {
+	dbs = hutl.Filter(dbs, func(db hcdc.Table) bool {
 		return c.FilterTable(db)
 	})
 
