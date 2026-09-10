@@ -82,16 +82,16 @@ func (c *LruCache[K, V]) shard(key K) *lruShard[K, V] {
 
 // Get 获取 key 对应的值，命中时提升到 LRU 头部。
 // 若配置了 onLoader 且 miss，通过 singleflight 回源加载并缓存。
-func (c *LruCache[K, V]) Get(key K) (*V, bool) {
+func (c *LruCache[K, V]) Get(key K) (*V, error) {
 	s := c.shard(key)
 	s.mu.RLock()
-	v, ok := s.lru.Get(key)
+	v, err := s.lru.Get(key)
 	s.mu.RUnlock()
-	if ok {
-		return v, true
+	if err == nil {
+		return v, nil
 	}
 	if c.onLoader == nil {
-		return nil, false
+		return nil, NotFound
 	}
 
 	// singleflight 防击穿
@@ -99,7 +99,7 @@ func (c *LruCache[K, V]) Get(key K) (*V, bool) {
 		return c.onLoader(key)
 	})
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 	loaded := val.(*V)
 
@@ -109,16 +109,16 @@ func (c *LruCache[K, V]) Get(key K) (*V, bool) {
 	if evicted && c.onEvict != nil {
 		c.onEvict(ek, ev)
 	}
-	return loaded, true
+	return loaded, nil
 }
 
 // Peek 返回 key 对应的值，但不改变 LRU 位置。
-func (c *LruCache[K, V]) Peek(key K) (*V, bool) {
+func (c *LruCache[K, V]) Peek(key K) (*V, error) {
 	s := c.shard(key)
 	s.mu.RLock()
-	v, ok := s.lru.Peek(key)
+	v, err := s.lru.Peek(key)
 	s.mu.RUnlock()
-	return v, ok
+	return v, err
 }
 
 // Set 插入或更新一个键值对。若淘汰旧条目且配置了 onEvict，回调通知。
@@ -185,8 +185,8 @@ func (c *LruCache[K, V]) Modify(key K, fn func(key K, old V) (*V, error)) (*V, e
 
 	s.mu.Lock()
 	l := s.lru
-	v, ok := l.Get(key)
-	if ok {
+	v, err := l.Get(key)
+	if err == nil {
 		newVal, err := fn(key, *v)
 		if err != nil {
 			s.mu.Unlock()
@@ -214,8 +214,8 @@ func (c *LruCache[K, V]) Modify(key K, fn func(key K, old V) (*V, error)) (*V, e
 	defer s.mu.Unlock()
 
 	// 双重检查：锁外加载期间，其他 goroutine 可能已写入
-	v, ok = l.Get(key)
-	if !ok {
+	v, err = l.Get(key)
+	if err != nil {
 		l.Set(key, loaded)
 		v = loaded
 	}

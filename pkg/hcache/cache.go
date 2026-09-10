@@ -2,8 +2,12 @@ package hcache
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var NotFound = errors.New("key not found")
+var ExpireAt = errors.New("key expire at")
 
 type Cache interface {
 	Lock(ctx context.Context, key string) error

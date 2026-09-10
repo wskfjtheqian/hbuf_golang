@@ -58,24 +58,27 @@ func NewLru[K comparable, V any](options ...LruOption[K, V]) *Lru[K, V] {
 	return c
 }
 
-func (c *Lru[K, V]) Get(key K) (*V, bool) {
+func (c *Lru[K, V]) Get(key K) (*V, error) {
 	now := htime.NowTime().UnixMilli()
 	if it, ok := c.data[key]; ok {
 		if it.expireAt > now {
 			c.moveToFront(it)
-			return it.val, true
+			return it.val, nil
 		}
-		return it.val, false
+		return it.val, ExpireAt
 	}
-	return nil, false
+	return nil, NotFound
 }
 
-func (c *Lru[K, V]) Peek(key K) (*V, bool) {
+func (c *Lru[K, V]) Peek(key K) (*V, error) {
 	now := htime.NowTime().UnixMilli()
 	if it, ok := c.data[key]; ok {
-		return it.val, it.expireAt > now
+		if it.expireAt > now {
+			return it.val, nil
+		}
+		return it.val, ExpireAt
 	}
-	return nil, false
+	return nil, NotFound
 }
 
 func (c *Lru[K, V]) Set(key K, val *V) (evictedKey K, evictedVal *V, evicted bool) {

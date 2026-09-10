@@ -82,23 +82,32 @@ func (c *TinyLfuCache[K, V]) shard(key K) *tlfShard[K, V] {
 
 // Get 获取 key 对应的值，累加频率计数，命中时提升到 LRU 头部。
 // 若配置了 onLoader 且 miss，通过 singleflight 回源加载并缓存。
-func (c *TinyLfuCache[K, V]) Get(key K) (*V, bool) {
+func (c *TinyLfuCache[K, V]) Get(key K) (*V, error) {
+	return c.GetOrLoader(key, nil)
+}
+
+func (c *TinyLfuCache[K, V]) GetOrLoader(key K, fn func(K) (*V, error)) (*V, error) {
 	s := c.shard(key)
 	s.mu.RLock()
-	v, ok := s.tlf.Get(key)
+	v, err := s.tlf.Get(key)
 	s.mu.RUnlock()
-	if ok {
-		return v, true
+	if err == nil {
+		return v, nil
 	}
-	if c.onLoader == nil {
-		return nil, false
+
+	if c.onLoader != nil {
+		fn = c.onLoader
+	}
+
+	if fn == nil {
+		return nil, NotFound
 	}
 
 	val, err, _ := c.sf.Do(sfKey(key), func() (any, error) {
-		return c.onLoader(key)
+		return fn(key)
 	})
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 	loaded := val.(*V)
 
@@ -108,16 +117,16 @@ func (c *TinyLfuCache[K, V]) Get(key K) (*V, bool) {
 	if evicted && c.onEvict != nil {
 		c.onEvict(ek, ev)
 	}
-	return loaded, true
+	return loaded, err
 }
 
 // Peek 返回 key 对应的值，不改变 LRU 位置，不累加频率。
-func (c *TinyLfuCache[K, V]) Peek(key K) (*V, bool) {
+func (c *TinyLfuCache[K, V]) Peek(key K) (*V, error) {
 	s := c.shard(key)
 	s.mu.RLock()
-	v, ok := s.tlf.Peek(key)
+	v, err := s.tlf.Peek(key)
 	s.mu.RUnlock()
-	return v, ok
+	return v, err
 }
 
 // Set 插入或更新一个键值对，带 TinyLFU 准入控制。
@@ -169,6 +178,7 @@ func (c *TinyLfuCache[K, V]) Keys() []K {
 
 func (c *TinyLfuCache[K, V]) Cap() int { return c.cap }
 
+// Purge 清空所有缓存条目。
 func (c *TinyLfuCache[K, V]) Purge() {
 	for _, s := range c.shards {
 		s.mu.Lock()
@@ -184,8 +194,8 @@ func (c *TinyLfuCache[K, V]) Modify(key K, fn func(key K, old V) (*V, error)) (*
 
 	s.mu.Lock()
 	tlf := s.tlf
-	v, ok := tlf.Get(key)
-	if ok {
+	v, err := tlf.Get(key)
+	if err == nil {
 		newVal, err := fn(key, *v)
 		if err != nil {
 			s.mu.Unlock()
@@ -213,8 +223,8 @@ func (c *TinyLfuCache[K, V]) Modify(key K, fn func(key K, old V) (*V, error)) (*
 	defer s.mu.Unlock()
 
 	// 双重检查：锁外加载期间，其他 goroutine 可能已写入
-	v, ok = tlf.Get(key)
-	if !ok {
+	v, err = tlf.Get(key)
+	if err != nil {
 		tlf.Set(key, loaded)
 		v = loaded
 	}

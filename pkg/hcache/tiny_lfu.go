@@ -102,7 +102,7 @@ func NewTinyLfu[K comparable, V any](options ...TinyLfuOption[K, V]) *TinyLfu[K,
 // Get 获取 key 对应的值。
 // 每次调用都会累加频率计数（命中与否都算"想要"），
 // 命中未过期条目时将其移到 LRU 头部。
-func (c *TinyLfu[K, V]) Get(key K) (*V, bool) {
+func (c *TinyLfu[K, V]) Get(key K) (*V, error) {
 	h := hsketch.Hash(key)
 	c.sketch.Add(h)
 
@@ -117,22 +117,25 @@ func (c *TinyLfu[K, V]) Get(key K) (*V, bool) {
 	if it, ok := c.data[key]; ok {
 		if it.expireAt > now {
 			c.moveToFront(it)
-			return it.val, true
+			return it.val, nil
 		}
-		return it.val, false
+		return it.val, ExpireAt
 	}
 
-	return nil, false
+	return nil, NotFound
 }
 
 // Peek 返回 key 对应的值，不改变 LRU 位置，不累加频率。
 // 即使过期也返回值，通过 bool 指示是否有效。
-func (c *TinyLfu[K, V]) Peek(key K) (*V, bool) {
+func (c *TinyLfu[K, V]) Peek(key K) (*V, error) {
 	now := htime.NowTime().UnixMilli()
 	if it, ok := c.data[key]; ok {
-		return it.val, it.expireAt > now
+		if it.expireAt > now {
+			return it.val, nil
+		}
+		return it.val, ExpireAt
 	}
-	return nil, false
+	return nil, NotFound
 }
 
 // Set 插入或更新一个键值对，带 TinyLFU 准入控制。
