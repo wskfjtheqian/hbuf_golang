@@ -137,6 +137,11 @@ func (s *Builder) ToText() string {
 	return ExplainSQL(text, nil, `'`, s.params...)
 }
 
+// 是否为空
+func (s *Builder) IsEmpty() bool {
+	return s.text.Len() == 0
+}
+
 func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
 	var count int64 = 0
 	defer newPrintLog(s, &count).print(ctx)
