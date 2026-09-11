@@ -220,10 +220,7 @@ func NewJsonEncode() Encoder {
 				return err
 			}
 			_, err = writer.Write(buffer)
-			if err != nil {
-				return err
-			}
-			return nil
+			return err
 		}
 	}
 }
@@ -236,11 +233,7 @@ func NewJsonDecode() Decoder {
 			if err != nil {
 				return err
 			}
-			err = hjson.Unmarshal(buffer, v, tag)
-			if err != nil {
-				return err
-			}
-			return nil
+			return hjson.Unmarshal(buffer, v, tag)
 		}
 	}
 }
@@ -254,10 +247,7 @@ func NewHBufEncode() Encoder {
 				return err
 			}
 			_, err = writer.Write(buffer)
-			if err != nil {
-				return err
-			}
-			return nil
+			return err
 		}
 	}
 }
@@ -270,11 +260,7 @@ func NewHBufDecode() Decoder {
 			if err != nil {
 				return err
 			}
-			err = hbuf.Unmarshal(buffer, v, tag)
-			if err != nil {
-				return err
-			}
-			return nil
+			return hbuf.Unmarshal(buffer, v, tag)
 		}
 	}
 }
