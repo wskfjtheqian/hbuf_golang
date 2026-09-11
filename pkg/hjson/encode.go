@@ -468,7 +468,7 @@ func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		return
 	}
 	if va.Type() == timePtrType {
-		timePtrEncoder(e, va, opts)
+		timeEncoder(e, va, opts)
 		return
 	}
 	m := va.Interface().(Marshaler)
@@ -534,17 +534,13 @@ func intEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 func timeEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	b := e.AvailableBuffer()
 	b = mayAppendQuote(b, opts.quoted)
-	t := v.Interface().(time.Time)
-	b = strconv.AppendInt(b, t.UnixMilli(), 10)
-	b = mayAppendQuote(b, opts.quoted)
-	e.Write(b)
-}
-
-func timePtrEncoder(e *encodeState, v reflect.Value, opts encOpts) {
-	b := e.AvailableBuffer()
-	b = mayAppendQuote(b, opts.quoted)
-	t := v.Interface().(*time.Time)
-	b = strconv.AppendInt(b, t.UnixMilli(), 10)
+	if v.Kind() == reflect.Ptr {
+		t := v.Interface().(*time.Time)
+		b = strconv.AppendInt(b, t.UnixMilli(), 10)
+	} else {
+		t := v.Interface().(time.Time)
+		b = strconv.AppendInt(b, t.UnixMilli(), 10)
+	}
 	b = mayAppendQuote(b, opts.quoted)
 	e.Write(b)
 }
