@@ -237,10 +237,9 @@ func (t *File) ReadFile(ctx context.Context, path string, fn ScanFileCall) (*mys
 	}
 
 	_, name := filepath.Split(path)
-	if name == "SELECT" {
-		return nil, herror.NewError("empty file name")
+	if strings.HasPrefix(name, "SELECT_") {
+		return nil, nil
 	}
-
 	name = strings.TrimSuffix(name, ".csv.active")
 	parts := strings.SplitN(name, "_", 2)
 	if len(parts) != 2 {
