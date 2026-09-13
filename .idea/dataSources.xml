@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="localhost@doris" uuid="16abdfcb-75c6-4105-afe3-115d16dcbb6c">
+    <data-source source="LOCAL" name="192.168.1.24@doris" uuid="429daa5a-5441-427a-91a2-687c8fd20500">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mysql://localhost:9030</jdbc-url>
+      <jdbc-url>jdbc:mysql://192.168.1.24:9030</jdbc-url>
       <jdbc-additional-properties>
         <property name="com.intellij.clouds.kubernetes.db.host.port" />
         <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
@@ -13,11 +13,11 @@
       </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="localhost@mysql" uuid="76509ab3-6615-4ca1-91d9-697824c3a853">
+    <data-source source="LOCAL" name="192.168.1.24@mysql" uuid="0fc22c42-77bb-4831-a02e-2a1161e84d54">
       <driver-ref>mariadb</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.mariadb.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mariadb://localhost:3316</jdbc-url>
+      <jdbc-url>jdbc:mariadb://192.168.1.24:3316</jdbc-url>
       <jdbc-additional-properties>
         <property name="com.intellij.clouds.kubernetes.db.host.port" />
         <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />

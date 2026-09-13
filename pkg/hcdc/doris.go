@@ -1,6 +1,7 @@
 package hcdc
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,7 +46,6 @@ type DorisConfig struct {
 	Username string `yaml:"username"` // 数据库用户名
 	Password string `yaml:"password"` // 数据库密码
 	Schema   string `yaml:"schema"`   // 数据库名称
-	LogDir   string `yaml:"logDir"`
 	LoadURL  string `yaml:"loadURL"`
 }
 
@@ -58,7 +59,6 @@ func (c *DorisConfig) Equal(other *DorisConfig) bool {
 		c.Username == other.Username &&
 		c.Password == other.Password &&
 		c.Schema == other.Schema &&
-		c.LogDir == other.LogDir &&
 		c.LoadURL == other.LoadURL
 }
 
@@ -67,7 +67,7 @@ type ActionInfo struct {
 
 type Doris struct {
 	cfg     *DorisConfig
-	workers map[SchemaTable]*Worker
+	workers map[InstanceId]*Worker
 	client  *http.Client
 	mu      sync.RWMutex
 	//conn    *client.Conn
@@ -78,22 +78,16 @@ type Doris struct {
 func NewDoris(cfg *DorisConfig) *Doris {
 	return &Doris{
 		cfg:     cfg,
-		workers: make(map[SchemaTable]*Worker),
+		workers: make(map[InstanceId]*Worker),
 		client:  &http.Client{Timeout: 60 * time.Second},
 		change:  make(chan []TableInfo),
 	}
 }
 
-func (d *Doris) RegisterWorker(ctx context.Context, schema Schema, table Table) *Worker {
+func (d *Doris) RegisterWorker(ctx context.Context, worker *Worker) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	key := SchemaTable(string(schema) + "." + string(table))
-	w := NewWorker(schema, table, d.cfg.LogDir)
-	d.workers[key] = w
-
-	go w.loop(ctx)
-	return w
+	d.workers[worker.instanceId] = worker
+	d.mu.Unlock()
 }
 
 func (d *Doris) Open(ctx context.Context) error {
@@ -119,6 +113,10 @@ func (d *Doris) Open(ctx context.Context) error {
 	if err != nil {
 		return herror.Wrap(err)
 	}
+	err = d.createCDCRecord(ctx)
+	if err != nil {
+		return err
+	}
 	go d.loop(ctx)
 
 	return nil
@@ -133,16 +131,7 @@ func (d *Doris) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			d.mu.RLock()
-			for _, worker := range d.workers {
-				err := worker.ScanFile(ctx, func(ctx context.Context, infos []ColumnInfo, columns string, reader io.Reader) error {
-					return d.StreamSave(ctx, worker.schema, worker.table, infos, columns, reader)
-				})
-				if err != nil {
-					herror.PrintStack(ctx, err)
-				}
-			}
-			d.mu.RUnlock()
+			d.scanFile(ctx)
 		case val := <-d.change:
 			for _, info := range val {
 				err := d.changeTable(ctx, &info)
@@ -156,17 +145,8 @@ func (d *Doris) loop(ctx context.Context) {
 func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
 	d.change <- infos
 }
-func (d *Doris) AddData(ctx context.Context, schema Schema, table Table, action Action, currentCols []ColumnInfo, values [][]RawBytes) error {
-	d.mu.RLock()
-	val, ok := d.workers[SchemaTable(string(schema)+"."+string(table))]
-	d.mu.RUnlock()
-	if !ok {
-		return nil
-	}
-	return val.AddData(ctx, action, currentCols, values)
-}
 
-func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, infos []ColumnInfo, columns string, value io.Reader) error {
+func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {
 	parse, err := url.Parse(d.cfg.LoadURL)
 	if err != nil {
 		return err
@@ -177,24 +157,7 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, info
 		return herror.Wrap(err)
 	}
 
-	decoders := hutl.Slice(hutl.Filter(infos, func(info ColumnInfo) bool {
-		switch info.Type {
-		case "boolean", "bool", "decimal", "numeric", "double", "real", "float", "tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint", "time", "date", "datetime", "timestamp":
-			return false
-		}
-		return true
-	}), func(i int, v ColumnInfo) string {
-		typ := GetColumnType(&v)
-		if typ == "bitmap32" || typ == "bitmap64" {
-			return "`" + string(v.Name) + "`= bitmap_from_string(from_base64(`" + string(v.Name) + "_base`))"
-		}
-		return "`" + string(v.Name) + "`= from_base64(`" + string(v.Name) + "_base`)"
-	})
-	if len(decoders) > 0 {
-		columns += "," + strings.Join(decoders, ",")
-	}
 	hlog.Info(ctx, "doris stream save: %s.%s columns: %s", schema, table, columns)
-
 	req.SetBasicAuth(d.cfg.Username, d.cfg.Password)
 	req.Header.Set("Expect", "100-continue")
 	req.Header.Set("column_separator", ",")
@@ -846,4 +809,57 @@ func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, tab
 		}
 	}
 	return fmt.Errorf("wait schema change timeout after %d seconds", maxRetries)
+}
+
+func (d *Doris) scanFile(ctx context.Context) error {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if len(d.workers) == 0 {
+		return nil
+	}
+
+	reader := bytes.Buffer{}
+	for _, worker := range d.workers {
+		id, pos, err := worker.ScanFile(ctx, func(ctx context.Context, schema Schema, table Table, columns string, reader io.Reader) error {
+			return d.StreamSave(ctx, schema, table, columns, reader)
+		})
+		if err != nil {
+			return nil
+		}
+		if pos != nil {
+			reader.WriteString(strconv.FormatInt(int64(id), 10))
+			reader.WriteString(",")
+			reader.WriteString(pos.Name)
+			reader.WriteString(",")
+			reader.WriteString(strconv.FormatUint(uint64(pos.Pos), 10))
+			reader.WriteString(",0\n")
+		}
+	}
+
+	if reader.Len() == 0 {
+		return nil
+	}
+	return d.StreamSave(ctx, "cdc_record", "log_position", "instance_id,file,position,__op", &reader)
+}
+
+func (d *Doris) createCDCRecord(ctx context.Context) error {
+	_, err := d.sql.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS cdc_record")
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	_, err = d.sql.QueryContext(ctx, `
+			CREATE TABLE IF NOT EXISTS cdc_record.log_position (
+				instance_id BIGINT NOT NULL COMMENT '实例ID',
+				file VARCHAR(255) NOT NULL COMMENT '文件名',
+				position BIGINT NOT NULL COMMENT '位置'
+			)UNIQUE KEY(instance_id)
+			DISTRIBUTED BY HASH(instance_id) BUCKETS 10
+			PROPERTIES (
+				"replication_num" = "1"
+			)
+       `)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	return nil
 }

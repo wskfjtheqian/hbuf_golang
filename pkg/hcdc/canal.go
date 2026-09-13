@@ -29,23 +29,26 @@ type OnCreateTable func(ctx context.Context, infos []TableInfo) error
 type OnCreateSchema func(ctx context.Context, schema Schema) error
 
 type CanalConfig struct {
-	Host          string   `yaml:"host"`          // 数据库主机地址
-	Username      string   `yaml:"username"`      // 数据库用户名
-	Password      string   `yaml:"password"`      // 数据库密码
-	Schema        string   `yaml:"schema"`        // 数据库名称
-	IncludeDBs    []string `yaml:"includeDBs"`    //支持的库
-	ExcludeDBs    []string `yaml:"excludeDBs"`    //排除的库
-	IncludeTables []string `yaml:"includeTables"` //支持的表
-	ExcludeTables []string `yaml:"excludeTables"` //排除的表
-	ServerID      *uint32  `yaml:"serverID"`      // 服务器ID
-	Charset       string   `yaml:"charset"`       // 字符集
-	Flavor        string   `yaml:"flavor"`        // 数据库类型
+	InstanceId    InstanceId `yaml:"instanceId"`    // 实例ID
+	Host          string     `yaml:"host"`          // 数据库主机地址
+	Username      string     `yaml:"username"`      // 数据库用户名
+	Password      string     `yaml:"password"`      // 数据库密码
+	Schema        string     `yaml:"schema"`        // 数据库名称
+	IncludeDBs    []string   `yaml:"includeDBs"`    //支持的库
+	ExcludeDBs    []string   `yaml:"excludeDBs"`    //排除的库
+	IncludeTables []string   `yaml:"includeTables"` //支持的表
+	ExcludeTables []string   `yaml:"excludeTables"` //排除的表
+	ServerID      *uint32    `yaml:"serverID"`      // 服务器ID
+	Charset       string     `yaml:"charset"`       // 字符集
+	Flavor        string     `yaml:"flavor"`        // 数据库类型
+	LogDir        string     `yaml:"logDir"`
 }
 
 func (c *CanalConfig) Validate(ctx context.Context) bool {
 	var valid bool = true
 	return valid
 }
+
 func (c *CanalConfig) Equal(other *CanalConfig) bool {
 	if c == nil && other == nil {
 		return true
@@ -101,6 +104,7 @@ func NewCanal(cfg *CanalConfig) *Canal {
 	ret := &Canal{
 		cfg:     cfg,
 		schemas: make(map[Schema]map[Table]TableInfo),
+		worker:  NewWorker(cfg.InstanceId, cfg.LogDir),
 	}
 	return ret
 }
@@ -114,21 +118,19 @@ type Canal struct {
 	includeDBs     []*regexp.Regexp
 	excludeTables  []*regexp.Regexp
 	includeTables  []*regexp.Regexp
-	onData         OnData
 	onCreateTable  OnCreateTable
 	onCreateSchema OnCreateSchema
 	schemas        map[Schema]map[Table]TableInfo
 	lock           sync.Mutex
 	sql            *sql.DB
-}
-
-func (c *Canal) SetOnData(fn OnData) {
-	c.onData = fn
+	worker         *Worker
+	position       mysql.Position
 }
 
 func (c *Canal) setOnCreateTable(fn OnCreateTable) {
 	c.onCreateTable = fn
 }
+
 func (c *Canal) setOnCreateSchema(fn OnCreateSchema) {
 	c.onCreateSchema = fn
 }
@@ -236,15 +238,11 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 
 // OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
 func (c *Canal) OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error {
-	// 伪代码：持久化当前的 binlog 位点
-	// c.savePositionToStorage(pos.Name, pos.Pos)
+	c.position = pos
 	return nil
 }
 
 func (c *Canal) OnRow(e *canal.RowsEvent) error {
-	if c.onData == nil {
-		return nil
-	}
 	val, ok := c.schemas[Schema(e.Table.Schema)]
 	if !ok || val == nil {
 		return nil
@@ -259,23 +257,23 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 
 	ctx := hlog.NewContext()
 	if e.Action == "insert" {
-		return c.onData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
+		return c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
-		})
+		}, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
 	} else if e.Action == "update" {
-		return c.onData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
+		return c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[1], func(i int, v any) RawBytes {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
-		})
+		}, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
 	} else if e.Action == "delete" {
-		return c.onData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
+		return c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
-		})
+		}, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
 	}
 
 	return nil
@@ -641,10 +639,6 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 }
 
 func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info TableInfo, start, end string) error {
-	if c.onData == nil {
-		return nil
-	}
-
 	var key Column = "id"
 	for _, column := range info.Columns {
 		if column.KeyIndex > 0 {
@@ -655,7 +649,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 
 	fields := make([]ColumnInfo, 0)
 	batch := hutl.NewBatchProcess(500, func(values [][]RawBytes) error {
-		return c.onData(ctx, schema, table, Insert, fields, values)
+		return c.worker.AddData(ctx, schema, table, Insert, fields, values, mysql.Position{Pos: uint32(time.Now().Unix()), Name: "SELECT"})
 	})
 
 	//query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + string(key) + "` > " + start + " AND `" + string(key) + "` <= " + end
@@ -732,6 +726,9 @@ func (c *Canal) Close() {
 }
 
 func (c *Canal) createSchemaTable(ctx context.Context) error {
+	if c.onCreateSchema == nil {
+		return nil
+	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	dbs, err := c.GetDatabases(ctx)
@@ -744,12 +741,12 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 
 	infos := make([]TableInfo, 0)
 	for _, db := range dbs {
-		err = c.onCreateSchema(ctx, Schema(db))
+		err = c.onCreateSchema(ctx, db)
 		if err != nil {
 			return err
 		}
 
-		tables, err := c.GetTables(ctx, Schema(db))
+		tables, err := c.GetTables(ctx, db)
 		if err != nil {
 			return err
 		}
@@ -757,7 +754,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 		tables = hutl.Filter(tables, func(v Table) bool {
 			return c.FilterTable(v)
 		})
-		if _, ok := c.schemas[Schema(db)]; !ok {
+		if _, ok := c.schemas[db]; !ok {
 			c.schemas[Schema(db)] = make(map[Table]TableInfo)
 		}
 		for _, table := range tables {
@@ -827,4 +824,8 @@ func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table
 		}
 	}
 	return "", nil
+}
+
+func (c *Canal) GetWorker() *Worker {
+	return c.worker
 }

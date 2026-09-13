@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 )
 
+type InstanceId int64
 type Schema string
 type Table string
 type Column string
@@ -120,7 +121,7 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 	canals := make([]*Canal, len(cfg.Canals))
 	for i, item := range cfg.Canals {
 		canals[i] = NewCanal(&item)
-		h.setCanalCall(canals[i])
+		h.setCanalCall(ctx, canals[i])
 		err := canals[i].Open(ctx)
 		if err != nil {
 			for j := 0; j < i; j++ {
@@ -134,15 +135,7 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
-func (h *HCDC) setCanalCall(canal *Canal) {
-	canal.SetOnData(func(ctx context.Context, schema Schema, table Table, action Action, columns []ColumnInfo, values [][]RawBytes) error {
-		doris := h.doris.Load()
-		if doris == nil {
-			return nil
-		}
-		return doris.AddData(ctx, schema, table, action, columns, values)
-	})
-
+func (h *HCDC) setCanalCall(ctx context.Context, canal *Canal) {
 	canal.setOnCreateSchema(func(ctx context.Context, schema Schema) error {
 		doris := h.doris.Load()
 		if doris == nil {
@@ -157,12 +150,9 @@ func (h *HCDC) setCanalCall(canal *Canal) {
 			return nil
 		}
 		doris.ChangeTables(ctx, infos)
-		for _, tableInfo := range infos {
-			doris.RegisterWorker(ctx, tableInfo.Schema, tableInfo.Table)
-		}
-
 		return nil
 	})
+	h.doris.Load().RegisterWorker(ctx, canal.worker)
 }
 
 func GetColumnType(col *ColumnInfo) string {
