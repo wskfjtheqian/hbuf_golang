@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
@@ -212,6 +213,8 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		return err
 	}
 
+	go s.keepSession(ctx)
+
 	if cfg.Client.Find {
 		go func() {
 			err := s.Discovery(ctx)
@@ -237,8 +240,31 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
+// 守护 session
+func (s *Service) keepSession(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			session := s.session.Load()
+			if session != nil {
+				<-session.Done()
+			}
+
+			time.Sleep(time.Second * 2)
+			err := s.Register(ctx)
+			if err != nil {
+				hlog.Error(ctx, "register service failed: %s", err)
+			}
+		}
+	}
+}
+
 // Register 注册服务到注册中心
 func (s *Service) Register(ctx context.Context) error {
+	s.session.Store(nil)
+
 	// 检查配置是否为空
 	if s.config == nil || s.config.Server == nil {
 		return herror.NewError("config is nil or server is nil")
@@ -258,6 +284,7 @@ func (s *Service) Register(ctx context.Context) error {
 	if leaseTime == 0 {
 		leaseTime = 5
 	}
+
 	session, err := concurrency.NewSession(client, concurrency.WithTTL(int(leaseTime)))
 	if err != nil {
 		return herror.Wrap(err)
@@ -357,22 +384,31 @@ func (s *Service) Discovery(ctx context.Context) error {
 
 	// 监听服务变化
 	watchCh := client.Watch(ctx, name, clientv3.WithPrefix())
-	for w := range watchCh {
-		for _, ev := range w.Events {
-			if ev.Type == clientv3.EventTypePut {
-				err := s.parseRegisterInfo(ev.Kv)
-				if err != nil {
-					hlog.Error(ctx, "add client failed: %s", err)
-				}
-			} else if ev.Type == clientv3.EventTypeDelete {
-				err := s.parseDeleteInfo(ev.Kv)
-				if err != nil {
-					hlog.Error(ctx, "delete client failed: %s", err)
+	for {
+		select {
+		case <-ctx.Done():
+			hlog.Info(ctx, "discovery watch stopped: context canceled")
+			return ctx.Err()
+		case w, ok := <-watchCh:
+			if !ok {
+				hlog.Warn(ctx, "discovery watch channel closed")
+				return nil
+			}
+			for _, ev := range w.Events {
+				if ev.Type == clientv3.EventTypePut {
+					err := s.parseRegisterInfo(ev.Kv)
+					if err != nil {
+						hlog.Error(ctx, "add client failed: %s", err)
+					}
+				} else if ev.Type == clientv3.EventTypeDelete {
+					err := s.parseDeleteInfo(ev.Kv)
+					if err != nil {
+						hlog.Error(ctx, "delete client failed: %s", err)
+					}
 				}
 			}
 		}
 	}
-	return nil
 }
 
 // startRpcServer 启动RPC服务
@@ -576,20 +612,26 @@ func (s *Service) parseDeleteInfo(v *mvccpb.KeyValue) error {
 // delHttpClient
 func (s *Service) delHttpClient(install *ServerInfo, host string) error {
 	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	s.clients[install.name].list = hutl.Filter(s.clients[install.name].list, func(router Router) bool {
-		return router.isLocal || (!router.isLocal && router.host != host)
-	})
+	if val, ok := s.clients[install.name]; ok {
+		// 复制一份新切片，避免直接在旧切片上修改导致 GetClient 并发冲突
+		newList := hutl.Filter(val.list, func(router Router) bool {
+			return router.isLocal || (!router.isLocal && router.host != host)
+		})
 
+		// 替换成新切片指针
+		val.list = newList
+	}
 	delete(s.httpClient, host)
-	s.lock.Unlock()
-
 	return nil
 }
 
 // addHttpClient 增加HTTP客户端
 func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	connect, ok := s.httpClient[addr.Host]
 	if !ok {
 		connect = hrpc.NewClient(
@@ -618,7 +660,6 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	})
 
 	s.checkSubscribe()
-	s.lock.Unlock()
 	return nil
 }
 
