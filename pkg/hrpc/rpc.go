@@ -2,7 +2,6 @@ package hrpc
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"reflect"
@@ -394,9 +393,8 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		_, err = io.Copy(writer, val)
 		return err
 	} else if err != nil {
-		var e *Result[hbuf.Data]
-		if errors.As(err, &e) && e.Code != -1 {
-			err = s.encode(writer)(e, method.Tag)
+		if val, ok := err.(ResultI); ok && val.GetCode() != -1 {
+			err = s.encode(writer)(val, method.Tag)
 		}
 		return err
 	}
