@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
@@ -188,33 +189,33 @@ func Test_DorisCopyTable(t *testing.T) {
 	time.Sleep(30 * time.Second)
 }
 
-//func Test_HCDC(t *testing.T) {
-//	cdc := hcdc.NewHCDC()
-//	err := cdc.SetConfig(t.Context(), &hcdc.Config{
-//		Canals: []hcdc.CanalConfig{
-//			{
-//				Host:          "192.168.1.24:3316",
-//				Username:      "root",
-//				Password:      "123456",
-//				Schema:        "game",
-//				IncludeDBs:    []string{"game_usa"},
-//				IncludeTables: []string{"(.*)"},
-//			},
-//		},
-//		Doris: &hcdc.DorisConfig{
-//			Host:     "192.168.1.24:9030",
-//			LoadURL:  "http://192.168.1.24:8040/",
-//			LogDir:   "./logs",
-//			Password: "",
-//			Username: "admin",
-//		},
-//	})
-//	if err != nil {
-//		herror.PrintStack(t.Context(), err)
-//	}
-//	time.Sleep(time.Hour)
-//}
-//
+func Test_HCDC(t *testing.T) {
+	cdc := hcdc.NewHCDC()
+	err := cdc.SetConfig(t.Context(), &hcdc.Config{
+		Canals: []hcdc.CanalConfig{
+			{
+				Host:          "192.168.1.24:3316",
+				Username:      "root",
+				Password:      "123456",
+				Schema:        "game",
+				IncludeDBs:    []string{"game_usa"},
+				IncludeTables: []string{"(.*)"},
+				LogDir:        "./logs",
+			},
+		},
+		Doris: &hcdc.DorisConfig{
+			Host:     "192.168.1.24:9030",
+			LoadURL:  "http://192.168.1.24:8040/",
+			Password: "",
+			Username: "admin",
+		},
+	})
+	if err != nil {
+		herror.PrintStack(t.Context(), err)
+	}
+	time.Sleep(time.Hour)
+}
+
 //func Test_StreamSave(t *testing.T) {
 //	c := hcdc.NewCanal(&hcdc.CanalConfig{
 //		Host:     "192.168.1.24:3316",

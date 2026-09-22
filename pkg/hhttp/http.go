@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -223,49 +224,52 @@ func (a *Http) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		writer: writer,
 		status: http.StatusOK,
 	}
-
 	ctx := request.Context()
 	if a.newContext != nil {
 		ctx = a.newContext()
 	}
+
+	log := a.builderPool.Get().(*strings.Builder)
+	log.Reset()
+
+	defer func() {
+		if r := recover(); r != nil {
+			hlog.Error(ctx, "panic: %v\n%s", r, debug.Stack())
+
+			w.status = http.StatusInternalServerError
+			writer.WriteHeader(http.StatusInternalServerError)
+		}
+		old := time.Since(start) / time.Millisecond
+		t := "[" + strconv.FormatFloat(float64(old), 'f', 3, 64) + "ms]"
+		if 200 > old {
+			log.WriteString(hutl.Yellow(t))
+		} else {
+			log.WriteString(hutl.Red(t))
+		}
+
+		log.WriteString(" ")
+		httpIP, _ := hip.GetHttpIP(request)
+		log.WriteString(httpIP)
+
+		log.WriteString(" ")
+		log.WriteString(request.Proto)
+
+		log.WriteString(" ")
+		log.WriteString(strconv.Itoa(w.status))
+
+		log.WriteString(" ")
+		log.WriteString(hutl.Green(request.URL.String()))
+
+		_ = a.log.Output(1, LogHTTP, log.String())
+	}()
+
 	ctx = hlog.WithContext(ctx, request.Header.Get("X-Trace-Id"))
+	log.WriteString("[")
+	log.WriteString(hlog.FromContext(ctx))
+	log.WriteString("] ")
 
 	a.mux.ServeHTTP(w, request.WithContext(WithContext(ctx, w, request)))
-	old := time.Since(start) / time.Millisecond
-	t := "[" + strconv.FormatFloat(float64(old), 'f', 3, 64) + "ms]"
-
-	text := a.builderPool.Get().(*strings.Builder)
-	text.Reset()
-	defer a.builderPool.Put(text)
-
-	//获得响应状态码
-	text.WriteString("[")
-	text.WriteString(hlog.FromContext(ctx))
-	text.WriteString("] ")
-
-	if 200 > old {
-		text.WriteString(hutl.Yellow(t))
-	} else {
-		text.WriteString(hutl.Red(t))
-	}
-
-	text.WriteString(" ")
-	httpIP, _ := hip.GetHttpIP(request)
-	text.WriteString(httpIP)
-
-	text.WriteString(" ")
-	text.WriteString(request.Method)
-
-	text.WriteString(" ")
-	text.WriteString(request.Proto)
-
-	text.WriteString(" ")
-	text.WriteString(strconv.Itoa(w.status))
-
-	text.WriteString(" ")
-	text.WriteString(hutl.Green(request.URL.String()))
-
-	_ = a.log.Output(1, LogHTTP, text.String())
+	a.builderPool.Put(log)
 }
 
 // Shutdown 优雅关闭 HTTP 服务
