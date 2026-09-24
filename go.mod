@@ -1,6 +1,6 @@
 module github.com/wskfjtheqian/hbuf_golang
 
-go 1.26
+go 1.27
 
 require (
 	github.com/RoaringBitmap/roaring v1.9.4

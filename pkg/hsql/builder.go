@@ -17,13 +17,32 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
+type InsertAction int8
+
+func (i InsertAction) String() string {
+	switch i {
+	case 1:
+		return "REPLACE INTO"
+	case 2:
+		return "INSERT IGNORE INTO"
+	default:
+		return "INSERT INTO"
+	}
+}
+
+const (
+	Insert InsertAction = iota
+	Replace
+	Ignore
+)
+
 const (
 	tmFmtWithMS = "2006-01-02 15:04:05.999"
 	tmFmtZero   = "0000-00-00 00:00:00"
 	nullStr     = "NULL"
 )
 
-var convertibleTypes = []reflect.Type{reflect.TypeOf(time.Time{}), reflect.TypeOf(false), reflect.TypeOf([]byte{})}
+var convertibleTypes = []reflect.Type{reflect.TypeFor[time.Time](), reflect.TypeOf(false), reflect.TypeFor[[]byte]()}
 
 func isPrintable(s string) bool {
 	for _, r := range s {
@@ -34,7 +53,7 @@ func isPrintable(s string) bool {
 	return true
 }
 
-func ToString(value interface{}) string {
+func ToString(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v
@@ -203,13 +222,13 @@ func (s *Builder) Exec(ctx context.Context) (int64, int64, error) {
 	return count, id, nil
 }
 
-func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...interface{}) string {
+func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...any) string {
 	var (
-		convertParams func(interface{}, int)
+		convertParams func(any, int)
 		vars          = make([]string, len(avars))
 	)
 
-	convertParams = func(v interface{}, idx int) {
+	convertParams = func(v any, idx int) {
 		switch v := v.(type) {
 		case bool:
 			vars[idx] = strconv.FormatBool(v)
