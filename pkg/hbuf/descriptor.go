@@ -12,20 +12,11 @@ import (
 )
 
 type Descriptor interface {
-	IsEmpty(p unsafe.Pointer, tag string) bool
-	GetValue(p unsafe.Pointer, tag string) unsafe.Pointer
-	SetValue(p unsafe.Pointer, tag string) unsafe.Pointer
-	Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte
-	Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error)
-	SetTag(tags map[string]bool)
-}
-
-func listToSet(list []string) map[string]bool {
-	set := make(map[string]bool, len(list))
-	for _, str := range list {
-		set[str] = true
-	}
-	return set
+	IsEmpty(p unsafe.Pointer) bool
+	GetValue(p unsafe.Pointer) unsafe.Pointer
+	SetValue(p unsafe.Pointer) unsafe.Pointer
+	Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte
+	Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error)
 }
 
 func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap map[uint16]Descriptor, fieldMap map[uint16]Descriptor, tags ...string) Descriptor {
@@ -58,11 +49,10 @@ func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap m
 		extendIds: extendIds,
 		isPtr:     isPtr,
 		typ:       typ,
-		tags:      listToSet(tags),
 	}
 }
 
-func CloneDataDescriptor(d Data, offset uintptr, isPtr bool, tags ...string) Descriptor {
+func CloneDataDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
 	var desc = d.Descriptors().(*DataDescriptor)
 	return &DataDescriptor{
 		offset:   offset,
@@ -71,7 +61,6 @@ func CloneDataDescriptor(d Data, offset uintptr, isPtr bool, tags ...string) Des
 		fieldIds: desc.fieldIds,
 		isPtr:    isPtr,
 		typ:      desc.typ,
-		tags:     listToSet(tags),
 	}
 }
 
@@ -82,17 +71,12 @@ type DataDescriptor struct {
 	fieldIds  []uint16
 	isPtr     bool
 	typ       reflect.Type
-	tags      map[string]bool
 	extendMap map[uint16]Descriptor
 	extends   []Descriptor
 	extendIds []uint16
 }
 
-func (d *DataDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *DataDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -103,15 +87,7 @@ func (d *DataDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return ptr == nil
 }
 
-func (d *DataDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *DataDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *DataDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -122,21 +98,21 @@ func (d *DataDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	return ptr
 }
 
-func (d *DataDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *DataDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *DataDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *DataDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	count := uint64(0)
 	if id != nil {
 		if p == nil {
 			return buf
 		}
 		for _, desc := range d.fields {
-			if !desc.IsEmpty(p, tag) {
+			if !desc.IsEmpty(p) {
 				count++
 			}
 		}
@@ -150,7 +126,7 @@ func (d *DataDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 			return WriterType(buf, TData, 0, 1)
 		}
 		for _, desc := range d.fields {
-			if !desc.IsEmpty(p, tag) {
+			if !desc.IsEmpty(p) {
 				count++
 			}
 		}
@@ -159,7 +135,7 @@ func (d *DataDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 
 	buf = EncodeUint64(buf, count)
 	for i, desc := range d.fields {
-		buf = desc.Encode(buf, desc.GetValue(p, tag), &d.fieldIds[i], tag)
+		buf = desc.Encode(buf, desc.GetValue(p), &d.fieldIds[i])
 	}
 
 	count = uint64(len(d.extends))
@@ -170,12 +146,12 @@ func (d *DataDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 		buf = EncodeUint64(buf, count)
 	}
 	for i, extend := range d.extends {
-		buf = extend.Encode(buf, extend.GetValue(p, tag), &d.extendIds[i], tag)
+		buf = extend.Encode(buf, extend.GetValue(p), &d.extendIds[i])
 	}
 	return buf
 }
 
-func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TData {
 		return nil, errors.New("invalid data type")
 	}
@@ -205,7 +181,7 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 		id, buf = DecodeId(buf, idLen)
 
 		if field, ok := d.fieldMap[id]; ok {
-			buf, err = field.Decode(buf, field.SetValue(ptr, tag), typ, true, valueLen, tag)
+			buf, err = field.Decode(buf, field.SetValue(ptr), typ, true, valueLen)
 			if err != nil {
 				return nil, err
 			}
@@ -220,7 +196,7 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 			id, buf = DecodeId(buf, idLen)
 
 			if extend, ok := d.extendMap[id]; ok {
-				buf, err = extend.Decode(buf, extend.SetValue(ptr, tag), typ, true, valueLen, tag)
+				buf, err = extend.Decode(buf, extend.SetValue(ptr), typ, true, valueLen)
 				if err != nil {
 					return nil, err
 				}
@@ -230,13 +206,10 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	return buf, nil
 }
 
-func NewListDescriptor[T any](offset uintptr, desc Descriptor, isPtr bool, tags ...string) Descriptor {
-	tagMap := listToSet(tags)
-	desc.SetTag(tagMap)
+func NewListDescriptor[T any](offset uintptr, desc Descriptor, isPtr bool) Descriptor {
 	return &ListDescriptor[T]{
 		offset: offset,
 		desc:   desc,
-		tags:   tagMap,
 		isPtr:  isPtr,
 	}
 }
@@ -244,15 +217,10 @@ func NewListDescriptor[T any](offset uintptr, desc Descriptor, isPtr bool, tags 
 type ListDescriptor[T any] struct {
 	offset uintptr
 	desc   Descriptor
-	tags   map[string]bool
 	isPtr  bool
 }
 
-func (d *ListDescriptor[T]) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *ListDescriptor[T]) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -268,15 +236,7 @@ func (d *ListDescriptor[T]) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *ListDescriptor[T]) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *ListDescriptor[T]) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *ListDescriptor[T]) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -287,14 +247,14 @@ func (d *ListDescriptor[T]) GetValue(p unsafe.Pointer, tag string) unsafe.Pointe
 	return ptr
 }
 
-func (d *ListDescriptor[T]) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *ListDescriptor[T]) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *ListDescriptor[T]) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *ListDescriptor[T]) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val []T
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || len(*(*[]T)(p)) == 0)) {
@@ -320,12 +280,12 @@ func (d *ListDescriptor[T]) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag
 	buf = EncodeUint64(buf, uint64(len(val)))
 
 	for i := 0; i < len(val); i++ {
-		buf = d.desc.Encode(buf, d.desc.GetValue(unsafe.Pointer(&val[i]), tag), nil, tag)
+		buf = d.desc.Encode(buf, d.desc.GetValue(unsafe.Pointer(&val[i])), nil)
 	}
 	return buf
 }
 
-func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TList {
 		return nil, errors.New("invalid list type")
 	}
@@ -344,7 +304,7 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 		for i := uint64(0); i < count; i++ {
 			typ, idLen, valueLen, buf = DecodeType(buf)
 			if idLen > 0 {
-				buf, err = d.desc.Decode(buf, d.desc.SetValue(unsafe.Pointer(&list[i]), tag), typ, idLen == 1, valueLen, tag)
+				buf, err = d.desc.Decode(buf, d.desc.SetValue(unsafe.Pointer(&list[i])), typ, idLen == 1, valueLen)
 				if err != nil {
 					return nil, err
 				}
@@ -355,7 +315,7 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 		for i := uint64(0); i < count; i++ {
 			typ, idLen, valueLen, buf = DecodeType(buf)
 			if idLen > 0 {
-				buf, err = d.desc.Decode(buf, nil, typ, idLen == 1, valueLen, tag)
+				buf, err = d.desc.Decode(buf, nil, typ, idLen == 1, valueLen)
 				if err != nil {
 					return nil, err
 				}
@@ -366,15 +326,10 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 }
 
 func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, isPtr bool, tags ...string) Descriptor {
-	tagMap := listToSet(tags)
-	keyDesc.SetTag(tagMap)
-	valueDesc.SetTag(tagMap)
-
 	return &MapDescriptor[K, V]{
 		offset:    offset,
 		keyDesc:   keyDesc,
 		valueDesc: valueDesc,
-		tags:      tagMap,
 		isPtr:     isPtr,
 	}
 }
@@ -383,15 +338,10 @@ type MapDescriptor[K comparable, V any] struct {
 	offset    uintptr
 	keyDesc   Descriptor
 	valueDesc Descriptor
-	tags      map[string]bool
 	isPtr     bool
 }
 
-func (d *MapDescriptor[K, V]) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *MapDescriptor[K, V]) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -407,15 +357,7 @@ func (d *MapDescriptor[K, V]) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *MapDescriptor[K, V]) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *MapDescriptor[K, V]) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *MapDescriptor[K, V]) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -426,14 +368,14 @@ func (d *MapDescriptor[K, V]) GetValue(p unsafe.Pointer, tag string) unsafe.Poin
 	return ptr
 }
 
-func (d *MapDescriptor[K, V]) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *MapDescriptor[K, V]) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *MapDescriptor[K, V]) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *MapDescriptor[K, V]) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val map[K]V
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || len(*(*map[K]V)(p)) == 0)) {
@@ -459,13 +401,13 @@ func (d *MapDescriptor[K, V]) Encode(buf []byte, p unsafe.Pointer, id *uint16, t
 	buf = EncodeUint64(buf, uint64(len(val)))
 
 	for k, v := range val {
-		buf = d.keyDesc.Encode(buf, d.keyDesc.GetValue(unsafe.Pointer(&k), tag), nil, tag)
-		buf = d.valueDesc.Encode(buf, d.valueDesc.GetValue(unsafe.Pointer(&v), tag), nil, tag)
+		buf = d.keyDesc.Encode(buf, d.keyDesc.GetValue(unsafe.Pointer(&k)), nil)
+		buf = d.valueDesc.Encode(buf, d.valueDesc.GetValue(unsafe.Pointer(&v)), nil)
 	}
 	return buf
 }
 
-func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TMap {
 		return nil, errors.New("invalid map type")
 	}
@@ -486,13 +428,13 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 			var k K
 			var v V
 			typ, idLen, valueLen, buf = DecodeType(buf)
-			buf, err = d.keyDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&k), tag), typ, true, valueLen, tag)
+			buf, err = d.keyDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&k)), typ, true, valueLen)
 			if err != nil {
 				return nil, err
 			}
 			typ, idLen, valueLen, buf = DecodeType(buf)
 			if idLen > 0 {
-				buf, err = d.valueDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&v), tag), typ, idLen == 1, valueLen, tag)
+				buf, err = d.valueDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&v)), typ, idLen == 1, valueLen)
 				if err != nil {
 					return nil, err
 				}
@@ -503,13 +445,13 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 	} else {
 		for i := uint64(0); i < count; i++ {
 			typ, idLen, valueLen, buf = DecodeType(buf)
-			buf, err = d.keyDesc.Decode(buf, nil, typ, true, valueLen, tag)
+			buf, err = d.keyDesc.Decode(buf, nil, typ, true, valueLen)
 			if err != nil {
 				return nil, err
 			}
 			typ, idLen, valueLen, buf = DecodeType(buf)
 			if idLen > 0 {
-				buf, err = d.valueDesc.Decode(buf, nil, typ, idLen == 1, valueLen, tag)
+				buf, err = d.valueDesc.Decode(buf, nil, typ, idLen == 1, valueLen)
 				if err != nil {
 					return nil, err
 				}
@@ -519,25 +461,19 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 	return buf, nil
 }
 
-func NewStringDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewStringDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &StringDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type StringDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *StringDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *StringDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -553,15 +489,7 @@ func (d *StringDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *StringDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *StringDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *StringDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -572,14 +500,14 @@ func (d *StringDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 	return ptr
 }
 
-func (d *StringDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *StringDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *StringDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *StringDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val string
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || len(*(*string)(p)) == 0)) {
@@ -605,7 +533,7 @@ func (d *StringDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag 
 	return append(buf, val...)
 }
 
-func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TBytes {
 		return nil, errors.New("invalid string type")
 	}
@@ -626,25 +554,19 @@ func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	return buf, nil
 }
 
-func NewBytesDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewBytesDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &BytesDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type BytesDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *BytesDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *BytesDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -660,15 +582,7 @@ func (d *BytesDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *BytesDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *BytesDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *BytesDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -679,14 +593,14 @@ func (d *BytesDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 	return ptr
 }
 
-func (d *BytesDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *BytesDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *BytesDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *BytesDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val []byte
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || len(*(*[]byte)(p)) == 0)) {
@@ -712,7 +626,7 @@ func (d *BytesDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag s
 	return append(buf, val...)
 }
 
-func (d *BytesDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *BytesDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TBytes {
 		return nil, errors.New("invalid bytes type")
 	}
@@ -733,25 +647,19 @@ func (d *BytesDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	return buf, nil
 }
 
-func NewInt64Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewInt64Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int64Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Int64Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Int64Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *Int64Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -767,15 +675,7 @@ func (d *Int64Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Int64Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Int64Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *Int64Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -786,14 +686,14 @@ func (d *Int64Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 	return ptr
 }
 
-func (d *Int64Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Int64Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val int64
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*int64)(p) == 0)) {
@@ -818,7 +718,7 @@ func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag s
 	return WriterInt64(buf, val)
 }
 
-func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TInt {
 		return nil, errors.New("invalid int64 type")
 	}
@@ -836,25 +736,19 @@ func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	return buf, nil
 }
 
-func NewInt32Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewInt32Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int32Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Int32Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Int32Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *Int32Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -870,15 +764,7 @@ func (d *Int32Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Int32Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Int32Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *Int32Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -889,14 +775,14 @@ func (d *Int32Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 	return ptr
 }
 
-func (d *Int32Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Int32Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val int32
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*int32)(p) == 0)) {
@@ -921,7 +807,7 @@ func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag s
 	return WriterInt64(buf, int64(val))
 }
 
-func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TInt {
 		return nil, errors.New("invalid int32 type")
 	}
@@ -940,25 +826,19 @@ func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	return buf, nil
 }
 
-func NewInt16Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewInt16Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int16Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Int16Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Int16Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *Int16Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -974,15 +854,7 @@ func (d *Int16Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Int16Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Int16Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *Int16Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -993,14 +865,14 @@ func (d *Int16Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 	return ptr
 }
 
-func (d *Int16Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Int16Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Int16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Int16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val int16
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*int16)(p) == 0)) {
@@ -1025,7 +897,7 @@ func (d *Int16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag s
 	return WriterInt64(buf, int64(val))
 }
 
-func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TInt {
 		return nil, errors.New("invalid int16 type")
 	}
@@ -1044,25 +916,19 @@ func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	return buf, nil
 }
 
-func NewInt8Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewInt8Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int8Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Int8Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Int8Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *Int8Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1078,15 +944,7 @@ func (d *Int8Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Int8Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Int8Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *Int8Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1097,14 +955,14 @@ func (d *Int8Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	return ptr
 }
 
-func (d *Int8Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Int8Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Int8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Int8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val int8
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*int8)(p) == 0)) {
@@ -1129,7 +987,7 @@ func (d *Int8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 	return WriterInt64(buf, int64(val))
 }
 
-func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TInt {
 		return nil, errors.New("invalid int8 type")
 	}
@@ -1148,24 +1006,19 @@ func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	return buf, nil
 }
 
-func NewUint64Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewUint64Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint64Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Uint64Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Uint64Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *Uint64Descriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1182,14 +1035,7 @@ func (d *Uint64Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Uint64Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Uint64Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *Uint64Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1201,14 +1047,14 @@ func (d *Uint64Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 	return ptr
 }
 
-func (d *Uint64Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Uint64Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Uint64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Uint64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val uint64
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*uint64)(p) == 0)) {
@@ -1233,7 +1079,7 @@ func (d *Uint64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag 
 	return EncodeUint64(buf, val)
 }
 
-func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TUint {
 		return nil, errors.New("invalid uint64 type")
 	}
@@ -1255,20 +1101,15 @@ func NewUint32Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor 
 	return &Uint32Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Uint32Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1285,14 +1126,7 @@ func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Uint32Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Uint32Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *Uint32Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1304,14 +1138,14 @@ func (d *Uint32Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 	return ptr
 }
 
-func (d *Uint32Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Uint32Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Uint32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Uint32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val uint32
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*uint32)(p) == 0)) {
@@ -1336,7 +1170,7 @@ func (d *Uint32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag 
 	return EncodeUint64(buf, uint64(val))
 }
 
-func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TUint {
 		return nil, errors.New("invalid uint32 type")
 	}
@@ -1359,20 +1193,15 @@ func NewUint16Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor 
 	return &Uint16Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Uint16Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1389,14 +1218,7 @@ func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *Uint16Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Uint16Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *Uint16Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1408,14 +1230,14 @@ func (d *Uint16Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 	return ptr
 }
 
-func (d *Uint16Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Uint16Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Uint16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Uint16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val uint16
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*uint16)(p) == 0)) {
@@ -1440,7 +1262,7 @@ func (d *Uint16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag 
 	return EncodeUint64(buf, uint64(val))
 }
 
-func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TUint {
 		return nil, errors.New("invalid uint16 type")
 	}
@@ -1463,20 +1285,15 @@ func NewUint8Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
 	return &Uint8Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type Uint8Descriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *Uint8Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *Uint8Descriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1488,14 +1305,7 @@ func (d *Uint8Descriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return *(*uint8)(ptr) == 0
 }
 
-func (d *Uint8Descriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *Uint8Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *Uint8Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1507,14 +1317,14 @@ func (d *Uint8Descriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 	return ptr
 }
 
-func (d *Uint8Descriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *Uint8Descriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *Uint8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *Uint8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	if p == nil || *(*uint8)(p) == 0 {
 		if id != nil {
 			return buf
@@ -1535,7 +1345,7 @@ func (d *Uint8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag s
 	return EncodeUint64(buf, uint64(val))
 }
 
-func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TUint {
 		return nil, errors.New("invalid uint8 type")
 	}
@@ -1558,20 +1368,15 @@ func NewDoubleDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor 
 	return &DoubleDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type DoubleDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1588,14 +1393,7 @@ func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *DoubleDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *DoubleDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *DoubleDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1607,14 +1405,14 @@ func (d *DoubleDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer
 	return ptr
 }
 
-func (d *DoubleDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *DoubleDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val uint64
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*float64)(p) == 0)) {
@@ -1639,7 +1437,7 @@ func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag 
 	return EncodeUint64(buf, val)
 }
 
-func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TFloat {
 		return nil, errors.New("invalid double type")
 	}
@@ -1661,20 +1459,15 @@ func NewFloatDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
 	return &FloatDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type FloatDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1691,14 +1484,7 @@ func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *FloatDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *FloatDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *FloatDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1710,14 +1496,14 @@ func (d *FloatDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer 
 	return ptr
 }
 
-func (d *FloatDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *FloatDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val uint32
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || *(*float32)(p) == 0)) {
@@ -1742,7 +1528,7 @@ func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag s
 	return EncodeUint64(buf, uint64(val))
 }
 
-func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TFloat {
 		return nil, errors.New("invalid float type")
 	}
@@ -1761,25 +1547,19 @@ func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	return buf, nil
 }
 
-func NewBoolDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewBoolDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &BoolDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type BoolDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *BoolDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
-
+func (d *BoolDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1807,15 +1587,7 @@ func (d *BoolDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	}
 }
 
-func (d *BoolDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *BoolDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
-
+func (d *BoolDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1826,14 +1598,14 @@ func (d *BoolDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	return ptr
 }
 
-func (d *BoolDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *BoolDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *BoolDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *BoolDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	if id != nil {
 		idLen := LengthId(*id)
 		if d.isPtr {
@@ -1875,7 +1647,7 @@ func (d *BoolDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 	}
 }
 
-func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TBool {
 		return nil, errors.New("invalid bool type")
 	}
@@ -1895,20 +1667,15 @@ func NewTimeDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
 	return &TimeDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type TimeDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *TimeDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *TimeDescriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1925,14 +1692,7 @@ func (d *TimeDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *TimeDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *TimeDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *TimeDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1944,14 +1704,14 @@ func (d *TimeDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
 	return ptr
 }
 
-func (d *TimeDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *TimeDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val uint64
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || (*(*time.Time)(p)).IsZero())) {
@@ -1977,7 +1737,7 @@ func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag st
 	return EncodeUint64(buf, val)
 }
 
-func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TUint {
 		return nil, errors.New("invalid Time type")
 	}
@@ -2000,20 +1760,15 @@ func NewDecimalDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor
 	return &DecimalDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
-		tags:   listToSet(tags),
 	}
 }
 
 type DecimalDescriptor struct {
 	offset uintptr
 	isPtr  bool
-	tags   map[string]bool
 }
 
-func (d *DecimalDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
-	if len(tag) > 0 && !d.tags[tag] {
-		return true
-	}
+func (d *DecimalDescriptor) IsEmpty(p unsafe.Pointer) bool {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -2030,14 +1785,7 @@ func (d *DecimalDescriptor) IsEmpty(p unsafe.Pointer, tag string) bool {
 	return false
 }
 
-func (d *DecimalDescriptor) SetTag(tags map[string]bool) {
-	d.tags = tags
-}
-
-func (d *DecimalDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if len(tag) > 0 && !d.tags[tag] {
-		return nil
-	}
+func (d *DecimalDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
 
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -2049,14 +1797,14 @@ func (d *DecimalDescriptor) GetValue(p unsafe.Pointer, tag string) unsafe.Pointe
 	return ptr
 }
 
-func (d *DecimalDescriptor) SetValue(p unsafe.Pointer, tag string) unsafe.Pointer {
-	if p != nil && (len(tag) == 0 || d.tags[tag]) {
+func (d *DecimalDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p != nil {
 		return unsafe.Add(p, d.offset)
 	}
 	return nil
 }
 
-func (d *DecimalDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag string) []byte {
+func (d *DecimalDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
 	var val string
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || (*(*decimal.Decimal)(p)).IsZero())) {
@@ -2082,7 +1830,7 @@ func (d *DecimalDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16, tag
 	return append(buf, val...)
 }
 
-func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8, tag string) ([]byte, error) {
+func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	if typ != TBytes {
 		return nil, errors.New("invalid decimal type")
 	}
