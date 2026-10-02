@@ -2,16 +2,20 @@ package hrpc
 
 import (
 	"context"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"errors"
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
-	hbuf "github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hjson"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
@@ -140,7 +144,6 @@ type Method struct {
 	Handler     Handler
 	WithContext func(ctx context.Context) context.Context
 	Decode      func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error)
-	Tag         string
 }
 
 // ////////////////////////////////////////////////////
@@ -207,41 +210,93 @@ func NewResultResponse[T hbuf.Data]() *Result[T] {
 	return ret
 }
 
-type Encoder func(writer io.Writer) func(v hbuf.Data, tag string) error
-type Decoder func(reader io.Reader) func(v hbuf.Data, tag string) error
+type Encoder func(writer io.Writer) func(v hbuf.Data) error
+type Decoder func(reader io.Reader) func(v hbuf.Data) error
+
+var marshalers = json.WithMarshalers(
+	json.JoinMarshalers(
+		json.MarshalToFunc(func(encoder *jsontext.Encoder, t time.Time) error {
+			return encoder.WriteToken(jsontext.Int(t.UnixMilli()))
+		}),
+		json.MarshalToFunc(func(enc *jsontext.Encoder, v int64) error {
+			return enc.WriteToken(jsontext.String(strconv.FormatInt(v, 10)))
+		}),
+		json.MarshalToFunc(func(enc *jsontext.Encoder, v uint64) error {
+			return enc.WriteToken(jsontext.String(strconv.FormatUint(v, 10)))
+		}),
+	),
+)
 
 // NewJsonEncode 编码器接口。
 func NewJsonEncode() Encoder {
-	return func(writer io.Writer) func(v hbuf.Data, tag string) error {
-		return func(v hbuf.Data, tag string) error {
-			buffer, err := hjson.Marshal(v, tag)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(buffer)
-			return err
+	return func(writer io.Writer) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			return json.MarshalWrite(writer, v, marshalers)
 		}
 	}
 }
 
-// NewJsonDecode 解码器接口。
-func NewJsonDecode() Decoder {
-	return func(reader io.Reader) func(v hbuf.Data, tag string) error {
-		return func(v hbuf.Data, tag string) error {
-			buffer, err := io.ReadAll(reader)
+var unmarshalers = json.WithUnmarshalers(
+	json.JoinUnmarshalers(
+		json.UnmarshalFromFunc(func(dec *jsontext.Decoder, t *time.Time) error {
+			// 用 PeekKind 预判 null，不消费 token
+			if dec.PeekKind() == 'n' {
+				return errors.ErrUnsupported // 替代 SkipFunc
+			}
+
+			tok, err := dec.ReadToken()
 			if err != nil {
 				return err
 			}
-			return hjson.Unmarshal(buffer, v, tag)
+			if tok.Kind() != '0' { // '0' 表示数字
+				return errors.New("time: expected number")
+			}
+			ms, err := strconv.ParseInt(tok.String(), 10, 64)
+			if err != nil {
+				return err
+			}
+			*t = time.UnixMilli(ms)
+			return nil
+		}),
+		json.UnmarshalFromFunc(func(dec *jsontext.Decoder, v *int64) error {
+			tok, err := dec.ReadToken()
+			if err != nil {
+				return err
+			}
+			if tok.Kind() != '"' {
+				return errors.ErrUnsupported
+			}
+			*v, err = strconv.ParseInt(tok.String(), 10, 64)
+			return err
+		}),
+		json.UnmarshalFromFunc(func(dec *jsontext.Decoder, v *uint64) error {
+			tok, err := dec.ReadToken()
+			if err != nil {
+				return err
+			}
+			if tok.Kind() != '"' {
+				return errors.ErrUnsupported
+			}
+			*v, err = strconv.ParseUint(tok.String(), 10, 64)
+			return err
+		}),
+	),
+)
+
+// NewJsonDecode 解码器接口。
+func NewJsonDecode() Decoder {
+	return func(reader io.Reader) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			return json.UnmarshalRead(reader, v, unmarshalers)
 		}
 	}
 }
 
 // NewHBufEncode 编码器接口。
 func NewHBufEncode() Encoder {
-	return func(writer io.Writer) func(v hbuf.Data, tag string) error {
-		return func(v hbuf.Data, tag string) error {
-			buffer, err := hbuf.Marshal(v, tag)
+	return func(writer io.Writer) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
+			buffer, err := hbuf.Marshal(v)
 			if err != nil {
 				return err
 			}
@@ -253,13 +308,13 @@ func NewHBufEncode() Encoder {
 
 // NewHBufDecode 解码器接口。
 func NewHBufDecode() Decoder {
-	return func(reader io.Reader) func(v hbuf.Data, tag string) error {
-		return func(v hbuf.Data, tag string) error {
+	return func(reader io.Reader) func(v hbuf.Data) error {
+		return func(v hbuf.Data) error {
 			buffer, err := io.ReadAll(reader)
 			if err != nil {
 				return err
 			}
-			return hbuf.Unmarshal(buffer, v, tag)
+			return hbuf.Unmarshal(buffer, v)
 		}
 	}
 }
@@ -363,11 +418,7 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		in = reader
 	} else {
 		in, err = method.Decode(func(v hbuf.Data) (hbuf.Data, error) {
-			temp := ""
-			if len(method.Tag) > 0 {
-				temp = "I" + method.Tag
-			}
-			err := s.decode(reader)(v, temp)
+			err := s.decode(reader)(v)
 			if err != nil {
 				return nil, err
 			}
@@ -394,15 +445,11 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		return err
 	} else if err != nil {
 		if val, ok := err.(ResultI); ok && val.GetCode() != -1 {
-			err = s.encode(writer)(val, method.Tag)
+			err = s.encode(writer)(val)
 		}
 		return err
 	}
-	temp := ""
-	if len(method.Tag) > 0 {
-		temp = "O" + method.Tag
-	}
-	return s.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)), temp)
+	return s.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)))
 }
 
 func (s *Server) Init(ctx context.Context, list ...string) error {
@@ -490,7 +537,7 @@ type Client struct {
 	middleware Middleware
 }
 
-func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, tag string, request any, response any) (any, error) {
+func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, request any, response any) (any, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req any) (any, error) {
 		traceId := hlog.FromContext(ctx)
@@ -502,11 +549,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 				_, err := io.Copy(writer, val)
 				return err
 			} else if val, ok := request.(hbuf.Data); ok {
-				temp := ""
-				if len(tag) > 0 {
-					temp = "I" + tag
-				}
-				return c.encode(writer)(val, temp)
+				return c.encode(writer)(val)
 			} else {
 				return herror.NewError("request is not io.Reader or hbuf.Data")
 			}
@@ -516,12 +559,7 @@ func (c *Client) Invoke(ctx context.Context, id uint32, name string, method stri
 		}
 		if val, ok := response.(ResultI); ok {
 			defer reader.Close()
-
-			temp := ""
-			if len(tag) > 0 {
-				temp = "O" + tag
-			}
-			err = c.decode(reader)(val, temp)
+			err = c.decode(reader)(val)
 			if err != nil {
 				return nil, err
 			}
