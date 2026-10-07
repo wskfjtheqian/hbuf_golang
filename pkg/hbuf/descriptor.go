@@ -3,7 +3,7 @@ package hbuf
 import (
 	"errors"
 	"reflect"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 	"unsafe"
@@ -19,23 +19,73 @@ type Descriptor interface {
 	Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error)
 }
 
-func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap map[uint16]Descriptor, fieldMap map[uint16]Descriptor, tags ...string) Descriptor {
+func NewRefDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
+	return &RefDescriptor{
+		offset: offset,
+		isPtr:  isPtr,
+		data:   d,
+	}
+}
+
+type RefDescriptor struct {
+	DataDescriptor
+	data Data
+	once sync.Once
+}
+
+func (r *RefDescriptor) IsEmpty(p unsafe.Pointer) bool {
+	r.do()
+	return r.DataDescriptor.IsEmpty(p)
+
+}
+
+func (r *RefDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
+	r.do()
+	return r.DataDescriptor.GetValue(p)
+}
+
+func (r *RefDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	r.do()
+	return r.DataDescriptor.SetValue(p)
+}
+
+func (r *RefDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
+	r.do()
+	return r.DataDescriptor.Encode(buf, p, id)
+}
+
+func (r *RefDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
+	r.do()
+	return r.DataDescriptor.Decode(buf, p, typ, valRead, valueLen)
+}
+
+func (r *RefDescriptor) do() {
+	r.once.Do(func() {
+		var desc = r.data.Descriptors().(*DataDescriptor)
+		r.fieldMap = desc.fieldMap
+		r.fields = desc.fields
+		r.fieldIds = desc.fieldIds
+		r.typ = desc.typ
+	})
+}
+
+func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap map[uint16]Descriptor, fieldMap map[uint16]Descriptor) Descriptor {
 	var extends []Descriptor
-	extendIds := make([]uint16, 0, len(tags))
+	extendIds := make([]uint16, 0, len(extendMap))
 	for id, _ := range extendMap {
 		extendIds = append(extendIds, id)
 	}
-	sort.Slice(extendIds, func(i, j int) bool { return extendIds[i] < extendIds[j] })
+	slices.Sort(extendIds)
 	for _, id := range extendIds {
 		extends = append(extends, extendMap[id])
 	}
 
 	var fields []Descriptor
-	fieldIds := make([]uint16, 0, len(tags))
+	fieldIds := make([]uint16, 0, len(fieldMap))
 	for id, _ := range fieldMap {
 		fieldIds = append(fieldIds, id)
 	}
-	sort.Slice(fieldIds, func(i, j int) bool { return fieldIds[i] < fieldIds[j] })
+	slices.Sort(fieldIds)
 	for _, id := range fieldIds {
 		fields = append(fields, fieldMap[id])
 	}
@@ -49,18 +99,6 @@ func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap m
 		extendIds: extendIds,
 		isPtr:     isPtr,
 		typ:       typ,
-	}
-}
-
-func CloneDataDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
-	var desc = d.Descriptors().(*DataDescriptor)
-	return &DataDescriptor{
-		offset:   offset,
-		fieldMap: desc.fieldMap,
-		fields:   desc.fields,
-		fieldIds: desc.fieldIds,
-		isPtr:    isPtr,
-		typ:      desc.typ,
 	}
 }
 
@@ -325,7 +363,7 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 	return buf, nil
 }
 
-func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, isPtr bool, tags ...string) Descriptor {
+func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, isPtr bool) Descriptor {
 	return &MapDescriptor[K, V]{
 		offset:    offset,
 		keyDesc:   keyDesc,
@@ -817,8 +855,7 @@ func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := int32(val)
-			*(**int32)(p) = &temp
+			*(**int32)(p) = new(int32(val))
 		} else {
 			*(*int32)(p) = int32(val)
 		}
@@ -907,8 +944,7 @@ func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := int16(val)
-			*(**int16)(p) = &temp
+			*(**int16)(p) = new(int16(val))
 		} else {
 			*(*int16)(p) = int16(val)
 		}
@@ -997,8 +1033,7 @@ func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := int8(val)
-			*(**int8)(p) = &temp
+			*(**int8)(p) = new(int8(val))
 		} else {
 			*(*int8)(p) = int8(val)
 		}
@@ -1097,7 +1132,7 @@ func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	return buf, nil
 }
 
-func NewUint32Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewUint32Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint32Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1180,8 +1215,7 @@ func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := uint32(val)
-			*(**uint32)(p) = &temp
+			*(**uint32)(p) = new(uint32(val))
 		} else {
 			*(*uint32)(p) = uint32(val)
 		}
@@ -1189,7 +1223,7 @@ func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	return buf, nil
 }
 
-func NewUint16Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewUint16Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint16Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1272,8 +1306,7 @@ func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := uint16(val)
-			*(**uint16)(p) = &temp
+			*(**uint16)(p) = new(uint16(val))
 		} else {
 			*(*uint16)(p) = uint16(val)
 		}
@@ -1281,7 +1314,7 @@ func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	return buf, nil
 }
 
-func NewUint8Descriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewUint8Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint8Descriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1294,7 +1327,6 @@ type Uint8Descriptor struct {
 }
 
 func (d *Uint8Descriptor) IsEmpty(p unsafe.Pointer) bool {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1355,8 +1387,7 @@ func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := uint8(val)
-			*(**uint8)(p) = &temp
+			*(**uint8)(p) = new(uint8(val))
 		} else {
 			*(*uint8)(p) = uint8(val)
 		}
@@ -1364,7 +1395,7 @@ func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	return buf, nil
 }
 
-func NewDoubleDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewDoubleDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &DoubleDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1455,7 +1486,7 @@ func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	return buf, nil
 }
 
-func NewFloatDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewFloatDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &FloatDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1538,8 +1569,7 @@ func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := uint32(val)
-			*(**uint32)(p) = &temp
+			*(**uint32)(p) = new(uint32(val))
 		} else {
 			*(*uint32)(p) = uint32(val)
 		}
@@ -1663,7 +1693,7 @@ func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	return buf, nil
 }
 
-func NewTimeDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewTimeDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &TimeDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1747,8 +1777,7 @@ func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	}
 	if p != nil {
 		if d.isPtr {
-			temp := time.UnixMicro(int64(val))
-			*(**time.Time)(p) = &temp
+			*(**time.Time)(p) = new(time.UnixMicro(int64(val)))
 		} else {
 			*(*time.Time)(p) = time.UnixMicro(int64(val))
 		}
@@ -1756,7 +1785,7 @@ func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	return buf, nil
 }
 
-func NewDecimalDescriptor(offset uintptr, isPtr bool, tags ...string) Descriptor {
+func NewDecimalDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &DecimalDescriptor{
 		offset: offset,
 		isPtr:  isPtr,
@@ -1853,23 +1882,4 @@ func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 		}
 	}
 	return buf, nil
-}
-
-func NewSyncDescriptor(f func() Descriptor) *SyncDescriptor {
-	return &SyncDescriptor{
-		f: f,
-	}
-}
-
-type SyncDescriptor struct {
-	once sync.Once
-	desc Descriptor
-	f    func() Descriptor
-}
-
-func (s *SyncDescriptor) Desc() Descriptor {
-	s.once.Do(func() {
-		s.desc = s.f()
-	})
-	return s.desc
 }

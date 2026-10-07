@@ -75,8 +75,8 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	28:  hbuf.NewTimeDescriptor(unsafe.Offsetof(hBufTest.V28), true),
 	29:  hbuf.NewDecimalDescriptor(unsafe.Offsetof(hBufTest.V29), false),
 	30:  hbuf.NewDecimalDescriptor(unsafe.Offsetof(hBufTest.V30), true),
-	31:  hbuf.CloneDataDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufTest.V31), false),
-	32:  hbuf.CloneDataDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufTest.V32), true),
+	31:  hbuf.NewRefDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufTest.V31), false),
+	32:  hbuf.NewRefDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufTest.V32), true),
 	33:  hbuf.NewListDescriptor[int8](unsafe.Offsetof(hBufTest.V33), hbuf.NewInt8Descriptor(0, false), false),
 	34:  hbuf.NewListDescriptor[*int8](unsafe.Offsetof(hBufTest.V34), hbuf.NewInt8Descriptor(0, true), false),
 	35:  hbuf.NewListDescriptor[int16](unsafe.Offsetof(hBufTest.V35), hbuf.NewInt16Descriptor(0, false), false),
@@ -107,8 +107,8 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	60:  hbuf.NewListDescriptor[*time.Time](unsafe.Offsetof(hBufTest.V60), hbuf.NewTimeDescriptor(0, true), false),
 	61:  hbuf.NewListDescriptor[decimal.Decimal](unsafe.Offsetof(hBufTest.V61), hbuf.NewDecimalDescriptor(0, false), false),
 	62:  hbuf.NewListDescriptor[*decimal.Decimal](unsafe.Offsetof(hBufTest.V62), hbuf.NewDecimalDescriptor(0, true), false),
-	63:  hbuf.NewListDescriptor[HBufSubTest](unsafe.Offsetof(hBufTest.V63), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
-	64:  hbuf.NewListDescriptor[*HBufSubTest](unsafe.Offsetof(hBufTest.V64), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, true), false),
+	63:  hbuf.NewListDescriptor[HBufSubTest](unsafe.Offsetof(hBufTest.V63), hbuf.NewRefDescriptor(&HBufSubTest{}, 0, false), false),
+	64:  hbuf.NewListDescriptor[*HBufSubTest](unsafe.Offsetof(hBufTest.V64), hbuf.NewRefDescriptor(&HBufSubTest{}, 0, true), false),
 	65:  hbuf.NewMapDescriptor[int64, int8](unsafe.Offsetof(hBufTest.V65), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt8Descriptor(0, false), false),
 	66:  hbuf.NewMapDescriptor[int64, *int8](unsafe.Offsetof(hBufTest.V66), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt8Descriptor(0, true), false),
 	67:  hbuf.NewMapDescriptor[int64, int16](unsafe.Offsetof(hBufTest.V67), hbuf.NewInt64Descriptor(0, false), hbuf.NewInt16Descriptor(0, false), false),
@@ -139,8 +139,8 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	92:  hbuf.NewMapDescriptor[int64, *time.Time](unsafe.Offsetof(hBufTest.V92), hbuf.NewInt64Descriptor(0, false), hbuf.NewTimeDescriptor(0, true), false),
 	93:  hbuf.NewMapDescriptor[int64, decimal.Decimal](unsafe.Offsetof(hBufTest.V93), hbuf.NewInt64Descriptor(0, false), hbuf.NewDecimalDescriptor(0, false), false),
 	94:  hbuf.NewMapDescriptor[int64, *decimal.Decimal](unsafe.Offsetof(hBufTest.V94), hbuf.NewInt64Descriptor(0, false), hbuf.NewDecimalDescriptor(0, true), false),
-	95:  hbuf.NewMapDescriptor[int64, HBufSubTest](unsafe.Offsetof(hBufTest.V95), hbuf.NewInt64Descriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
-	96:  hbuf.NewMapDescriptor[int64, *HBufSubTest](unsafe.Offsetof(hBufTest.V96), hbuf.NewInt64Descriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, true), false),
+	95:  hbuf.NewMapDescriptor[int64, HBufSubTest](unsafe.Offsetof(hBufTest.V95), hbuf.NewInt64Descriptor(0, false), hbuf.NewRefDescriptor(&HBufSubTest{}, 0, false), false),
+	96:  hbuf.NewMapDescriptor[int64, *HBufSubTest](unsafe.Offsetof(hBufTest.V96), hbuf.NewInt64Descriptor(0, false), hbuf.NewRefDescriptor(&HBufSubTest{}, 0, true), false),
 	97:  hbuf.NewMapDescriptor[string, int8](unsafe.Offsetof(hBufTest.V97), hbuf.NewStringDescriptor(0, false), hbuf.NewInt8Descriptor(0, false), false),
 	98:  hbuf.NewMapDescriptor[string, *int8](unsafe.Offsetof(hBufTest.V98), hbuf.NewStringDescriptor(0, false), hbuf.NewInt8Descriptor(0, true), false),
 	99:  hbuf.NewMapDescriptor[string, int16](unsafe.Offsetof(hBufTest.V99), hbuf.NewStringDescriptor(0, false), hbuf.NewInt16Descriptor(0, false), false),
@@ -171,8 +171,8 @@ var hBufTestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufTe
 	124: hbuf.NewMapDescriptor[string, *time.Time](unsafe.Offsetof(hBufTest.V124), hbuf.NewStringDescriptor(0, false), hbuf.NewTimeDescriptor(0, true), false),
 	125: hbuf.NewMapDescriptor[string, decimal.Decimal](unsafe.Offsetof(hBufTest.V125), hbuf.NewStringDescriptor(0, false), hbuf.NewDecimalDescriptor(0, false), false),
 	126: hbuf.NewMapDescriptor[string, *decimal.Decimal](unsafe.Offsetof(hBufTest.V126), hbuf.NewStringDescriptor(0, false), hbuf.NewDecimalDescriptor(0, true), false),
-	127: hbuf.NewMapDescriptor[string, HBufSubTest](unsafe.Offsetof(hBufTest.V127), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, false), false),
-	128: hbuf.NewMapDescriptor[string, *HBufSubTest](unsafe.Offsetof(hBufTest.V128), hbuf.NewStringDescriptor(0, false), hbuf.CloneDataDescriptor(&HBufSubTest{}, 0, true), false),
+	127: hbuf.NewMapDescriptor[string, HBufSubTest](unsafe.Offsetof(hBufTest.V127), hbuf.NewStringDescriptor(0, false), hbuf.NewRefDescriptor(&HBufSubTest{}, 0, false), false),
+	128: hbuf.NewMapDescriptor[string, *HBufSubTest](unsafe.Offsetof(hBufTest.V128), hbuf.NewStringDescriptor(0, false), hbuf.NewRefDescriptor(&HBufSubTest{}, 0, true), false),
 })
 
 type HBufTest struct {
@@ -1418,9 +1418,9 @@ func (g *HBufBTest) SetC2(val int64) {
 
 var hBufSub1Test HBufSub1Test
 var hBufSub1TestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&hBufSub1Test), map[uint16]hbuf.Descriptor{
-	1: hbuf.CloneDataDescriptor(&HBufBTest{}, unsafe.Offsetof(hBufSub1Test.HBufBTest), false),
-	2: hbuf.CloneDataDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufSub1Test.HBufSubTest), false),
-	3: hbuf.CloneDataDescriptor(&HBufTest{}, unsafe.Offsetof(hBufSub1Test.HBufTest), false),
+	1: hbuf.NewRefDescriptor(&HBufBTest{}, unsafe.Offsetof(hBufSub1Test.HBufBTest), false),
+	2: hbuf.NewRefDescriptor(&HBufSubTest{}, unsafe.Offsetof(hBufSub1Test.HBufSubTest), false),
+	3: hbuf.NewRefDescriptor(&HBufTest{}, unsafe.Offsetof(hBufSub1Test.HBufTest), false),
 }, map[uint16]hbuf.Descriptor{
 	1: hbuf.NewInt64Descriptor(unsafe.Offsetof(hBufSub1Test.V1), false),
 	2: hbuf.NewInt64Descriptor(unsafe.Offsetof(hBufSub1Test.V2), true),
