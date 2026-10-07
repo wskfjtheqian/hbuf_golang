@@ -192,7 +192,7 @@ func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
 	}
 	if any(data) != nil {
 		//这里有递归死循环
-		//descriptor[3] = hbuf.CloneDataDescriptor(data, unsafe.Offsetof(ret.Data)+unsafe.Sizeof(&ret.Data), true)
+		descriptor[3] = hbuf.CloneDataDescriptor(data, unsafe.Offsetof(ret.Data)+unsafe.Sizeof(&ret.Data), true)
 	}
 	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
 	return ret
@@ -204,7 +204,7 @@ func NewResultResponse[T hbuf.Data]() *Result[T] {
 		1: hbuf.NewInt32Descriptor(unsafe.Offsetof(ret.Code), false),
 		2: hbuf.NewStringDescriptor(unsafe.Offsetof(ret.Msg), false),
 		//这里有递归死循环
-		//3: hbuf.CloneDataDescriptor(reflect.New(reflect.TypeOf(ret.Data).Elem()).Interface().(hbuf.Data), unsafe.Offsetof(ret.Data), true),
+		3: hbuf.CloneDataDescriptor(reflect.New(reflect.TypeOf(ret.Data).Elem()).Interface().(hbuf.Data), unsafe.Offsetof(ret.Data), true),
 	}
 	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
 	return ret
