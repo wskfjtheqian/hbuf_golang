@@ -158,9 +158,9 @@ type ResultI interface {
 }
 
 type Result[T hbuf.Data] struct {
-	Code       int32  `json:"code,filter:O*"`
-	Msg        string `json:"msg,filter:O*"`
-	Data       T      `json:"data,filter:O*"`
+	Code       int32  `json:"code"`
+	Msg        string `json:"msg"`
+	Data       T      `json:"data"`
 	descriptor hbuf.Descriptor
 }
 
@@ -227,6 +227,10 @@ var marshalers = json.WithMarshalers(
 	),
 )
 
+func GetMarshalers() json.Options {
+	return marshalers
+}
+
 // NewJsonEncode 编码器接口。
 func NewJsonEncode() Encoder {
 	return func(writer io.Writer) func(v hbuf.Data) error {
@@ -282,6 +286,10 @@ var unmarshalers = json.WithUnmarshalers(
 		}),
 	),
 )
+
+func GetUnmarshalers() json.Options {
+	return unmarshalers
+}
 
 // NewJsonDecode 解码器接口。
 func NewJsonDecode() Decoder {
