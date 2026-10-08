@@ -2,6 +2,7 @@ package hbuf
 
 import (
 	"time"
+	"unsafe"
 )
 
 func DecodeType(buf []byte) (typ Type, idLen uint8, valueLen uint8, ret []byte) {
@@ -62,22 +63,14 @@ func DecodeUint64(buf []byte, valueLen uint8) (uint64, []byte) {
 	}
 }
 
-// Unpack9BytesToTimeShift 从 9 字节中安全解包并还原为 time.Time
+// DecodeTime 从 9 字节中安全解包并还原为 time.Time
 func DecodeTime(buf []byte) (time.Time, []byte) {
-	// 1. 逆向拼接出低 64 位
-	low64 := uint64(buf[0]) |
-		(uint64(buf[1]) << 8) |
-		(uint64(buf[2]) << 16) |
-		(uint64(buf[3]) << 24) |
-		(uint64(buf[4]) << 32) |
-		(uint64(buf[5]) << 40) |
-		(uint64(buf[6]) << 48) |
-		(uint64(buf[7]) << 56)
+	low64 := *(*uint64)(unsafe.Pointer(&buf[0]))
 
-	// 2. 取出第 9 个字节
+	// 3. 取出第 9 个字节
 	high8 := uint64(buf[8])
 
-	// 3. 位域还原业务字段
+	// 4. 位域还原业务字段（保持你的 42位秒 + 30位纳秒逻辑不变）
 	nsec := low64 & 0x3FFFFFFF            // 滤出低 30 位纳秒
 	secs := (high8 << 34) | (low64 >> 30) // 拼回高 8 位和低 34 位秒数
 

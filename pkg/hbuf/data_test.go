@@ -275,12 +275,6 @@ var pSrc = ProtoTest{
 }
 
 func TestEncoderDecoder(t *testing.T) {
-	aa := time.Now()
-	temp := aa.UnixMicro()
-	bb := time.Unix(0, temp)
-	println(aa.String())
-	println(bb.String())
-
 	var err error
 	var pBuf []byte
 	t.Run("EncoderProto", func(t *testing.T) {
