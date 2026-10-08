@@ -71,8 +71,8 @@ var src = HBufTest{
 	V56:  []*float32{new(float32(1.58817)), new(float32(2.58817)), new(float32(3.58817)), new(float32(4.58817)), new(float32(5.58817)), new(float32(6.58817)), new(float32(7.58817)), new(float32(8.58817)), new(float32(9.58817)), new(float32(10.58817))},
 	V57:  []float64{1.58817, 2.58817, 3.58817, 4.58817, 5.58817, 6.58817, 7.58817, 8.58817, 9.58817, 10.58817},
 	V58:  []*float64{new(float64(1.58817)), new(float64(2.58817)), new(float64(3.58817)), new(float64(4.58817)), new(float64(5.58817)), new(float64(6.58817)), new(float64(7.58817)), new(float64(8.58817)), new(float64(9.58817)), new(float64(10.58817))},
-	V59:  []time.Time{time.Time(time.Now()), time.Time(time.Now()), time.Time(time.Now())},
-	V60:  []*time.Time{new(time.Time(time.Now())), new(time.Time(time.Now())), new(time.Time(time.Now()))},
+	V59:  []time.Time{time.Now(), time.Now(), time.Now()},
+	V60:  []*time.Time{new(time.Now()), new(time.Now()), new(time.Now())},
 	V61:  []decimal.Decimal{decimal.NewFromFloat(3.1415926535), decimal.NewFromFloat(3.14159265359), decimal.NewFromFloat(3.14159265359)},
 	V62:  []*decimal.Decimal{new(decimal.NewFromFloat(3.1415926535)), new(decimal.NewFromFloat(3.14159265359)), new(decimal.NewFromFloat(3.14159265359))},
 	V63:  []HBufSubTest{{A1: 12, A2: new(int64(12))}, {A1: 45, A2: new(int64(45))}, {A1: 78, A2: new(int64(78))}},
@@ -135,8 +135,8 @@ var src = HBufTest{
 	V120: map[string]*float32{"a": new(float32(1.1)), "b": new(float32(2.2)), "c": new(float32(3.3))},
 	V121: map[string]float64{"a": 1.1, "b": 2.2, "c": 3.3},
 	V122: map[string]*float64{"a": new(float64(1.1)), "b": new(float64(2.2)), "c": new(float64(3.3))},
-	V123: map[string]time.Time{"a": time.Time(time.Now()), "b": time.Time(time.Now()), "c": time.Time(time.Now())},
-	V124: map[string]*time.Time{"a": new(time.Time(time.Now())), "b": new(time.Time(time.Now())), "c": new(time.Time(time.Now()))},
+	V123: map[string]time.Time{"a": time.Now(), "b": time.Now(), "c": time.Now()},
+	V124: map[string]*time.Time{"a": new(time.Now()), "b": new(time.Now()), "c": new(time.Now())},
 	V125: map[string]decimal.Decimal{"a": decimal.NewFromFloat(3.1415926535), "b": decimal.NewFromFloat(3.14159265359), "c": decimal.NewFromFloat(3.14159265359)},
 	V126: map[string]*decimal.Decimal{"a": new(decimal.NewFromFloat(3.1415926535)), "b": new(decimal.NewFromFloat(3.14159265359)), "c": new(decimal.NewFromFloat(3.14159265359))},
 	V127: map[string]HBufSubTest{"a": {A1: 22, A2: new(int64(11))}, "b": {A1: 33, A2: new(int64(22))}, "c": {A1: 44, A2: new(int64(33))}},
@@ -275,6 +275,12 @@ var pSrc = ProtoTest{
 }
 
 func TestEncoderDecoder(t *testing.T) {
+	aa := time.Now()
+	temp := aa.UnixMicro()
+	bb := time.Unix(0, temp)
+	println(aa.String())
+	println(bb.String())
+
 	var err error
 	var pBuf []byte
 	t.Run("EncoderProto", func(t *testing.T) {

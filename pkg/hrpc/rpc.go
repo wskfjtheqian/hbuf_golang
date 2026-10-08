@@ -235,7 +235,12 @@ func GetMarshalers() json.Options {
 func NewJsonEncode() Encoder {
 	return func(writer io.Writer) func(v hbuf.Data) error {
 		return func(v hbuf.Data) error {
-			return json.MarshalWrite(writer, v, marshalers)
+			buffer, err := json.Marshal(v, marshalers)
+			if err != nil {
+				return herror.Wrap(err)
+			}
+			_, err = writer.Write(buffer)
+			return err
 		}
 	}
 }
@@ -295,7 +300,11 @@ func GetUnmarshalers() json.Options {
 func NewJsonDecode() Decoder {
 	return func(reader io.Reader) func(v hbuf.Data) error {
 		return func(v hbuf.Data) error {
-			return json.UnmarshalRead(reader, v, unmarshalers)
+			buffer, err := io.ReadAll(reader)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(buffer, v, unmarshalers)
 		}
 	}
 }
@@ -306,7 +315,7 @@ func NewHBufEncode() Encoder {
 		return func(v hbuf.Data) error {
 			buffer, err := hbuf.Marshal(v)
 			if err != nil {
-				return err
+				return herror.Wrap(err)
 			}
 			_, err = writer.Write(buffer)
 			return err

@@ -66,6 +66,9 @@ func (r *RefDescriptor) do() {
 		r.fields = desc.fields
 		r.fieldIds = desc.fieldIds
 		r.typ = desc.typ
+		r.extendMap = desc.extendMap
+		r.extends = desc.extends
+		r.extendIds = desc.extendIds
 	})
 }
 
@@ -201,9 +204,6 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	if valRead {
 		count, buf = DecodeUint64(buf, valueLen)
 	}
-	if count == 0 {
-		return buf, nil
-	}
 
 	ptr := p
 	if p != nil {
@@ -213,15 +213,18 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 			*(**unsafe.Pointer)(p) = (*unsafe.Pointer)(ptr)
 		}
 	}
-	var id uint16
-	for i := uint64(0); i < count; i++ {
-		typ, idLen, valueLen, buf = DecodeType(buf)
-		id, buf = DecodeId(buf, idLen)
 
-		if field, ok := d.fieldMap[id]; ok {
-			buf, err = field.Decode(buf, field.SetValue(ptr), typ, true, valueLen)
-			if err != nil {
-				return nil, err
+	var id uint16
+	if count > 0 {
+		for i := uint64(0); i < count; i++ {
+			typ, idLen, valueLen, buf = DecodeType(buf)
+			id, buf = DecodeId(buf, idLen)
+
+			if field, ok := d.fieldMap[id]; ok {
+				buf, err = field.Decode(buf, field.SetValue(ptr), typ, true, valueLen)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -309,10 +312,11 @@ func (d *ListDescriptor[T]) Encode(buf []byte, p unsafe.Pointer, id *uint16) []b
 			}
 			return WriterType(buf, TList, 0, 1)
 		}
-		if d.isPtr || len(*(*[]T)(p)) != 0 {
-			val = *(*[]T)(p)
-			buf = WriterType(buf, TList, 1, LengthUint(uint64(len(val))))
+		val = *(*[]T)(p)
+		if len(val) == 0 {
+			return WriterType(buf, TList, 0, 1)
 		}
+		buf = WriterType(buf, TList, 1, LengthUint(uint64(len(val))))
 	}
 
 	buf = EncodeUint64(buf, uint64(len(val)))
@@ -430,10 +434,11 @@ func (d *MapDescriptor[K, V]) Encode(buf []byte, p unsafe.Pointer, id *uint16) [
 			}
 			return WriterType(buf, TMap, 0, 1)
 		}
-		if d.isPtr || len(*(*map[K]V)(p)) != 0 {
-			val = *(*map[K]V)(p)
-			buf = WriterType(buf, TMap, 1, LengthUint(uint64(len(val))))
+		val = *(*map[K]V)(p)
+		if len(val) == 0 {
+			return WriterType(buf, TMap, 0, 1)
 		}
+		buf = WriterType(buf, TMap, 1, LengthUint(uint64(len(val))))
 	}
 
 	buf = EncodeUint64(buf, uint64(len(val)))
@@ -466,7 +471,7 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 			var k K
 			var v V
 			typ, idLen, valueLen, buf = DecodeType(buf)
-			buf, err = d.keyDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&k)), typ, true, valueLen)
+			buf, err = d.keyDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&k)), typ, idLen == 1, valueLen)
 			if err != nil {
 				return nil, err
 			}
@@ -562,10 +567,12 @@ func (d *StringDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 			}
 			return WriterType(buf, TBytes, 0, 1)
 		}
-		if d.isPtr || len(*(*string)(p)) != 0 {
-			val = *(*string)(p)
-			buf = WriterType(buf, TBytes, 1, LengthUint(uint64(len(val))))
+
+		val = *(*string)(p)
+		if len(val) == 0 {
+			return WriterType(buf, TBytes, 0, 1)
 		}
+		buf = WriterType(buf, TBytes, 1, LengthUint(uint64(len(val))))
 	}
 	buf = EncodeUint64(buf, uint64(len(val)))
 	return append(buf, val...)
@@ -655,10 +662,12 @@ func (d *BytesDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 			}
 			return WriterType(buf, TBytes, 0, 1)
 		}
-		if d.isPtr || len(*(*[]byte)(p)) != 0 {
-			val = *(*[]byte)(p)
-			buf = WriterType(buf, TBytes, 1, LengthUint(uint64(len(val))))
+
+		val = *(*[]byte)(p)
+		if len(val) == 0 {
+			return WriterType(buf, TBytes, 0, 1)
 		}
+		buf = WriterType(buf, TBytes, 1, LengthUint(uint64(len(val))))
 	}
 	buf = EncodeUint64(buf, uint64(len(val)))
 	return append(buf, val...)
@@ -748,10 +757,12 @@ func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 			}
 			return WriterType(buf, TInt, 0, 1)
 		}
-		if d.isPtr || *(*int64)(p) != 0 {
-			val = *(*int64)(p)
-			buf = WriterType(buf, TInt, 1, LengthInt(val))
+
+		val = *(*int64)(p)
+		if val == 0 {
+			return WriterType(buf, TInt, 0, 1)
 		}
+		buf = WriterType(buf, TInt, 1, LengthInt(val))
 	}
 	return WriterInt64(buf, val)
 }
@@ -835,12 +846,14 @@ func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 			if !d.isPtr {
 				return buf
 			}
+			return WriterType(buf, TInt, 0, 0)
+		}
+
+		val = *(*int32)(p)
+		if val == 0 {
 			return WriterType(buf, TInt, 0, 1)
 		}
-		if d.isPtr || *(*int32)(p) != 0 {
-			val = *(*int32)(p)
-			buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
-		}
+		buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
 	}
 	return WriterInt64(buf, int64(val))
 }
@@ -926,10 +939,12 @@ func (d *Int16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 			}
 			return WriterType(buf, TInt, 0, 1)
 		}
-		if d.isPtr || *(*int16)(p) != 0 {
-			val = *(*int16)(p)
-			buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
+
+		val = *(*int16)(p)
+		if val == 0 {
+			return WriterType(buf, TInt, 0, 1)
 		}
+		buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
 	}
 	return WriterInt64(buf, int64(val))
 }
@@ -1015,10 +1030,12 @@ func (d *Int8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte
 			}
 			return WriterType(buf, TInt, 0, 1)
 		}
-		if d.isPtr || *(*int8)(p) != 0 {
-			val = *(*int8)(p)
-			buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
+
+		val = *(*int8)(p)
+		if val == 0 {
+			return WriterType(buf, TInt, 0, 1)
 		}
+		buf = WriterType(buf, TInt, 1, LengthInt(int64(val)))
 	}
 	return WriterInt64(buf, int64(val))
 }
@@ -1106,10 +1123,12 @@ func (d *Uint64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 			}
 			return WriterType(buf, TUint, 0, 1)
 		}
-		if d.isPtr || *(*uint64)(p) != 0 {
-			val = *(*uint64)(p)
-			buf = WriterType(buf, TUint, 1, LengthUint(val))
+
+		val = *(*uint64)(p)
+		if val == 0 {
+			return WriterType(buf, TUint, 0, 1)
 		}
+		buf = WriterType(buf, TUint, 1, LengthUint(val))
 	}
 	return EncodeUint64(buf, val)
 }
@@ -1197,10 +1216,12 @@ func (d *Uint32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 			}
 			return WriterType(buf, TUint, 0, 1)
 		}
-		if d.isPtr || *(*uint32)(p) != 0 {
-			val = *(*uint32)(p)
-			buf = WriterType(buf, TUint, 1, LengthUint(uint64(val)))
+
+		val = *(*uint32)(p)
+		if val == 0 {
+			return WriterType(buf, TUint, 0, 1)
 		}
+		buf = WriterType(buf, TUint, 1, LengthUint(uint64(val)))
 	}
 	return EncodeUint64(buf, uint64(val))
 }
@@ -1288,10 +1309,12 @@ func (d *Uint16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 			}
 			return WriterType(buf, TUint, 0, 1)
 		}
-		if d.isPtr || *(*uint16)(p) != 0 {
-			val = *(*uint16)(p)
-			buf = WriterType(buf, TUint, 1, LengthUint(uint64(val)))
+
+		val = *(*uint16)(p)
+		if val == 0 {
+			return WriterType(buf, TUint, 0, 1)
 		}
+		buf = WriterType(buf, TUint, 1, LengthUint(uint64(val)))
 	}
 	return EncodeUint64(buf, uint64(val))
 }
@@ -1460,10 +1483,11 @@ func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 			}
 			return WriterType(buf, TFloat, 0, 1)
 		}
-		if d.isPtr || *(*float64)(p) != 0 {
-			val = *(*uint64)(p)
-			buf = WriterType(buf, TFloat, 1, LengthUint(val))
+		val = *(*uint64)(p)
+		if val == 0 {
+			return WriterType(buf, TFloat, 0, 1)
 		}
+		buf = WriterType(buf, TFloat, 1, LengthUint(val))
 	}
 	return EncodeUint64(buf, val)
 }
@@ -1551,10 +1575,11 @@ func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 			}
 			return WriterType(buf, TFloat, 0, 1)
 		}
-		if d.isPtr || *(*float32)(p) != 0 {
-			val = *(*uint32)(p)
-			buf = WriterType(buf, TFloat, 1, LengthUint(uint64(val)))
+		val = *(*uint32)(p)
+		if val == 0 {
+			return WriterType(buf, TFloat, 0, 1)
 		}
+		buf = WriterType(buf, TFloat, 1, LengthUint(uint64(val)))
 	}
 	return EncodeUint64(buf, uint64(val))
 }
@@ -1742,44 +1767,51 @@ func (d *TimeDescriptor) SetValue(p unsafe.Pointer) unsafe.Pointer {
 }
 
 func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
-	var val uint64
+	var val time.Time
 	if id != nil {
 		if (d.isPtr && p == nil) || (!d.isPtr && (p == nil || (*(*time.Time)(p)).IsZero())) {
 			return buf
 		}
 
-		val = uint64((*(*time.Time)(p)).UnixMicro())
-		buf = WriterType(buf, TUint, LengthId(*id), LengthUint(val))
+		val = (*(*time.Time)(p))
+		buf = WriterType(buf, TBytes, LengthId(*id), 1)
 		buf = WriterId(buf, *id)
 	} else {
 		if p == nil {
 			if !d.isPtr {
 				return buf
 			}
-			return WriterType(buf, TUint, 0, 1)
+			return WriterType(buf, TBytes, 0, 1)
 		}
 
-		if d.isPtr || !(*(*time.Time)(p)).IsZero() {
-			val = uint64((*(*time.Time)(p)).UnixMicro())
-			buf = WriterType(buf, TUint, 1, LengthUint(val))
+		val = (*(*time.Time)(p))
+		if (*(*time.Time)(p)).IsZero() {
+			return WriterType(buf, TBytes, 0, 1)
 		}
+		buf = WriterType(buf, TBytes, 1, 1)
 	}
-	return EncodeUint64(buf, val)
+	buf = EncodeUint64(buf, 9)
+	return EncodeTime(buf, &val)
 }
 
 func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
-	if typ != TUint {
+	if typ != TBytes {
 		return nil, errors.New("invalid Time type")
 	}
-	var val uint64
+	var val time.Time
 	if valRead {
-		val, buf = DecodeUint64(buf, valueLen)
+		var size uint64
+		size, buf = DecodeUint64(buf, valueLen)
+		if size != 9 {
+			return nil, errors.New("invalid time size")
+		}
+		val, buf = DecodeTime(buf)
 	}
 	if p != nil {
 		if d.isPtr {
-			*(**time.Time)(p) = new(time.UnixMicro(int64(val)))
+			*(**time.Time)(p) = new(val)
 		} else {
-			*(*time.Time)(p) = time.UnixMicro(int64(val))
+			*(*time.Time)(p) = val
 		}
 	}
 	return buf, nil
@@ -1850,10 +1882,11 @@ func (d *DecimalDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []b
 			}
 			return WriterType(buf, TBytes, 0, 1)
 		}
-		if d.isPtr || !(*(*decimal.Decimal)(p)).IsZero() {
-			val = (*(*decimal.Decimal)(p)).String()
-			buf = WriterType(buf, TBytes, 1, LengthUint(uint64(len(val))))
+		val = (*(*decimal.Decimal)(p)).String()
+		if (*(*decimal.Decimal)(p)).IsZero() {
+			return WriterType(buf, TBytes, 0, 1)
 		}
+		buf = WriterType(buf, TBytes, 1, LengthUint(uint64(len(val))))
 	}
 	buf = EncodeUint64(buf, uint64(len(val)))
 	return append(buf, val...)

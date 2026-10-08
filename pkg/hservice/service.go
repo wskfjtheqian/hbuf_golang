@@ -138,7 +138,7 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 		httpClient:    make(map[string]*hrpc.Client),
 		waitSubscribe: make(chan bool, 2),
 	}
-	ret.rpcServer = hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewJsonEncode()), hrpc.WithServerDecode(hrpc.NewJsonDecode()))
+	ret.rpcServer = hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
 
 	for _, option := range options {
 		option(ret)
@@ -636,8 +636,8 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 	if !ok {
 		connect = hrpc.NewClient(
 			hrpc.NewHttpClient(addr.String()).Request,
-			hrpc.WithClientEncoder(hrpc.NewJsonEncode()),
-			hrpc.WithClientDecode(hrpc.NewJsonDecode()),
+			hrpc.WithClientEncoder(hrpc.NewHBufEncode()),
+			hrpc.WithClientDecode(hrpc.NewHBufDecode()),
 		)
 		for _, option := range s.clientOption {
 			option(connect)

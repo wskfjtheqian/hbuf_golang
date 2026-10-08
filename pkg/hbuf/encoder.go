@@ -1,5 +1,7 @@
 package hbuf
 
+import "time"
+
 func WriterType(buf []byte, typ Type, idLen uint8, valueLen uint8) []byte {
 	return append(buf, byte(typ&0b111)<<5|byte(int(valueLen-1)&0b111)<<2|byte(idLen)&0b11)
 }
@@ -98,4 +100,36 @@ func EncodeUint64(buf []byte, v uint64) []byte {
 	} else {
 		return append(buf, byte(v), byte(v>>8), byte(v>>16), byte(v>>24), byte(v>>32), byte(v>>40), byte(v>>48), byte(v>>56))
 	}
+}
+
+// EncodeTime 将时间转换为（42位秒 + 30位纳秒）的 72 位大整数，
+// 并采用你完全相同的小端序（低位在前）风格写入 buf 中。
+func EncodeTime(buf []byte, t *time.Time) []byte {
+	secs := uint64(t.Unix())
+	nsec := uint64(t.Nanosecond())
+
+	// ================== 位域拼接 (42位秒 + 30位纳秒) ==================
+	// 1. 低 64 位安全融合：
+	//    因为低 30 位给纳秒，所以高 34 位给秒数。
+	//    我们先用 (secs & 0x3FFFFFFFF) 提取出 secs 的低 34 位，再左移 30 位。
+	//    这样操作绝对不会引发 uint64 溢出。
+	low64 := ((secs & 0x3FFFFFFFF) << 30) | (nsec & 0x3FFFFFFF)
+
+	// 2. 高 8 位提取：
+	//    secs 的总长度是 42 位，低 34 位已经放进了 low64。
+	//    剩下的最高 8 位（42 - 34 = 8），正好通过右移 34 位提取出来。
+	high8 := byte(secs >> 34)
+
+	// 3. 严格遵循你的小端序变长追加风格
+	return append(buf,
+		byte(low64),
+		byte(low64>>8),
+		byte(low64>>16),
+		byte(low64>>24),
+		byte(low64>>32),
+		byte(low64>>40),
+		byte(low64>>48),
+		byte(low64>>56),
+		high8, // 追加第 9 个字节（高位秒数）
+	)
 }
