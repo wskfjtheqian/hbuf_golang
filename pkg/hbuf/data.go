@@ -26,14 +26,14 @@ func Marshal(data Data) (b []byte, err error) {
 	return data.Descriptors().Encode(buf, reflect.ValueOf(data).UnsafePointer(), nil), nil
 }
 
-func Unmarshal(buf []byte, data Data) (err error) {
+func Unmarshal(buf []byte, data Data) error {
 	if len(buf) == 0 {
 		return nil
 	}
-	typ, _, valueLen, buf := DecodeType(buf)
-	_, err = data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, true, valueLen)
+	typ, _, valueLen, buf, err := DecodeType(buf)
 	if err != nil {
 		return err
 	}
-	return nil
+	_, err = data.Descriptors().Decode(buf, reflect.ValueOf(data).UnsafePointer(), typ, true, valueLen)
+	return err
 }

@@ -14,99 +14,134 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-var ErrShortBuffer = errors.New("hbuf: short buffer")
+// ===================== SkipValue =====================
 
+// SkipValue 根据类型和 valueLen 跳过一段 value。
+// 调用约定：只有当 value 确实存在时才调用（即 idLen > 0）。
 func SkipValue(buf []byte, typ Type, valueLen uint8) ([]byte, error) {
 	switch typ {
 	case TInt, TUint, TFloat:
 		if len(buf) < int(valueLen) {
-			return nil, ErrShortBuffer
+			return buf, ErrShortBuffer
 		}
 		return buf[valueLen:], nil
 	case TBool:
 		return buf, nil
 	case TBytes:
-		size, rest := DecodeUint64(buf, valueLen)
+		size, rest, err := DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
 		if uint64(len(rest)) < size {
-			return nil, ErrShortBuffer
+			return buf, ErrShortBuffer
 		}
 		return rest[size:], nil
 	case TList:
-		count, rest := DecodeUint64(buf, valueLen)
-		for range count {
-			elemTyp, elemIdLen, elemValLen, r := DecodeType(rest)
+		count, rest, err := DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
+		for i := uint64(0); i < count; i++ {
+			elemTyp, elemIdLen, elemValLen, r, err := DecodeType(rest)
+			if err != nil {
+				return buf, err
+			}
 			rest = r
 			if elemIdLen > 0 {
+				if len(rest) < int(elemIdLen) {
+					return buf, ErrShortBuffer
+				}
 				rest = rest[elemIdLen:]
-				var err error
 				rest, err = SkipValue(rest, elemTyp, elemValLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 		}
 		return rest, nil
 	case TMap:
-		count, rest := DecodeUint64(buf, valueLen)
-		for range count {
+		count, rest, err := DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
+		for i := uint64(0); i < count; i++ {
 			// key
-			kTyp, kIdLen, kValLen, r := DecodeType(rest)
+			kTyp, kIdLen, kValLen, r, err := DecodeType(rest)
+			if err != nil {
+				return buf, err
+			}
 			rest = r
 			if kIdLen > 0 {
+				if len(rest) < int(kIdLen) {
+					return buf, ErrShortBuffer
+				}
 				rest = rest[kIdLen:]
-				var err error
 				rest, err = SkipValue(rest, kTyp, kValLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 			// value
-			vTyp, vIdLen, vValLen, r := DecodeType(rest)
+			vTyp, vIdLen, vValLen, r, err := DecodeType(rest)
+			if err != nil {
+				return buf, err
+			}
 			rest = r
 			if vIdLen > 0 {
+				if len(rest) < int(vIdLen) {
+					return buf, ErrShortBuffer
+				}
 				rest = rest[vIdLen:]
-				var err error
 				rest, err = SkipValue(rest, vTyp, vValLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 		}
 		return rest, nil
 	case TData:
-		// 主体
 		rest, err := skipDataBody(buf, valueLen)
 		if err != nil {
-			return nil, err
+			return buf, err
 		}
-		// extend 段：读一个 type 头
-		eTyp, eIdLen, eValLen, r := DecodeType(rest)
-		_ = eTyp
+		_, eIdLen, eValLen, r, err := DecodeType(rest)
+		if err != nil {
+			return buf, err
+		}
 		if eIdLen == 0 {
 			return r, nil
 		}
 		return skipDataBody(r, eValLen)
 	}
-
-	return nil, errors.New("hbuf: unknown type")
+	return buf, errors.New("hbuf: unknown type")
 }
 
 func skipDataBody(buf []byte, valueLen uint8) ([]byte, error) {
-	count, rest := DecodeUint64(buf, valueLen)
-	for range count {
-		fTyp, fIdLen, fValLen, r := DecodeType(rest)
+	count, rest, err := DecodeUint64(buf, valueLen)
+	if err != nil {
+		return buf, err
+	}
+	for i := uint64(0); i < count; i++ {
+		fTyp, fIdLen, fValLen, r, err := DecodeType(rest)
+		if err != nil {
+			return buf, err
+		}
 		rest = r
 		if fIdLen > 0 {
+			if len(rest) < int(fIdLen) {
+				return buf, ErrShortBuffer
+			}
 			rest = rest[fIdLen:]
-			var err error
 			rest, err = SkipValue(rest, fTyp, fValLen)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 		}
 	}
 	return rest, nil
 }
+
+// ===================== Descriptor 接口 =====================
 
 type Descriptor interface {
 	IsEmpty(p unsafe.Pointer) bool
@@ -115,6 +150,8 @@ type Descriptor interface {
 	Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte
 	Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error)
 }
+
+// ===================== RefDescriptor =====================
 
 func NewRefDescriptor(d Data, offset uintptr, isPtr bool) Descriptor {
 	return &RefDescriptor{
@@ -133,7 +170,6 @@ type RefDescriptor struct {
 func (r *RefDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	r.do()
 	return r.DataDescriptor.IsEmpty(p)
-
 }
 
 func (r *RefDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
@@ -169,10 +205,12 @@ func (r *RefDescriptor) do() {
 	})
 }
 
+// ===================== DataDescriptor =====================
+
 func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap map[uint16]Descriptor, fieldMap map[uint16]Descriptor) Descriptor {
 	var extends []Descriptor
 	extendIds := make([]uint16, 0, len(extendMap))
-	for id, _ := range extendMap {
+	for id := range extendMap {
 		extendIds = append(extendIds, id)
 	}
 	slices.Sort(extendIds)
@@ -182,7 +220,7 @@ func NewDataDescriptor(offset uintptr, isPtr bool, typ reflect.Type, extendMap m
 
 	var fields []Descriptor
 	fieldIds := make([]uint16, 0, len(fieldMap))
-	for id, _ := range fieldMap {
+	for id := range fieldMap {
 		fieldIds = append(fieldIds, id)
 	}
 	slices.Sort(fieldIds)
@@ -299,7 +337,10 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	var idLen uint8
 
 	if valRead {
-		count, buf = DecodeUint64(buf, valueLen)
+		count, buf, err = DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
 	}
 
 	ptr := p
@@ -314,40 +355,65 @@ func (d *DataDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	var id uint16
 	if count > 0 {
 		for i := uint64(0); i < count; i++ {
-			typ, idLen, valueLen, buf = DecodeType(buf)
-			id, buf = DecodeId(buf, idLen)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
+			id, buf, err = DecodeId(buf, idLen)
+			if err != nil {
+				return buf, err
+			}
 
 			if field, ok := d.fieldMap[id]; ok {
 				buf, err = field.Decode(buf, field.SetValue(ptr), typ, true, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			} else {
 				buf, err = SkipValue(buf, typ, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 		}
 	}
 
-	typ, idLen, valueLen, buf = DecodeType(buf)
+	typ, idLen, valueLen, buf, err = DecodeType(buf)
+	if err != nil {
+		return buf, err
+	}
 	if idLen > 0 {
-		count, buf = DecodeUint64(buf, valueLen)
+		count, buf, err = DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
 		for i := uint64(0); i < count; i++ {
-			typ, idLen, valueLen, buf = DecodeType(buf)
-			id, buf = DecodeId(buf, idLen)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
+			id, buf, err = DecodeId(buf, idLen)
+			if err != nil {
+				return buf, err
+			}
 
 			if extend, ok := d.extendMap[id]; ok {
 				buf, err = extend.Decode(buf, extend.SetValue(ptr), typ, true, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
+				}
+			} else {
+				buf, err = SkipValue(buf, typ, valueLen)
+				if err != nil {
+					return buf, err
 				}
 			}
 		}
 	}
 	return buf, nil
 }
+
+// ===================== ListDescriptor =====================
 
 func NewListDescriptor[T any](offset uintptr, desc Descriptor, isPtr bool) Descriptor {
 	return &ListDescriptor[T]{
@@ -438,7 +504,10 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 	var idLen uint8
 
 	if valRead {
-		count, buf = DecodeUint64(buf, valueLen)
+		count, buf, err = DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
 	}
 	if count == 0 {
 		return buf, nil
@@ -446,28 +515,36 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 	if p != nil {
 		list := make([]T, count)
 		for i := uint64(0); i < count; i++ {
-			typ, idLen, valueLen, buf = DecodeType(buf)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
 			if idLen > 0 {
 				buf, err = d.desc.Decode(buf, d.desc.SetValue(unsafe.Pointer(&list[i])), typ, idLen == 1, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 		}
 		*(*[]T)(p) = list
 	} else {
 		for i := uint64(0); i < count; i++ {
-			typ, idLen, valueLen, buf = DecodeType(buf)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
 			if idLen > 0 {
 				buf, err = d.desc.Decode(buf, nil, typ, idLen == 1, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 		}
 	}
 	return buf, nil
 }
+
+// ===================== MapDescriptor =====================
 
 func NewMapDescriptor[K comparable, V any](offset uintptr, keyDesc Descriptor, valueDesc Descriptor, isPtr bool) Descriptor {
 	return &MapDescriptor[K, V]{
@@ -562,7 +639,10 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 	var idLen uint8
 
 	if valRead {
-		count, buf = DecodeUint64(buf, valueLen)
+		count, buf, err = DecodeUint64(buf, valueLen)
+		if err != nil {
+			return buf, err
+		}
 	}
 	if count == 0 {
 		return buf, nil
@@ -572,16 +652,22 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 		for i := uint64(0); i < count; i++ {
 			var k K
 			var v V
-			typ, idLen, valueLen, buf = DecodeType(buf)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
 			buf, err = d.keyDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&k)), typ, idLen == 1, valueLen)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
-			typ, idLen, valueLen, buf = DecodeType(buf)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
 			if idLen > 0 {
-				buf, err = d.valueDesc.Decode(buf, d.keyDesc.SetValue(unsafe.Pointer(&v)), typ, idLen == 1, valueLen)
+				buf, err = d.valueDesc.Decode(buf, d.valueDesc.SetValue(unsafe.Pointer(&v)), typ, idLen == 1, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 			m[k] = v
@@ -589,22 +675,32 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 		*(*map[K]V)(p) = m
 	} else {
 		for i := uint64(0); i < count; i++ {
-			typ, idLen, valueLen, buf = DecodeType(buf)
-			buf, err = d.keyDesc.Decode(buf, nil, typ, true, valueLen)
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
-			typ, idLen, valueLen, buf = DecodeType(buf)
+			if idLen > 0 {
+				buf, err = d.keyDesc.Decode(buf, nil, typ, true, valueLen)
+				if err != nil {
+					return buf, err
+				}
+			}
+			typ, idLen, valueLen, buf, err = DecodeType(buf)
+			if err != nil {
+				return buf, err
+			}
 			if idLen > 0 {
 				buf, err = d.valueDesc.Decode(buf, nil, typ, idLen == 1, valueLen)
 				if err != nil {
-					return nil, err
+					return buf, err
 				}
 			}
 		}
 	}
 	return buf, nil
 }
+
+// ===================== StringDescriptor =====================
 
 func NewStringDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &StringDescriptor{
@@ -682,6 +778,7 @@ func (d *StringDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 
 func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val string
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -692,19 +789,28 @@ func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = strconv.FormatInt(temp, 10)
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = strconv.FormatUint(temp, 10)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = strconv.FormatFloat(float64(math.Float32frombits(uint32(temp))), 'f', -1, 32)
 			} else {
@@ -714,12 +820,18 @@ func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TBytes:
 		if valRead {
 			var size uint64
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val = string(buf[:size])
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid string type")
+		return buf, errors.New("invalid string type")
 	}
 
 	if p != nil {
@@ -731,6 +843,8 @@ func (d *StringDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	return buf, nil
 }
+
+// ===================== BytesDescriptor =====================
 
 func NewBytesDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &BytesDescriptor{
@@ -808,6 +922,7 @@ func (d *BytesDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 
 func (d *BytesDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val []byte
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -818,35 +933,49 @@ func (d *BytesDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = []byte(strconv.FormatInt(temp, 10))
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = []byte(strconv.FormatUint(temp, 10))
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = []byte(strconv.FormatFloat(float64(math.Float32frombits(uint32(temp))), 'f', -1, 32))
 			} else {
 				val = []byte(strconv.FormatFloat(math.Float64frombits(temp), 'f', -1, 64))
 			}
 		}
-
 	case TBytes:
 		if valRead {
 			var size uint64
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val = buf[:size]
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid bytes type")
+		return buf, errors.New("invalid bytes type")
 	}
 
 	if p != nil {
@@ -858,6 +987,8 @@ func (d *BytesDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	return buf, nil
 }
+
+// ===================== Int64Descriptor =====================
 
 func NewInt64Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int64Descriptor{
@@ -934,6 +1065,7 @@ func (d *Int64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 
 func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val int64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -941,18 +1073,27 @@ func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 		}
 	case TInt:
 		if valRead {
-			val, buf = DecodeInt64(buf, valueLen)
+			val, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = int64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = int64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -962,16 +1103,21 @@ func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseInt(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid int64 type")
+		return buf, errors.New("invalid int64 type")
 	}
 
 	if p != nil {
@@ -983,6 +1129,8 @@ func (d *Int64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	return buf, nil
 }
+
+// ===================== Int32Descriptor =====================
 
 func NewInt32Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int32Descriptor{
@@ -1059,6 +1207,7 @@ func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 
 func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val int64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1066,18 +1215,27 @@ func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 		}
 	case TInt:
 		if valRead {
-			val, buf = DecodeInt64(buf, valueLen)
+			val, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = int64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = int64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1087,16 +1245,21 @@ func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseInt(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid int32 type")
+		return buf, errors.New("invalid int32 type")
 	}
 
 	if p != nil {
@@ -1108,6 +1271,8 @@ func (d *Int32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	return buf, nil
 }
+
+// ===================== Int16Descriptor =====================
 
 func NewInt16Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int16Descriptor{
@@ -1184,6 +1349,7 @@ func (d *Int16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 
 func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val int64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1191,18 +1357,27 @@ func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 		}
 	case TInt:
 		if valRead {
-			val, buf = DecodeInt64(buf, valueLen)
+			val, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = int64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = int64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1212,16 +1387,21 @@ func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseInt(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid int16 type")
+		return buf, errors.New("invalid int16 type")
 	}
 
 	if p != nil {
@@ -1233,6 +1413,8 @@ func (d *Int16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	return buf, nil
 }
+
+// ===================== Int8Descriptor =====================
 
 func NewInt8Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Int8Descriptor{
@@ -1309,6 +1491,7 @@ func (d *Int8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte
 
 func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val int64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1316,18 +1499,27 @@ func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 		}
 	case TInt:
 		if valRead {
-			val, buf = DecodeInt64(buf, valueLen)
+			val, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = int64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = int64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1337,16 +1529,21 @@ func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseInt(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid int64 type")
+		return buf, errors.New("invalid int8 type")
 	}
 
 	if p != nil {
@@ -1358,6 +1555,8 @@ func (d *Int8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	}
 	return buf, nil
 }
+
+// ===================== Uint64Descriptor =====================
 
 func NewUint64Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint64Descriptor{
@@ -1434,6 +1633,7 @@ func (d *Uint64Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 
 func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val uint64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1442,17 +1642,26 @@ func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = uint64(temp)
 		}
 	case TUint:
 		if valRead {
-			val, buf = DecodeUint64(buf, valueLen)
+			val, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = uint64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1462,16 +1671,21 @@ func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseUint(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid uint64 type")
+		return buf, errors.New("invalid uint64 type")
 	}
 
 	if p != nil {
@@ -1483,6 +1697,8 @@ func (d *Uint64Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	return buf, nil
 }
+
+// ===================== Uint32Descriptor =====================
 
 func NewUint32Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint32Descriptor{
@@ -1497,7 +1713,6 @@ type Uint32Descriptor struct {
 }
 
 func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer) bool {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1514,7 +1729,6 @@ func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *Uint32Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1561,6 +1775,7 @@ func (d *Uint32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 
 func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val uint64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1569,17 +1784,26 @@ func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = uint64(temp)
 		}
 	case TUint:
 		if valRead {
-			val, buf = DecodeUint64(buf, valueLen)
+			val, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = uint64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1589,16 +1813,21 @@ func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseUint(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid uint32 type")
+		return buf, errors.New("invalid uint32 type")
 	}
 
 	if p != nil {
@@ -1610,6 +1839,8 @@ func (d *Uint32Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	return buf, nil
 }
+
+// ===================== Uint16Descriptor =====================
 
 func NewUint16Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint16Descriptor{
@@ -1624,7 +1855,6 @@ type Uint16Descriptor struct {
 }
 
 func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer) bool {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1641,7 +1871,6 @@ func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *Uint16Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1688,6 +1917,7 @@ func (d *Uint16Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 
 func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val uint64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1696,17 +1926,26 @@ func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = uint64(temp)
 		}
 	case TUint:
 		if valRead {
-			val, buf = DecodeUint64(buf, valueLen)
+			val, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = uint64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1716,16 +1955,21 @@ func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseUint(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid uint16 type")
+		return buf, errors.New("invalid uint16 type")
 	}
 
 	if p != nil {
@@ -1737,6 +1981,8 @@ func (d *Uint16Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	return buf, nil
 }
+
+// ===================== Uint8Descriptor =====================
 
 func NewUint8Descriptor(offset uintptr, isPtr bool) Descriptor {
 	return &Uint8Descriptor{
@@ -1762,7 +2008,6 @@ func (d *Uint8Descriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *Uint8Descriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1803,6 +2048,7 @@ func (d *Uint8Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 
 func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val uint64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1811,17 +2057,26 @@ func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = uint64(temp)
 		}
 	case TUint:
 		if valRead {
-			val, buf = DecodeUint64(buf, valueLen)
+			val, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = uint64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1831,16 +2086,21 @@ func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseUint(string(buf[:size]), 10, 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid uint8 type")
+		return buf, errors.New("invalid uint8 type")
 	}
 
 	if p != nil {
@@ -1852,6 +2112,8 @@ func (d *Uint8Descriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	return buf, nil
 }
+
+// ===================== DoubleDescriptor =====================
 
 func NewDoubleDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &DoubleDescriptor{
@@ -1866,7 +2128,6 @@ type DoubleDescriptor struct {
 }
 
 func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer) bool {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1883,7 +2144,6 @@ func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *DoubleDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -1929,6 +2189,7 @@ func (d *DoubleDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []by
 
 func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val float64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -1937,19 +2198,28 @@ func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = float64(temp)
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = float64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = float64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -1959,16 +2229,21 @@ func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseFloat(string(buf[:size]), 64)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid double type")
+		return buf, errors.New("invalid double type")
 	}
 
 	if p != nil {
@@ -1980,6 +2255,8 @@ func (d *DoubleDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRea
 	}
 	return buf, nil
 }
+
+// ===================== FloatDescriptor =====================
 
 func NewFloatDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &FloatDescriptor{
@@ -1994,7 +2271,6 @@ type FloatDescriptor struct {
 }
 
 func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer) bool {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -2011,7 +2287,6 @@ func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *FloatDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -2057,6 +2332,7 @@ func (d *FloatDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 
 func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val float64
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -2065,19 +2341,28 @@ func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = float64(temp)
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = float64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = float64(math.Float32frombits(uint32(temp)))
 			} else {
@@ -2087,16 +2372,21 @@ func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = strconv.ParseFloat(string(buf[:size]), 32)
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid float type")
+		return buf, errors.New("invalid float type")
 	}
 
 	if p != nil {
@@ -2108,6 +2398,8 @@ func (d *FloatDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead
 	}
 	return buf, nil
 }
+
+// ===================== BoolDescriptor =====================
 
 func NewBoolDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &BoolDescriptor{
@@ -2211,25 +2503,35 @@ func (d *BoolDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte
 
 func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val bool
+	var err error
 	switch typ {
 	case TBool:
 		val = 2 == valueLen
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = temp != 0
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = temp != 0
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = 0 != math.Float32frombits(uint32(temp))
 			} else {
@@ -2239,12 +2541,18 @@ func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	case TBytes:
 		if valRead {
 			var size uint64
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val = "true" == strings.ToLower(string(buf[:size]))
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid bool type")
+		return buf, errors.New("invalid bool type")
 	}
 
 	if p != nil {
@@ -2256,6 +2564,8 @@ func (d *BoolDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	}
 	return buf, nil
 }
+
+// ===================== TimeDescriptor =====================
 
 func NewTimeDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &TimeDescriptor{
@@ -2286,7 +2596,6 @@ func (d *TimeDescriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *TimeDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -2334,18 +2643,28 @@ func (d *TimeDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte
 
 func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val time.Time
+	var err error
 	switch typ {
 	case TBytes:
 		if valRead {
 			var size uint64
-			size, buf = DecodeUint64(buf, valueLen)
-			if size != 9 {
-				return nil, errors.New("invalid time size")
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
 			}
-			val, buf = DecodeTime(buf)
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
+			if size != 9 {
+				return nil, errors.New("invalid time type")
+			}
+			val, buf, err = DecodeTime(buf)
+			if err != nil {
+				return buf, err
+			}
 		}
 	default:
-		return nil, errors.New("invalid time type")
+		return buf, errors.New("invalid time type")
 	}
 
 	if p != nil {
@@ -2357,6 +2676,8 @@ func (d *TimeDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead 
 	}
 	return buf, nil
 }
+
+// ===================== DecimalDescriptor =====================
 
 func NewDecimalDescriptor(offset uintptr, isPtr bool) Descriptor {
 	return &DecimalDescriptor{
@@ -2387,7 +2708,6 @@ func (d *DecimalDescriptor) IsEmpty(p unsafe.Pointer) bool {
 }
 
 func (d *DecimalDescriptor) GetValue(p unsafe.Pointer) unsafe.Pointer {
-
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
 		ptr = *(*unsafe.Pointer)(ptr)
@@ -2434,6 +2754,7 @@ func (d *DecimalDescriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []b
 
 func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRead bool, valueLen uint8) ([]byte, error) {
 	var val decimal.Decimal
+	var err error
 	switch typ {
 	case TBool:
 		if 2 == valueLen {
@@ -2442,19 +2763,28 @@ func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 	case TInt:
 		if valRead {
 			var temp int64
-			temp, buf = DecodeInt64(buf, valueLen)
+			temp, buf, err = DecodeInt64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = decimal.NewFromInt(temp)
 		}
 	case TUint:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			val = decimal.NewFromUint64(temp)
 		}
 	case TFloat:
 		if valRead {
 			var temp uint64
-			temp, buf = DecodeUint64(buf, valueLen)
+			temp, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
 			if valueLen <= 4 {
 				val = decimal.NewFromFloat(float64(math.Float32frombits(uint32(temp))))
 			} else {
@@ -2464,16 +2794,21 @@ func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 	case TBytes:
 		if valRead {
 			var size uint64
-			var err error
-			size, buf = DecodeUint64(buf, valueLen)
+			size, buf, err = DecodeUint64(buf, valueLen)
+			if err != nil {
+				return buf, err
+			}
+			if uint64(len(buf)) < size {
+				return buf, ErrShortBuffer
+			}
 			val, err = decimal.NewFromString(string(buf[:size]))
 			if err != nil {
-				return nil, err
+				return buf, err
 			}
 			buf = buf[size:]
 		}
 	default:
-		return nil, errors.New("invalid decimal type")
+		return buf, errors.New("invalid decimal type")
 	}
 
 	if p != nil {
@@ -2485,6 +2820,8 @@ func (d *DecimalDescriptor) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 	}
 	return buf, nil
 }
+
+// ===================== SyncDescriptor =====================
 
 func NewSyncDescriptor(f func() Descriptor) *SyncDescriptor {
 	return &SyncDescriptor{
