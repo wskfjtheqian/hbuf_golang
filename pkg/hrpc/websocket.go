@@ -41,6 +41,9 @@ func (d *rawMessage) Write(p []byte) (n int, err error) {
 }
 
 func (d rawMessage) MarshalJSON() ([]byte, error) {
+	if d == nil {
+		return []byte("null"), nil
+	}
 	return d, nil
 }
 
@@ -50,12 +53,12 @@ func (d *rawMessage) UnmarshalJSON(b []byte) error {
 }
 
 type WebSocketData struct {
-	Type   Type        `json:"type,omitempty"`
 	Header http.Header `json:"header,omitempty"`
 	Data   rawMessage  `json:"data,omitempty"`
 	Id     uint64      `json:"id,omitempty"`
 	Path   string      `json:"path,omitempty"`
 	Status int32       `json:"status,omitempty"`
+	Type   Type        `json:"type,omitempty"`
 }
 
 func (w *WebSocketData) Read(p []byte) (n int, err error) {
