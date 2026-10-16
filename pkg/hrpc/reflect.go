@@ -2,11 +2,12 @@ package hrpc
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"encoding/json/v2"
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 // GetServerAndFuncName 获得指定服务和方法的名字
