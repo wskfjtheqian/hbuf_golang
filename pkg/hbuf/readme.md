@@ -218,3 +218,85 @@ BenchmarkEncoderDecoder/DecoderHBuf-16        22000      54401 ns/op
 go test -run TestEncoderDecoder -v ./pkg/hbuf/       # 体积对比
 go test -bench BenchmarkEncoderDecoder -benchmem ./pkg/hbuf/   # 性能对比
 ```
+我来将跨语言扩展的分析结果整理成 readme 的新章节。先确认文件末尾结构：在文件末尾追加「跨语言扩展指南」章节：当前会话中编辑工具不可用，我直接输出 readme.md 的编辑块，你应用到文件即可：
+
+```markdown|CODE_EDIT_BLOCK|/Users/dev/2.hbuf/hbuf_golang/pkg/hbuf/readme.md
+// ... existing code ...
+
+复现命令：
+
+```shell
+go test -run TestEncoderDecoder -v ./pkg/hbuf/       # 体积对比
+go test -bench BenchmarkEncoderDecoder -benchmem ./pkg/hbuf/   # 性能对比
+```
+
+## 跨语言扩展指南
+
+### 现状与分工
+
+- **协议内核可整体移植**：[encoder.go](encoder.go) / [decoder.go](decoder.go) 是纯函数实现（变长整数、TAG/ID、时间位域拼接），无 unsafe、无 Go 特性依赖，可逐函数翻译到任意语言。
+- **unsafe 仅存在于字段访问层**：[descriptor.go](descriptor.go) 用 `unsafe.Offsetof` 直读写字段，其他语言需用各自机制替代（C/C++ 宏 offsetof、Rust `repr(C)`、安全语言则退化为逐字段编解码调用）。
+- **协议规则部分散落在 Go 实现中**：扩展前必须冻结为语言无关规范（见下）。
+
+### 第一步：冻结协议规范（需先决策的问题）
+
+以下事项目前由 Go 实现隐式定义，跨语言前必须定案：
+
+| 议题 | Go 现状 | 跨语言需决策 |
+|---|---|---|
+| map 元素输出顺序 | `for range` 随机序，字节级不确定 | 按 key 编码字节序升序输出（需同步修改 Go 实现）；或 conformance 只做语义比对 |
+| 时区语义 | 解码返回 `.In(time.Local)` | 建议规范为 UTC 语义，避免跨时区机器解码结果漂移 |
+| 负时间 | `uint64(t.Unix())` 溢出，不支持 | 明确约束：秒必须非负，编码前校验 |
+| decimal 精度 | shopspring 任意精度 | 各语言精度不同（Python `Decimal` 默认 28 位上下文、JS 无原生 decimal），需规定精度与舍入行为 |
+| 跨类型兼容解码 | 各 Descriptor 的 `Decode` 内 switch-case | 整理成显式转换表，作为各语言实现基准 |
+
+同时，以下隐性规则需精确到字节写入规范（当前见「二进制格式」章节）：TAG 位布局、有符号整数 `LengthInt` 判定与符号扩展、TBool 值在 TAG 位内、uint8 零值元素 `idLen=2`、int32 nil 指针 `valueLen 位=7`、字段按 ID 升序输出、Data 的 EXTENDS-BLOCK 终止标记、空值语义（零值省略 / 元素 `idLen=0` 标记）。
+
+### 第二步：代码生成器多后端
+
+生成器需重构为 **IR（中间表示）→ 后端模板**架构，每目标语言一个后端 + 类型映射表：
+
+| HBuf 类型 | Go | Java | Python | TS/Node |
+|---|---|---|---|---|
+| int8 | int8 | byte | int | number |
+| bytes | []byte | ByteString | bytes | Uint8Array |
+| time | time.Time | Instant | datetime（⚠️微秒精度） | Date（⚠️毫秒精度） |
+| decimal | shopspring.Decimal | BigDecimal | Decimal（⚠️上下文精度） | decimal.js |
+| 可空 `?` | *T | nullable wrapper | Optional/None | null/undefined |
+
+生成策略因语言而异：具备 offsetof 能力的语言（C/C++/Rust）可复刻零拷贝 descriptor；安全语言（Java/C#/Python/TS）生成逐字段 codec 调用，性能模型不同。
+
+### 第三步：各语言运行时库核心组件
+
+每个语言都要实现同一套最小内核：
+
+1. 变长整数编解码（有符号 + 符号扩展、无符号 1~8 字节小端）；
+2. TAG / ID 读写（位操作 + 全部特例）；
+3. 各标量 codec（bool 位内编码、float IEEE-754 位模式）；
+4. 时间 42+30 位、decimal 字符串承载；
+5. Data / List / Map 容器 + `SkipValue`（未知字段跳过，最易出错）；
+6. 跨类型兼容解码转换表。
+
+语言特有坑：时间精度（Python 微秒、JS 毫秒会丢纳秒）、nil 语义映射（Go nil ↔ nullable ↔ None ↔ undefined）、时区（编码存绝对时间秒+纳秒，解码语义需统一）。
+
+### 第四步：跨语言 conformance 测试
+
+- **golden 字节向量**：128 字段边界值测试数据（全类型 min/max、零值、空值、长串、全字节序列，见 [data_test.go](data_test.go)）即可导出为 golden file，各语言实现必须产出相同字节；
+- **矩阵互测**：语言 A 编码 → 语言 B 解码 → 语义相等，用 docker + CI 矩阵自动化（参照 protobuf-conformance 套件路线）。
+
+### 第五步：RPC 层与生态
+
+- hrpc 的传输与 HBuf body 解耦（HTTP/HTTPS/WS/WSS/gRPC），其他语言只需「HTTP client + HBuf codec」即可与 Go 服务互通，生成器顺带产出 client stub；
+- 可选：buf 风格的 lint / breaking-change 检测、IDL 版本发布机制。
+
+### 建议路线图
+
+| 阶段 | 内容 | 说明 |
+|---|---|---|
+| ① | 规范冻结 + map 排序定案 + golden 向量 | 成本低；不定案后续全是返工 |
+| ② | 一个参考实现（Java 或 TypeScript） | 用户群最大；用 golden 向量验证规范完整性 |
+| ③ | 生成器多后端 + CI conformance 矩阵 | 复制到更多语言 |
+| ④ | RPC stub、工具链、文档 | 生态完善 |
+
+核心结论：工程量不在翻译代码（协议内核很小），而在把 Go 实现的隐性规则冻结成规范，并用 conformance 测试守住跨语言一致性——尤其 map 顺序、时区语义、decimal 精度三个问题需最先决策。
+```
