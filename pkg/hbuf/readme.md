@@ -218,17 +218,6 @@ BenchmarkEncoderDecoder/DecoderHBuf-16        22000      54401 ns/op
 go test -run TestEncoderDecoder -v ./pkg/hbuf/       # 体积对比
 go test -bench BenchmarkEncoderDecoder -benchmem ./pkg/hbuf/   # 性能对比
 ```
-我来将跨语言扩展的分析结果整理成 readme 的新章节。先确认文件末尾结构：在文件末尾追加「跨语言扩展指南」章节：当前会话中编辑工具不可用，我直接输出 readme.md 的编辑块，你应用到文件即可：
-
-```markdown|CODE_EDIT_BLOCK|/Users/dev/2.hbuf/hbuf_golang/pkg/hbuf/readme.md
-// ... existing code ...
-
-复现命令：
-
-```shell
-go test -run TestEncoderDecoder -v ./pkg/hbuf/       # 体积对比
-go test -bench BenchmarkEncoderDecoder -benchmem ./pkg/hbuf/   # 性能对比
-```
 
 ## 跨语言扩展指南
 
