@@ -41,17 +41,14 @@ func SkipValue(buf []byte, typ Type, valueLen uint8) ([]byte, error) {
 		if err != nil {
 			return buf, err
 		}
-		for i := uint64(0); i < count; i++ {
+		for range count {
 			elemTyp, elemIdLen, elemValLen, r, err := DecodeType(rest)
 			if err != nil {
 				return buf, err
 			}
 			rest = r
-			if elemIdLen > 0 {
-				if len(rest) < int(elemIdLen) {
-					return buf, ErrShortBuffer
-				}
-				rest = rest[elemIdLen:]
+			// 元素编码为 TAG | VALUE（无 ID 字节），idLen == 1 表示元素有值
+			if elemIdLen == 1 {
 				rest, err = SkipValue(rest, elemTyp, elemValLen)
 				if err != nil {
 					return buf, err
@@ -64,34 +61,26 @@ func SkipValue(buf []byte, typ Type, valueLen uint8) ([]byte, error) {
 		if err != nil {
 			return buf, err
 		}
-		for i := uint64(0); i < count; i++ {
-			// key
+		for range count {
+			// key（TAG | VALUE，无 ID 字节，idLen == 1 表示有值）
 			kTyp, kIdLen, kValLen, r, err := DecodeType(rest)
 			if err != nil {
 				return buf, err
 			}
 			rest = r
-			if kIdLen > 0 {
-				if len(rest) < int(kIdLen) {
-					return buf, ErrShortBuffer
-				}
-				rest = rest[kIdLen:]
+			if kIdLen == 1 {
 				rest, err = SkipValue(rest, kTyp, kValLen)
 				if err != nil {
 					return buf, err
 				}
 			}
-			// value
+			// value（TAG | VALUE，无 ID 字节，idLen == 1 表示有值）
 			vTyp, vIdLen, vValLen, r, err := DecodeType(rest)
 			if err != nil {
 				return buf, err
 			}
 			rest = r
-			if vIdLen > 0 {
-				if len(rest) < int(vIdLen) {
-					return buf, ErrShortBuffer
-				}
-				rest = rest[vIdLen:]
+			if vIdLen == 1 {
 				rest, err = SkipValue(rest, vTyp, vValLen)
 				if err != nil {
 					return buf, err

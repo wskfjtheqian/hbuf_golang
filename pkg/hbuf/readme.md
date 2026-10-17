@@ -104,7 +104,7 @@ Data 字段尾部固定跟随一个扩展块，用于继承（extends）场景�
 ## 解码规则
 
 - **跨类型兼容**：数值类描述符（int/uint/float/decimal）均可接受 `TBool / TInt / TUint / TFloat / TBytes` 输入并转换（如 int64 字段可接受字符串数值）；`string` / `[]byte` 字段可接受数值、浮点、布尔输入并转为其文本形式。字段类型演进（如 int8 → int64）无需重建数据。
-- **未知字段跳过**：遇到目标结构中不存在的 ID，按类型走 `SkipValue` 跳过。注意：`SkipValue` 在跳过 `TList` / `TMap` 时假定元素带 ID 字节（先跳过 `elemIdLen` 字节），与实际的元素编码（不带 ID 字节）不一致，跳过未知的 List / Map 字段会导致字节流错位（已知问题）；其余类型的未知字段可安全跳过。
+- **未知字段跳过**：遇到目标结构中不存在的 ID，按类型走 `SkipValue` 跳过，保证向后兼容。`SkipValue` 按实际编码约定处理：字段为 `TAG | ID | VALUE`；List 元素 / Map 的 Key/Value 为 `TAG | VALUE`（无 ID 字节），`idLen == 1` 表示元素有值，才继续跳过其值部分。
 
 ## API 与使用方式
 
@@ -184,33 +184,33 @@ data HBufSub1Test: HBufBTest = 1, HBufSubTest = 2, HBufTest = 3 {
 
 ## 性能对比
 
-测试对象：128 个字段、覆盖全部类型的 `HBufTest` 与等价 `ProtoTest`（对比基准见 [data_test.go](data_test.go) 的 `TestEncoderDecoder` / `BenchmarkEncoderDecoder`）。
+测试对象：128 个字段、覆盖全部类型的 `HBufTest` 与等价 `ProtoTest`，字段值取各类型边界（整数取 min / max，字符串含空串与 304 字节长串，bytes 含 0x00~0xFF 全字节序列，时间含 9999 年上限，decimal 含大数与极小指数），两侧语义一致（对比基准见 [data_test.go](data_test.go) 的 `TestEncoderDecoder` / `BenchmarkEncoderDecoder`）。
 
 ### 序列化体积（字节）
 
 ```text
-EncoderProto len: 4109
-EncoderJson  len: 5659
-EncoderHBuf  len: 3469
+EncoderProto len: 18062
+EncoderJson  len: 21052
+EncoderHBuf  len: 16942
 ```
 
-HBuf 体积约为 Protobuf 的 **84%**、JSON 的 **61%**。
+HBuf 体积约为 Protobuf 的 **94%**、JSON 的 **80%**。
 
 ### 编码 / 解码耗时
 
 测试环境：goos: darwin, goarch: amd64, Go 1.27.0, CPU: Intel(R) Core(TM) i9-9980HK @ 2.40GHz, 16 线程（2026-10-17 实测）。
 
 ```text
-BenchmarkEncoderDecoder/EncoderProto-16       14355      84033 ns/op
-BenchmarkEncoderDecoder/DecoderProto-16       12200      98722 ns/op
-BenchmarkEncoderDecoder/EncoderJson-16        15291      78681 ns/op
-BenchmarkEncoderDecoder/DecoderJson-16         7585     157799 ns/op
-BenchmarkEncoderDecoder/EncoderHBuf-16        30122      39281 ns/op
-BenchmarkEncoderDecoder/DecoderHBuf-16        19437      62088 ns/op
+BenchmarkEncoderDecoder/EncoderProto-16       15830      75252 ns/op
+BenchmarkEncoderDecoder/DecoderProto-16       14644      82040 ns/op
+BenchmarkEncoderDecoder/EncoderJson-16        13462      89953 ns/op
+BenchmarkEncoderDecoder/DecoderJson-16         8334     144243 ns/op
+BenchmarkEncoderDecoder/EncoderHBuf-16        22377      53454 ns/op
+BenchmarkEncoderDecoder/DecoderHBuf-16        22000      54401 ns/op
 ```
 
-- 编码：HBuf 39 µs，约为 Proto（84 µs）的 **47%**、Json（79 µs）的 **50%**。
-- 解码：HBuf 62 µs，约为 Proto（99 µs）的 **63%**、Json（158 µs）的 **39%**。
+- 编码：HBuf 53 µs，约为 Proto（75 µs）的 **71%**、Json（90 µs）的 **59%**。
+- 解码：HBuf 54 µs，约为 Proto（82 µs）的 **66%**、Json（144 µs）的 **38%**。
 
 复现命令：
 
