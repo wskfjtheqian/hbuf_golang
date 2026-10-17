@@ -870,3 +870,35 @@ func Test_Concurrency(t *testing.T) {
 	}
 
 }
+
+// 测试 traceId 从 header 透传到 handler
+func TestHttpService_TraceId(t *testing.T) {
+	traceIds := make(chan string, 1)
+	rpcServer := hrpc.NewServer()
+	rpcServer.Register(0, "test", nil, &hrpc.Method{
+		Name: "trace",
+		WithContext: func(ctx context.Context) context.Context {
+			return ctx
+		},
+		Handler: func(ctx context.Context, req any) (any, error) {
+			traceIds <- hlog.FromContext(ctx)
+			return &HbufResponse{}, nil
+		},
+	})
+
+	header := http.Header{}
+	header.Set("X-Trace-Id", "trace-header-123")
+	err := rpcServer.Response(context.Background(), "test/trace", io.Discard, nil, header)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case got := <-traceIds:
+		if got != "trace-header-123" {
+			t.Fatalf("traceId mismatch: got %q, want trace-header-123", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("handler not called")
+	}
+}

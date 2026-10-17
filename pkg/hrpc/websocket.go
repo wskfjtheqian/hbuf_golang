@@ -91,6 +91,8 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response, key str
 		encoder:     NewJsonEncode(),
 		decoder:     NewJsonDecode(),
 		responseMap: make(map[uint64]chan *WebSocketData),
+		write:       make(chan *WebSocketData),
+		done:        make(chan struct{}),
 		response:    response,
 		responseMiddleware: func(next Response) Response {
 			return response
@@ -102,8 +104,6 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response, key str
 		pongWait:     10 * time.Second,
 		ctx:          ctx,
 	}
-	write := make(chan *WebSocketData)
-	ret.write.Store(&write)
 	return ret
 }
 
@@ -114,7 +114,8 @@ type webSocket struct {
 	encoder     Encoder
 	decoder     Decoder
 	responseMap map[uint64]chan *WebSocketData
-	write       atomic.Pointer[chan *WebSocketData]
+	write       chan *WebSocketData
+	done        chan struct{}
 
 	requestMiddleware  RequestMiddleware
 	response           Response
@@ -134,6 +135,17 @@ func (s *webSocket) Context() context.Context {
 		return s.ctx
 	}
 	return context.Background()
+}
+
+// send 安全发送数据,连接关闭时返回错误。
+// 写通道永不 close,配合 done channel 避免 send on closed channel panic。
+func (s *webSocket) send(data *WebSocketData) error {
+	select {
+	case s.write <- data:
+		return nil
+	case <-s.done:
+		return errors.New("connection is closed")
+	}
 }
 
 func (s *webSocket) run() {
@@ -165,9 +177,8 @@ func (s *webSocket) run() {
 					herror.PrintStack(ctx, err)
 				}
 				if data.Type == TypePing {
-					write := s.write.Load()
-					if write != nil {
-						*write <- &WebSocketData{Type: TypePong}
+					if err := s.send(&WebSocketData{Type: TypePong}); err != nil {
+						break
 					}
 					continue
 				}
@@ -185,10 +196,7 @@ func (s *webSocket) run() {
 			}
 		}
 
-		write := s.write.Load()
-		s.write.Store(nil)
-
-		close(*write)
+		close(s.done)
 		_ = s.conn.Close()
 		if ticker != nil {
 			ticker.Stop()
@@ -201,11 +209,6 @@ func (s *webSocket) run() {
 	go func() {
 		ctx := hlog.NewContext()
 		for {
-			write := s.write.Load()
-			if write == nil {
-				break
-			}
-
 			writeData := func(data *WebSocketData) {
 
 				buf := bytes.NewBuffer(nil)
@@ -226,20 +229,20 @@ func (s *webSocket) run() {
 			}
 			if ticker != nil {
 				select {
+				case <-s.done:
+					return
 				case <-ticker.C:
 					writeData(&WebSocketData{Type: TypePing})
-				case data := <-*write:
-					if data == nil {
-						break
-					}
+				case data := <-s.write:
 					writeData(data)
 				}
 			} else {
-				data := <-*write
-				if data == nil {
-					break
+				select {
+				case <-s.done:
+					return
+				case data := <-s.write:
+					writeData(data)
 				}
-				writeData(data)
 			}
 		}
 	}()
@@ -265,11 +268,9 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 		}
 		if notification {
 			data.Type = TypeNotification
-			write := s.write.Load()
-			if write == nil {
-				return nil, errors.New("connection is closed")
+			if err := s.send(data); err != nil {
+				return nil, err
 			}
-			*write <- data
 			return nil, nil
 		}
 
@@ -288,11 +289,9 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 			close(response)
 		}()
 
-		write := s.write.Load()
-		if write == nil {
-			return nil, errors.New("connection is closed")
+		if err := s.send(data); err != nil {
+			return nil, err
 		}
-		*write <- data
 
 		timer := time.NewTimer(30 * time.Second)
 		defer timer.Stop()
@@ -317,11 +316,7 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	}
 	if nil == s.response {
 		response.Status = http.StatusNotFound
-		write := s.write.Load()
-		if write == nil {
-			return
-		}
-		*write <- response
+		_ = s.send(response)
 		return
 	}
 
@@ -356,11 +351,7 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	} else {
 		response.Status = http.StatusOK
 	}
-	write := s.write.Load()
-	if write == nil {
-		return
-	}
-	*write <- response
+	_ = s.send(response)
 	return
 }
 
@@ -663,6 +654,14 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, i
 	if onConnect != nil {
 		onConnect()
 	}
+	// onClose 必须在 run 之前设置,保证读 goroutine 退出时读取无竞态
+	socket.onClose = func() {
+		if w.manager.CompareAndDelete(id, socket) && onClose != nil {
+			onClose()
+		} else if len(id) == 0 && onConnect != nil {
+			onConnect()
+		}
+	}
 	socket.run()
 
 	if len(id) > 0 {
@@ -672,14 +671,6 @@ func (w *WebSocketServer) handleConnection(ctx context.Context, conn net.Conn, i
 			if onClose != nil {
 				onClose()
 			}
-		}
-	}
-
-	socket.onClose = func() {
-		if w.manager.CompareAndDelete(id, socket) && onClose != nil {
-			onClose()
-		} else if len(id) == 0 && onConnect != nil {
-			onConnect()
 		}
 	}
 }

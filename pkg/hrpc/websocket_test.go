@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
 )
 
@@ -197,4 +198,112 @@ func TestWebsocket_Encrypt(t *testing.T) {
 		t.Fatal("test fail")
 	}
 
+}
+
+// 测试 traceId 经 WebSocket 透传到服务端 handler
+func TestWebsocket_TraceId(t *testing.T) {
+	traceIds := make(chan string, 1)
+	rpcServer := hrpc.NewServer()
+	rpcServer.Register(0, "test", nil, &hrpc.Method{
+		Name: "trace",
+		WithContext: func(ctx context.Context) context.Context {
+			return ctx
+		},
+		Handler: func(ctx context.Context, req any) (any, error) {
+			traceIds <- hlog.FromContext(ctx)
+			return &HbufResponse{}, nil
+		},
+	})
+
+	server := hrpc.NewWebSocketServer(rpcServer.Response)
+	go server.ListenAndServe(context.Background(), ":8085")
+	<-time.After(time.Second)
+
+	client := hrpc.NewWebSocketClient("ws://localhost:8085/socket", nil)
+	err := client.Connect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpcClient := hrpc.NewClient(client.Request)
+
+	traceId := "trace-test-123"
+	ctx := hlog.WithContext(context.Background(), traceId)
+	_, err = rpcClient.Invoke(ctx, 0, "test", "trace", bytes.NewReader([]byte("{}")), hrpc.NewResultResponse[*HbufResponse]())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case got := <-traceIds:
+		if got != traceId {
+			t.Fatalf("traceId mismatch: got %s, want %s", got, traceId)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("handler not called")
+	}
+}
+
+// 测试连接关闭后发送返回错误
+func TestWebsocket_SendAfterClose(t *testing.T) {
+	server := hrpc.NewWebSocketServer(nil)
+
+	http.HandleFunc("/socket-close", func(writer http.ResponseWriter, request *http.Request) {
+		server.ServeHTTP(writer, request, "id-close", nil, nil)
+	})
+	go http.ListenAndServe(":8086", nil)
+	<-time.After(time.Second)
+
+	client := hrpc.NewWebSocketClient("ws://localhost:8086/socket-close", nil)
+	err := client.Connect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-time.After(500 * time.Millisecond) // 等待服务端注册连接
+
+	server.CloseClient(context.Background(), "id-close")
+	<-time.After(500 * time.Millisecond) // 等待读 goroutine 退出并关闭 done
+
+	_, err = client.Request(context.Background(), "/test", true, func(writer io.Writer) error {
+		_, err := writer.Write([]byte("{}"))
+		return err
+	})
+	if err == nil {
+		t.Fatal("expected error after close")
+	}
+}
+
+// 测试并发发送与连接关闭的竞态,确保无 send on closed channel panic
+func TestWebsocket_CloseRace(t *testing.T) {
+	server := hrpc.NewWebSocketServer(nil)
+
+	http.HandleFunc("/socket-race", func(writer http.ResponseWriter, request *http.Request) {
+		server.ServeHTTP(writer, request, "id-race", nil, nil)
+	})
+	go http.ListenAndServe(":8087", nil)
+	<-time.After(time.Second)
+
+	for i := 0; i < 20; i++ {
+		client := hrpc.NewWebSocketClient("ws://localhost:8087/socket-race", nil)
+		if err := client.Connect(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		<-time.After(300 * time.Millisecond) // 等待服务端注册连接
+
+		waitGroup := sync.WaitGroup{}
+		waitGroup.Add(10)
+		for j := 0; j < 10; j++ {
+			go func() {
+				defer waitGroup.Done()
+				for k := 0; k < 50; k++ {
+					// 发送 notification,关闭前后返回错误均属预期,关键在于不 panic
+					_, _ = client.Request(context.Background(), "/test", true, func(writer io.Writer) error {
+						_, err := writer.Write([]byte("{}"))
+						return err
+					})
+				}
+			}()
+		}
+		server.CloseClient(context.Background(), "id-race")
+		waitGroup.Wait()
+	}
 }

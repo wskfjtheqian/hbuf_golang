@@ -7,22 +7,21 @@ import (
 	"time"
 )
 
-var nowTime atomic.Pointer[time.Time]
+var nowTime atomic.Int64
 
 func init() {
-	now := time.Now()
-	nowTime.Store(&now)
+	nowTime.Store(time.Now().UnixMilli())
 	go func() {
 		ticker := time.NewTicker(time.Millisecond)
-		for now = range ticker.C {
-			nowTime.Store(&now)
+		for t := range ticker.C {
+			nowTime.Store(t.UnixMilli())
 		}
 	}()
 }
 
 // NowTime 获得当前时间 精确到毫秒
 func NowTime() time.Time {
-	return *nowTime.Load()
+	return time.UnixMilli(nowTime.Load())
 }
 
 // TimeZone 是 TimeZones 切片的索引别名

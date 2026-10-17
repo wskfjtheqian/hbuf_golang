@@ -452,7 +452,7 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	traceId := hlog.FromContext(ctx)
 	if len(traceId) == 0 {
 		traceId = GetHeader(ctx, "X-Trace-Id")
-		if len(traceId) == 0 {
+		if len(traceId) > 0 {
 			ctx = hlog.WithContext(ctx, traceId)
 		}
 	}
