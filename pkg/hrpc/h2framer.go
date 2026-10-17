@@ -1,6 +1,7 @@
 package hrpc
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -283,11 +284,14 @@ type h2ClientConn struct {
 // newH2ClientConn 创建连接对象。读侧 Framer 启用 MetaHeadersFrame 合并。
 func newH2ClientConn(t *H2FramerTransport, nc net.Conn) *h2ClientConn {
 	cc := &h2ClientConn{
-		t:          t,
-		nc:         nc,
-		queue:      newWriteQueue[*writeItem](),
-		done:       make(chan struct{}),
-		readFramer: http2.NewFramer(io.Discard, nc),
+		t:     t,
+		nc:    nc,
+		queue: newWriteQueue[*writeItem](),
+		done:  make(chan struct{}),
+		// 读侧包 bufio:公开 Framer API 无内部缓冲,逐帧 Read 直连 nc 会退化为
+		// 每帧一次 read syscall(实测与 gRPC 差距主因),此处与 gRPC transport 一致
+		// 用 32KB 缓冲将大批帧收敛为少量 syscall。
+		readFramer: http2.NewFramer(io.Discard, bufio.NewReaderSize(nc, 32<<10)),
 	}
 	cc.readFramer.ReadMetaHeaders = hpack.NewDecoder(4096, nil)
 	cc.peerMaxFrame.Store(16384)

@@ -1,6 +1,7 @@
 package hrpc
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -178,11 +179,13 @@ type h2ServerConn struct {
 // newH2ServerConn 创建连接对象。读侧 Framer 启用 MetaHeadersFrame 合并。
 func newH2ServerConn(hs *H2Server, nc net.Conn) *h2ServerConn {
 	cc := &h2ServerConn{
-		hs:         hs,
-		nc:         nc,
-		queue:      newWriteQueue[*srvWriteItem](),
-		done:       make(chan struct{}),
-		readFramer: http2.NewFramer(io.Discard, nc),
+		hs:    hs,
+		nc:    nc,
+		queue: newWriteQueue[*srvWriteItem](),
+		done:  make(chan struct{}),
+		// 读侧包 bufio:与客户端同理由,避免每帧一次 read syscall。
+		// start() 的 preface 读取先于 readLoop 启动且直接读 nc,bufio 尚未预读,顺序安全。
+		readFramer: http2.NewFramer(io.Discard, bufio.NewReaderSize(nc, 32<<10)),
 	}
 	cc.readFramer.ReadMetaHeaders = hpack.NewDecoder(4096, nil)
 	cc.peerMaxFrame.Store(16384)
