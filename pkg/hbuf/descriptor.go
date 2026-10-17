@@ -1193,7 +1193,7 @@ func (d *Int32Descriptor) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byt
 			if !d.isPtr {
 				return buf
 			}
-			return WriterType(buf, TInt, 0, 0)
+			return WriterType(buf, TInt, 0, 1)
 		}
 
 		val = *(*int32)(p)
