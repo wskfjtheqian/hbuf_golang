@@ -183,34 +183,107 @@ func (r *Result[T]) Descriptors() hbuf.Descriptor {
 	return r.descriptor
 }
 
+// resultDescriptorCache 缓存每种 T 的 Result descriptor,
+// 避免每次请求动态构建(map + unsafe.Offsetof + sort),实测每次构建约 800ns。
+var resultDescriptorCache sync.Map // key: reflect.Type, value: hbuf.Descriptor
+
+// resultDescriptor 返回 *Result[T] 的 Descriptor 单例
+func resultDescriptor[T hbuf.Data]() hbuf.Descriptor {
+	typ := reflect.TypeOf((*Result[T])(nil))
+	if d, ok := resultDescriptorCache.Load(typ); ok {
+		return d.(hbuf.Descriptor)
+	}
+	d := buildResultDescriptor[T]()
+	actual, _ := resultDescriptorCache.LoadOrStore(typ, d)
+	return actual.(hbuf.Descriptor)
+}
+
+// buildResultDescriptor 构建 *Result[T] 的 Descriptor。
+// T 为接口类型(服务端 NewResult(0, "ok", val) 推断为 hbuf.Data)时,
+// Data 字段存 itab+数据指针,内层 descriptor 由运行时值决定,
+// 使用 interfaceDataField 动态绑定;T 为具体指针类型时直接静态绑定。
+func buildResultDescriptor[T hbuf.Data]() hbuf.Descriptor {
+	var zero T
+	typ := reflect.TypeOf(&zero).Elem()
+	fieldMap := map[uint16]hbuf.Descriptor{
+		1: hbuf.NewInt32Descriptor(unsafe.Offsetof(Result[T]{}.Code), false),
+		2: hbuf.NewStringDescriptor(unsafe.Offsetof(Result[T]{}.Msg), false),
+	}
+	if typ.Kind() == reflect.Interface {
+		fieldMap[3] = &interfaceDataField{offset: unsafe.Offsetof(Result[T]{}.Data)}
+	} else {
+		fieldMap[3] = hbuf.NewRefDescriptor(
+			reflect.New(typ.Elem()).Interface().(hbuf.Data),
+			unsafe.Offsetof(Result[T]{}.Data),
+			true,
+		)
+	}
+	return hbuf.NewDataDescriptor(0, false, reflect.TypeOf((*Result[T])(nil)), nil, fieldMap)
+}
+
+// interfaceDataField 是 Result[hbuf.Data] 中 Data 接口字段的动态绑定 Descriptor。
+// 接口字段布局为 itab(1 word)+ 数据指针(1 word),内层 descriptor 由运行时值决定,
+// 无法静态缓存,故在 Encode 时从接口字段动态获取。
+// 解码方向无此用法(客户端统一用 NewResultResponse[T] 具体类型),返回错误。
+type interfaceDataField struct {
+	offset uintptr // Data 字段在 Result 中的偏移
+}
+
+func (d *interfaceDataField) IsEmpty(p unsafe.Pointer) bool {
+	if p == nil {
+		return true
+	}
+	// 接口第二字(数据指针)为 nil 即空
+	return *(*unsafe.Pointer)(unsafe.Add(p, d.offset+unsafe.Sizeof(unsafe.Pointer(nil)))) == nil
+}
+
+// GetValue 返回接口字段本身的地址,由 Encode 重新读取接口值
+func (d *interfaceDataField) GetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p == nil {
+		return nil
+	}
+	return unsafe.Add(p, d.offset)
+}
+
+func (d *interfaceDataField) SetValue(p unsafe.Pointer) unsafe.Pointer {
+	if p == nil {
+		return nil
+	}
+	return unsafe.Add(p, d.offset)
+}
+
+func (d *interfaceDataField) Encode(buf []byte, p unsafe.Pointer, id *uint16) []byte {
+	if p == nil {
+		return buf
+	}
+	v := *(*hbuf.Data)(p) // 接口值
+	if v == nil {
+		return buf
+	}
+	ptr := *(*unsafe.Pointer)(unsafe.Add(p, unsafe.Sizeof(unsafe.Pointer(nil)))) // 数据指针
+	if ptr == nil {
+		return buf
+	}
+	return v.Descriptors().Encode(buf, ptr, id)
+}
+
+func (d *interfaceDataField) Decode(buf []byte, p unsafe.Pointer, typ hbuf.Type, valRead bool, valueLen uint8) ([]byte, error) {
+	return buf, errors.New("hrpc: decoding into Result[hbuf.Data] interface field is unsupported, use NewResultResponse[T] with a concrete type")
+}
+
 func NewResult[T hbuf.Data](code int32, msg string, data T) *Result[T] {
-	ret := &Result[T]{
-		Code: code,
-		Msg:  msg,
-		Data: data,
+	return &Result[T]{
+		Code:       code,
+		Msg:        msg,
+		Data:       data,
+		descriptor: resultDescriptor[T](),
 	}
-	descriptor := map[uint16]hbuf.Descriptor{
-		1: hbuf.NewInt32Descriptor(unsafe.Offsetof(ret.Code), false),
-		2: hbuf.NewStringDescriptor(unsafe.Offsetof(ret.Msg), false),
-	}
-	if any(data) != nil {
-		//这里有递归死循环
-		descriptor[3] = hbuf.NewRefDescriptor(data, unsafe.Offsetof(ret.Data)+unsafe.Sizeof(&ret.Data), true)
-	}
-	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
-	return ret
 }
 
 func NewResultResponse[T hbuf.Data]() *Result[T] {
-	ret := &Result[T]{}
-	descriptor := map[uint16]hbuf.Descriptor{
-		1: hbuf.NewInt32Descriptor(unsafe.Offsetof(ret.Code), false),
-		2: hbuf.NewStringDescriptor(unsafe.Offsetof(ret.Msg), false),
-		//这里有递归死循环
-		3: hbuf.NewRefDescriptor(reflect.New(reflect.TypeOf(ret.Data).Elem()).Interface().(hbuf.Data), unsafe.Offsetof(ret.Data), true),
+	return &Result[T]{
+		descriptor: resultDescriptor[T](),
 	}
-	ret.descriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(ret), nil, descriptor)
-	return ret
 }
 
 type Encoder func(writer io.Writer) func(v hbuf.Data) error

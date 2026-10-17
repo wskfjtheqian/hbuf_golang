@@ -1,9 +1,10 @@
 package hrpc_test
 
 import (
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"reflect"
 	"unsafe"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 )
 
 var hbufRequest HbufRequest

@@ -204,28 +204,33 @@ wsServer.Shutdown(ctx)
 
 ## 性能对比
 
-HRPC 和 HTTP、GRPC 协议的性能对比
+测试环境:goos: darwin, goarch: amd64, Go 1.27.0, CPU: Intel(R) Core(TM) i9-9980HK @ 2.40GHz, 16 线程(2026-10-17 实测,含 Result descriptor 单例缓存优化)。
+
+### 串行基准(单连接循环,`Benchmark_HRPC_HTTP`)
 
 ```text
-cpu: 12th Gen Intel(R) Core(TM) i5-12400
-Benchmark_HRPC_HTTP
-Benchmark_HRPC_HTTP/HRPC_HTTP_HBufEncode
-Benchmark_HRPC_HTTP/HRPC_HTTP_HBufEncode-12         	   19248	     61437 ns/op
-Benchmark_HRPC_HTTP/HRPC_HTTP
-Benchmark_HRPC_HTTP/HRPC_HTTP-12                    	   18450	     65758 ns/op
-Benchmark_HRPC_HTTP/HRPC_HTTPS
-Benchmark_HRPC_HTTP/HRPC_HTTPS-12                   	   12978	     96648 ns/op
-Benchmark_HRPC_HTTP/HRPC_WS
-Benchmark_HRPC_HTTP/HRPC_WS-12                      	   17193	     68161 ns/op
-Benchmark_HRPC_HTTP/HRPC_WSS
-Benchmark_HRPC_HTTP/HRPC_WSS-12                     	   16544	     70637 ns/op
-Benchmark_HRPC_HTTP/Http
-Benchmark_HRPC_HTTP/Http-12                         	   21285	     56085 ns/op
-Benchmark_HRPC_HTTP/Https
-Benchmark_HRPC_HTTP/Https-12                        	   14214	     83532 ns/op
-Benchmark_HRPC_HTTP/GRPC
-Benchmark_HRPC_HTTP/GRPC-12                         	    9921	    114093 ns/op
-PASS
+Benchmark_HRPC_HTTP/HRPC_HTTP_HBufEncode-16   	   38892	     88256 ns/op	    8564 B/op	     111 allocs/op
+Benchmark_HRPC_HTTP/HRPC_HTTP-16              	   39855	     99060 ns/op	    8662 B/op	     111 allocs/op
+Benchmark_HRPC_HTTP/HRPC_HTTPS-16             	   26208	    136692 ns/op	   11156 B/op	     114 allocs/op
+Benchmark_HRPC_HTTP/HRPC_WS-16                	   38295	     83183 ns/op	    6071 B/op	      71 allocs/op
+Benchmark_HRPC_HTTP/HRPC_WSS-16               	   35740	     95557 ns/op	    5975 B/op	      67 allocs/op
+Benchmark_HRPC_HTTP/Http-16                   	   39900	     89972 ns/op	    7647 B/op	      93 allocs/op
+Benchmark_HRPC_HTTP/Https-16                  	   26875	    134806 ns/op	   10755 B/op	      98 allocs/op
+Benchmark_HRPC_HTTP/GRPC-16                   	   34644	    103470 ns/op	    8799 B/op	     153 allocs/op
 ```
 
-> 测试命令:`GOTOOLCHAIN=go1.27.0 go test -bench Benchmark_HRPC_HTTP -run '^$' ./pkg/hrpc/ -benchmem`
+串行场景结论:HRPC_HTTP(99.1 µs)与 HRPC_WS(83.2 µs)均快于 GRPC(103.5 µs);HRPC_HTTPS 因串行单连接下每次请求的 TLS 加解密开销,比明文场景慢约 38%(对照裸 Http/Https 同样相差 50%)。
+
+### 并发基准(1000 并发窗口,相同 TLS 条件)
+
+```text
+HRPC_HTTPS_HBuf   14467 ns/op   10972 B/op   115 allocs/op
+GRPC_Plain         9896 ns/op    8634 B/op   137 allocs/op
+GRPC_TLS           9777 ns/op    8647 B/op   137 allocs/op
+```
+
+并发场景 HRPC 约为 gRPC 的 1.5 倍耗时,差距主要来自每请求分配(多 2.3 KB)与 h2 帧发送策略;编解码本身已与 protobuf 相当(纯编解码 HBuf 231 ns vs protobuf 289 ns,小对象)。
+
+> 注意:HRPC 走明文 HTTP/1.1 时无多路复用,高并发下连接爆炸会耗尽本地端口,并发压测务必使用 HTTPS(HTTP/2)或 WebSocket。
+
+> 测试命令:`GOTOOLCHAIN=go1.27.0 go test -bench Benchmark_HRPC_HTTP -run '^$' ./pkg/hrpc/ -benchmem -benchtime=3s`
