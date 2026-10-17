@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -953,4 +954,315 @@ func TestInvokeServerFunc(t *testing.T) {
 	if val != "ok" {
 		t.Fatal("unexpected data")
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// H2FramerTransport 与 gRPC 对比
+
+// newGrpcServer 启动 gRPC 测试服务端(动态端口),返回监听地址。
+// 并发流上限设大,与 H2FramerTransport 同为单连接承载全部并发流。
+func newGrpcServer(tb testing.TB) string {
+	tb.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	grpcServer := grpc.NewServer(grpc.MaxConcurrentStreams(10000))
+	RegisterProtoServiceServer(grpcServer, &TestProtoServiceServer{})
+	go grpcServer.Serve(listener)
+	tb.Cleanup(func() {
+		grpcServer.Stop()
+		_ = listener.Close()
+	})
+	return listener.Addr().String()
+}
+
+// newStdH2Request 构造走标准库 x/net http2.Transport(h2c) 的请求函数,
+// 与 HttpClient.Request 等价逻辑,仅传输层不同,用于对照 H2FramerTransport。
+func newStdH2Request(tb testing.TB, addr string) hrpc.Request {
+	tb.Helper()
+	std := &http2.Transport{
+		AllowHTTP: true,
+		DialTLSContext: func(ctx context.Context, network, address string, _ *tls.Config) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, address)
+		},
+	}
+	client := &http.Client{Transport: std}
+	tb.Cleanup(func() { std.CloseIdleConnections() })
+	base := "http://" + addr + "/rpc/"
+	return func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error) {
+		buffer := bytes.NewBuffer(nil)
+		if err := callback(buffer); err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+path, buffer)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+		}
+		return resp.Body, nil
+	}
+}
+
+// concurrencyMatrix 运行并发矩阵:n 个 goroutine 各串行发 m 个请求,返回总耗时。
+func concurrencyMatrix(tb testing.TB, n, m int, fn func() error) time.Duration {
+	tb.Helper()
+	start := make(chan struct{})
+	errCh := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for j := 0; j < m; j++ {
+				if err := fn(); err != nil {
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
+				}
+			}
+		}()
+	}
+	begin := time.Now()
+	close(start)
+	wg.Wait()
+	elapsed := time.Since(begin)
+	select {
+	case err := <-errCh:
+		tb.Fatalf("matrix request failed: %v", err)
+	default:
+	}
+	return elapsed
+}
+
+// Benchmark_H2Framer_VS_GRPC 对比 H2FramerTransport 与 gRPC 的串行调用性能。
+// hrpc 侧使用 HBuf 编码、gRPC 侧使用 protobuf,均为各自最快路径。
+func Benchmark_H2Framer_VS_GRPC(b *testing.B) {
+	rpcServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
+	addr := newH2cServer(b, rpcServer)
+
+	transport := hrpc.NewH2FramerTransport()
+	b.Cleanup(func() { transport.CloseIdleConnections() })
+	client := hrpc.NewHttpClient("http://"+addr+"/rpc", hrpc.WithH2FramerTransport(transport))
+	testClient := NewHbufServiceClient(hrpc.NewClient(client.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+
+	b.Run("HRPC_H2Framer", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" || resp.Age != 18 {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	// 标准库 x/net http2.Transport 对照:同服务端同编解码链,仅传输层不同
+	stdRequest := newStdH2Request(b, addr)
+	stdTestClient := NewHbufServiceClient(hrpc.NewClient(stdRequest, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+	b.Run("HTTP2_StdTransport", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := stdTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" || resp.Age != 18 {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	grpcAddr := newGrpcServer(b)
+	grpcClient, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = grpcClient.Close() })
+	grpcTestClient := NewProtoServiceClient(grpcClient)
+	if _, err := grpcTestClient.ProtoMethod(context.Background(), &ProtoRequest{Name: "test", Age: 18}); err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("GRPC", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := grpcTestClient.ProtoMethod(context.Background(), &ProtoRequest{Name: "test", Age: 18})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" || resp.Age != 18 {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	// 自研 H2FramerServer 服务端对照:与 x/net http2.Server 同编解码链,仅服务端传输不同
+	framerServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	RegisterHbufService(framerServer, &TestHbufService{})
+	framerAddr := newH2FramerServer(b, framerServer)
+
+	framerTransport := hrpc.NewH2FramerTransport()
+	b.Cleanup(func() { framerTransport.CloseIdleConnections() })
+	framerClient := hrpc.NewHttpClient("http://"+framerAddr+"/rpc", hrpc.WithH2FramerTransport(framerTransport))
+	framerTestClient := NewHbufServiceClient(hrpc.NewClient(framerClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+	b.Run("HRPC_H2Framer+FramerServer", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := framerTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" || resp.Age != 18 {
+				b.Fatal("test fail")
+			}
+		}
+	})
+
+	framerStdRequest := newStdH2Request(b, framerAddr)
+	framerStdClient := NewHbufServiceClient(hrpc.NewClient(framerStdRequest, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+	b.Run("HTTP2_StdTransport+FramerServer", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := framerStdClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+			if err != nil {
+				b.Fatal(err)
+			}
+			if resp.Name != "test" || resp.Age != 18 {
+				b.Fatal("test fail")
+			}
+		}
+	})
+}
+
+// Test_Concurrency_H2Framer_VS_GRPC 对比 H2FramerTransport 与 gRPC 的并发性能。
+// 矩阵沿用既有惯例:1000 并发窗口 × 3 请求,双方均为单连接。
+func Test_Concurrency_H2Framer_VS_GRPC(t *testing.T) {
+	const goroutines, perGoroutine = 1000, 3
+
+	rpcServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
+	addr := newH2cServer(t, rpcServer)
+
+	transport := hrpc.NewH2FramerTransport()
+	defer transport.CloseIdleConnections()
+	client := hrpc.NewHttpClient("http://"+addr+"/rpc", hrpc.WithH2FramerTransport(transport))
+	testClient := NewHbufServiceClient(hrpc.NewClient(client.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+
+	// 预热:建立连接
+	if _, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18}); err != nil {
+		t.Fatal(err)
+	}
+	hbufElapsed := concurrencyMatrix(t, goroutines, perGoroutine, func() error {
+		resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+		if err != nil {
+			return err
+		}
+		if resp.Name != "test" || resp.Age != 18 {
+			return fmt.Errorf("resp mismatch: %+v", resp)
+		}
+		return nil
+	})
+	total := goroutines * perGoroutine
+	t.Logf("HRPC_H2Framer: %d requests in %v, %.0f qps, avg %.1f µs/req",
+		total, hbufElapsed, float64(total)/hbufElapsed.Seconds(), float64(hbufElapsed.Microseconds())/float64(total))
+
+	// 标准库 x/net http2.Transport 对照:同服务端同编解码链,仅传输层不同
+	stdRequest := newStdH2Request(t, addr)
+	stdTestClient := NewHbufServiceClient(hrpc.NewClient(stdRequest, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+	if _, err := stdTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18}); err != nil {
+		t.Fatal(err)
+	}
+	stdElapsed := concurrencyMatrix(t, goroutines, perGoroutine, func() error {
+		resp, err := stdTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+		if err != nil {
+			return err
+		}
+		if resp.Name != "test" || resp.Age != 18 {
+			return fmt.Errorf("resp mismatch: %+v", resp)
+		}
+		return nil
+	})
+	t.Logf("HTTP2_StdTransport: %d requests in %v, %.0f qps, avg %.1f µs/req",
+		total, stdElapsed, float64(total)/stdElapsed.Seconds(), float64(stdElapsed.Microseconds())/float64(total))
+
+	grpcAddr := newGrpcServer(t)
+	grpcClient, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer grpcClient.Close()
+	grpcTestClient := NewProtoServiceClient(grpcClient)
+
+	// 预热:建立连接
+	if _, err := grpcTestClient.ProtoMethod(context.Background(), &ProtoRequest{Name: "test", Age: 18}); err != nil {
+		t.Fatal(err)
+	}
+	grpcElapsed := concurrencyMatrix(t, goroutines, perGoroutine, func() error {
+		resp, err := grpcTestClient.ProtoMethod(context.Background(), &ProtoRequest{Name: "test", Age: 18})
+		if err != nil {
+			return err
+		}
+		if resp.Name != "test" || resp.Age != 18 {
+			return fmt.Errorf("resp mismatch: %+v", resp)
+		}
+		return nil
+	})
+	t.Logf("GRPC: %d requests in %v, %.0f qps, avg %.1f µs/req",
+		total, grpcElapsed, float64(total)/grpcElapsed.Seconds(), float64(grpcElapsed.Microseconds())/float64(total))
+
+	// 自研 H2FramerServer 服务端对照:与 x/net http2.Server 同编解码链,仅服务端传输不同
+	framerServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	RegisterHbufService(framerServer, &TestHbufService{})
+	framerAddr := newH2FramerServer(t, framerServer)
+
+	framerTransport := hrpc.NewH2FramerTransport()
+	defer framerTransport.CloseIdleConnections()
+	framerClient := hrpc.NewHttpClient("http://"+framerAddr+"/rpc", hrpc.WithH2FramerTransport(framerTransport))
+	framerTestClient := NewHbufServiceClient(hrpc.NewClient(framerClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+	if _, err := framerTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18}); err != nil {
+		t.Fatal(err)
+	}
+	framerElapsed := concurrencyMatrix(t, goroutines, perGoroutine, func() error {
+		resp, err := framerTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+		if err != nil {
+			return err
+		}
+		if resp.Name != "test" || resp.Age != 18 {
+			return fmt.Errorf("resp mismatch: %+v", resp)
+		}
+		return nil
+	})
+	t.Logf("HRPC_H2Framer+FramerServer: %d requests in %v, %.0f qps, avg %.1f µs/req",
+		total, framerElapsed, float64(total)/framerElapsed.Seconds(), float64(framerElapsed.Microseconds())/float64(total))
+
+	// 标准库客户端与 H2FramerServer 互操作:隔离客户端差异,验证服务端批量合并收益
+	framerStdRequest := newStdH2Request(t, framerAddr)
+	framerStdClient := NewHbufServiceClient(hrpc.NewClient(framerStdRequest, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+	if _, err := framerStdClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18}); err != nil {
+		t.Fatal(err)
+	}
+	framerStdElapsed := concurrencyMatrix(t, goroutines, perGoroutine, func() error {
+		resp, err := framerStdClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+		if err != nil {
+			return err
+		}
+		if resp.Name != "test" || resp.Age != 18 {
+			return fmt.Errorf("resp mismatch: %+v", resp)
+		}
+		return nil
+	})
+	t.Logf("HTTP2_StdTransport+FramerServer: %d requests in %v, %.0f qps, avg %.1f µs/req",
+		total, framerStdElapsed, float64(total)/framerStdElapsed.Seconds(), float64(framerStdElapsed.Microseconds())/float64(total))
+
+	t.Logf("ratio: HRPC_H2Framer / StdTransport / HRPC+FramerServer / Std+FramerServer / GRPC = %.2f / %.2f / %.2f / %.2f / 1.00",
+		float64(hbufElapsed)/float64(grpcElapsed), float64(stdElapsed)/float64(grpcElapsed),
+		float64(framerElapsed)/float64(grpcElapsed), float64(framerStdElapsed)/float64(grpcElapsed))
 }

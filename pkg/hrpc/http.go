@@ -168,6 +168,16 @@ func WithTLSConfig(tlsConfig *tls.Config) HttpClientOption {
 	}
 }
 
+// WithH2FramerTransport 使用基于 x/net/http2 Framer 的自研 h2 传输替换默认 Transport。
+// 该传输在单条 h2 连接上仿照 gRPC loopyWriter 合并 HEADERS+DATA 帧批量写出,
+// 高并发下显著减少 syscall 次数。仅支持 http(h2c) 与 https(ALPN h2)。
+// 注意:设置后基于 *http.Transport 的选项(如 WithMaxIdleConns)不再适用。
+func WithH2FramerTransport(transport *H2FramerTransport) HttpClientOption {
+	return func(h *HttpClient) {
+		h.client.Transport = transport
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////
 
 // HttpServerOptions  HttpServer 的选项。
