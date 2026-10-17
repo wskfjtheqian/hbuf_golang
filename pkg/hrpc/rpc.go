@@ -29,6 +29,9 @@ const (
 	TypePong
 )
 
+// CodeNotFound 方法未找到错误码,对应 HTTP 404
+const CodeNotFound int32 = -1
+
 // Request 是用于处理RPC请求的函数
 type Request func(ctx context.Context, path string, notification bool, callback func(writer io.Writer) error) (io.ReadCloser, error)
 
@@ -400,9 +403,10 @@ type Server struct {
 	encode     Encoder
 	middleware Middleware
 	wait       sync.WaitGroup
+	shutdowns  []func(ctx context.Context) error
 }
 
-// Register 注册方法
+// Register 注册方法。id 为服务分组标识,当前版本未使用,保留用于后续按 id 分组路由。
 func (s *Server) Register(id int32, name string, init Init, methods ...*Method) {
 	name = strings.Trim(name, "/") + "/"
 	s.lock.Lock()
@@ -426,7 +430,7 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 	s.lock.RUnlock()
 
 	if !ok {
-		return NewResult[hbuf.Data](-1, "method not found", nil)
+		return NewResult[hbuf.Data](CodeNotFound, "method not found", nil)
 	}
 
 	var err error
@@ -461,12 +465,15 @@ func (s *Server) Response(ctx context.Context, path string, writer io.Writer, re
 		_, err = io.Copy(writer, val)
 		return err
 	} else if err != nil {
-		if val, ok := err.(ResultI); ok && val.GetCode() != -1 {
+		if val, ok := err.(ResultI); ok && val.GetCode() != CodeNotFound {
 			err = s.encode(writer)(val)
 		}
 		return err
 	}
-	return s.encode(writer)(NewResult(0, "ok", response.(hbuf.Data)))
+	if val, ok := response.(hbuf.Data); ok {
+		return s.encode(writer)(NewResult(0, "ok", val))
+	}
+	return herror.NewError("handler response is not io.Reader or hbuf.Data")
 }
 
 func (s *Server) Init(ctx context.Context, list ...string) error {
@@ -493,7 +500,32 @@ func (s *Server) Init(ctx context.Context, list ...string) error {
 	return err
 }
 
+// StatusFromError 将 RPC 错误映射为 HTTP 状态码。
+// 返回的第二个值表示是否属于服务端内部错误(需要记录日志)。
+func StatusFromError(err error) (int, bool) {
+	var e *Result[hbuf.Data]
+	if errors.As(err, &e) && e.Code == CodeNotFound {
+		return http.StatusNotFound, false
+	}
+	return http.StatusInternalServerError, true
+}
+
+// OnShutdown 注册关闭钩子,Shutdown 时按注册顺序执行
+func (s *Server) OnShutdown(hook func(ctx context.Context) error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.shutdowns = append(s.shutdowns, hook)
+}
+
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.lock.RLock()
+	hooks := append([]func(ctx context.Context) error{}, s.shutdowns...)
+	s.lock.RUnlock()
+	for _, hook := range hooks {
+		if err := hook(ctx); err != nil {
+			return err
+		}
+	}
 	s.wait.Wait()
 	return nil
 }
@@ -554,6 +586,7 @@ type Client struct {
 	middleware Middleware
 }
 
+// Invoke 调用远程方法。id 为服务分组标识,当前版本未使用,保留用于后续按 id 分组路由。
 func (c *Client) Invoke(ctx context.Context, id uint32, name string, method string, request any, response any) (any, error) {
 	name = strings.Trim(name, "/") + "/"
 	data, err := c.middleware(func(ctx context.Context, req any) (any, error) {

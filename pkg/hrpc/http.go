@@ -8,12 +8,11 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"golang.org/x/net/http2"
 )
 
@@ -25,15 +24,15 @@ func NewHttpClient(base string, options ...HttpClientOption) *HttpClient {
 	base = strings.TrimRight(base, "/") + "/"
 
 	transport := &http.Transport{
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:     &tls.Config{},
 		MaxIdleConns:        50, // 限制最大空闲连接数
 		IdleConnTimeout:     30 * time.Second,
 		MaxIdleConnsPerHost: 100, // 限制每个主机的最大连接数
 	}
 	if strings.HasPrefix(base, "https://") {
-		err := http2.ConfigureTransport(transport)
-		if err != nil {
-			os.Exit(1)
+		// HTTP/2 配置失败时降级为 HTTP/1.1 继续运行,不终止进程
+		if err := http2.ConfigureTransport(transport); err != nil {
+			hlog.Warn(context.Background(), "http2 configure fail, fallback to http/1.1: %v", err)
 		}
 	}
 
@@ -151,6 +150,17 @@ func WithIdleConnTimeout(idleConnTimeout time.Duration) HttpClientOption {
 	}
 }
 
+// WithInsecureSkipVerify 跳过TLS证书校验(仅建议测试环境使用)
+func WithInsecureSkipVerify(insecureSkipVerify bool) HttpClientOption {
+	return func(h *HttpClient) {
+		transport := h.client.Transport.(*http.Transport)
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		transport.TLSClientConfig.InsecureSkipVerify = insecureSkipVerify
+	}
+}
+
 // WithTLSConfig 设置HttpClient的TLS配置
 func WithTLSConfig(tlsConfig *tls.Config) HttpClientOption {
 	return func(h *HttpClient) {
@@ -200,14 +210,17 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return h.server.Response(ctx, path, writer, reader, header)
 	})(ctx, r.URL.Path[len(h.pathPrefix):], w, r.Body, r.Header)
 	if err != nil {
-		var e *Result[hbuf.Data]
-		if errors.As(err, &e) && e.Code == -1 {
-			w.WriteHeader(http.StatusNotFound)
-			return
+		status, serverError := StatusFromError(err)
+		w.WriteHeader(status)
+		if serverError {
+			herror.PrintStack(ctx, err)
 		}
-		w.WriteHeader(http.StatusInternalServerError)
-		herror.PrintStack(ctx, err)
 	}
+}
+
+// Shutdown 等待在途请求完成并执行服务端注册的关闭钩子
+func (h *HttpServer) Shutdown(ctx context.Context) error {
+	return h.server.Shutdown(ctx)
 }
 
 // WithResponseMiddleware 设置响应中间件。

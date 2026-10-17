@@ -102,10 +102,10 @@ func TestWebsocket_Listen(t *testing.T) {
 	RegisterHbufService(rpcServer, &TestHbufService{})
 
 	server := hrpc.NewWebSocketServer(rpcServer.Response)
-	go server.ListenAndServe(context.Background(), ":8080")
+	go server.ListenAndServe(context.Background(), ":8090")
 	<-time.After(time.Second)
 
-	client := hrpc.NewWebSocketClient("ws://localhost:8080/socket", nil)
+	client := hrpc.NewWebSocketClient("ws://localhost:8090/socket", nil)
 
 	err := client.Connect(context.Background())
 	if err != nil {

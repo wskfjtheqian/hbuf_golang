@@ -256,7 +256,7 @@ func TestHttpService_Http2(t *testing.T) {
 		}
 	}()
 
-	client := hrpc.NewHttpClient("https://localhost:9080/rpc")
+	client := hrpc.NewHttpClient("https://localhost:9080/rpc", hrpc.WithInsecureSkipVerify(true))
 
 	rpcClient := hrpc.NewClient(client.Request)
 	testClient := NewHbufServiceClient(rpcClient)
@@ -359,7 +359,7 @@ func TestHttpService_Middleware2(t *testing.T) {
 		}
 	}()
 
-	client := hrpc.NewHttpClient("https://localhost:9080/rpc")
+	client := hrpc.NewHttpClient("https://localhost:9080/rpc", hrpc.WithInsecureSkipVerify(true))
 
 	rpcClient := hrpc.NewClient(client.Request)
 	testClient := NewHbufServiceClient(rpcClient)
@@ -433,7 +433,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 	mux1.Handle("/rpc/", server1)
 	go http.ListenAndServeTLS(":8081", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux1)
 
-	client1 := hrpc.NewHttpClient("https://localhost:8081/rpc")
+	client1 := hrpc.NewHttpClient("https://localhost:8081/rpc", hrpc.WithInsecureSkipVerify(true))
 	rpcClient1 := hrpc.NewClient(client1.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
 	testClient1 := NewHbufServiceClient(rpcClient1)
 
@@ -492,7 +492,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 	})
 	go http.ListenAndServeTLS(":8085", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux3)
 
-	client3 := hrpc.NewWebSocketClient("wss://localhost:8085/socket", nil)
+	client3 := hrpc.NewWebSocketClient("wss://localhost:8085/socket", nil, hrpc.WithWebSocketClientInsecureSkipVerify(true))
 
 	err = client3.Connect(context.Background())
 	if err != nil {
@@ -782,7 +782,7 @@ func Test_Concurrency(t *testing.T) {
 
 	go http.ListenAndServeTLS(":8081", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", mux)
 
-	httpClient := hrpc.NewHttpClient("https://localhost:8081/rpc")
+	httpClient := hrpc.NewHttpClient("https://localhost:8081/rpc", hrpc.WithInsecureSkipVerify(true))
 	rpcClient := hrpc.NewClient(httpClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
 	rpcTestClient := NewHbufServiceClient(rpcClient)
 
@@ -832,7 +832,7 @@ func Test_Concurrency(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				wsClient := hrpc.NewWebSocketClient("wss://localhost:8082/socket", nil, hrpc.WithWebSocketClientEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketClientDecode(hrpc.NewHBufDecode()))
+				wsClient := hrpc.NewWebSocketClient("wss://localhost:8082/socket", nil, hrpc.WithWebSocketClientInsecureSkipVerify(true), hrpc.WithWebSocketClientEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketClientDecode(hrpc.NewHBufDecode()))
 				wsRpcClient := hrpc.NewClient(wsClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
 				wsTestClient := NewHbufServiceClient(wsRpcClient)
 				err := wsClient.Connect(context.Background())
@@ -900,5 +900,57 @@ func TestHttpService_TraceId(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("handler not called")
+	}
+}
+
+// 测试 handler 返回 nil 数据时不再 panic,返回明确错误
+func TestServer_ResponseNilData(t *testing.T) {
+	rpcServer := hrpc.NewServer()
+	rpcServer.Register(0, "test", nil, &hrpc.Method{
+		Name: "nil",
+		WithContext: func(ctx context.Context) context.Context {
+			return ctx
+		},
+		Handler: func(ctx context.Context, req any) (any, error) {
+			return nil, nil
+		},
+	})
+
+	err := rpcServer.Response(context.Background(), "test/nil", io.Discard, nil, http.Header{})
+	if err == nil {
+		t.Fatal("expected error for nil response")
+	}
+}
+
+type testInvoke struct{}
+
+func (t testInvoke) OnlyError(ctx context.Context) error {
+	return nil
+}
+
+func (t testInvoke) BadSingle(ctx context.Context) string {
+	return "bad"
+}
+
+func (t testInvoke) DataAndError(ctx context.Context) (string, error) {
+	return "ok", nil
+}
+
+// 测试 InvokeServerFunc 的返回值约定
+func TestInvokeServerFunc(t *testing.T) {
+	obj := testInvoke{}
+
+	if _, err := hrpc.InvokeServerFunc(context.Background(), obj, "OnlyError", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hrpc.InvokeServerFunc(context.Background(), obj, "BadSingle", ""); err == nil {
+		t.Fatal("expected error for non-error single return")
+	}
+	val, err := hrpc.InvokeServerFunc(context.Background(), obj, "DataAndError", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val != "ok" {
+		t.Fatal("unexpected data")
 	}
 }

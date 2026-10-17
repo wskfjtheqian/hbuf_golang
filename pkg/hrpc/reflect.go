@@ -3,10 +3,11 @@ package hrpc
 import (
 	"context"
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 // GetServerAndFuncName 获得指定服务和方法的名字
@@ -33,7 +34,13 @@ func GetServerFuncName(f any) string {
 	return name
 }
 
-// InvokeServerFunc 通过反射获调用函数,参数为 JSON 字符串
+// InvokeServerFunc 通过反射调用方法,args 为 JSON 字符串。
+// 返回值约定:
+//   - 0 个返回值:视为成功,返回 (nil, nil)
+//   - 1 个返回值:必须为 error
+//   - 2 个返回值:第一个为数据,第二个必须为 error
+//
+// 不符合约定时返回明确错误,不 panic。
 func InvokeServerFunc(ctx context.Context, obj any, method string, args string) (any, error) {
 	m := reflect.ValueOf(obj).MethodByName(method)
 	if !m.IsValid() {
@@ -64,10 +71,23 @@ func InvokeServerFunc(ctx context.Context, obj any, method string, args string) 
 		return nil, nil
 	}
 	if len(results) == 1 {
-		return nil, results[0].Interface().(error)
+		if v := results[0].Interface(); v != nil {
+			if err, ok := v.(error); ok {
+				return nil, err
+			}
+			return nil, herror.NewError("method " + method + " must return error as its only value")
+		}
+		return nil, nil
 	}
-	if !results[1].IsNil() {
-		return nil, results[1].Interface().(error)
+	if len(results) > 2 {
+		return nil, herror.NewError("method " + method + " returns more than 2 values")
+	}
+	if v := results[1].Interface(); v != nil {
+		err, ok := v.(error)
+		if !ok {
+			return nil, herror.NewError("method " + method + " second return value must be error")
+		}
+		return nil, err
 	}
 	return results[0].Interface(), nil
 }

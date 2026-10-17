@@ -104,6 +104,7 @@ func newWebSocket(ctx context.Context, conn net.Conn, response Response, key str
 		pongWait:     10 * time.Second,
 		ctx:          ctx,
 	}
+	ret.requestTimeout = 30 * time.Second
 	return ret
 }
 
@@ -122,12 +123,13 @@ type webSocket struct {
 	responseMiddleware ResponseMiddleware
 	ctx                context.Context
 
-	pingInterval time.Duration
-	pongWait     time.Duration
-	isSendPing   bool
-	onClose      func()
-	state        ws.State
-	key          string
+	pingInterval   time.Duration
+	pongWait       time.Duration
+	requestTimeout time.Duration
+	isSendPing     bool
+	onClose        func()
+	state          ws.State
+	key            string
 }
 
 func (s *webSocket) Context() context.Context {
@@ -293,7 +295,7 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 			return nil, err
 		}
 
-		timer := time.NewTimer(30 * time.Second)
+		timer := time.NewTimer(s.requestTimeout)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
@@ -336,11 +338,9 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data, data.Header)
 	if err != nil {
 		var e *Result[hbuf.Data]
-		if errors.As(err, &e) && e.Code == -1 {
-			err = s.encoder(response)(&Result[hbuf.Data]{
-				Code: http.StatusInternalServerError,
-				Msg:  "Server error",
-			})
+		if errors.As(err, &e) && e.Code == CodeNotFound {
+			// 必须用 NewResult 构造,字面量缺少 descriptor,HBuf 编码会 panic
+			err = s.encoder(response)(NewResult[hbuf.Data](http.StatusNotFound, "Not Found", nil))
 			if err != nil {
 				herror.PrintStack(ctx, err)
 				return
@@ -417,6 +417,30 @@ func WithWebSocketClientIsSendPing(isSendPing bool) WebSocketClientOptions {
 	}
 }
 
+// WithWebSocketClientRequestTimeout 设置WebSocket客户端请求超时时间
+func WithWebSocketClientRequestTimeout(timeout time.Duration) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.requestTimeout = timeout
+	}
+}
+
+// WithWebSocketClientTLSConfig 设置WebSocket客户端的TLS配置
+func WithWebSocketClientTLSConfig(tlsConfig *tls.Config) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		c.dialer.TLSConfig = tlsConfig
+	}
+}
+
+// WithWebSocketClientInsecureSkipVerify 跳过TLS证书校验(仅建议测试环境使用)
+func WithWebSocketClientInsecureSkipVerify(insecureSkipVerify bool) WebSocketClientOptions {
+	return func(c *WebSocketClient) {
+		if c.dialer.TLSConfig == nil {
+			c.dialer.TLSConfig = &tls.Config{}
+		}
+		c.dialer.TLSConfig.InsecureSkipVerify = insecureSkipVerify
+	}
+}
+
 // NewWebSocketClient 创建一个WebSocket客户端
 func NewWebSocketClient(base string, response Response, options ...WebSocketClientOptions) *WebSocketClient {
 	ret := &WebSocketClient{
@@ -428,13 +452,15 @@ func NewWebSocketClient(base string, response Response, options ...WebSocketClie
 		responseMiddleware: func(next Response) Response {
 			return next
 		},
-		isSendPing:   true,
-		pongWait:     60 * time.Second,
-		pingInterval: 30 * time.Second,
+		isSendPing:     true,
+		pongWait:       60 * time.Second,
+		pingInterval:   30 * time.Second,
+		requestTimeout: 30 * time.Second,
 		dialer: &ws.Dialer{
-			TLSConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSConfig: &tls.Config{},
 		},
 	}
+
 	for _, option := range options {
 		option(ret)
 	}
@@ -453,6 +479,7 @@ type WebSocketClient struct {
 	isSendPing         bool
 	pongWait           time.Duration
 	pingInterval       time.Duration
+	requestTimeout     time.Duration
 	dialer             *ws.Dialer
 }
 
@@ -479,6 +506,7 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 	c.socket.isSendPing = c.isSendPing
 	c.socket.pongWait = c.pongWait
 	c.socket.pingInterval = c.pingInterval
+	c.socket.requestTimeout = c.requestTimeout
 	c.socket.run()
 	return nil
 }
@@ -590,6 +618,8 @@ type WebSocketServer struct {
 	pongWait           time.Duration
 	isSendPing         bool
 	upgrader           *ws.HTTPUpgrader
+	lock               sync.Mutex
+	listener           net.Listener
 }
 
 // Serve 启动WebSocket服务器
@@ -609,7 +639,15 @@ func (w *WebSocketServer) ListenAndServe(ctx context.Context, addr string) error
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	w.lock.Lock()
+	w.listener = listener
+	w.lock.Unlock()
+	defer func() {
+		w.lock.Lock()
+		w.listener = nil
+		w.lock.Unlock()
+		_ = listener.Close()
+	}()
 	go func() {
 		<-ctx.Done()
 		_ = listener.Close()
@@ -681,6 +719,22 @@ func (w *WebSocketServer) CloseClient(ctx context.Context, id string) {
 	if client != nil {
 		client.Close(ctx)
 	}
+}
+
+// Shutdown 关闭监听器与所有活跃连接
+func (w *WebSocketServer) Shutdown(ctx context.Context) error {
+	w.lock.Lock()
+	listener := w.listener
+	w.listener = nil
+	w.lock.Unlock()
+	if listener != nil {
+		_ = listener.Close()
+	}
+	w.manager.Range(func(key string, client *webSocket) bool {
+		client.Close(ctx)
+		return true
+	})
+	return nil
 }
 
 var clientContextType = reflect.TypeOf(&ClientContext{})
