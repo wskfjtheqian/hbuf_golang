@@ -204,33 +204,70 @@ wsServer.Shutdown(ctx)
 
 ## 性能对比
 
-测试环境:goos: darwin, goarch: amd64, Go 1.27.0, CPU: Intel(R) Core(TM) i9-9980HK @ 2.40GHz, 16 线程(2026-10-17 实测,含 Result descriptor 单例缓存优化)。
+测试环境:goos: darwin, goarch: amd64, Go 1.27.0, CPU: Intel(R) Core(TM) i9-9980HK @ 2.40GHz, 16 线程(2026-10-17 实测)。
 
-### 串行基准(单连接循环,`Benchmark_HRPC_HTTP`)
+### 串行基准(单连接循环,`-benchmem -benchtime=3s`)
 
-```text
-Benchmark_HRPC_HTTP/HRPC_HTTP_HBufEncode-16   	   38892	     88256 ns/op	    8564 B/op	     111 allocs/op
-Benchmark_HRPC_HTTP/HRPC_HTTP-16              	   39855	     99060 ns/op	    8662 B/op	     111 allocs/op
-Benchmark_HRPC_HTTP/HRPC_HTTPS-16             	   26208	    136692 ns/op	   11156 B/op	     114 allocs/op
-Benchmark_HRPC_HTTP/HRPC_WS-16                	   38295	     83183 ns/op	    6071 B/op	      71 allocs/op
-Benchmark_HRPC_HTTP/HRPC_WSS-16               	   35740	     95557 ns/op	    5975 B/op	      67 allocs/op
-Benchmark_HRPC_HTTP/Http-16                   	   39900	     89972 ns/op	    7647 B/op	      93 allocs/op
-Benchmark_HRPC_HTTP/Https-16                  	   26875	    134806 ns/op	   10755 B/op	      98 allocs/op
-Benchmark_HRPC_HTTP/GRPC-16                   	   34644	    103470 ns/op	    8799 B/op	     153 allocs/op
-```
-
-串行场景结论:HRPC_HTTP(99.1 µs)与 HRPC_WS(83.2 µs)均快于 GRPC(103.5 µs);HRPC_HTTPS 因串行单连接下每次请求的 TLS 加解密开销,比明文场景慢约 38%(对照裸 Http/Https 同样相差 50%)。
-
-### 并发基准(1000 并发窗口,相同 TLS 条件)
+多传输协议对照(`Benchmark_HRPC_HTTP`):
 
 ```text
-HRPC_HTTPS_HBuf   14467 ns/op   10972 B/op   115 allocs/op
-GRPC_Plain         9896 ns/op    8634 B/op   137 allocs/op
-GRPC_TLS           9777 ns/op    8647 B/op   137 allocs/op
+Benchmark_HRPC_HTTP/HRPC_HTTP_HBufEncode-16   	   38918	     93520 ns/op	    8637 B/op	     111 allocs/op
+Benchmark_HRPC_HTTP/HRPC_HTTP-16              	   39027	     92214 ns/op	    8688 B/op	     111 allocs/op
+Benchmark_HRPC_HTTP/HRPC_HTTPS-16             	   26356	    137735 ns/op	   11153 B/op	     114 allocs/op
+Benchmark_HRPC_HTTP/HRPC_WS-16                	   42522	     88886 ns/op	    6069 B/op	      71 allocs/op
+Benchmark_HRPC_HTTP/HRPC_WSS-16               	   36957	     95920 ns/op	    5978 B/op	      67 allocs/op
+Benchmark_HRPC_HTTP/Http-16                   	   39805	     89439 ns/op	    7643 B/op	      93 allocs/op
+Benchmark_HRPC_HTTP/Https-16                  	   26570	    134692 ns/op	   10754 B/op	      98 allocs/op
+Benchmark_HRPC_HTTP/GRPC-16                   	   34720	    104728 ns/op	    8823 B/op	     153 allocs/op
 ```
 
-并发场景 HRPC 约为 gRPC 的 1.5 倍耗时,差距主要来自每请求分配(多 2.3 KB)与 h2 帧发送策略;编解码本身已与 protobuf 相当(纯编解码 HBuf 231 ns vs protobuf 289 ns,小对象)。
+其中 `Http`/`Https` 为裸标准库 JSON 对照,`GRPC` 为 protobuf 对照。
+
+h2 传输对照(`Benchmark_H2Framer_VS_GRPC`,均为 HTTP/2 单连接):
+
+```text
+Benchmark_H2Framer_VS_GRPC/HRPC_H2Framer-16                     	   26863	    132511 ns/op	   12913 B/op	     137 allocs/op
+Benchmark_H2Framer_VS_GRPC/HTTP2_StdTransport-16                	   29548	    123777 ns/op	   12223 B/op	     124 allocs/op
+Benchmark_H2Framer_VS_GRPC/GRPC-16                              	   33556	    108750 ns/op	    9840 B/op	     153 allocs/op
+Benchmark_H2Framer_VS_GRPC/HRPC_H2Framer+FramerServer-16        	   30324	    109158 ns/op	   11615 B/op	     146 allocs/op
+Benchmark_H2Framer_VS_GRPC/HTTP2_StdTransport+FramerServer-16   	   35259	    103410 ns/op	   11012 B/op	     135 allocs/op
+```
+
+- `HRPC_H2Framer`:自研 H2FramerTransport 客户端 + x/net http2.Server 服务端
+- `HTTP2_StdTransport`:标准库 x/net http2.Transport 客户端 + x/net http2.Server 服务端
+- `HRPC_H2Framer+FramerServer`:全自研 h2 链路(H2FramerTransport 客户端 + H2FramerServer 服务端)
+- `HTTP2_StdTransport+FramerServer`:标准库 h2 客户端 + 自研 H2FramerServer 服务端
+
+串行结论:全自研 h2 链路(109.2 µs)与 gRPC(108.8 µs)持平;HRPC_WS(88.9 µs)为最快路径;HRPC_HTTP(92.2 µs)快于 gRPC 约 12%;TLS 场景(HRPC_HTTPS 137.7 µs)慢于明文约 49%,为串行单连接每请求加解密开销(裸标准库 Https 同样慢 51%,属 TLS 固有成本)。
+
+### 并发基准
+
+请求延迟矩阵(1000 并发窗口 × 3 请求,`Test_Concurrency_H2Framer_VS_GRPC`;h2/gRPC 组为单连接,WSS 为 33 连接分摊):
+
+```text
+HRPC_H2Framer                      40.1 µs/req   24961 qps   ratio 3.52
+HTTP2_StdTransport                 34.3 µs/req   29157 qps   ratio 3.01
+HRPC_H2Framer+FramerServer         11.4 µs/req   87778 qps   ratio 1.00
+HTTP2_StdTransport+FramerServer    30.0 µs/req   33348 qps   ratio 2.63
+HRPC_WSS                           11.4 µs/req   87914 qps   ratio 1.00
+GRPC                               11.4 µs/req   87781 qps   ratio 1.00
+```
+
+全自研 h2 链路与 gRPC 持平(1.00 倍);HRPC_WSS(33 连接分摊 1000 并发窗口)同样与 gRPC 持平;x/net http2.Server 服务端组因响应逐帧 flush 慢 2-4 倍。
+
+持续压测 qps(1000 goroutine × 10s,`Test_Concurrency`):
+
+```text
+标准库 HTTP/1.1              2980 qps   (明文 HTTP/1.1 无多路复用,连接爆炸)
+HRPC_HTTPS                 60885 qps
+HRPC_WS(WSS 33 连接)       5.3万 qps   (波动大,压测中部分请求超时)
+GRPC                      122228 qps
+HRPC_H2Framer+FramerServer 126678 qps   (全自研 h2 链路,反超 gRPC 约 4%)
+```
 
 > 注意:HRPC 走明文 HTTP/1.1 时无多路复用,高并发下连接爆炸会耗尽本地端口,并发压测务必使用 HTTPS(HTTP/2)或 WebSocket。
 
-> 测试命令:`GOTOOLCHAIN=go1.27.0 go test -bench Benchmark_HRPC_HTTP -run '^$' ./pkg/hrpc/ -benchmem -benchtime=3s`
+> 测试命令:
+> - 串行:`GOTOOLCHAIN=go1.27.0 go test -bench 'Benchmark_HRPC_HTTP$|Benchmark_H2Framer_VS_GRPC$' -run '^$' ./pkg/hrpc/ -benchmem -benchtime=3s`
+> - 并发矩阵:`GOTOOLCHAIN=go1.27.0 go test -run 'Test_Concurrency_H2Framer_VS_GRPC' -v ./pkg/hrpc/`
+> - 持续压测:`GOTOOLCHAIN=go1.27.0 go test -run 'Test_Concurrency$' -v -timeout=180s ./pkg/hrpc/`

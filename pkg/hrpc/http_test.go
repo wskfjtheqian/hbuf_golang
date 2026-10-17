@@ -870,6 +870,44 @@ func Test_Concurrency(t *testing.T) {
 		t.Log("HRPC_WS concurrency count: per second ", wsService.count.Load()/int32(timeLength))
 	}
 
+	{
+		// 测试全自研 h2 链路(H2FramerTransport + H2FramerServer)并发性能
+		framerService := &HbufServiceConcurrency{}
+		framerRpcServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+		RegisterHbufService(framerRpcServer, framerService)
+		framerAddr := newH2FramerServer(t, framerRpcServer)
+
+		framerTransport := hrpc.NewH2FramerTransport()
+		defer framerTransport.CloseIdleConnections()
+		framerHttpClient := hrpc.NewHttpClient("http://"+framerAddr+"/rpc", hrpc.WithH2FramerTransport(framerTransport))
+		framerRpcClient := hrpc.NewClient(framerHttpClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode()))
+		framerTestClient := NewHbufServiceClient(framerRpcClient)
+
+		_, err := framerTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test " + strconv.Itoa(-1)})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		timeLength := 10
+		end := now.Load() + int64(time.Duration(timeLength)*time.Second/time.Millisecond)
+		var wg sync.WaitGroup
+		for i := 0; i < 1000; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for end > now.Load() {
+					_, err := framerTestClient.HbufMethod(context.Background(), &HbufRequest{Name: "test " + strconv.Itoa(i)})
+					if err != nil {
+						t.Error(err)
+						return
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		t.Log("HRPC_H2Framer+FramerServer concurrency count: per second ", framerService.count.Load()/int32(timeLength))
+	}
+
 }
 
 // 测试 traceId 从 header 透传到 handler
@@ -1039,6 +1077,86 @@ func concurrencyMatrix(tb testing.TB, n, m int, fn func() error) time.Duration {
 	select {
 	case err := <-errCh:
 		tb.Fatalf("matrix request failed: %v", err)
+	default:
+	}
+	return elapsed
+}
+
+// wsConcurrencyMatrix 运行 WebSocket(WSS) 并发矩阵:33 连接分摊 n 个 goroutine,
+// 每 goroutine 串行发 m 个请求,返回总耗时。与持续压测同连接数,动态端口自建服务。
+func wsConcurrencyMatrix(tb testing.TB, n, m int) time.Duration {
+	tb.Helper()
+	rpcServer := hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	RegisterHbufService(rpcServer, &TestHbufService{})
+
+	cert, err := tls.LoadX509KeyPair("/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	wsServer := hrpc.NewWebSocketServer(rpcServer.Response, hrpc.WithWebSocketServerEncode(hrpc.NewHBufEncode()), hrpc.WithWebSocketServerDecode(hrpc.NewHBufDecode()))
+	mux := http.NewServeMux()
+	// 连接管理按 client id 区分,同 id 新连接会顶替旧连接,故每连接分配唯一 id
+	var wsConnID atomic.Int64
+	mux.HandleFunc("/socket", func(writer http.ResponseWriter, request *http.Request) {
+		wsServer.ServeHTTP(writer, request, fmt.Sprintf("matrix-%d", wsConnID.Add(1)), nil, nil)
+	})
+	tlsListener := tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{cert}})
+	go func() { _ = http.Serve(tlsListener, mux) }()
+	tb.Cleanup(func() { _ = tlsListener.Close() })
+
+	const conns = 33
+	start := make(chan struct{})
+	errCh := make(chan error, n)
+	var wg sync.WaitGroup
+	for c := 0; c < conns; c++ {
+		wsClient := hrpc.NewWebSocketClient("wss://"+listener.Addr().String()+"/socket", nil,
+			hrpc.WithWebSocketClientInsecureSkipVerify(true),
+			hrpc.WithWebSocketClientEncode(hrpc.NewHBufEncode()),
+			hrpc.WithWebSocketClientDecode(hrpc.NewHBufDecode()))
+		if err := wsClient.Connect(context.Background()); err != nil {
+			tb.Fatal(err)
+		}
+		testClient := NewHbufServiceClient(hrpc.NewClient(wsClient.Request, hrpc.WithClientEncoder(hrpc.NewHBufEncode()), hrpc.WithClientDecode(hrpc.NewHBufDecode())))
+		g := n / conns
+		if c == conns-1 {
+			g += n % conns
+		}
+		for i := 0; i < g; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				for j := 0; j < m; j++ {
+					resp, err := testClient.HbufMethod(context.Background(), &HbufRequest{Name: "test", Age: 18})
+					if err != nil {
+						select {
+						case errCh <- err:
+						default:
+						}
+						return
+					}
+					if resp.Name != "test" || resp.Age != 18 {
+						select {
+						case errCh <- fmt.Errorf("resp mismatch: %+v", resp):
+						default:
+						}
+						return
+					}
+				}
+			}()
+		}
+	}
+	begin := time.Now()
+	close(start)
+	wg.Wait()
+	elapsed := time.Since(begin)
+	select {
+	case err := <-errCh:
+		tb.Fatalf("wss matrix request failed: %v", err)
 	default:
 	}
 	return elapsed
@@ -1262,7 +1380,13 @@ func Test_Concurrency_H2Framer_VS_GRPC(t *testing.T) {
 	t.Logf("HTTP2_StdTransport+FramerServer: %d requests in %v, %.0f qps, avg %.1f µs/req",
 		total, framerStdElapsed, float64(total)/framerStdElapsed.Seconds(), float64(framerStdElapsed.Microseconds())/float64(total))
 
-	t.Logf("ratio: HRPC_H2Framer / StdTransport / HRPC+FramerServer / Std+FramerServer / GRPC = %.2f / %.2f / %.2f / %.2f / 1.00",
+	// WebSocket(WSS) 对照:33 连接分摊 1000 并发窗口,与持续压测同连接数
+	wssElapsed := wsConcurrencyMatrix(t, goroutines, perGoroutine)
+	t.Logf("HRPC_WSS: %d requests in %v, %.0f qps, avg %.1f µs/req",
+		total, wssElapsed, float64(total)/wssElapsed.Seconds(), float64(wssElapsed.Microseconds())/float64(total))
+
+	t.Logf("ratio: HRPC_H2Framer / StdTransport / HRPC+FramerServer / Std+FramerServer / HRPC_WSS / GRPC = %.2f / %.2f / %.2f / %.2f / %.2f / 1.00",
 		float64(hbufElapsed)/float64(grpcElapsed), float64(stdElapsed)/float64(grpcElapsed),
-		float64(framerElapsed)/float64(grpcElapsed), float64(framerStdElapsed)/float64(grpcElapsed))
+		float64(framerElapsed)/float64(grpcElapsed), float64(framerStdElapsed)/float64(grpcElapsed),
+		float64(wssElapsed)/float64(grpcElapsed))
 }
