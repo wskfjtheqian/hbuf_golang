@@ -1,6 +1,7 @@
 package hlog
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -19,13 +20,29 @@ import (
 type Level int
 
 func (l Level) String() string {
+	switch l {
+	case DEBUG:
+		return "DEBUG"
+	case INFO:
+		return "INFO"
+	case WARN:
+		return "WARN"
+	case ERROR:
+		return "ERROR"
+	case EXIT:
+		return "EXIT"
+	}
 	if text, ok := (*levelName.Load())[l]; ok {
 		return text
 	}
 	return strconv.Itoa(int(l))
 }
 
+var levelNameLock sync.Mutex
+
 func SetLevelName(level Level, name string) {
+	levelNameLock.Lock()
+	defer levelNameLock.Unlock()
 	temp := map[Level]string{}
 	m := (*levelName.Load())
 	for key, val := range m {
@@ -81,11 +98,17 @@ type Logger struct {
 	out       map[Level]SyncWriter
 	outTarget atomic.Pointer[func(level Level) SyncWriter]
 	compare   func(v1 Level, v2 Level) bool
+
+	stdout *bufio.Writer // 带缓冲的控制台输出
+	stop   chan struct{} // 停止 flushDaemon
+	closed atomic.Bool
 }
 
 func NewLogger(prefix string, flag int) *Logger {
 	l := &Logger{
-		out: map[Level]SyncWriter{},
+		out:    map[Level]SyncWriter{},
+		stdout: bufio.NewWriterSize(os.Stdout, bufferSize),
+		stop:   make(chan struct{}),
 	}
 	l.SetPrefix(prefix)
 	l.SetFlags(flag)
@@ -107,8 +130,17 @@ func (l *Logger) SetFlags(flag int) {
 func (l *Logger) Flush() {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+	_ = l.stdout.Flush()
 	for _, writer := range l.out {
 		_ = writer.Flush()
+	}
+}
+
+// Close 停止定时刷盘 goroutine 并刷盘, 关闭后 Logger 不应继续使用。
+func (l *Logger) Close() {
+	if l.closed.CompareAndSwap(false, true) {
+		close(l.stop)
+		l.Flush()
 	}
 }
 func (l *Logger) Debug(format string, v ...any) {
@@ -199,12 +231,11 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 func (l *Logger) writer(level Level, data []byte) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	if l.outErr.Load() {
-		os.Stdout.Write(data)
-	}
-
 	if level < Level(l.outLevel.Load()) {
 		return nil
+	}
+	if l.outErr.Load() {
+		_, _ = l.stdout.Write(data)
 	}
 	if _, ok := l.out[level]; !ok {
 		call := l.outTarget.Load()
@@ -239,8 +270,8 @@ func (l *Logger) flushDaemon() {
 		select {
 		case <-tick.C:
 			l.Flush()
-			//case sev := <-s.flushChan:
-			//	s.flush(sev)
+		case <-l.stop:
+			return
 		}
 	}
 }
@@ -268,7 +299,7 @@ func (l *Logger) setSimple(simple bool) {
 		}
 	} else {
 		l.compare = func(v1 Level, v2 Level) bool {
-			return v1 < v2
+			return v1 <= v2
 		}
 	}
 	for _, val := range l.out {

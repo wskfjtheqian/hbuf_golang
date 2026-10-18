@@ -2,6 +2,8 @@ package hlog
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -12,6 +14,8 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
+// MaxSize 单个日志文件的最大字节数, 超过后自动轮转。
+// 请在 Logger 启动前设置, 运行期修改需自行保证同步。
 var MaxSize uint64 = 1024 * 1024 * 1800
 
 type fileWriter struct {
@@ -28,23 +32,38 @@ func (f *fileWriter) Compare(call func(v1 Level, v2 Level) bool) {
 }
 
 func newFileWriter(dir string, level Level) *fileWriter {
-	ret := &fileWriter{level: level, dir: dir}
+	ret := &fileWriter{
+		level: level,
+		dir:   dir,
+		call:  func(v1 Level, v2 Level) bool { return v1 <= v2 },
+	}
 	_ = ret.rotateFile(htime.NowTime())
 	return ret
 }
 
 func (f *fileWriter) Flush() error {
+	if f.out == nil {
+		return nil
+	}
 	return f.out.Flush()
 }
 
 func (f *fileWriter) Sync() error {
+	if f.file == nil {
+		return nil
+	}
 	return f.file.Sync()
 }
 
+// Write 中 call 谓词语义: 返回 true 表示该级别应写入此文件(见 Logger.setSimple)。
 func (f *fileWriter) Write(level Level, p []byte) (n int, err error) {
-	if f.call(level, f.level) {
-		return 0, err
+	if f.out == nil {
+		return 0, errors.New("hlog: fileWriter not initialized (create failed)")
 	}
+	if !f.call(level, f.level) {
+		return 0, nil
+	}
+	p = stripAnsi(p)
 	if f.nbytes+uint64(len(p)) >= MaxSize {
 		if err := f.rotateFile(htime.NowTime()); err != nil {
 			return 0, err
@@ -53,60 +72,44 @@ func (f *fileWriter) Write(level Level, p []byte) (n int, err error) {
 	n, err = f.out.Write(p)
 	f.nbytes += uint64(n)
 	return n, err
-
 }
 
 const bufferSize = 256 * 1024
 
-// rotateFile closes the syncBuffer's file and starts a new one.
+// rotateFile 先刷盘并关闭旧文件, 再创建新文件, 避免创建失败或同名覆盖时丢失数据。
 func (f *fileWriter) rotateFile(now time.Time) error {
-	var err error
-	file, _, err := create(f.dir, f.level.String(), now)
 	if f.file != nil {
-		f.Flush()
-		f.file.Close()
+		_ = f.Flush()
+		_ = f.file.Close()
+		f.file = nil
+		f.out = nil
 	}
 
-	f.file = file
-	f.nbytes = 0
+	file, _, err := create(f.dir, f.level.String(), now)
 	if err != nil {
 		return err
 	}
+	f.file = file
+	f.nbytes = 0
 	f.out = bufio.NewWriterSize(f.file, bufferSize)
-	return err
+	return nil
 }
 
+// create 创建新的日志文件; 同秒轮转时 logName 相同, 使用 O_EXCL + 序号后缀避免覆盖旧文件。
 func create(dir, tag string, now time.Time) (*os.File, string, error) {
-	//onceLogDirs.Do(createLogDirs)
-	//if len(logDirs) == 0 {
-	//	return nil, "", errors.New("log: no log dirs")
-	//}
-	//name, link := logName(tag, t)
-	//var lastErr error
-	//for _, dir := range logDirs {
-	//	fname := filepath.Join(dir, name)
-	//	f, err := os.Create(fname)
-	//	if err == nil {
-	//		symlink := filepath.Join(dir, link)
-	//		os.Remove(symlink)        // ignore err
-	//		os.Symlink(name, symlink) // ignore err
-	//		if *logLink != "" {
-	//			lsymlink := filepath.Join(*logLink, link)
-	//			os.Remove(lsymlink)         // ignore err
-	//			os.Symlink(fname, lsymlink) // ignore err
-	//		}
-	//		return f, fname, nil
-	//	}
-	//	lastErr = err
-	//}
-
 	name, link := logName(tag, now)
-	dir = filepath.Join(dir, name)
-	file, err := os.Create(dir)
-	if err != nil {
-		return nil, "", err
+	base := filepath.Join(dir, name)
+	target := base
+	for i := 1; ; i++ {
+		file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err == nil {
+			return file, link, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, "", err
+		}
+		target = fmt.Sprintf("%s.%d", base, i)
 	}
-	return file, link, nil
 }
 
 // the name for the symlink for tag.
@@ -161,4 +164,27 @@ func shortHostname(hostname string) string {
 		return hostname[:i]
 	}
 	return hostname
+}
+
+// stripAnsi 剥离 ANSI 颜色转义序列(\x1b[...m), 避免颜色码污染日志文件内容。
+func stripAnsi(p []byte) []byte {
+	if bytes.IndexByte(p, 0x1b) < 0 {
+		return p
+	}
+	out := p[:0]
+	for i := 0; i < len(p); {
+		if p[i] == 0x1b {
+			j := i + 1
+			for j < len(p) && p[j] != 'm' {
+				j++
+			}
+			if j < len(p) {
+				i = j + 1
+				continue
+			}
+		}
+		out = append(out, p[i])
+		i++
+	}
+	return out
 }
