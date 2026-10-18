@@ -167,6 +167,9 @@ type Service struct {
 	waitSubscribe chan bool
 	clientOption  []hrpc.ClientOption
 	httpServer    atomic.Pointer[http.Server]
+
+	keepMu     sync.Mutex
+	keepCancel context.CancelFunc
 }
 
 // SetConfig 设置配置
@@ -183,19 +186,22 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		return nil
 	}
 
-	for key, value := range cfg.Client.Server {
-		if install, ok := s.install[key]; ok {
-			for _, item := range value {
-				if "local" == strings.ToLower(item) {
-					s.addLocalClient(install)
-				} else {
-					parse, err := url.Parse(item)
-					if err != nil {
-						return err
-					}
-					err = s.addHttpClient(install, parse)
-					if err != nil {
-						return err
+	// Client 配置可选：为 nil 时跳过静态客户端建立，仅作为服务端或纯发现节点运行
+	if cfg.Client != nil {
+		for key, value := range cfg.Client.Server {
+			if install, ok := s.install[key]; ok {
+				for _, item := range value {
+					if "local" == strings.ToLower(item) {
+						s.addLocalClient(install)
+					} else {
+						parse, err := url.Parse(item)
+						if err != nil {
+							return err
+						}
+						err = s.addHttpClient(install, parse)
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -213,9 +219,17 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		return err
 	}
 
-	go s.keepSession(ctx)
+	// 替换旧的 keepSession 守护协程，避免多次 SetConfig 后重复注册
+	keepCtx, keepCancel := context.WithCancel(ctx)
+	s.keepMu.Lock()
+	if s.keepCancel != nil {
+		s.keepCancel()
+	}
+	s.keepCancel = keepCancel
+	s.keepMu.Unlock()
+	go s.keepSession(keepCtx)
 
-	if cfg.Client.Find {
+	if cfg.Client != nil && cfg.Client.Find {
 		go func() {
 			err := s.Discovery(ctx)
 			if err != nil {
@@ -230,13 +244,22 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		}
 	}
 
-	defer close(s.waitSubscribe)
-	select {
-	case <-s.waitSubscribe:
-		s.rpcServer.Init(ctx, cfg.Server.List...)
-	case <-ctx.Done():
-		return ctx.Err()
+	// 等待所有已安装服务都获得客户端后再初始化。
+	// checkSubscribe 需持锁调用（与 addHttpClient/addLocalClient 保持一致），
+	// 提前调用一次可覆盖「无已安装服务」或「客户端已就绪」两种立即满足的场景。
+	s.lock.Lock()
+	s.checkSubscribe()
+	subscribed := s.isSubscribe
+	s.lock.Unlock()
+
+	if !subscribed {
+		select {
+		case <-s.waitSubscribe:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+	s.rpcServer.Init(ctx, cfg.Server.List...)
 	return nil
 }
 
@@ -334,8 +357,14 @@ func (s *Service) Deregister(ctx context.Context) error {
 		return err
 	}
 
+	// RPC 服务未启动时服务地址为空，此时以空前缀删除会误删其他服务的注册信息
+	addr := s.GetServerAddr()
+	if addr == "" {
+		return herror.NewError("server addr is empty, deregister aborted")
+	}
+
 	// 注销服务
-	name := ProtocolName + s.GetServerAddr()
+	name := ProtocolName + addr
 	_, err = client.Delete(ctx, name, clientv3.WithPrefix())
 	if err != nil {
 		return err
@@ -708,7 +737,7 @@ func (s *Service) GetClient(name string, dispatch Dispatch) hrpc.Init {
 	return c
 }
 
-// 检测服务是否未完成订阅
+// 检测服务是否未完成订阅。调用方需持有 s.lock。
 func (s *Service) checkSubscribe() {
 	if !s.isSubscribe {
 		temp := true
@@ -726,6 +755,14 @@ func (s *Service) checkSubscribe() {
 }
 
 func (s *Service) Shutdown(ctx context.Context) error {
+	// 停止 keepSession 守护协程
+	s.keepMu.Lock()
+	if s.keepCancel != nil {
+		s.keepCancel()
+		s.keepCancel = nil
+	}
+	s.keepMu.Unlock()
+
 	server := s.httpServer.Swap(nil)
 	if server == nil {
 		return nil
