@@ -20,7 +20,7 @@ HLog 是一个高性能的 Go 日志库（见 [log.go](log.go) / [ctx.go](ctx.go
 | [log.go](log.go) | 核心：`Level`、`Logger`、日志头格式化、全局 `std` Logger、命令行 flag 注册 |
 | [ctx.go](ctx.go) | traceId：18 位 Base62 生成器（`NewTraceId`）与 Context 封装 |
 | [file.go](file.go) | `fileWriter`：文件输出、大小轮转、日志文件命名 |
-| [http.go](http.go) | `httpWriter`：HTTP 上传输出（当前为占位空实现） |
+| [http.go](http.go) | `httpWriter`：HTTP 上传输出（缓冲批量 POST 上传） |
 
 ## 日志级别
 
@@ -55,10 +55,10 @@ defer hlog.Flush() // 程序退出前刷盘（另有 30s 定时刷盘兜底）
 输出格式：
 
 ```text
-2026/10/18 12:00:00 [ERROR]  [9ZxKpQ2mW3vT8sN4hL] connect db failed: dial tcp ...
+2026/10/18 12:00:00 [ERROR] [9ZxKpQ2mW3vT8sN4hL] connect db failed: dial tcp ...
 ```
 
-头部依次为：时间、级别（带 ANSI 颜色）、调用文件与行号（需 `Lshortfile` / `Llongfile`）、traceId。
+头部依次为：时间、级别（带 ANSI 颜色）、调用文件与行号（需 `Lshortfile` / `Llongfile`）；包级函数在消息前自动附加 `[traceId]`。
 
 ### 自定义 Logger
 
@@ -102,7 +102,7 @@ id := hlog.FromContext(ctx)                            // 从上下文取回
 
 ### 控制台
 
-默认开启，每条日志同时写入 `os.Stdout`；`-log_err=false` 或 `setOutError(false)` 关闭。
+默认开启，每条日志同时写入 `os.Stdout`；`-log_err=false` 关闭。
 
 ### 文件
 
@@ -117,12 +117,12 @@ server.mac1.qian.INFO.20261018-120000.12345.log
 - 写入使用 256KB bufio 缓冲，由 flushDaemon 每 30 秒刷盘
 - 单文件超过 `MaxSize`（默认 1800MB，可直接修改该变量）时自动创建新文件
 - 级别路由（默认复杂模式）：每个日志文件包含「本级别及更低级别」的日志，即低级别日志也会写入更高级别的文件；`-log_simple=true` 时每个文件仅包含本级别日志
-- 写入文件前自动剥离 ANSI 颜色码，文件内容为纯文本
+- 写入文件前默认剥离 ANSI 颜色码（`StripAnsi` 开关，默认 true，置 false 可保留颜色），文件内容为纯文本
 - 同一秒内多次轮转时，自动以 `.1`、`.2` 序号后缀创建新文件，避免同名覆盖
 
 ### HTTP
 
-配置 `-log_out=http://...` 时走 `httpWriter`，当前为占位空实现，上传逻辑待扩展。
+配置 `-log_out=http://...` 时走 `httpWriter`：日志经 256KB 缓冲后批量 POST 上传（`Content-Type: application/octet-stream`），每 30 秒或 `Flush` 时发送；发送失败时数据保留在内存中等待下次重试，超过 512KB 上限则丢弃，避免内存无限增长。
 
 ## 命令行参数
 
@@ -130,11 +130,11 @@ server.mac1.qian.INFO.20261018-120000.12345.log
 |---|---|---|
 | `-log_out` | 无 | 日志输出目标，支持目录路径（文件输出）与 http(s) 地址（HTTP 上传） |
 | `-log_level` | 30000 | 输出级别：DEBUG(00000)/INFO(10000)/WARN(20000)/ERROR(30000)/EXIT(40000) |
-| `-log_simple` | false | 简单模式：日志文件仅包含当前级别的日志；关闭时为复杂模式（默认），日志同时写入更低级别的文件 |
+| `-log_simple` | false | 简单模式：日志文件仅包含当前级别的日志；关闭时为复杂模式（默认），高级别文件同时包含更低级别的日志 |
 | `-log_err` | true | 是否同时输出日志到控制台 |
 
 ## 性能设计
 
 - **缓冲复用**：日志头与消息在 `sync.Pool` 字节缓冲中拼装，单缓冲超过 64KB 时归还前清空，避免大对象长期驻留
 - **无锁读取**：`prefix` / `flag` / `outLevel` 等热路径字段均以 `atomic` 存储，写日志仅锁 `Logger.lock` 保护 writer 表
-- **批写输出**：stdout 与 fileWriter 均以 256KB bufio 缓冲聚合写盘，降低 syscall 频率
+- **批写输出**：stdout、fileWriter 与 httpWriter 均以 256KB bufio 缓冲聚合写盘/上传，降低 syscall 与网络请求频率

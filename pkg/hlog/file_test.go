@@ -276,21 +276,34 @@ func TestFileWriterStripAnsi(t *testing.T) {
 	}
 }
 
-func TestHttpWriterPlaceholder(t *testing.T) {
-	w := newHttpWriter("http://127.0.0.1:8080/log", ERROR)
-	w.Compare(func(v1 Level, v2 Level) bool { return v1 < v2 })
-	if err := w.Flush(); err != nil {
-		t.Fatalf("Flush: %v", err)
-	}
-	if err := w.Sync(); err != nil {
-		t.Fatalf("Sync: %v", err)
-	}
-	// 当前为占位空实现: 数据被静默丢弃
-	n, err := w.Write(ERROR, []byte("x"))
+func TestFileWriterKeepAnsiWhenDisabled(t *testing.T) {
+	old := StripAnsi
+	StripAnsi = false
+	defer func() { StripAnsi = old }()
+
+	dir := t.TempDir()
+	w := newFileWriter(dir, INFO)
+	_, err := w.Write(INFO, []byte("\x1b[42m[INFO]\x1b[0m hello\n"))
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	if n != 0 {
-		t.Fatalf("placeholder writer must drop data, got n=%d", n)
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	_ = w.file.Close()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(entries))
+	}
+	data, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "\x1b") {
+		t.Fatalf("StripAnsi=false must keep ANSI escapes: %q", data)
 	}
 }

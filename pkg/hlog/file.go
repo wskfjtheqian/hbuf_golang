@@ -18,6 +18,10 @@ import (
 // 请在 Logger 启动前设置, 运行期修改需自行保证同步。
 var MaxSize uint64 = 1024 * 1024 * 1800
 
+// StripAnsi 是否在写入文件/上传前剥离 ANSI 颜色转义序列, 默认 true(文件与 HTTP 内容为纯文本)。
+// 请在 Logger 启动前设置, 运行期修改需自行保证同步。
+var StripAnsi = true
+
 type fileWriter struct {
 	file   *os.File
 	out    *bufio.Writer
@@ -63,7 +67,9 @@ func (f *fileWriter) Write(level Level, p []byte) (n int, err error) {
 	if !f.call(level, f.level) {
 		return 0, nil
 	}
-	p = stripAnsi(p)
+	if StripAnsi {
+		p = stripAnsi(p)
+	}
 	if f.nbytes+uint64(len(p)) >= MaxSize {
 		if err := f.rotateFile(htime.NowTime()); err != nil {
 			return 0, err
