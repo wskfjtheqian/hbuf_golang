@@ -136,7 +136,7 @@ Client:
 
 - `cfg` 与当前配置相同 → 直接返回（幂等）
 - `cfg` 为 nil → 注销服务并清空配置
-- 否则按序执行：建立静态客户端 → 启动 HTTPS RPC 服务 → 注册到 etcd → 启动 keepSession → 按需开启 Discovery → 等待订阅完成后 `rpcServer.Init`
+- 否则先清理旧配置资源（注销旧 key、关闭旧 session、停止旧 keepSession），再按序执行：建立静态客户端 → 启动 HTTPS RPC 服务 → 注册到 etcd → 启动 keepSession → 按需开启 Discovery → 等待订阅完成后 `rpcServer.Init`
 
 ## Context 与中间件
 
@@ -175,15 +175,26 @@ hservice 通过 `NewService` 默认启用 HBuf 编解码（`WithServerEncoder/Wi
 
 ### 离线单元测试（默认执行）
 
-不依赖外部环境，覆盖配置校验与相等性（`TestConfig_Validate` / `TestConfig_Equal`）、四种调度策略（`TestDispatchRoundRobin` / `TestDispatchRandom` / `TestDispatchHash` / `TestDispatchPriorityLocal_Fallback`）、上下文传递（`TestWithContext_FromContext` / `TestFromContext_NoService` / `TestGetClient_NoContext` / `TestGetClient_NotInstalled`）、未配置/未连接时的错误路径（`TestRegister_NoConfig` / `TestDeregister_NoEtcdClient`），以及 `Client` 为 nil 时 `SetConfig` 不 panic 的回归测试（`TestSetConfig_NilClient`）。
+不依赖外部环境，覆盖：
+
+- 配置校验与相等性：`TestConfig_Validate` / `TestConfig_Equal` / `TestConfig_Equal_FieldDiff` / `TestHttp_Validate_Cert` / `TestServer_Validate` / `TestClient_Validate`
+- 四种调度策略及边界：`TestDispatchRoundRobin` / `TestDispatchRoundRobin_Single` / `TestDispatchRandom` / `TestDispatchHash` / `TestDispatchHash_LargeHash` / `TestDispatchPriorityLocal_Fallback`
+- 上下文传递：`TestWithContext_FromContext` / `TestContext_Value` / `TestFromContext_NoService` / `TestGetClient_NoContext` / `TestGetClient_NotInstalled`
+- 未启动/未配置态：`TestGetServerAddr_NotStarted` / `TestShutdown_NotStarted` / `TestRegister_NoConfig` / `TestDeregister_NoEtcdClient`
+- `Client` 为 nil 时 `SetConfig` 不 panic：`TestSetConfig_NilClient`
 
 ### 集成测试（环境变量门控）
 
-以下测试验证完整注册→注销流程、连续多次 `SetConfig`、注销安全性，需设置环境变量 `HSERVICE_TEST_ETCD` 指向可用 etcd 才会执行，否则自动跳过：
+以下测试验证完整注册→注销流程、热更新、服务发现、注销安全性，需设置环境变量 `HSERVICE_TEST_ETCD` 指向可用 etcd 才会执行，否则自动跳过：
 
 - `TestService_RegisterAndDeregister`：注册→断言 etcd key→注销→断言 key 删除
 - `TestService_SetConfigTwice`：幂等路径与完整重跑路径均不 panic、不阻塞
 - `TestService_Deregister_EmptyAddr`：RPC 服务未启动时注销返回错误，不误删其他服务的注册信息
+- `TestService_Discovery`：服务发现自动建立路由，远端注销后路由自动移除
+- `TestService_StaticHttpClient`：静态 URL 配置建立 HTTP 客户端路由（非本地 init）
+- `TestService_Register_Disabled`：`Register=false` 时不写入注册信息
+- `TestService_SetConfig_WaitTimeout`：客户端未就绪时 `SetConfig` 阻塞至 ctx 超时
+- `TestService_Shutdown_Started`：启动后 `Shutdown` 正常关闭
 
 ```shell
 HSERVICE_TEST_ETCD=127.0.0.1:2389 go test -count=1 -v -race ./pkg/hservice/

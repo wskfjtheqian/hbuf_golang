@@ -152,6 +152,7 @@ type Service struct {
 	etcd      *hetcd.Etcd
 	session   atomic.Pointer[concurrency.Session]
 	listen    atomic.Pointer[net.Listener]
+	addr      atomic.Pointer[string] // GetServerAddr 解析结果缓存，保证注册与注销使用一致地址
 	rpcServer *hrpc.Server
 	install   map[string]*ServerInfo
 
@@ -184,6 +185,23 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		}
 		s.config = nil
 		return nil
+	}
+
+	// 清理旧配置的资源：注销旧 key、关闭旧 session、停止旧 keepSession。
+	// 不清理则旧 key 的租约被旧 session 持续续约，永久残留在注册中心。
+	s.keepMu.Lock()
+	if s.keepCancel != nil {
+		s.keepCancel()
+		s.keepCancel = nil
+	}
+	s.keepMu.Unlock()
+	if oldAddr := s.GetServerAddr(); oldAddr != "" {
+		if client, err := s.etcd.GetClient(); err == nil {
+			_, _ = client.Delete(ctx, ProtocolName+oldAddr, clientv3.WithPrefix())
+		}
+	}
+	if old := s.session.Swap(nil); old != nil {
+		_ = old.Close()
 	}
 
 	// Client 配置可选：为 nil 时跳过静态客户端建立，仅作为服务端或纯发现节点运行
@@ -411,8 +429,9 @@ func (s *Service) Discovery(ctx context.Context) error {
 		}
 	}
 
-	// 监听服务变化
-	watchCh := client.Watch(ctx, name, clientv3.WithPrefix())
+	// 监听服务变化。从全量拉取的下一个 revision 开始监听，
+	// 否则 Get 与 Watch 间隙中发生的删除事件会永久丢失。
+	watchCh := client.Watch(ctx, name, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.Revision+1))
 	for {
 		select {
 		case <-ctx.Done():
@@ -465,6 +484,7 @@ func (s *Service) startRpcServer(ctx context.Context) error {
 		return err
 	}
 	s.listen.Store(&listen)
+	s.addr.Store(nil) // 监听地址变化后清空缓存，下次 GetServerAddr 重新解析
 	hlog.Info(ctx, "start https rpc server: %s", listen.Addr())
 
 	go func() {
@@ -549,8 +569,14 @@ func (s *Service) generateSelfSignedCert(privateKey *ecdsa.PrivateKey) (tls.Cert
 	return cert, nil
 }
 
-// GetServerAddr 获取服务地址
+// GetServerAddr 获取服务地址。
+// 多网卡机器上每次遍历网卡解析可能得到不同地址，首次解析成功后缓存，
+// 保证 Register 写入的 key 与 Deregister 删除的 prefix 使用一致地址。
 func (s *Service) GetServerAddr() string {
+	if addr := s.addr.Load(); addr != nil && *addr != "" {
+		return *addr
+	}
+
 	listen := s.listen.Load()
 	if listen == nil {
 		return ""
@@ -560,7 +586,9 @@ func (s *Service) GetServerAddr() string {
 		return ""
 	}
 	if addr != "::" {
-		return addr + ":" + port
+		result := addr + ":" + port
+		s.addr.Store(&result)
+		return result
 	}
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -580,10 +608,14 @@ func (s *Service) GetServerAddr() string {
 			continue
 		}
 
-		return ip.String() + ":" + port
+		result := ip.String() + ":" + port
+		s.addr.Store(&result)
+		return result
 	}
 
-	return addrs[0].(*net.IPNet).IP.String() + ":" + port
+	result := addrs[0].(*net.IPNet).IP.String() + ":" + port
+	s.addr.Store(&result)
+	return result
 }
 
 // parseRegisterInfo 解析服务注册信息
