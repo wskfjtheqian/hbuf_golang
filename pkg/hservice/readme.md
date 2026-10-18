@@ -110,6 +110,8 @@ func (s *UserService) GetOrder(ctx context.Context, req *GetOrderRequest) (*GetO
 配置结构对应 YAML（标签首字母大写）：
 
 ```yaml
+Codec: json            # 编解码器: json(默认) | hbuf
+Transport: h2          # 传输层: http(默认) | h2(hrpc.H2Framer 帧批处理)
 Server:
   Register: true        # 是否注册到 etcd
   Local: true           # 是否开启本地服务
@@ -130,7 +132,13 @@ Client:
       - local            # "local" 表示走本地直调
 ```
 
-`Client` 配置可选：为 nil 时跳过静态客户端建立，服务可作为纯服务端或纯发现节点运行。各结构体均提供 `Validate(ctx)`（启动前校验，如证书文件是否可加载）与 `Equal(other)`（`SetConfig` 幂等判断的依据）。
+`Codec` 与 `Transport` 同时作用于服务端与客户端（同构集群）：
+
+- `Codec: json`（默认）使用 JSON 编解码，`Codec: hbuf` 使用 HBuf 二进制编解码
+- `Transport: http`（默认）使用标准库 `net/http`；`Transport: h2` 使用 hrpc.H2Framer（单连接帧批处理，高并发下显著减少 syscall），服务端由 TLS 层完成 ALPN h2 协商
+- 服务端证书为自签名或自定义，客户端统一跳过证书校验
+
+`Client` 配置可选：为 nil 时跳过静态客户端建立，服务可作为纯服务端或纯发现节点运行。各结构体均提供 `Validate(ctx)`（启动前校验，如证书文件是否可加载、编解码器/传输层取值是否合法）与 `Equal(other)`（`SetConfig` 幂等判断的依据）。
 
 `SetConfig` 行为：
 
@@ -163,11 +171,12 @@ client := hservice.GetClient(ctx, "user") // 直接取客户端，使用上下�
 | 能力 | 归属 |
 |---|---|
 | 协议编解码（HBuf/JSON）、`Result[T]` 响应模型、中间件 | hrpc |
-| HTTP/HTTPS 服务端、客户端、连接池 | hrpc |
+| HTTP/HTTPS 服务端、客户端、连接池、H2Framer 传输 | hrpc |
 | 服务注册、注销、租约保活、发现 | hservice |
 | 客户端路由、调度、本地优先、订阅等待 | hservice |
+| 编解码器/传输层选择（`Config.Codec` / `Config.Transport`） | hservice |
 
-hservice 通过 `NewService` 默认启用 HBuf 编解码（`WithServerEncoder/WithServerDecode` + 客户端 `WithClientEncoder/WithClientDecode`）；`WithServerOption` / `WithClientOption` 可将任意 hrpc 选项透传给底层服务端与发现的客户端。
+hservice 通过 `NewService` 默认启用 JSON 编解码（`WithServerEncoder/WithServerDecode` + 客户端 `WithClientEncoder/WithClientDecode`）；`Config.Codec` 优先于默认值与 `WithServerOption` 自定义项，切换时在 `SetConfig` 中重建 `rpcServer` 并重新注册已安装服务。`WithServerOption` / `WithClientOption` 可将任意 hrpc 选项透传给底层服务端与发现的客户端。
 
 ## 测试说明
 
@@ -177,7 +186,7 @@ hservice 通过 `NewService` 默认启用 HBuf 编解码（`WithServerEncoder/Wi
 
 不依赖外部环境，覆盖：
 
-- 配置校验与相等性：`TestConfig_Validate` / `TestConfig_Equal` / `TestConfig_Equal_FieldDiff` / `TestHttp_Validate_Cert` / `TestServer_Validate` / `TestClient_Validate`
+- 配置校验与相等性：`TestConfig_Validate` / `TestConfig_Equal` / `TestConfig_Equal_FieldDiff` / `TestConfig_CodecTransport_Defaults` / `TestConfig_Validate_CodecTransport` / `TestConfig_Equal_CodecTransport` / `TestHttp_Validate_Cert` / `TestServer_Validate` / `TestClient_Validate`
 - 四种调度策略及边界：`TestDispatchRoundRobin` / `TestDispatchRoundRobin_Single` / `TestDispatchRandom` / `TestDispatchHash` / `TestDispatchHash_LargeHash` / `TestDispatchPriorityLocal_Fallback`
 - 上下文传递：`TestWithContext_FromContext` / `TestContext_Value` / `TestFromContext_NoService` / `TestGetClient_NoContext` / `TestGetClient_NotInstalled`
 - 未启动/未配置态：`TestGetServerAddr_NotStarted` / `TestShutdown_NotStarted` / `TestRegister_NoConfig` / `TestDeregister_NoEtcdClient`
@@ -195,6 +204,8 @@ hservice 通过 `NewService` 默认启用 HBuf 编解码（`WithServerEncoder/Wi
 - `TestService_Register_Disabled`：`Register=false` 时不写入注册信息
 - `TestService_SetConfig_WaitTimeout`：客户端未就绪时 `SetConfig` 阻塞至 ctx 超时
 - `TestService_Shutdown_Started`：启动后 `Shutdown` 正常关闭
+- `TestService_EndToEnd_JsonHttp`：JSON 编解码 + 标准库 HTTP 传输端到端 RPC 调用（未配置 Codec，验证默认 JSON 路径）
+- `TestService_EndToEnd_HBufH2`：HBuf 编解码 + H2Framer 传输端到端 RPC 调用
 
 ```shell
 HSERVICE_TEST_ETCD=127.0.0.1:2389 go test -count=1 -v -race ./pkg/hservice/

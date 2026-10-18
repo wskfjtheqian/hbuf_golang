@@ -99,6 +99,9 @@ func FromContext(ctx context.Context) *Service {
 // ProtocolName 协议名称
 const ProtocolName = "hbuf-rpc://"
 
+// http2Proto 服务端 TLS ALPN 协议标识
+const http2Proto = "h2"
+
 // RegisterInfo 定义了服务注册信息
 type RegisterInfo struct {
 	Name string `json:"name"`
@@ -116,9 +119,7 @@ type Option func(*Service)
 
 func WithServerOption(options ...hrpc.ServerOption) Option {
 	return func(s *Service) {
-		for _, option := range options {
-			option(s.rpcServer)
-		}
+		s.serverOptions = append(s.serverOptions, options...)
 	}
 }
 
@@ -138,11 +139,16 @@ func NewService(etcd *hetcd.Etcd, options ...Option) *Service {
 		httpClient:    make(map[string]*hrpc.Client),
 		waitSubscribe: make(chan bool, 2),
 	}
-	ret.rpcServer = hrpc.NewServer(hrpc.WithServerEncoder(hrpc.NewHBufEncode()), hrpc.WithServerDecode(hrpc.NewHBufDecode()))
+	// 默认 JSON 编解码，可通过 Option 或 Config.Codec 覆盖
+	ret.serverOptions = []hrpc.ServerOption{
+		hrpc.WithServerEncoder(hrpc.NewJsonEncode()),
+		hrpc.WithServerDecode(hrpc.NewJsonDecode()),
+	}
 
 	for _, option := range options {
 		option(ret)
 	}
+	ret.rpcServer = hrpc.NewServer(ret.serverOptions...)
 	return ret
 }
 
@@ -167,7 +173,9 @@ type Service struct {
 	isSubscribe   bool
 	waitSubscribe chan bool
 	clientOption  []hrpc.ClientOption
+	serverOptions []hrpc.ServerOption // 重建 rpcServer 时重放的选项（默认 HBuf 编解码 + 用户自定义）
 	httpServer    atomic.Pointer[http.Server]
+	h2Server      atomic.Pointer[hrpc.H2Server]
 
 	keepMu     sync.Mutex
 	keepCancel context.CancelFunc
@@ -204,6 +212,19 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		_ = old.Close()
 	}
 
+	// 提前保存配置：后续 addHttpClient/startRpcServer/rpcServer 重建均依赖新配置
+	s.config = cfg
+
+	// 按配置重建 rpcServer：切换编解码器需要重建 Server，已安装服务会在下方重新注册。
+	// 配置项 Codec 优先于 NewService 的默认 JSON 与 WithServerOption 自定义项。
+	options := make([]hrpc.ServerOption, 0, len(s.serverOptions)+2)
+	options = append(options, s.serverOptions...)
+	options = append(options,
+		hrpc.WithServerEncoder(s.newEncoder()),
+		hrpc.WithServerDecode(s.newDecoder()),
+	)
+	s.rpcServer = hrpc.NewServer(options...)
+
 	// Client 配置可选：为 nil 时跳过静态客户端建立，仅作为服务端或纯发现节点运行
 	if cfg.Client != nil {
 		for key, value := range cfg.Client.Server {
@@ -226,7 +247,6 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 		}
 	}
 
-	s.config = cfg
 	err := s.startRpcServer(ctx)
 	if err != nil {
 		return err
@@ -337,6 +357,10 @@ func (s *Service) Register(ctx context.Context) error {
 		path = *config.Path
 	}
 	path = "/" + strings.Trim(path, "/") + "/"
+	// Path 为 "/" 时构造出 "//"，会导致客户端路由 URL 与路径拼接错误
+	if path == "//" {
+		path = "/"
+	}
 
 	addr := s.GetServerAddr()
 	for _, key := range s.config.Server.List {
@@ -468,11 +492,12 @@ func (s *Service) startRpcServer(ctx context.Context) error {
 	config := s.config.Server.Http
 	var path = "/"
 	if config.Path != nil {
-		path += strings.Trim(*config.Path, "/") + "/"
+		// Path 为 "/" 时构造出 "//"，会导致 HTTP 路由匹配与路径截取错位
+		trimmed := strings.Trim(*config.Path, "/")
+		if trimmed != "" {
+			path = "/" + trimmed + "/"
+		}
 	}
-
-	mux := http.NewServeMux()
-	mux.Handle(path, hrpc.NewHttpServer(path, s.rpcServer))
 
 	//获得IP地址
 	address := ":0"
@@ -485,50 +510,85 @@ func (s *Service) startRpcServer(ctx context.Context) error {
 	}
 	s.listen.Store(&listen)
 	s.addr.Store(nil) // 监听地址变化后清空缓存，下次 GetServerAddr 重新解析
-	hlog.Info(ctx, "start https rpc server: %s", listen.Addr())
+	hlog.Info(ctx, "start rpc server: %s", listen.Addr())
 
+	// 按配置选择传输层
+	if s.config.GetTransport() == TransportH2Framer {
+		return s.startH2FramerServer(ctx, path, listen)
+	}
+	return s.startHttpServer(ctx, path, listen)
+}
+
+// startHttpServer 基于标准库 net/http 启动 RPC 服务
+func (s *Service) startHttpServer(ctx context.Context, path string, listen net.Listener) error {
+	config := s.config.Server.Http
+
+	mux := http.NewServeMux()
+	mux.Handle(path, hrpc.NewHttpServer(path, s.rpcServer))
+
+	tlsConfig, err := s.newTlsConfig(config)
+	if err != nil {
+		return err
+	}
+
+	server := &http.Server{
+		Handler:   mux,
+		TLSConfig: tlsConfig,
+	}
+	s.httpServer.Store(server)
 	go func() {
-		if config.Crt != nil && config.Key != nil && *config.Crt != "" && *config.Key != "" {
-			// 开启https服务
-			server := &http.Server{
-				Handler: mux,
-			}
-			s.httpServer.Store(server)
-			err := server.ServeTLS(listen, *config.Crt, *config.Key)
-			if err != nil {
-				hlog.Error(ctx, "start https rpc server failed: %s", err)
-				return
-			}
-		} else {
-			// 1. 生成私钥
-			privateKey, err := s.generatePrivateKey()
-			if err != nil {
-				hlog.Error(ctx, "generate private key failed: %s", err)
-				return
-			}
-
-			// 5. 生成自签名证书
-			cert, err := s.generateSelfSignedCert(privateKey)
-			if err != nil {
-				hlog.Error(ctx, "generate self signed cert failed: %s", err)
-				return
-			}
-
-			server := &http.Server{
-				Handler: mux,
-				TLSConfig: &tls.Config{
-					Certificates: []tls.Certificate{cert},
-				},
-			}
-			s.httpServer.Store(server)
-			err = server.ServeTLS(listen, "", "")
-			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				hlog.Error(ctx, "start https rpc server failed: %s", err)
-				return
-			}
+		err := server.ServeTLS(listen, "", "")
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			hlog.Error(ctx, "start https rpc server failed: %s", err)
+			return
 		}
 	}()
 	return nil
+}
+
+// startH2FramerServer 基于 hrpc.H2Framer 启动 RPC 服务
+func (s *Service) startH2FramerServer(ctx context.Context, path string, listen net.Listener) error {
+	config := s.config.Server.Http
+
+	tlsConfig, err := s.newTlsConfig(config)
+	if err != nil {
+		return err
+	}
+
+	// H2Framer 服务端为 prior-knowledge h2，由 TLS 层完成 ALPN h2 协商
+	h2Server := hrpc.NewH2Server(path, s.rpcServer)
+	s.h2Server.Store(h2Server)
+	go func() {
+		err := h2Server.Serve(tls.NewListener(listen, tlsConfig))
+		if err != nil {
+			hlog.Error(ctx, "start h2 framer rpc server failed: %s", err)
+			return
+		}
+	}()
+	return nil
+}
+
+// newTlsConfig 构造服务端 TLS 配置：优先加载 Crt/Key 证书，否则生成自签名证书。
+// 证书与自签名场景下客户端均无法验证，故客户端统一跳过证书校验。
+func (s *Service) newTlsConfig(config *Http) (*tls.Config, error) {
+	if config.Crt != nil && config.Key != nil && *config.Crt != "" && *config.Key != "" {
+		cert, err := tls.LoadX509KeyPair(*config.Crt, *config.Key)
+		if err != nil {
+			return nil, err
+		}
+		return &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{http2Proto}}, nil
+	}
+
+	// 生成自签名证书
+	privateKey, err := s.generatePrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	cert, err := s.generateSelfSignedCert(privateKey)
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{http2Proto}}, nil
 }
 
 // 生成 ECDSA 私钥
@@ -670,6 +730,22 @@ func (s *Service) parseDeleteInfo(v *mvccpb.KeyValue) error {
 	return nil
 }
 
+// newEncoder 按配置返回编解码器（服务端与客户端共用）
+func (s *Service) newEncoder() hrpc.Encoder {
+	if s.config != nil && s.config.GetCodec() == CodecHBuf {
+		return hrpc.NewHBufEncode()
+	}
+	return hrpc.NewJsonEncode()
+}
+
+// newDecoder 按配置返回解码器（服务端与客户端共用）
+func (s *Service) newDecoder() hrpc.Decoder {
+	if s.config != nil && s.config.GetCodec() == CodecHBuf {
+		return hrpc.NewHBufDecode()
+	}
+	return hrpc.NewJsonDecode()
+}
+
 // delHttpClient
 func (s *Service) delHttpClient(install *ServerInfo, host string) error {
 	s.lock.Lock()
@@ -695,10 +771,21 @@ func (s *Service) addHttpClient(install *ServerInfo, addr *url.URL) error {
 
 	connect, ok := s.httpClient[addr.Host]
 	if !ok {
+		// 按配置选择传输层与客户端编解码器。
+		// 服务端证书为自签名或自定义，客户端统一跳过证书校验。
+		var httpOptions []hrpc.HttpClientOption
+		if s.config != nil && s.config.GetTransport() == TransportH2Framer {
+			httpOptions = append(httpOptions,
+				hrpc.WithInsecureSkipVerify(true),
+				hrpc.WithH2FramerTransport(hrpc.NewH2FramerTransport(hrpc.WithFramerInsecureSkipVerify(true))),
+			)
+		} else {
+			httpOptions = append(httpOptions, hrpc.WithInsecureSkipVerify(true))
+		}
 		connect = hrpc.NewClient(
-			hrpc.NewHttpClient(addr.String()).Request,
-			hrpc.WithClientEncoder(hrpc.NewHBufEncode()),
-			hrpc.WithClientDecode(hrpc.NewHBufDecode()),
+			hrpc.NewHttpClient(addr.String(), httpOptions...).Request,
+			hrpc.WithClientEncoder(s.newEncoder()),
+			hrpc.WithClientDecode(s.newDecoder()),
 		)
 		for _, option := range s.clientOption {
 			option(connect)
@@ -794,6 +881,15 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		s.keepCancel = nil
 	}
 	s.keepMu.Unlock()
+
+	// 关闭 H2Framer 服务（内部会等待在途请求完成）
+	if h2Server := s.h2Server.Swap(nil); h2Server != nil {
+		_ = h2Server.Shutdown(ctx)
+	}
+	// 关闭监听器，使 H2Framer Serve 的 Accept 循环退出
+	if listen := s.listen.Load(); listen != nil {
+		_ = (*listen).Close()
+	}
 
 	server := s.httpServer.Swap(nil)
 	if server == nil {

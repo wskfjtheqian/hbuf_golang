@@ -8,8 +8,38 @@ import (
 )
 
 type Config struct {
-	Server *Server `yaml:"Server"` //服务端配置
-	Client *Client `yaml:"Client"` //客户端配置
+	Server    *Server `yaml:"Server"`    //服务端配置
+	Client    *Client `yaml:"Client"`    //客户端配置
+	Codec     *string `yaml:"Codec"`     //编解码器: json | hbuf
+	Transport *string `yaml:"Transport"` //传输层: http | h2
+}
+
+// 编解码器类型
+const (
+	CodecHBuf = "hbuf" // HBuf 二进制编解码
+	CodecJSON = "json" // JSON 编解码
+)
+
+// 传输层类型
+const (
+	TransportHTTP     = "http" // 标准库 net/http 传输
+	TransportH2Framer = "h2"   // hrpc.H2Framer 帧批处理传输
+)
+
+// GetCodec 获取编解码器类型，默认 json
+func (c *Config) GetCodec() string {
+	if c != nil && c.Codec != nil && *c.Codec == CodecHBuf {
+		return CodecHBuf
+	}
+	return CodecJSON
+}
+
+// GetTransport 获取传输层类型，默认 http
+func (c *Config) GetTransport() string {
+	if c != nil && c.Transport != nil && *c.Transport == TransportH2Framer {
+		return TransportH2Framer
+	}
+	return TransportHTTP
 }
 
 // Equal 判断两个Config是否相同
@@ -21,7 +51,7 @@ func (c *Config) Equal(other *Config) bool {
 		return false
 	}
 
-	if c.Server.Equal(other.Server) && c.Client.Equal(other.Client) {
+	if c.Server.Equal(other.Server) && c.Client.Equal(other.Client) && c.Codec == other.Codec && c.Transport == other.Transport {
 		return true
 	}
 	return false
@@ -42,6 +72,14 @@ func (c *Config) Validate(ctx context.Context) bool {
 	if c.Client == nil {
 		valid = false
 		hlog.Error(ctx, "client config is nil")
+	}
+	if c.Codec != nil && *c.Codec != CodecHBuf && *c.Codec != CodecJSON {
+		valid = false
+		hlog.Error(ctx, "unsupported codec: %s", *c.Codec)
+	}
+	if c.Transport != nil && *c.Transport != TransportHTTP && *c.Transport != TransportH2Framer {
+		valid = false
+		hlog.Error(ctx, "unsupported transport: %s", *c.Transport)
 	}
 	return valid
 }

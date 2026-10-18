@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hbuf"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hetcd"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hrpc"
@@ -25,6 +28,83 @@ type mockService struct {
 }
 
 func (m *mockService) Init(ctx context.Context) {}
+
+// echoRequest/echoResponse 为端到端测试提供最小 hbuf.Data 结构。
+// 模仿 hrpc 测试的 HbufRequest 手写 descriptor，JSON 编解码走字段反射。
+var echoRequestDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&echoRequest{}), map[uint16]hbuf.Descriptor{}, map[uint16]hbuf.Descriptor{
+	1: hbuf.NewStringDescriptor(unsafe.Offsetof(echoRequest{}.Name), false),
+})
+
+type echoRequest struct {
+	Name string `json:"name,omitempty" hbuf:"1"`
+}
+
+func (e *echoRequest) Descriptors() hbuf.Descriptor {
+	return echoRequestDescriptor
+}
+
+var echoResponseDescriptor = hbuf.NewDataDescriptor(0, false, reflect.TypeOf(&echoResponse{}), map[uint16]hbuf.Descriptor{}, map[uint16]hbuf.Descriptor{
+	1: hbuf.NewStringDescriptor(unsafe.Offsetof(echoResponse{}.Name), false),
+})
+
+type echoResponse struct {
+	Name string `json:"name,omitempty" hbuf:"1"`
+}
+
+func (e *echoResponse) Descriptors() hbuf.Descriptor {
+	return echoResponseDescriptor
+}
+
+// EchoService 端到端测试服务接口
+var _ hrpc.Init = (*echoServiceImpl)(nil)
+
+type EchoService interface {
+	Init(ctx context.Context)
+	Echo(ctx context.Context, req *echoRequest) (*echoResponse, error)
+}
+
+type echoServiceImpl struct{}
+
+func (e *echoServiceImpl) Init(ctx context.Context) {}
+
+func (e *echoServiceImpl) Echo(ctx context.Context, req *echoRequest) (*echoResponse, error) {
+	return &echoResponse{Name: req.Name}, nil
+}
+
+type echoServiceClient struct {
+	client *hrpc.Client
+}
+
+func (e *echoServiceClient) Init(ctx context.Context) {}
+
+func (e *echoServiceClient) Echo(ctx context.Context, req *echoRequest) (*echoResponse, error) {
+	response, err := e.client.Invoke(ctx, 0, "echo_service", "echo", req, hrpc.NewResultResponse[*echoResponse]())
+	if err != nil {
+		return nil, err
+	}
+	return response.(*echoResponse), nil
+}
+
+// installEchoService 注册带方法的 echo 服务，客户端构造返回可发起真实 RPC 的代理
+func installEchoService(t *testing.T, service *hservice.Service) {
+	t.Helper()
+	hservice.Register(service, EchoService(&echoServiceImpl{}), func(r hrpc.ServerRegister, s EchoService) {
+		r.Register(0, "echo_service", s, &hrpc.Method{
+			Name: "echo",
+			WithContext: func(ctx context.Context) context.Context {
+				return ctx
+			},
+			Handler: func(ctx context.Context, req any) (any, error) {
+				return s.Echo(ctx, req.(*echoRequest))
+			},
+			Decode: func(decoder func(v hbuf.Data) (hbuf.Data, error)) (hbuf.Data, error) {
+				return decoder(&echoRequest{})
+			},
+		})
+	}, func(c *hrpc.Client) EchoService {
+		return &echoServiceClient{client: c}
+	})
+}
 
 // installService 通过公共 API 注册一个名为 name 的 mock 服务，返回本地 init 实例
 func installService(t *testing.T, service *hservice.Service, name string) *mockService {
@@ -424,6 +504,75 @@ func TestContext_Value(t *testing.T) {
 	}
 }
 
+// TestConfig_CodecTransport_Defaults 编解码器与传输层默认值及显式配置
+func TestConfig_CodecTransport_Defaults(t *testing.T) {
+	cfg := &hservice.Config{}
+	if cfg.GetCodec() != hservice.CodecJSON {
+		t.Errorf("默认编解码器应为 json，实际 %s", cfg.GetCodec())
+	}
+	if cfg.GetTransport() != hservice.TransportHTTP {
+		t.Errorf("默认传输层应为 http，实际 %s", cfg.GetTransport())
+	}
+
+	codec := hservice.CodecHBuf
+	transport := hservice.TransportH2Framer
+	cfg.Codec = &codec
+	cfg.Transport = &transport
+	if cfg.GetCodec() != hservice.CodecHBuf {
+		t.Error("显式配置 Codec 应生效")
+	}
+	if cfg.GetTransport() != hservice.TransportH2Framer {
+		t.Error("显式配置 Transport 应生效")
+	}
+
+	// nil 配置返回默认值
+	var nilCfg *hservice.Config
+	if nilCfg.GetCodec() != hservice.CodecJSON || nilCfg.GetTransport() != hservice.TransportHTTP {
+		t.Error("nil 配置应返回默认值")
+	}
+}
+
+// TestConfig_Validate_CodecTransport 非法编解码器/传输层校验失败
+func TestConfig_Validate_CodecTransport(t *testing.T) {
+	valid := &hservice.Config{
+		Server: &hservice.Server{Http: &hservice.Http{Path: hutl.ToPointer("/")}, List: []string{"user"}},
+		Client: &hservice.Client{Server: map[string][]string{}},
+	}
+	if !valid.Validate(context.Background()) {
+		t.Fatal("基础配置应校验通过")
+	}
+
+	badCodec := hutl.ToPointer("xml")
+	valid.Codec = badCodec
+	if valid.Validate(context.Background()) {
+		t.Error("非法编解码器应校验失败")
+	}
+	valid.Codec = nil
+
+	badTransport := hutl.ToPointer("tcp")
+	valid.Transport = badTransport
+	if valid.Validate(context.Background()) {
+		t.Error("非法传输层应校验失败")
+	}
+}
+
+// TestConfig_Equal_CodecTransport 编解码器/传输层差异均能识别
+func TestConfig_Equal_CodecTransport(t *testing.T) {
+	base := &hservice.Config{}
+	codec := hservice.CodecHBuf
+	transport := hservice.TransportH2Framer
+
+	if base.Equal(&hservice.Config{Codec: &codec}) {
+		t.Error("Codec 不同不应相等")
+	}
+	if base.Equal(&hservice.Config{Transport: &transport}) {
+		t.Error("Transport 不同不应相等")
+	}
+	if !base.Equal(&hservice.Config{}) {
+		t.Error("相同配置应相等")
+	}
+}
+
 // findRegisterKey 查询 etcd 中指定服务的注册 key，不存在时返回空串
 func findRegisterKey(ctx context.Context, client *clientv3.Client, name string) (string, error) {
 	resp, err := client.Get(ctx, hservice.ProtocolName, clientv3.WithPrefix())
@@ -805,4 +954,83 @@ func TestService_Shutdown_Started(t *testing.T) {
 	// 清理：注销并释放租约，避免 key 残留污染其他测试
 	cancel()
 	_ = service.Deregister(context.Background())
+}
+
+// TestService_EndToEnd_JsonHttp 集成测试：JSON 编解码 + 标准库 HTTP 传输端到端调用。
+// codec 传空串，验证未配置 Codec 时的默认 JSON 路径。
+// 需设置环境变量 HSERVICE_TEST_ETCD 指向可用 etcd。
+func TestService_EndToEnd_JsonHttp(t *testing.T) {
+	testServiceEndToEnd(t, "", hservice.TransportHTTP)
+}
+
+// TestService_EndToEnd_HBufH2 集成测试：HBuf 编解码 + H2Framer 传输端到端调用。
+// 需设置环境变量 HSERVICE_TEST_ETCD 指向可用 etcd。
+func TestService_EndToEnd_HBufH2(t *testing.T) {
+	testServiceEndToEnd(t, hservice.CodecHBuf, hservice.TransportH2Framer)
+}
+
+// testServiceEndToEnd 服务端与客户端使用指定编解码器与传输层完成一次端到端 RPC 调用。
+// codec 传空串时不配置 Codec 字段（走默认 JSON 路径）。
+// 服务端为自签名证书，客户端统一跳过证书校验。
+func testServiceEndToEnd(t *testing.T, codec, transport string) {
+	t.Helper()
+	endpoint := getEtcdEndpoint(t)
+
+	e := hetcd.NewEtcd()
+	if err := e.SetConfig(context.Background(), &hetcd.Config{Endpoints: []string{endpoint}}); err != nil {
+		t.Fatal("创建 Etcd 客户端失败:", err)
+	}
+	defer e.Shutdown(context.Background())
+
+	// 服务端：注册 echo 服务，本地客户端保证订阅立即完成
+	serviceA := hservice.NewService(e)
+	installEchoService(t, serviceA)
+	defer serviceA.Shutdown(context.Background())
+	ctxA, cancelA := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelA()
+	cfgA := &hservice.Config{
+		Server:    &hservice.Server{Register: true, List: []string{"echo_service"}, Http: &hservice.Http{Path: hutl.ToPointer("/")}},
+		Client:    &hservice.Client{Find: false, Server: map[string][]string{"echo_service": {"local"}}},
+		Transport: &transport,
+	}
+	if codec != "" {
+		cfgA.Codec = &codec
+	}
+	if err := serviceA.SetConfig(ctxA, cfgA); err != nil {
+		t.Fatal("服务端设置配置失败:", err)
+	}
+	defer func() {
+		cancelA()
+		_ = serviceA.Deregister(context.Background())
+	}()
+
+	// 客户端：静态 URL 指向服务端（自身不注册），GetClient 仅含远端路由
+	serviceB := hservice.NewService(e)
+	installEchoService(t, serviceB)
+	defer serviceB.Shutdown(context.Background())
+	ctxB, cancelB := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelB()
+	addr := serviceA.GetServerAddr()
+	cfgB := &hservice.Config{
+		Server:    &hservice.Server{Register: true, Http: &hservice.Http{Path: hutl.ToPointer("/")}},
+		Client:    &hservice.Client{Find: false, Server: map[string][]string{"echo_service": {"https://" + addr + "/"}}},
+		Transport: &transport,
+	}
+	if codec != "" {
+		cfgB.Codec = &codec
+	}
+	if err := serviceB.SetConfig(ctxB, cfgB); err != nil {
+		t.Fatal("客户端设置配置失败:", err)
+	}
+
+	// 端到端调用：客户端经指定传输层发起 RPC，服务端以指定编解码器处理
+	callCtx := hservice.WithContext(ctxB, hservice.WithContextService(serviceB))
+	echo := hservice.GetClient(callCtx, "echo_service").(EchoService)
+	resp, err := echo.Echo(ctxB, &echoRequest{Name: "hello"})
+	if err != nil {
+		t.Fatal("RPC 调用失败:", err)
+	}
+	if resp.Name != "hello" {
+		t.Fatalf("响应不匹配: %+v", resp)
+	}
 }
