@@ -17,12 +17,13 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
 )
 
+// LogFormat 定义了日志的输出格式模式
 type LogFormat int
 
 const (
-	FormatColored LogFormat = iota // Default text with terminal color codes
-	FormatPlain                    // Plain text without terminal color codes
-	FormatJSON                     // Structural JSON format
+	FormatColored LogFormat = iota // 传统控制台文本带颜色
+	FormatPlain                    // 传统控制台文本不带颜色（适合不需要JSON但追求干净界面的落盘系统）
+	FormatJSON                     // 结构化 JSON 格式（K8s / VictoriaLogs 生产环境最佳实践）
 )
 
 type Level int
@@ -107,20 +108,21 @@ type Logger struct {
 	outTarget atomic.Pointer[func(level Level) SyncWriter]
 	compare   func(v1 Level, v2 Level) bool
 
-	stdout io.Writer   // 优化：生产环境直接无缓冲写入标准输出
-	isJSON atomic.Bool // 优化：无反射高性能 JSON 切换开关
+	stdout io.Writer    // 生产环境：无缓冲直接输出到宿主机/管道
+	format atomic.Int32 // 格式原子存储 (LogFormat)
 }
 
 func NewLogger(prefix string, flag int) *Logger {
 	l := &Logger{
 		out:    map[Level]SyncWriter{},
-		stdout: os.Stdout, // 直接绑定标准输出
+		stdout: os.Stdout,
 	}
 	l.SetPrefix(prefix)
 	l.SetFlags(flag)
 	l.SetOutLevel(ERROR)
 	l.setSimple(false)
 	l.setOutError(true)
+	l.SetFormat(FormatColored) // 默认文本带颜色，兼容老调用
 	return l
 }
 
@@ -132,20 +134,18 @@ func (l *Logger) SetFlags(flag int) {
 	l.flag.Store(int32(flag))
 }
 
-func (l *Logger) SetJSON(enabled bool) {
-	l.isJSON.Store(enabled)
+func (l *Logger) SetFormat(format LogFormat) {
+	l.format.Store(int32(format))
 }
 
 func (l *Logger) Flush() {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	// 标准输出无缓冲，仅刷新额外的文件或网络 SyncWriter
 	for _, writer := range l.out {
 		_ = writer.Flush()
 	}
 }
 
-// Close 关闭后 Logger 不应继续使用。
 func (l *Logger) Close() {
 	l.Flush()
 }
@@ -182,13 +182,12 @@ func (l *Logger) Exit(format string, v ...any) {
 }
 
 func (l *Logger) Output(calldepth int, level Level, s string) error {
-	calldepth++ // +1 for this frame.
+	calldepth++
 	return l.output(0, calldepth, level, func(b []byte) []byte {
 		return append(b, s...)
 	}, false, "")
 }
 
-// output handles the core logic of formatting and writing log records.
 func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput func([]byte) []byte, hasCtx bool, ctxVal string) error {
 	if l.isDiscard.Load() {
 		return nil
@@ -197,7 +196,7 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 	now := htime.NowTime()
 	prefix := l.Prefix()
 	flag := l.Flags()
-	isJSON := l.isJSON.Load()
+	currentFormat := LogFormat(l.format.Load())
 
 	var file string
 	var line int
@@ -223,29 +222,28 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 	buf := getBuffer()
 	defer putBuffer(buf)
 
-	formatHeader(buf, now, prefix, flag, file, line, level, isJSON)
+	formatHeader(buf, now, prefix, flag, file, line, level, currentFormat)
 
-	if isJSON {
-		// JSON 模式：将业务消息写入一个临时缓冲区进行自动化 JSON 安全转义
+	if currentFormat == FormatJSON {
+		// JSON 模式：安全地将业务日志进行转义，防止破坏 JSON 骨架结构
 		msgBuf := getBuffer()
 		*msgBuf = appendOutput(*msgBuf)
 		if len(*msgBuf) > 0 && (*msgBuf)[len(*msgBuf)-1] == '\n' {
 			*msgBuf = (*msgBuf)[:len(*msgBuf)-1]
 		}
-		// 追加转义后的业务消息
 		appendEscapedJSONString(buf, *msgBuf)
 		putBuffer(msgBuf)
 
-		// 闭合 Context 上下文（若存在）
-		if hasCtx {
+		// 如果有链路或业务上下文，追加为标准的 Context 字段
+		if hasCtx && ctxVal != "" {
 			*buf = append(*buf, `,"context":"`...)
 			*buf = append(*buf, ctxVal...)
 			*buf = append(*buf, '"')
 		}
 		*buf = append(*buf, '}')
 	} else {
-		// 传统文本模式
-		if hasCtx {
+		// 传统文本模式（包括带颜色和不带颜色）
+		if hasCtx && ctxVal != "" {
 			*buf = append(*buf, '[')
 			*buf = append(*buf, []byte(ctxVal)...)
 			*buf = append(*buf, ']', ' ')
@@ -253,7 +251,7 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 		*buf = appendOutput(*buf)
 	}
 
-	// 统一尾部换行处理
+	// 统一在行尾补换行符
 	if len(*buf) == 0 || (*buf)[len(*buf)-1] != '\n' {
 		*buf = append(*buf, '\n')
 	}
@@ -262,7 +260,7 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 }
 
 func (l *Logger) writer(level Level, data []byte) error {
-	// 优化点：控制台输出移出互斥锁外，解决高并发下的锁严重互斥雪崩问题
+	// 【无锁核心】：若开关开启，并发安全地直写 stdout，不进入任何互斥锁区间
 	if l.outErr.Load() {
 		_, _ = l.stdout.Write(data)
 	}
@@ -271,7 +269,7 @@ func (l *Logger) writer(level Level, data []byte) error {
 		return nil
 	}
 
-	// 只有低频写入外部第三方持久化 SyncWriter 时才按需短暂加锁
+	// 仅对不安全的落盘 map/SyncWriter 按需短暂加锁保护
 	l.lock.Lock()
 	if _, ok := l.out[level]; !ok {
 		call := l.outTarget.Load()
@@ -362,15 +360,16 @@ func itoa(buf *[]byte, i int, wid int) {
 	*buf = append(*buf, b[bp:]...)
 }
 
-func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string, line int, level Level, isJSON bool) {
-	if isJSON {
-		// JSON 骨架高效非反射组装
+func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string, line int, level Level, format LogFormat) {
+	if format == FormatJSON {
+		// ------------------ 1. 结构化 JSON 模式 ------------------
 		*buf = append(*buf, `{"time":`...)
 		if flag&LUTC != 0 {
 			t = t.UTC()
 		}
 		*buf = append(*buf, '"')
-		*buf = t.AppendFormat(*buf, time.RFC3339Nano)
+		// 显式指定微秒固定宽度精度，消除因零值切片缩短而导致的分配与解析损耗
+		*buf = t.AppendFormat(*buf, "2006-01-02T15:04:05.000000Z07:00")
 		*buf = append(*buf, `","level":"`...)
 		*buf = append(*buf, level.String()...)
 		*buf = append(*buf, '"')
@@ -402,7 +401,7 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 		return
 	}
 
-	// 传统控制台文本带颜色模式
+	// ------------------ 2. 传统文本模式 (带颜色 / 不带颜色) ------------------
 	if flag&Lmsgprefix == 0 {
 		*buf = append(*buf, prefix...)
 	}
@@ -434,23 +433,27 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 		}
 	}
 
-	if level >= EXIT {
-		*buf = append(*buf, []byte("\x1b[45m")...)
-	} else if level >= ERROR {
-		*buf = append(*buf, []byte("\x1b[41m")...)
-	} else if level >= WARN {
-		*buf = append(*buf, []byte("\x1b[43m")...)
-	} else if level <= DEBUG {
-		*buf = append(*buf, []byte("\x1b[42m")...)
-	} else {
-		*buf = append(*buf, []byte("\x1b[0m")...)
+	// 仅当需要彩色时追加 ANSI 代码，彻底消除字面量到切片的转换损耗
+	if format == FormatColored {
+		if level >= EXIT {
+			*buf = append(*buf, "\x1b[45m"...)
+		} else if level >= ERROR {
+			*buf = append(*buf, "\x1b[41m"...)
+		} else if level >= WARN {
+			*buf = append(*buf, "\x1b[43m"...)
+		} else if level <= DEBUG {
+			*buf = append(*buf, "\x1b[42m"...)
+		} else {
+			*buf = append(*buf, "\x1b[0m"...)
+		}
 	}
-	*buf = append(*buf, '[')
-	*buf = append(*buf, []byte(level.String())...)
-	*buf = append(*buf, ']', ' ')
-	*buf = append(*buf, []byte("\x1b[0m")...)
-	*buf = append(*buf, ' ')
 
+	*buf = append(*buf, '[')
+	*buf = append(*buf, level.String()...)
+	*buf = append(*buf, ']', ' ')
+	if format == FormatColored {
+		*buf = append(*buf, "\x1b[0m "...)
+	}
 	if flag&(Lshortfile|Llongfile) != 0 {
 		if flag&Lshortfile != 0 {
 			short := file
@@ -472,7 +475,7 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 	}
 }
 
-// appendEscapedJSONString 实现极其快速且无多余堆分配的普通字符串转义追加
+// appendEscapedJSONString 零分配高效字节流 JSON 字符转义追加
 func appendEscapedJSONString(buf *[]byte, s []byte) {
 	for _, c := range s {
 		switch c {
@@ -537,8 +540,18 @@ func init() {
 		std.setOutError("true" == s)
 		return nil
 	})
-	flag.BoolFunc("log_json", "Whether to output logs in structural JSON format, default is false.", func(s string) error {
-		std.SetJSON("true" == s)
+	// 🔴 新增统一参数切换三种模式：支持 json, colored, plain 三种输入，不合规则默认转为 plain
+	flag.Func("log_format", "Log output format, supports: json, colored, plain [default: colored]", func(s string) error {
+		switch strings.ToLower(strings.TrimSpace(s)) {
+		case "json":
+			std.SetFormat(FormatJSON)
+		case "plain":
+			std.SetFormat(FormatPlain)
+		case "colored":
+			std.SetFormat(FormatColored)
+		default:
+			std.SetFormat(FormatColored)
+		}
 		return nil
 	})
 }
@@ -548,8 +561,8 @@ func SetFlags(flag int) {
 func SetPrefix(prefix string) {
 	std.SetPrefix(prefix)
 }
-func SetJSON(enabled bool) {
-	std.SetJSON(enabled)
+func SetFormat(format LogFormat) {
+	std.SetFormat(format)
 }
 func Debug(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, DEBUG, func(b []byte) []byte {
