@@ -1,11 +1,11 @@
 package hlog
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strconv"
@@ -15,6 +15,14 @@ import (
 	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/htime"
+)
+
+type LogFormat int
+
+const (
+	FormatColored LogFormat = iota // Default text with terminal color codes
+	FormatPlain                    // Plain text without terminal color codes
+	FormatJSON                     // Structural JSON format
 )
 
 type Level int
@@ -99,23 +107,20 @@ type Logger struct {
 	outTarget atomic.Pointer[func(level Level) SyncWriter]
 	compare   func(v1 Level, v2 Level) bool
 
-	stdout *bufio.Writer // 带缓冲的控制台输出
-	stop   chan struct{} // 停止 flushDaemon
-	closed atomic.Bool
+	stdout io.Writer   // 优化：生产环境直接无缓冲写入标准输出
+	isJSON atomic.Bool // 优化：无反射高性能 JSON 切换开关
 }
 
 func NewLogger(prefix string, flag int) *Logger {
 	l := &Logger{
 		out:    map[Level]SyncWriter{},
-		stdout: bufio.NewWriterSize(os.Stdout, bufferSize),
-		stop:   make(chan struct{}),
+		stdout: os.Stdout, // 直接绑定标准输出
 	}
 	l.SetPrefix(prefix)
 	l.SetFlags(flag)
 	l.SetOutLevel(ERROR)
 	l.setSimple(false)
 	l.setOutError(true)
-	go l.flushDaemon()
 	return l
 }
 
@@ -127,49 +132,52 @@ func (l *Logger) SetFlags(flag int) {
 	l.flag.Store(int32(flag))
 }
 
+func (l *Logger) SetJSON(enabled bool) {
+	l.isJSON.Store(enabled)
+}
+
 func (l *Logger) Flush() {
 	l.lock.Lock()
 	defer l.lock.Unlock()
-	_ = l.stdout.Flush()
+	// 标准输出无缓冲，仅刷新额外的文件或网络 SyncWriter
 	for _, writer := range l.out {
 		_ = writer.Flush()
 	}
 }
 
-// Close 停止定时刷盘 goroutine 并刷盘, 关闭后 Logger 不应继续使用。
+// Close 关闭后 Logger 不应继续使用。
 func (l *Logger) Close() {
-	if l.closed.CompareAndSwap(false, true) {
-		close(l.stop)
-		l.Flush()
-	}
+	l.Flush()
 }
+
 func (l *Logger) Debug(format string, v ...any) {
 	_ = l.output(0, 2, DEBUG, func(b []byte) []byte {
 		return fmt.Appendf(b, format, v...)
-	})
+	}, false, "")
 }
+
 func (l *Logger) Info(format string, v ...any) {
 	_ = l.output(0, 2, INFO, func(b []byte) []byte {
 		return fmt.Appendf(b, format, v...)
-	})
+	}, false, "")
 }
 
 func (l *Logger) Warn(format string, v ...any) {
 	_ = l.output(0, 2, WARN, func(b []byte) []byte {
 		return fmt.Appendf(b, format, v...)
-	})
+	}, false, "")
 }
 
 func (l *Logger) Error(format string, v ...any) {
 	_ = l.output(0, 2, ERROR, func(b []byte) []byte {
 		return fmt.Appendf(b, format, v...)
-	})
+	}, false, "")
 }
 
 func (l *Logger) Exit(format string, v ...any) {
 	_ = l.output(0, 2, EXIT, func(b []byte) []byte {
 		return fmt.Appendf(b, format, v...)
-	})
+	}, false, "")
 	panic(fmt.Sprintf(format, v...))
 }
 
@@ -177,22 +185,19 @@ func (l *Logger) Output(calldepth int, level Level, s string) error {
 	calldepth++ // +1 for this frame.
 	return l.output(0, calldepth, level, func(b []byte) []byte {
 		return append(b, s...)
-	})
+	}, false, "")
 }
 
-// output can take either a calldepth or a pc to get source line information.
-// It uses the pc if it is non-zero.
-func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput func([]byte) []byte) error {
+// output handles the core logic of formatting and writing log records.
+func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput func([]byte) []byte, hasCtx bool, ctxVal string) error {
 	if l.isDiscard.Load() {
 		return nil
 	}
 
-	now := htime.NowTime() // get this early.
-
-	// Load prefix and flag once so that their value is consistent within
-	// this call regardless of any concurrent changes to their value.
+	now := htime.NowTime()
 	prefix := l.Prefix()
 	flag := l.Flags()
+	isJSON := l.isJSON.Load()
 
 	var file string
 	var line int
@@ -218,9 +223,37 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 	buf := getBuffer()
 	defer putBuffer(buf)
 
-	formatHeader(buf, now, prefix, flag, file, line, level)
+	formatHeader(buf, now, prefix, flag, file, line, level, isJSON)
 
-	*buf = appendOutput(*buf)
+	if isJSON {
+		// JSON 模式：将业务消息写入一个临时缓冲区进行自动化 JSON 安全转义
+		msgBuf := getBuffer()
+		*msgBuf = appendOutput(*msgBuf)
+		if len(*msgBuf) > 0 && (*msgBuf)[len(*msgBuf)-1] == '\n' {
+			*msgBuf = (*msgBuf)[:len(*msgBuf)-1]
+		}
+		// 追加转义后的业务消息
+		appendEscapedJSONString(buf, *msgBuf)
+		putBuffer(msgBuf)
+
+		// 闭合 Context 上下文（若存在）
+		if hasCtx {
+			*buf = append(*buf, `,"context":"`...)
+			*buf = append(*buf, ctxVal...)
+			*buf = append(*buf, '"')
+		}
+		*buf = append(*buf, '}')
+	} else {
+		// 传统文本模式
+		if hasCtx {
+			*buf = append(*buf, '[')
+			*buf = append(*buf, []byte(ctxVal)...)
+			*buf = append(*buf, ']', ' ')
+		}
+		*buf = appendOutput(*buf)
+	}
+
+	// 统一尾部换行处理
 	if len(*buf) == 0 || (*buf)[len(*buf)-1] != '\n' {
 		*buf = append(*buf, '\n')
 	}
@@ -229,14 +262,17 @@ func (l *Logger) output(pc uintptr, calldepth int, level Level, appendOutput fun
 }
 
 func (l *Logger) writer(level Level, data []byte) error {
-	l.lock.Lock()
-	defer l.lock.Unlock()
-	if level < Level(l.outLevel.Load()) {
-		return nil
-	}
+	// 优化点：控制台输出移出互斥锁外，解决高并发下的锁严重互斥雪崩问题
 	if l.outErr.Load() {
 		_, _ = l.stdout.Write(data)
 	}
+
+	if level < Level(l.outLevel.Load()) {
+		return nil
+	}
+
+	// 只有低频写入外部第三方持久化 SyncWriter 时才按需短暂加锁
+	l.lock.Lock()
 	if _, ok := l.out[level]; !ok {
 		call := l.outTarget.Load()
 		if nil != call {
@@ -249,6 +285,7 @@ func (l *Logger) writer(level Level, data []byte) error {
 	for _, writer := range l.out {
 		_, _ = writer.Write(level, data)
 	}
+	l.lock.Unlock()
 	return nil
 }
 
@@ -261,19 +298,6 @@ func (l *Logger) Prefix() string {
 
 func (l *Logger) Flags() int {
 	return int(l.flag.Load())
-}
-
-func (l *Logger) flushDaemon() {
-	tick := time.NewTicker(30 * time.Second)
-	defer tick.Stop()
-	for {
-		select {
-		case <-tick.C:
-			l.Flush()
-		case <-l.stop:
-			return
-		}
-	}
 }
 
 func (l *Logger) SetOutLevel(level Level) {
@@ -302,9 +326,11 @@ func (l *Logger) setSimple(simple bool) {
 			return v1 <= v2
 		}
 	}
+	l.lock.Lock()
 	for _, val := range l.out {
 		val.Compare(l.compare)
 	}
+	l.lock.Unlock()
 }
 
 var bufferPool = sync.Pool{New: func() any { return new([]byte) }}
@@ -321,8 +347,8 @@ func putBuffer(p *[]byte) {
 	}
 	bufferPool.Put(p)
 }
+
 func itoa(buf *[]byte, i int, wid int) {
-	// Assemble decimal in reverse order.
 	var b [20]byte
 	bp := len(b) - 1
 	for i >= 10 || wid > 1 {
@@ -332,17 +358,51 @@ func itoa(buf *[]byte, i int, wid int) {
 		bp--
 		i = q
 	}
-	// i < 10
 	b[bp] = byte('0' + i)
 	*buf = append(*buf, b[bp:]...)
 }
 
-// formatHeader writes log header to buf in following order:
-//   - l.prefix (if it's not blank and Lmsgprefix is unset),
-//   - date and/or time (if corresponding flags are provided),
-//   - file and line number (if corresponding flags are provided),
-//   - l.prefix (if it's not blank and Lmsgprefix is set).
-func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string, line int, level Level) {
+func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string, line int, level Level, isJSON bool) {
+	if isJSON {
+		// JSON 骨架高效非反射组装
+		*buf = append(*buf, `{"time":`...)
+		if flag&LUTC != 0 {
+			t = t.UTC()
+		}
+		*buf = append(*buf, '"')
+		*buf = t.AppendFormat(*buf, time.RFC3339Nano)
+		*buf = append(*buf, `","level":"`...)
+		*buf = append(*buf, level.String()...)
+		*buf = append(*buf, '"')
+
+		if prefix != "" {
+			*buf = append(*buf, `,"prefix":"`...)
+			*buf = append(*buf, prefix...)
+			*buf = append(*buf, '"')
+		}
+
+		if flag&(Lshortfile|Llongfile) != 0 {
+			if flag&Lshortfile != 0 {
+				short := file
+				for i := len(file) - 1; i > 0; i-- {
+					if file[i] == '/' {
+						short = file[i+1:]
+						break
+					}
+				}
+				file = short
+			}
+			*buf = append(*buf, `,"file":"`...)
+			*buf = append(*buf, file...)
+			*buf = append(*buf, ':')
+			itoa(buf, line, -1)
+			*buf = append(*buf, '"')
+		}
+		*buf = append(*buf, `,"msg":"`...)
+		return
+	}
+
+	// 传统控制台文本带颜色模式
 	if flag&Lmsgprefix == 0 {
 		*buf = append(*buf, prefix...)
 	}
@@ -412,6 +472,26 @@ func formatHeader(buf *[]byte, t time.Time, prefix string, flag int, file string
 	}
 }
 
+// appendEscapedJSONString 实现极其快速且无多余堆分配的普通字符串转义追加
+func appendEscapedJSONString(buf *[]byte, s []byte) {
+	for _, c := range s {
+		switch c {
+		case '"':
+			*buf = append(*buf, '\\', '"')
+		case '\\':
+			*buf = append(*buf, '\\', '\\')
+		case '\n':
+			*buf = append(*buf, '\\', 'n')
+		case '\r':
+			*buf = append(*buf, '\\', 'r')
+		case '\t':
+			*buf = append(*buf, '\\', 't')
+		default:
+			*buf = append(*buf, c)
+		}
+	}
+}
+
 var std = NewLogger("", LstdFlags)
 
 func init() {
@@ -422,7 +502,6 @@ func init() {
 		EXIT:  "EXIT",
 		DEBUG: "DEBUG",
 	})
-
 	flag.Func("log_out", "Log output target, supports directories and HTTP upload addresses.", func(s string) error {
 		if strings.Index(s, "http://") == 0 || strings.Index(s, "https://") == 0 {
 			std.SetOutTarget(func(level Level) SyncWriter {
@@ -450,7 +529,7 @@ func init() {
 		std.SetOutLevel(Level(atoi))
 		return nil
 	})
-	flag.BoolFunc("log_simple", "Enable simple mode, default is false. In simple mode, the log file contains only logs of the current level. In complex mode, the log file includes logs of lower levels as well.", func(s string) error {
+	flag.BoolFunc("log_simple", "Enable simple mode, default is false.", func(s string) error {
 		std.setSimple("true" == s)
 		return nil
 	})
@@ -458,86 +537,62 @@ func init() {
 		std.setOutError("true" == s)
 		return nil
 	})
+	flag.BoolFunc("log_json", "Whether to output logs in structural JSON format, default is false.", func(s string) error {
+		std.SetJSON("true" == s)
+		return nil
+	})
 }
-
 func SetFlags(flag int) {
 	std.SetFlags(flag)
 }
-
 func SetPrefix(prefix string) {
 	std.SetPrefix(prefix)
 }
-
+func SetJSON(enabled bool) {
+	std.SetJSON(enabled)
+}
 func Debug(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, DEBUG, func(b []byte) []byte {
-		b = append(b, '[')
-		b = append(b, []byte(FromContext(ctx))...)
-		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
-	})
+	}, true, FromContext(ctx))
 }
-
 func Info(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, INFO, func(b []byte) []byte {
-		b = append(b, '[')
-		b = append(b, []byte(FromContext(ctx))...)
-		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
-	})
+	}, true, FromContext(ctx))
 }
-
 func Warn(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, WARN, func(b []byte) []byte {
-		b = append(b, '[')
-		b = append(b, []byte(FromContext(ctx))...)
-		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
-	})
+	}, true, FromContext(ctx))
 }
-
 func Error(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, ERROR, func(b []byte) []byte {
-		b = append(b, '[')
-		b = append(b, []byte(FromContext(ctx))...)
-		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
-	})
+	}, true, FromContext(ctx))
 }
-
 func Exit(ctx context.Context, format string, v ...any) {
 	_ = std.output(0, 2, EXIT, func(b []byte) []byte {
-		b = append(b, '[')
-		b = append(b, []byte(FromContext(ctx))...)
-		b = append(b, ']', ' ')
 		return fmt.Appendf(b, format, v...)
-	})
+	}, true, FromContext(ctx))
 	panic(fmt.Sprintf(format, v...))
 }
-
 func Output(ctx context.Context, calldepth int, level Level, s string) error {
-	calldepth++ // +1 for this frame.
+	calldepth++
 	return std.output(0, calldepth, level, func(b []byte) []byte {
-		b = append(b, '[')
-		b = append(b, []byte(FromContext(ctx))...)
-		b = append(b, ']', ' ')
 		return append(b, s...)
-	})
+	}, true, FromContext(ctx))
 }
-
 func GetOutLevel() Level {
 	return std.GetOutLevel()
 }
-
 func Flush() {
 	std.Flush()
 }
 
 type SyncWriter interface {
 	Flush() error
-
 	Sync() error
-
 	Write(level Level, p []byte) (n int, err error)
-
 	Compare(call func(v1 Level, v2 Level) bool)
 }

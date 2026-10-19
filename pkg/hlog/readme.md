@@ -11,7 +11,7 @@ HLog 是一个高性能的 Go 日志库（见 [log.go](log.go) / [ctx.go](ctx.go
 - **自动轮转与刷盘**：单文件超过 `MaxSize`（默认 1800MB）自动滚动；每 30 秒由 flushDaemon 定时 Flush
 - **高性能**：`sync.Pool` 字节缓冲复用、`atomic` 字段无锁读写、256KB bufio 缓冲写文件
 - **ANSI 颜色分级**：EXIT 紫底、ERROR 红底、WARN 黄底、DEBUG 绿底
-- **零代码配置**：通过 `-log_out` / `-log_level` / `-log_simple` / `-log_err` 四个命令行 flag 即可完成部署期配置
+- **零代码配置**：通过 `-log_out` / `-log_level` / `-log_simple` / `-log_err` / `-log_json` 五个命令行 flag 即可完成部署期配置
 
 ## 文件结构
 
@@ -132,6 +132,7 @@ server.mac1.qian.INFO.20261018-120000.12345.log
 | `-log_level` | 30000 | 输出级别：DEBUG(00000)/INFO(10000)/WARN(20000)/ERROR(30000)/EXIT(40000) |
 | `-log_simple` | false | 简单模式：日志文件仅包含当前级别的日志；关闭时为复杂模式（默认），高级别文件同时包含更低级别的日志 |
 | `-log_err` | true | 是否同时输出日志到控制台 |
+| `-log_json` | true | 是否 JSON 格式化日志 |
 
 ## 性能设计
 
