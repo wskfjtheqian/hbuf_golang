@@ -37,7 +37,9 @@ const (
 )
 
 const (
+	tmFmtWithS  = "2006-01-02 15:04:05"
 	tmFmtWithMS = "2006-01-02 15:04:05.999"
+	tmFmtWithUS = "2006-01-02 15:04:05.999999"
 	tmFmtZero   = "0000-00-00 00:00:00"
 	nullStr     = "NULL"
 )
@@ -50,6 +52,7 @@ func isPrintable(s string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -151,9 +154,21 @@ func (s *Builder) Join(b *Builder) *Builder {
 	return s
 }
 
-func (s *Builder) ToText() string {
+func (s *Builder) ToText(ctx context.Context) string {
 	text := s.text.String()
-	return ExplainSQL(text, nil, `'`, s.params...)
+	db, ok := FromContext(ctx)
+	timeFmt := tmFmtWithMS
+	if ok && db.GetConfig() != nil {
+		switch *db.GetConfig().TimeTruncate {
+		case time.Second:
+			timeFmt = tmFmtWithS
+		case time.Millisecond:
+			timeFmt = tmFmtWithMS
+		case time.Microsecond:
+			timeFmt = tmFmtWithUS
+		}
+	}
+	return ExplainSQL(text, nil, timeFmt, `'`, s.params...)
 }
 
 // 是否为空
@@ -163,21 +178,22 @@ func (s *Builder) IsEmpty() bool {
 
 func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error)) (int64, error) {
 	var count int64 = 0
-	defer newPrintLog(s, &count).print(ctx)
 
-	sql, ok := FromContext(ctx)
+	db, ok := FromContext(ctx)
+	defer newPrintLog(s, &count).print(ctx, db.GetConfig())
+
 	if !ok {
-		return 0, herror.NewError("no database connection found in context" + "：" + s.ToText())
+		return 0, herror.NewError("no database connection found in context" + "：" + s.ToText(ctx))
 	}
 
-	db, err := sql.GetDB()
+	d, err := db.GetDB()
 	if err != nil {
-		return 0, herror.WrapMsg(err, s.ToText())
+		return 0, herror.WrapMsg(err, s.ToText(ctx))
 	}
 
-	result, err := db.Query(s.text.String(), s.params...)
+	result, err := d.Query(s.text.String(), s.params...)
 	if err != nil {
-		return 0, herror.WrapMsg(err, s.ToText())
+		return 0, herror.WrapMsg(err, s.ToText(ctx))
 	}
 	defer result.Close()
 
@@ -187,7 +203,7 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 		if isScan {
 			isScan, err = scan(result)
 			if err != nil {
-				return 0, herror.WrapMsg(err, s.ToText())
+				return 0, herror.WrapMsg(err, s.ToText(ctx))
 			}
 		}
 	}
@@ -196,9 +212,10 @@ func (s *Builder) Query(ctx context.Context, scan func(*sql.Rows) (bool, error))
 
 func (s *Builder) Exec(ctx context.Context) (int64, int64, error) {
 	var count int64 = 0
-	defer newPrintLog(s, &count).print(ctx)
 
 	db, ok := FromContext(ctx)
+	defer newPrintLog(s, &count).print(ctx, db.GetConfig())
+
 	if !ok {
 		return 0, 0, herror.NewError("no database connection found in context")
 	}
@@ -209,20 +226,20 @@ func (s *Builder) Exec(ctx context.Context) (int64, int64, error) {
 
 	result, err := d.Exec(s.text.String(), s.params...)
 	if err != nil {
-		return 0, 0, herror.WrapMsg(err, s.ToText())
+		return 0, 0, herror.WrapMsg(err, s.ToText(ctx))
 	}
 	count, err = result.RowsAffected()
 	if err != nil {
-		return 0, 0, herror.WrapMsg(err, s.ToText())
+		return 0, 0, herror.WrapMsg(err, s.ToText(ctx))
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, 0, herror.WrapMsg(err, s.ToText())
+		return 0, 0, herror.WrapMsg(err, s.ToText(ctx))
 	}
 	return count, id, nil
 }
 
-func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, avars ...any) string {
+func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, timeFmt, escaper string, avars ...any) string {
 	var (
 		convertParams func(any, int)
 		vars          = make([]string, len(avars))
@@ -236,14 +253,14 @@ func ExplainSQL(sql string, numericPlaceholder *regexp.Regexp, escaper string, a
 			if v.IsZero() {
 				vars[idx] = escaper + tmFmtZero + escaper
 			} else {
-				vars[idx] = escaper + v.Format(tmFmtWithMS) + escaper
+				vars[idx] = escaper + v.Format(timeFmt) + escaper
 			}
 		case *time.Time:
 			if v != nil {
 				if v.IsZero() {
 					vars[idx] = escaper + tmFmtZero + escaper
 				} else {
-					vars[idx] = escaper + v.Format(tmFmtWithMS) + escaper
+					vars[idx] = escaper + v.Format(timeFmt) + escaper
 				}
 			} else {
 				vars[idx] = nullStr
@@ -343,7 +360,7 @@ type printLog struct {
 	builder *Builder
 }
 
-func (p *printLog) print(ctx context.Context) {
+func (p *printLog) print(ctx context.Context, cfg *Config) {
 	if !PrintSQL {
 		return
 	}
@@ -357,8 +374,19 @@ func (p *printLog) print(ctx context.Context) {
 		text.WriteString(hutl.Red(t))
 	}
 	text.WriteString(hutl.Blue("[Rows:" + strconv.FormatInt(*p.count, 10) + "] "))
-	text.WriteString(hutl.Green(p.builder.ToText()))
 
+	timeFmt := tmFmtWithMS
+	if cfg != nil {
+		switch *cfg.TimeTruncate {
+		case time.Second:
+			timeFmt = tmFmtWithS
+		case time.Millisecond:
+			timeFmt = tmFmtWithMS
+		case time.Microsecond:
+			timeFmt = tmFmtWithUS
+		}
+	}
+	text.WriteString(hutl.Green(ExplainSQL(p.builder.text.String(), nil, timeFmt, `'`, p.builder.params...)))
 	_ = hlog.Output(ctx, 3, LogSQL, text.String())
 }
 

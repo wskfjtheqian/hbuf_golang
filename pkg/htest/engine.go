@@ -2,7 +2,8 @@ package htest
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"log"
 	"math/rand"
@@ -32,7 +33,7 @@ type T struct {
 func (t *T) Call(info any, err error) {
 	if err != nil {
 		if t.T != nil {
-			marshal, err := json.MarshalIndent(err, "", "\t")
+			marshal, err := json.Marshal(err, jsontext.WithIndent("\t"))
 			if err != nil {
 				t.T.Error(err)
 				return
@@ -42,7 +43,7 @@ func (t *T) Call(info any, err error) {
 		t.success = false
 	} else {
 		if t.T != nil {
-			marshal, err := json.MarshalIndent(info, "", "\t")
+			marshal, err := json.Marshal(info, jsontext.WithIndent("\t"))
 			if err != nil {
 				t.T.Error(err)
 				return
@@ -59,7 +60,7 @@ func (t *T) IsSuccess() bool {
 
 func (t *T) Error(err error) {
 	if t.T != nil {
-		marshal, err := json.MarshalIndent(err, "", "\t")
+		marshal, err := json.Marshal(err, jsontext.WithIndent("\t"))
 		if err != nil {
 			t.T.Error(err)
 			return
@@ -70,7 +71,7 @@ func (t *T) Error(err error) {
 
 func (t *T) Log(err error) {
 	if t.T != nil {
-		marshal, err := json.MarshalIndent(err, "", "\t")
+		marshal, err := json.Marshal(err, jsontext.WithIndent("\t"))
 		if err != nil {
 			t.T.Log(err)
 			return

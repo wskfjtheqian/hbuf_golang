@@ -41,6 +41,9 @@ func (d *rawMessage) Write(p []byte) (n int, err error) {
 }
 
 func (d rawMessage) MarshalJSON() ([]byte, error) {
+	if d == nil {
+		return []byte("null"), nil
+	}
 	return d, nil
 }
 

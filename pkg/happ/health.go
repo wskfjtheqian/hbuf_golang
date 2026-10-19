@@ -1,7 +1,7 @@
 package happ
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -191,7 +191,7 @@ func (h *Health) healthSummary(w http.ResponseWriter, r *http.Request) {
 
 func (h *Health) writeResponse(w http.ResponseWriter, statusCode int, status HealthStatus) {
 	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(status)
+	_ = json.MarshalWrite(w, status)
 }
 
 func (h *Health) getHealthStatus() HealthStatus {

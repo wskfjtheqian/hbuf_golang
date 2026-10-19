@@ -2,7 +2,7 @@ package hmq
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"reflect"
 	"sort"
 	"strings"

@@ -1,10 +1,11 @@
 package hip
 
 import (
-	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"encoding/json/v2"
 	"net/http"
 	"net/url"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 // IpApiInfo 是ip-api.com的结构体
@@ -46,7 +47,8 @@ func ipApi(ip string) (*Info, error) {
 	}
 	defer get.Body.Close()
 	var info IpApiInfo
-	err = json.NewDecoder(get.Body).Decode(&info)
+
+	err = json.UnmarshalRead(get.Body, &info)
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
