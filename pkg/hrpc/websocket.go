@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -314,6 +315,13 @@ func (s *webSocket) Request(ctx context.Context, path string, notification bool,
 
 // onResponse  当从客户端接收到请求时调用
 func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
+	ctx := s.Context()
+	defer func() {
+		if r := recover(); r != nil {
+			hlog.Error(ctx, "panic: %v\n%s", r, debug.Stack())
+		}
+	}()
+
 	response := &WebSocketData{
 		Id:     data.Id,
 		Type:   TypeResponse,
@@ -325,7 +333,6 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 		return
 	}
 
-	ctx := s.Context()
 	if notification {
 		err := s.responseMiddleware(func(ctx context.Context, path string, writer io.Writer, reader io.Reader, header http.Header) error {
 			return s.response(ctx, path, writer, reader, header)
