@@ -1,22 +1,28 @@
 package hip
 
 import (
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 // Info IP信息的结构体
 type Info struct {
-	Country     string
-	CountryCode string
-	City        string
-	Lat         float64
-	Lon         float64
-	Query       string
-	Region      string
-	RegionName  string
+	Country     string  // 国家名称
+	CountryCode string  // 国家代码（如 CN、US）
+	City        string  // 城市名称
+	Lat         float64 // 纬度
+	Lon         float64 // 经度
+	Query       string  // 查询的IP地址
+	Region      string  // 地区/省份代码
+	RegionName  string  // 地区/省份名称
+	Isp         string  // 互联网服务提供商
+	Org         string  // 组织机构为
+	Mobile      bool    // 是否为手机移动基站网络
+	Proxy       bool    // 是否为公开代理
+	Hosting     bool    // 托管机房 / 云服务器
 }
 
 type Key string

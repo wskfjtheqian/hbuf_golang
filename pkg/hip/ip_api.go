@@ -2,14 +2,16 @@ package hip
 
 import (
 	"encoding/json"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"net/http"
 	"net/url"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 // IpApiInfo 是ip-api.com的结构体
 type IpApiInfo struct {
 	Status      string  `json:"status"`
+	Message     string  `json:"message"`
 	Country     string  `json:"country"`
 	CountryCode string  `json:"countryCode"`
 	Region      string  `json:"region"`
@@ -21,7 +23,9 @@ type IpApiInfo struct {
 	Timezone    string  `json:"timezone"`
 	Isp         string  `json:"isp"`
 	Org         string  `json:"org"`
-	As          string  `json:"as"`
+	Mobile      bool    `json:"mobile"`
+	Proxy       bool    `json:"proxy"`
+	Hosting     bool    `json:"hosting"`
 	Query       string  `json:"query"`
 }
 
@@ -34,12 +38,12 @@ func ipApi(ip string) (*Info, error) {
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
-
+	query := parse.Query()
 	if len(IpApiSecret) != 0 {
-		query := parse.Query()
 		query.Add("key", IpApiSecret)
-		parse.RawQuery = query.Encode()
 	}
+	query.Add("fields", "status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,mobile,proxy,hosting,query")
+	parse.RawQuery = query.Encode()
 	get, err := http.Get(parse.String())
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -54,11 +58,16 @@ func ipApi(ip string) (*Info, error) {
 	return &Info{
 		Country:     info.Country,
 		CountryCode: info.CountryCode,
-		Region:      info.Region,
-		RegionName:  info.RegionName,
 		City:        info.City,
 		Lat:         info.Lat,
 		Lon:         info.Lon,
 		Query:       info.Query,
+		Region:      info.Region,
+		RegionName:  info.RegionName,
+		Isp:         info.Isp,
+		Org:         info.Org,
+		Mobile:      info.Mobile,
+		Proxy:       info.Proxy,
+		Hosting:     info.Hosting,
 	}, nil
 }
