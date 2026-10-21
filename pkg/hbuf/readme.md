@@ -40,7 +40,7 @@ bit 7 6 5     4 3 2         1 0
 - **值长度（3 bit）**：存储 `实际长度 - 1`，即实际长度为 1~8 字节。
 - **ID 长度（2 bit）**：ID 占用的字节数，`0` = 无 ID，`1` = 1 字节，`2` = 2 字节。
 
-> 实现：`WriterType` / `DecodeType`（descriptor.go / decoder.go）。
+> 实现：`WriterType`（encoder.go）/ `DecodeType`（decoder.go）。
 
 ### ID 编码
 
@@ -87,14 +87,13 @@ Data 字段尾部固定跟随一个扩展块，用于继承（extends）场景�
 空/null: TAG(类型, idLen=0, 1)                          —— 无 VALUE
 ```
 
-解码端以 `idLen == 1` 作为「需要读取值」的判定（`valRead`）。「空 / null」有两个编码特例（同样无 VALUE）：
+解码端以 `idLen == 1` 作为「需要读取值」的判定（`valRead`）。零值元素与 nil 指针元素统一编码为空标记 `TAG(类型, idLen=0, 1)`（无 VALUE），解码时跳过、元素保持零值（TBool 无 VALUE 字节，`false` 元素以 `TAG(TBool, idLen=1, 1)` 正常写入）。唯一特例：
 
-- `uint8` 零值元素编码为 `TAG(TUint, idLen=2, 1)`；
-- `int32` 指针元素为 `nil` 时编码为 `TAG(TInt, idLen=0, 值长度位=7)`（`Int32Descriptor` 传入 `WriterType(buf, TInt, 0, 0)`，解码 valueLen=8）。
+- `uint8` 零值元素编码为 `TAG(TUint, idLen=2, 1)`（`idLen > 0` 触发解码但 `valRead=false`，取值 0）。
 
 ### 空值语义
 
-- **结构体字段**：值为零值（`0` / `""` / `false` / 空集合 / 零时间 / 零 decimal）或指针为 `nil` 时，整个字段不写入；解码时未出现的字段保持零值。例外：`*bool` 指针只要非 nil 就会写入（包括 `false`）。
+- **结构体字段**：非指针字段为零值（`0` / `""` / `false` / 空集合 / 零时间 / 零 decimal）时不写入；指针字段为 `nil` 时不写入，非 nil 即写入（即使指向零值，如 `false`、`""`、空集合）。解码时未出现的字段保持零值。唯一例外：`*uint8` 指向 `0` 时仍视为空、不写入。
 - **List 元素 / Map 的 Key/Value**：空值写 1 字节 TAG（`idLen=0`）标记，保证元素数量对齐（特例见「元素编码」一节）。
 
 ### 时间编码（date）
@@ -159,7 +158,7 @@ func (u *User) Descriptors() hbuf.Descriptor { return userDescriptor }
 
 ## IDL 语法
 
-见 [hbuf_test.hbuf](hbuf_test.hbuf)，支持：`?`（可空，映射为指针）、`[]`（列表）、`value<key>`（Map）、`:`（继承，可多继承并指定扩展 ID）：
+见 [hbuf_test.hbuf](hbuf_test.hbuf)（节选，`HBufTest` 完整定义含 128 个字段），支持：`?`（可空，映射为指针）、`[]`（列表）、`value<key>`（Map）、`:`（继承，可多继承并指定扩展 ID）：
 
 ```
 package go = "hbuf"
@@ -170,17 +169,32 @@ data HBufSubTest {
 }
 
 data HBufTest {
+    int8 V1 = 1
+    int8? V2 = 2
+    bool V17 = 17
     string V19 = 19
+    bytes V21 = 21
+    float V23 = 23
+    double V25 = 25
+    date V27 = 27
+    decimal V29 = 29
+    HBufSubTest V31 = 31
     int64[] v39 = 39
     int8<int64> v65 = 65
-    HBufSubTest V31 = 31
 }
 
-data HBufSub1Test: HBufBTest = 1, HBufSubTest = 2, HBufTest = 3 {
+data HBufBTest {
+    int64 C1 = 1
+    int64? C2 = 2
+}
+
+data HBufSub1Test:HBufBTest = 1, HBufSubTest = 2, HBufTest = 3 {
     int64 V1 = 1
     int64? V2 = 2
 }
 ```
+
+IDL 类型与 Go 的对应：`int8`→`int8`、`bytes`→`[]byte`、`float`/`double`→`float32`/`float64`、`date`→`time.Time`、`decimal`→`shopspring.Decimal`、`value<key>`→`map[key]value`。
 
 ## 性能对比
 
@@ -198,19 +212,19 @@ HBuf 体积约为 Protobuf 的 **94%**、JSON 的 **80%**。
 
 ### 编码 / 解码耗时
 
-测试环境：goos: darwin, goarch: amd64, Go 1.27.0, CPU: Intel(R) Core(TM) i9-9980HK @ 2.40GHz, 16 线程（2026-10-17 实测）。
+测试环境：goos: darwin, goarch: amd64, Go 1.27.3, CPU: Intel(R) Core(TM) i9-9980HK @ 2.40GHz, 16 线程（2026-10-21 实测）。
 
 ```text
-BenchmarkEncoderDecoder/EncoderProto-16       15830      75252 ns/op
-BenchmarkEncoderDecoder/DecoderProto-16       14644      82040 ns/op
-BenchmarkEncoderDecoder/EncoderJson-16        13462      89953 ns/op
-BenchmarkEncoderDecoder/DecoderJson-16         8334     144243 ns/op
-BenchmarkEncoderDecoder/EncoderHBuf-16        22377      53454 ns/op
-BenchmarkEncoderDecoder/DecoderHBuf-16        22000      54401 ns/op
+BenchmarkEncoderDecoder/EncoderProto-16       15032      79508 ns/op
+BenchmarkEncoderDecoder/DecoderProto-16       14029      87480 ns/op
+BenchmarkEncoderDecoder/EncoderJson-16        12448      96970 ns/op
+BenchmarkEncoderDecoder/DecoderJson-16         7851     150316 ns/op
+BenchmarkEncoderDecoder/EncoderHBuf-16        20284      60205 ns/op
+BenchmarkEncoderDecoder/DecoderHBuf-16        21026      58539 ns/op
 ```
 
-- 编码：HBuf 53 µs，约为 Proto（75 µs）的 **71%**、Json（90 µs）的 **59%**。
-- 解码：HBuf 54 µs，约为 Proto（82 µs）的 **66%**、Json（144 µs）的 **38%**。
+- 编码：HBuf 60 µs，约为 Proto（80 µs）的 **76%**、Json（97 µs）的 **62%**。
+- 解码：HBuf 59 µs，约为 Proto（87 µs）的 **67%**、Json（150 µs）的 **39%**。
 
 复现命令：
 
@@ -239,7 +253,7 @@ go test -bench BenchmarkEncoderDecoder -benchmem ./pkg/hbuf/   # 性能对比
 | decimal 精度 | shopspring 任意精度 | 各语言精度不同（Python `Decimal` 默认 28 位上下文、JS 无原生 decimal），需规定精度与舍入行为 |
 | 跨类型兼容解码 | 各 Descriptor 的 `Decode` 内 switch-case | 整理成显式转换表，作为各语言实现基准 |
 
-同时，以下隐性规则需精确到字节写入规范（当前见「二进制格式」章节）：TAG 位布局、有符号整数 `LengthInt` 判定与符号扩展、TBool 值在 TAG 位内、uint8 零值元素 `idLen=2`、int32 nil 指针 `valueLen 位=7`、字段按 ID 升序输出、Data 的 EXTENDS-BLOCK 终止标记、空值语义（零值省略 / 元素 `idLen=0` 标记）。
+同时，以下隐性规则需精确到字节写入规范（当前见「二进制格式」章节）：TAG 位布局、有符号整数 `LengthInt` 判定与符号扩展、TBool 值在 TAG 位内、uint8 零值元素 `idLen=2`、指针字段非 nil 即写入（`*uint8` 指向 0 除外）、字段按 ID 升序输出、Data 的 EXTENDS-BLOCK 终止标记、空值语义（零值省略 / 元素 `idLen=0` 标记）。
 
 ### 第二步：代码生成器多后端
 

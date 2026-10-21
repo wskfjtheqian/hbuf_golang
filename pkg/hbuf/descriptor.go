@@ -515,7 +515,11 @@ func (d *ListDescriptor[T]) Decode(buf []byte, p unsafe.Pointer, typ Type, valRe
 				}
 			}
 		}
-		*(*[]T)(p) = list
+		if d.isPtr {
+			*(*unsafe.Pointer)(p) = unsafe.Pointer(&list)
+		} else {
+			*(*[]T)(p) = list
+		}
 	} else {
 		for i := uint64(0); i < count; i++ {
 			typ, idLen, valueLen, buf, err = DecodeType(buf)
@@ -661,7 +665,11 @@ func (d *MapDescriptor[K, V]) Decode(buf []byte, p unsafe.Pointer, typ Type, val
 			}
 			m[k] = v
 		}
-		*(*map[K]V)(p) = m
+		if d.isPtr {
+			*(*unsafe.Pointer)(p) = unsafe.Pointer(&m)
+		} else {
+			*(*map[K]V)(p) = m
+		}
 	} else {
 		for i := uint64(0); i < count; i++ {
 			typ, idLen, valueLen, buf, err = DecodeType(buf)
