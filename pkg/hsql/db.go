@@ -20,12 +20,12 @@ type Sql interface {
 }
 
 // WithContext 给上下文添加 Builder 连接
-func WithContext(ctx context.Context, n *DB, tableNameFunc func(ctx context.Context, name string) string) context.Context {
+func WithContext(ctx context.Context, n *DB, tableNameFunc func(ctx context.Context, schema, table string) (string, string)) context.Context {
 	ret := &Context{
 		Context: ctx,
 		db:      n,
-		tableNameFunc: func(ctx context.Context, name string) string {
-			return name
+		tableNameFunc: func(ctx context.Context, schema, table string) (string, string) {
+			return schema, table
 		},
 	}
 	if tableNameFunc != nil {
@@ -39,7 +39,7 @@ type Context struct {
 	context.Context
 	db            *DB
 	tx            *sql.Tx
-	tableNameFunc func(ctx context.Context, name string) string
+	tableNameFunc func(ctx context.Context, schema, table string) (string, string)
 }
 
 var contextType = reflect.TypeOf(&Context{})
@@ -71,7 +71,7 @@ func (d *Context) GetCache() hcache.Cache {
 	return d.db.cache
 }
 
-func (d *Context) Clone(ctx context.Context, tableNameFunc func(ctx context.Context, name string) string) *Context {
+func (d *Context) Clone(ctx context.Context, tableNameFunc func(ctx context.Context, schema, table string) (string, string)) *Context {
 	return &Context{
 		Context:       ctx,
 		db:            d.db,
@@ -88,13 +88,13 @@ func FromContext(ctx context.Context) (n *Context, ok bool) {
 	return val.(*Context), true
 }
 
-// TableName 获取表名的函数
-func TableName(ctx context.Context, name string) string {
+// SchemaTable 获取表名的函数
+func SchemaTable(ctx context.Context, table string) (string, string) {
 	val := ctx.Value(contextType)
 	if val == nil {
-		return name
+		return "", table
 	}
-	return val.(*Context).tableNameFunc(ctx, name)
+	return val.(*Context).tableNameFunc(ctx, *val.(*Context).GetConfig().DbName, table)
 }
 
 // TableName 获取表名的函数
@@ -168,6 +168,8 @@ func (d *DB) SetConfig(ctx context.Context, cfg *Config) error {
 	}
 	query.Set("parseTime", "true")
 	query.Set("clientFoundRows", "true")
+	query.Set("timeTruncate", cfg.TimeTruncate.String())
+
 	uri += "?" + query.Encode()
 
 	db, err := sql.Open(*cfg.Type, uri)
@@ -190,6 +192,7 @@ func (d *DB) SetConfig(ctx context.Context, cfg *Config) error {
 	if cfg.ConnMaxIdleTime != nil {
 		db.SetConnMaxIdleTime(*cfg.ConnMaxIdleTime)
 	}
+
 	if cfg.EnableCache {
 		d.cache = d.srcCache
 	}

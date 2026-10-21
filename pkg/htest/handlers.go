@@ -1,7 +1,7 @@
 package htest
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log"
 	"net"
 	"net/http"
@@ -19,7 +19,7 @@ type StartRequest struct {
 
 func (s *Server) startTest(w http.ResponseWriter, r *http.Request) {
 	var req StartRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.UnmarshalRead(r.Body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -42,42 +42,42 @@ func (s *Server) startTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	json.MarshalWrite(w, map[string]string{"status": "started"})
 }
 
 func (s *Server) stopTest(w http.ResponseWriter, r *http.Request) {
 	s.engine.Stop()
-	json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
+	json.MarshalWrite(w, map[string]string{"status": "stopped"})
 }
 
 func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 	status := map[string]interface{}{
 		"running": s.engine.IsRunning(),
 	}
-	json.NewEncoder(w).Encode(status)
+	json.MarshalWrite(w, status)
 }
 
 func (s *Server) getDistribution(w http.ResponseWriter, r *http.Request) {
 	distribution := s.engine.GetAPIDistribution()
-	json.NewEncoder(w).Encode(distribution)
+	json.MarshalWrite(w, distribution)
 }
 
 // 新增处理详细统计的接口
 func (s *Server) getDetailedStats(w http.ResponseWriter, r *http.Request) {
 	detailedStats := s.engine.GetDetailedStats()
-	json.NewEncoder(w).Encode(detailedStats)
+	json.MarshalWrite(w, detailedStats)
 }
 
 // 新增重置统计接口
 func (s *Server) resetStats(w http.ResponseWriter, r *http.Request) {
 	s.engine.ResetStats()
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	json.MarshalWrite(w, map[string]string{"status": "reset"})
 }
 
 // apiList 获得所有API列表
 func (s *Server) apiList(writer http.ResponseWriter, request *http.Request) {
 	list := s.engine.GetApiList()
-	err := json.NewEncoder(writer).Encode(list)
+	err := json.MarshalWrite(writer, list)
 	if err != nil {
 		log.Println(err)
 	}

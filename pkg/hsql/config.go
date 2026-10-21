@@ -74,8 +74,8 @@ type Config struct {
 	//批量操作限制
 	BatchLimit *uint `yaml:"BatchLimit"`
 
-	//Key添加表名
-
+	//时间截断
+	TimeTruncate *time.Duration `yaml:"TimeTruncate"`
 }
 
 // Validate 检查配置是否有效
@@ -110,8 +110,19 @@ func (c *Config) Validate(ctx context.Context) bool {
 		valid = false
 		hlog.Error(ctx, "数据库配置主机地址为空")
 	}
+	if c.TimeTruncate != nil {
+		if !(*c.TimeTruncate == time.Second ||
+			*c.TimeTruncate == time.Millisecond ||
+			*c.TimeTruncate == time.Microsecond) {
+			valid = false
+			hlog.Error(ctx, "数据库配置时间截断设置无效, 可用参数(1秒，1毫秒，1微秒)")
+		}
+	} else {
+		c.TimeTruncate = hutl.ToPointer(time.Millisecond)
+	}
+
 	if c.Params == nil {
-		c.Params = hutl.ToPointer("")
+		c.Params = new("")
 	}
 
 	return valid

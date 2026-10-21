@@ -1,7 +1,8 @@
 package hip
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestIpApi(t *testing.T) {
 		return
 	}
 
-	marshal, err := json.MarshalIndent(api, "", "\t")
+	marshal, err := json.Marshal(api, jsontext.WithIndent("\t"))
 	if err != nil {
 		t.Error(err)
 		return

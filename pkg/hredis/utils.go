@@ -1,6 +1,6 @@
 package hredis
 
-import "encoding/json"
+import "encoding/json/v2"
 
 func NewRedisValue(data any) *RedisValue {
 	return &RedisValue{data: data}
@@ -31,7 +31,7 @@ func (r *RedisValue) UnmarshalBinary(data []byte) error {
 //	"context"
 //	"crypto/md5"
 //	"encoding/hex"
-//	"encoding/json"
+//	"encoding/json/v2"
 //	"github.com/wskfjtheqian/hbuf_golang/pkg/db"
 //	"github.com/wskfjtheqian/hbuf_golang/pkg/erro"
 //	"runtime"

@@ -10,7 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"math/big"
@@ -516,13 +516,13 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 
 	go http.ListenAndServe(":8082", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := &HbufRequest{}
-		err := json.NewDecoder(r.Body).Decode(req)
+		err := json.UnmarshalRead(r.Body, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		resp := &HbufResponse{Name: req.Name}
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	b.Run("Http", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -530,7 +530,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 				Name: "test",
 			}
 			body := bytes.NewBuffer(nil)
-			err := json.NewEncoder(body).Encode(req)
+			err := json.MarshalWrite(body, req)
 			if err != nil {
 				b.Fatal(err)
 				return
@@ -542,7 +542,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 			}
 			defer post.Body.Close()
 			resp := &HbufResponse{Name: req.Name}
-			err = json.NewDecoder(post.Body).Decode(resp)
+			err = json.UnmarshalRead(post.Body, resp)
 			if err != nil {
 				b.Fatal(err)
 				return
@@ -556,13 +556,13 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 
 	go http.ListenAndServeTLS(":8083", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.crt", "/Users/dev/2.hbuf/hbuf_golang/pkg/hrpc/server.key", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := &HbufRequest{}
-		err := json.NewDecoder(r.Body).Decode(req)
+		err := json.UnmarshalRead(r.Body, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		resp := &HbufResponse{Name: req.Name}
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 
 	client6 := &http.Client{
@@ -578,7 +578,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 				Name: "test",
 			}
 			body := bytes.NewBuffer(nil)
-			err := json.NewEncoder(body).Encode(req)
+			err := json.MarshalWrite(body, req)
 			if err != nil {
 				b.Fatal(err)
 				return
@@ -590,7 +590,7 @@ func Benchmark_HRPC_HTTP(b *testing.B) {
 			}
 			defer post.Body.Close()
 			resp := &HbufResponse{Name: req.Name}
-			err = json.NewDecoder(post.Body).Decode(resp)
+			err = json.UnmarshalRead(post.Body, resp)
 			if err != nil {
 				b.Fatal(err)
 				return
@@ -681,13 +681,13 @@ func Test_Concurrency(t *testing.T) {
 	go http.ListenAndServe(":8089", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count.Add(1)
 		req := &HbufRequest{}
-		err := json.NewDecoder(r.Body).Decode(req)
+		err := json.UnmarshalRead(r.Body, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		resp := &HbufResponse{Name: req.Name}
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 
 	<-time.After(time.Second * 1)
@@ -704,7 +704,7 @@ func Test_Concurrency(t *testing.T) {
 					Name: "test",
 				}
 				body := bytes.NewBuffer(nil)
-				err := json.NewEncoder(body).Encode(req)
+				err := json.MarshalWrite(body, req)
 				if err != nil {
 					t.Fatal(err)
 					return
@@ -716,7 +716,7 @@ func Test_Concurrency(t *testing.T) {
 				}
 				defer post.Body.Close()
 				resp := &HbufResponse{Name: req.Name}
-				err = json.NewDecoder(post.Body).Decode(resp)
+				err = json.UnmarshalRead(post.Body, resp)
 				if err != nil {
 					t.Fatal(err)
 					return
