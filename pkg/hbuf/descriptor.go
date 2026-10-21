@@ -156,6 +156,12 @@ type RefDescriptor struct {
 	once sync.Once
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (r *RefDescriptor) WithOffset(offset uintptr) Descriptor {
+	r.DataDescriptor.offset = offset
+	return r
+}
+
 func (r *RefDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	r.do()
 	return r.DataDescriptor.IsEmpty(p)
@@ -239,6 +245,12 @@ type DataDescriptor struct {
 	extendMap map[uint16]Descriptor
 	extends   []Descriptor
 	extendIds []uint16
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *DataDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *DataDescriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -711,6 +723,12 @@ type StringDescriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *StringDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *StringDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -853,6 +871,12 @@ func NewBytesDescriptor(offset uintptr, isPtr bool) Descriptor {
 type BytesDescriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *BytesDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *BytesDescriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -999,6 +1023,12 @@ type Int64Descriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Int64Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *Int64Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1139,6 +1169,12 @@ func NewInt32Descriptor(offset uintptr, isPtr bool) Descriptor {
 type Int32Descriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Int32Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *Int32Descriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -1283,6 +1319,12 @@ type Int16Descriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Int16Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *Int16Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1423,6 +1465,12 @@ func NewInt8Descriptor(offset uintptr, isPtr bool) Descriptor {
 type Int8Descriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Int8Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *Int8Descriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -1567,6 +1615,12 @@ type Uint64Descriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Uint64Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *Uint64Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1707,6 +1761,12 @@ func NewUint32Descriptor(offset uintptr, isPtr bool) Descriptor {
 type Uint32Descriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Uint32Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *Uint32Descriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -1851,6 +1911,12 @@ type Uint16Descriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Uint16Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *Uint16Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -1993,6 +2059,12 @@ type Uint8Descriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *Uint8Descriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *Uint8Descriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -2122,6 +2194,12 @@ func NewDoubleDescriptor(offset uintptr, isPtr bool) Descriptor {
 type DoubleDescriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *DoubleDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *DoubleDescriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -2267,6 +2345,12 @@ type FloatDescriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *FloatDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *FloatDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -2408,6 +2492,12 @@ func NewBoolDescriptor(offset uintptr, isPtr bool) Descriptor {
 type BoolDescriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *BoolDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *BoolDescriptor) IsEmpty(p unsafe.Pointer) bool {
@@ -2576,6 +2666,12 @@ type TimeDescriptor struct {
 	isPtr  bool
 }
 
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *TimeDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
+}
+
 func (d *TimeDescriptor) IsEmpty(p unsafe.Pointer) bool {
 	ptr := unsafe.Add(p, d.offset)
 	if d.isPtr {
@@ -2686,6 +2782,12 @@ func NewDecimalDescriptor(offset uintptr, isPtr bool) Descriptor {
 type DecimalDescriptor struct {
 	offset uintptr
 	isPtr  bool
+}
+
+// WithOffset 绑定宿主偏移（tag 反射构建用）。
+func (d *DecimalDescriptor) WithOffset(offset uintptr) Descriptor {
+	d.offset = offset
+	return d
 }
 
 func (d *DecimalDescriptor) IsEmpty(p unsafe.Pointer) bool {
