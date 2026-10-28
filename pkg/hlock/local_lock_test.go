@@ -3,7 +3,9 @@ package hlock_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlock"
 )
@@ -22,6 +24,9 @@ func TestNewLocalLock(t *testing.T) {
 	if lock1 != lock2 {
 		t.Errorf("预期返回同一个锁实例，但实际返回了不同的锁实例")
 	}
+
+	_ = lock1.Unlock(context.Background())
+	_ = lock2.Unlock(context.Background())
 }
 
 // 测试Lock函数
@@ -29,6 +34,7 @@ func TestLock(t *testing.T) {
 	ctx := context.Background()
 	key := "test_lock"
 	lock := hlock.NewLocalLock(key)
+	defer lock.Unlock(ctx)
 
 	// 测试正常加锁
 	err := lock.Lock(ctx)
@@ -36,10 +42,75 @@ func TestLock(t *testing.T) {
 		t.Errorf("预期加锁成功，但实际返回错误: %v", err)
 	}
 
-	// 测试重复加锁（应阻塞，但此处无法模拟阻塞，只能假设不会出错）
+	// 测试同 goroutine 可重入加锁（应立即成功）
 	err = lock.Lock(ctx)
 	if err != nil {
-		t.Errorf("预期加锁成功，但实际返回错误: %v", err)
+		t.Errorf("预期可重入加锁成功，但实际返回错误: %v", err)
+	}
+	_ = lock.Unlock(ctx)
+}
+
+// 测试跨 goroutine 加锁阻塞
+func TestLockBlocking(t *testing.T) {
+	ctx := context.Background()
+	key := "test_lock_blocking"
+	lock := hlock.NewLocalLock(key)
+	err := lock.Lock(ctx)
+	if err != nil {
+		t.Fatalf("预期加锁成功，但实际返回错误: %v", err)
+	}
+	defer lock.Unlock(ctx)
+
+	done := make(chan struct{})
+	go func() {
+		l := hlock.NewLocalLock(key)
+		_ = l.Lock(ctx)
+		_ = l.Unlock(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Errorf("预期跨 goroutine 加锁阻塞，但立即返回")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	_ = lock.Unlock(ctx)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Errorf("预期解锁后 goroutine 加锁成功")
+	}
+}
+
+// 测试Lock超时
+func TestLockTimeout(t *testing.T) {
+	ctx := context.Background()
+	key := "test_lock_timeout"
+	lock := hlock.NewLocalLock(key)
+	err := lock.Lock(ctx)
+	if err != nil {
+		t.Fatalf("预期加锁成功，但实际返回错误: %v", err)
+	}
+	defer lock.Unlock(ctx)
+
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		l := hlock.NewLocalLock(key)
+		errCh <- l.Lock(timeoutCtx)
+	}()
+
+	select {
+	case err = <-errCh:
+		if err == nil {
+			t.Errorf("预期超时返回错误，实际返回 nil")
+		}
+	case <-time.After(time.Second):
+		t.Errorf("预期及时超时返回，实际未返回")
 	}
 }
 
@@ -56,10 +127,10 @@ func TestUnlock(t *testing.T) {
 		t.Errorf("预期解锁成功，但实际返回错误: %v", err)
 	}
 
-	// 测试解锁未锁定的锁
+	// 测试解锁未锁定的锁（不应 panic，应安全返回）
 	err = lock.Unlock(ctx)
 	if err != nil {
-		t.Errorf("预期解锁成功，但实际返回错误: %v", err)
+		t.Errorf("预期解锁未锁定的锁安全返回，但实际返回错误: %v", err)
 	}
 }
 
@@ -68,6 +139,7 @@ func TestTryLock(t *testing.T) {
 	ctx := context.Background()
 	key := "test_try_lock"
 	lock := hlock.NewLocalLock(key)
+	defer lock.Unlock(ctx)
 
 	// 测试正常尝试加锁
 	locked, err := lock.TryLock(ctx)
@@ -78,14 +150,33 @@ func TestTryLock(t *testing.T) {
 		t.Errorf("预期尝试加锁成功，但实际未加锁")
 	}
 
-	// 测试重复尝试加锁
+	// 测试同 goroutine 可重入尝试加锁
 	locked, err = lock.TryLock(ctx)
 	if err != nil {
-		t.Errorf("预期尝试加锁成功，但实际返回错误: %v", err)
+		t.Errorf("预期可重入尝试加锁成功，但实际返回错误: %v", err)
 	}
-	if locked {
-		t.Errorf("预期尝试加锁失败，但实际加锁成功")
+	if !locked {
+		t.Errorf("预期可重入尝试加锁成功，但实际未加锁")
 	}
+	_ = lock.Unlock(ctx)
+
+	// 测试跨 goroutine 尝试加锁失败
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		l := hlock.NewLocalLock(key)
+		locked, err := l.TryLock(ctx)
+		if err != nil {
+			t.Errorf("预期尝试加锁返回错误为 nil，但实际返回错误: %v", err)
+		}
+		if locked {
+			t.Errorf("预期跨 goroutine 尝试加锁失败，但实际加锁成功")
+		}
+		// 失败后释放引用，不应 panic
+		_ = l.Unlock(ctx)
+	}()
+	wg.Wait()
 }
 
 // 测试WithLocalGetOrPopulate函数
@@ -200,5 +291,44 @@ func TestWithLocalTry(t *testing.T) {
 	if err == nil {
 		t.Errorf("预期fun失败，但实际未返回错误")
 	}
+}
 
+// 测试WithLocal可重入（嵌套调用相同key不死锁）
+func TestWithLocalReentrant(t *testing.T) {
+	ctx := context.Background()
+	key := "test_with_local_reentrant"
+
+	val, err := hlock.WithLocal[int](ctx, key, func(ctx context.Context) (int, error) {
+		return hlock.WithLocal[int](ctx, key, func(ctx context.Context) (int, error) {
+			return 42, nil
+		})
+	})
+	if err != nil {
+		t.Errorf("预期嵌套可重入加锁成功，但实际返回错误: %v", err)
+	}
+	if val != 42 {
+		t.Errorf("预期返回值为42，但实际返回%v", val)
+	}
+}
+
+// 测试并发创建/加锁/解锁
+func TestNewLocalLockConcurrent(t *testing.T) {
+	ctx := context.Background()
+	key := "test_concurrent"
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			l := hlock.NewLocalLock(key)
+			if err := l.Lock(ctx); err != nil {
+				t.Errorf("预期加锁成功，但实际返回错误: %v", err)
+				return
+			}
+			time.Sleep(time.Millisecond)
+			_ = l.Unlock(ctx)
+		}()
+	}
+	wg.Wait()
 }

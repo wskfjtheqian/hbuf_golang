@@ -2,13 +2,20 @@ package hlock
 
 import (
 	"context"
-	"hash/fnv"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
 
 const shardCount = 128
+
+// lockPollInterval Lock 等待锁期间的轮询间隔。
+const lockPollInterval = 10 * time.Millisecond
 
 type shard struct {
 	mu sync.RWMutex
@@ -25,22 +32,50 @@ func init() {
 	}
 }
 
+func fnv32a(s string) uint32 {
+	const (
+		offset32 = 2166136261
+		prime32  = 16777619
+	)
+	h := uint32(offset32)
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= prime32
+	}
+	return h
+}
+
 func getShard(key string) *shard {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(key))
-	return shards[h.Sum32()%shardCount]
+	return shards[fnv32a(key)%shardCount]
+}
+
+// goroutineID 获取当前 goroutine 的 id，用作可重入锁的持有者标识。
+func goroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	// buf 形如 "goroutine 123 [running]:..."
+	fields := strings.Fields(string(buf[:n]))
+	if len(fields) < 2 {
+		return 0
+	}
+	id, _ := strconv.ParseUint(fields[1], 10, 64)
+	return id
 }
 
 // =========================
 // 创建锁
 // =========================
 
+// NewLocalLock 创建或复用 key 对应的本地锁实例。
+// 每获取一次实例引用计数 +1，调用方用完（含 TryLock 失败后放弃）应调用 Unlock 释放引用，
+// 引用归零且实例仍在分片 map 中时才会被回收。
 func NewLocalLock(key string) Locker {
 	s := getShard(key)
 
 	// fast path：读锁
 	s.mu.RLock()
 	if l, ok := s.m[key]; ok {
+		l.refs.Add(1)
 		s.mu.RUnlock()
 		return l
 	}
@@ -52,6 +87,7 @@ func NewLocalLock(key string) Locker {
 
 	// double check
 	if l, ok := s.m[key]; ok {
+		l.refs.Add(1)
 		return l
 	}
 
@@ -59,6 +95,7 @@ func NewLocalLock(key string) Locker {
 		key:   key,
 		shard: s,
 	}
+	l.refs.Store(1)
 
 	s.m[key] = l
 	return l
@@ -69,38 +106,102 @@ func NewLocalLock(key string) Locker {
 // =========================
 
 type localLock struct {
-	mu    sync.Mutex
-	key   string
-	shard *shard
+	mu      sync.Mutex
+	owner   atomic.Uint64 // 持有者 goroutine id，0 表示未持有
+	reentry int           // 可重入深度，仅在持有 mu 时读写
+	refs    atomic.Int32  // 引用计数，控制实例在分片 map 中的回收时机
+	key     string
+	shard   *shard
+}
+
+// tryAcquire 尝试加锁。同一 goroutine 重复获取时走可重入路径。
+func (l *localLock) tryAcquire() bool {
+	id := goroutineID()
+	if l.owner.Load() == id {
+		l.reentry++
+		return true
+	}
+	if l.mu.TryLock() {
+		l.owner.Store(id)
+		l.reentry = 1
+		return true
+	}
+	return false
 }
 
 // =========================
-// Lock
+// Lock（支持 ctx 超时/取消）
 // =========================
 
 func (l *localLock) Lock(ctx context.Context) error {
-	l.mu.Lock()
-	return nil
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if l.tryAcquire() {
+		return nil
+	}
+
+	ticker := time.NewTicker(lockPollInterval)
+	defer ticker.Stop()
+
+	for {
+		if l.tryAcquire() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			// 加锁失败，释放本次获取的引用
+			l.release()
+			return herror.Wrap(ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 // =========================
-// Unlock（自动删除）
+// Unlock（自动回收）
 // =========================
 
+// Unlock 解锁并释放一次引用。未持有锁或持有者不是当前 goroutine 时解锁动作被忽略，
+// 不会 panic；引用计数归零且锁空闲时回收实例。
 func (l *localLock) Unlock(ctx context.Context) error {
-	l.mu.Unlock()
-	s := l.shard
+	id := goroutineID()
+	if l.owner.Load() == id {
+		l.reentry--
+		if l.reentry == 0 {
+			l.owner.Store(0)
+			l.mu.Unlock()
+		}
+	}
 
-	// 删除必须加写锁
+	l.release()
+	return nil
+}
+
+// release 释放一次引用。引用归零且锁空闲时，在分片写锁下复查后回收实例，
+// 避免与并发的新获取竞争导致误删仍被引用或持有的实例。
+func (l *localLock) release() {
+	for {
+		n := l.refs.Load()
+		if n <= 0 {
+			break
+		}
+		if l.refs.CompareAndSwap(n, n-1) {
+			break
+		}
+	}
+
+	s := l.shard
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// double check（防止误删新锁）
-	if cur, ok := s.m[l.key]; ok && cur == l {
-		delete(s.m, l.key)
+	if l.refs.Load() <= 0 && l.owner.Load() == 0 {
+		// double check（防止误删新锁）
+		if cur, ok := s.m[l.key]; ok && cur == l {
+			delete(s.m, l.key)
+		}
 	}
-
-	return nil
 }
 
 // =========================
@@ -108,14 +209,13 @@ func (l *localLock) Unlock(ctx context.Context) error {
 // =========================
 
 func (l *localLock) TryLock(ctx context.Context) (bool, error) {
-
-	if l.mu.TryLock() {
+	if l.tryAcquire() {
 		return true, nil
 	}
 	return false, nil
 }
 
-// WithLocalGetOrPopulate 带有 fallback 函数的分布式控制系统加锁, 基于ctx的可重入锁。
+// WithLocalGetOrPopulate 带有 fallback 函数的本地加锁, 基于 goroutine 的可重入锁。
 func WithLocalGetOrPopulate[T any](ctx context.Context, key string, get func(ctx context.Context) (T, bool, error), populate func(ctx context.Context) (T, error)) (T, error) {
 	val, ret, err := get(ctx)
 	if err != nil {
@@ -125,7 +225,7 @@ func WithLocalGetOrPopulate[T any](ctx context.Context, key string, get func(ctx
 		return val, nil
 	}
 
-	ctx, l := localContext(ctx, key)
+	l := NewLocalLock(key)
 	err = l.Lock(ctx)
 	if err != nil {
 		return val, err
@@ -147,10 +247,10 @@ func WithLocalGetOrPopulate[T any](ctx context.Context, key string, get func(ctx
 	return val, nil
 }
 
-// WithLocal 分布式控制系统加锁, 基于ctx的可重入锁。
+// WithLocal 本地加锁, 基于 goroutine 的可重入锁。
 func WithLocal[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
 	var val T
-	ctx, l := localContext(ctx, key)
+	l := NewLocalLock(key)
 	err := l.Lock(ctx)
 	if err != nil {
 		return val, err
@@ -164,15 +264,17 @@ func WithLocal[T any](ctx context.Context, key string, fun func(ctx context.Cont
 	return val, nil
 }
 
-// WithLocalTry 分布式控制系统尝试加锁, 基于ctx的可重入锁。
+// WithLocalTry 本地尝试加锁, 基于 goroutine 的可重入锁。
 func WithLocalTry[T any](ctx context.Context, key string, fun func(ctx context.Context) (T, error)) (T, error) {
 	var val T
-	ctx, l := localContext(ctx, key)
+	l := NewLocalLock(key)
 	lock, err := l.TryLock(ctx)
 	if err != nil {
 		return val, err
 	}
 	if !lock {
+		// 加锁失败且不再使用，释放引用避免实例驻留分片 map
+		_ = l.Unlock(ctx)
 		return val, herror.NewError("lock failed")
 	}
 	defer l.Unlock(ctx)
@@ -182,16 +284,4 @@ func WithLocalTry[T any](ctx context.Context, key string, fun func(ctx context.C
 		return val, err
 	}
 	return val, nil
-}
-
-func localContext(ctx context.Context, key string) (context.Context, Locker) {
-	key = "local_lock_" + key
-	value := ctx.Value(key)
-	if value != nil {
-		return ctx, value.(*localLock)
-	}
-
-	l := NewLocalLock(key)
-	ctx = context.WithValue(ctx, key, l)
-	return ctx, l
 }

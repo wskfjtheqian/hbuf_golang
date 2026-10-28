@@ -62,8 +62,12 @@ func (l *redisLock) TryLock(ctx context.Context) (bool, error) {
 	return ok, nil
 }
 
-// Lock （指数退避 + 抖动）
+// Lock （指数退避 + 抖动，支持 ctx 取消/超时）
 func (l *redisLock) Lock(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	backoff := 10 * time.Microsecond
 
 	for {
@@ -77,7 +81,13 @@ func (l *redisLock) Lock(ctx context.Context) error {
 		}
 
 		sleep := backoff + time.Duration(rand.Int63n(int64(backoff)))
-		time.Sleep(sleep)
+		timer := time.NewTimer(sleep)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return herror.Wrap(ctx.Err())
+		case <-timer.C:
+		}
 
 		if backoff < time.Millisecond {
 			backoff *= 2
@@ -149,10 +159,18 @@ func (l localRedis) Unlock(ctx context.Context) error {
 
 func (l localRedis) TryLock(ctx context.Context) (bool, error) {
 	lock, _ := l.local.TryLock(ctx)
-	if lock {
-		return l.redis.TryLock(ctx)
+	if !lock {
+		// 本地锁失败，释放本地锁实例引用
+		_ = l.local.Unlock(ctx)
+		return false, nil
 	}
-	return false, nil
+
+	lock, err := l.redis.TryLock(ctx)
+	if !lock || err != nil {
+		// redis 加锁失败，释放已持有的本地锁
+		_ = l.local.Unlock(ctx)
+	}
+	return lock, err
 }
 
 // WithRedisGetOrPopulate 带有 fallback 函数的分布式控制系统加锁, 基于ctx的可重入锁,优先走本地锁。
