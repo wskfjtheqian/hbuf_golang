@@ -257,6 +257,110 @@ func TestRedisLockWatchdog(t *testing.T) {
 	}
 }
 
+// TestRedisLockTimeoutWatchdog 测试超时选项下 watchdog 仍用原始 ctx 续期：
+// 修复过"Lock 派生超时 ctx 后 defer cancel 在返回时取消，导致 watchdog 立即失效"的问题。
+func TestRedisLockTimeoutWatchdog(t *testing.T) {
+	ctx := newTestRedisContext(t)
+	key := newTestRedisKey("test_redis_timeout_watchdog")
+
+	// timeout 300ms + TTL 300ms，持锁远超 timeout 时长，验证续期不失效
+	lock, err := hlock.NewRedisLock(ctx, key,
+		hlock.WithRedisLockTimeout(300*time.Millisecond),
+		hlock.WithRedisLockTTL(300*time.Millisecond))
+	if err != nil {
+		t.Fatalf("预期创建锁成功，但实际返回错误: %v", err)
+	}
+	if err := lock.Lock(ctx); err != nil {
+		t.Fatalf("预期加锁成功，但实际返回错误: %v", err)
+	}
+
+	// 等待远超 timeout/TTL 的时长，若 watchdog 失效锁早已过期
+	time.Sleep(1500 * time.Millisecond)
+
+	other, err := hlock.NewRedisLock(ctx, key)
+	if err != nil {
+		t.Fatalf("预期创建锁成功，但实际返回错误: %v", err)
+	}
+	locked, err := other.TryLock(ctx)
+	if err != nil {
+		t.Fatalf("预期尝试加锁无错误，但实际返回错误: %v", err)
+	}
+	if locked {
+		_ = other.Unlock(ctx)
+		t.Errorf("预期 watchdog 持续续期后锁仍被持有，但 other 尝试加锁成功")
+	}
+
+	if err := lock.Unlock(ctx); err != nil {
+		t.Fatalf("预期解锁成功，但实际返回错误: %v", err)
+	}
+}
+
+// TestRedisLockTimeoutOption 测试 WithRedisLockTimeout 选项：Lock 等待超时
+func TestRedisLockTimeoutOption(t *testing.T) {
+	ctx := newTestRedisContext(t)
+	key := newTestRedisKey("test_redis_lock_timeout_option")
+
+	lock, err := hlock.NewRedisLock(ctx, key, hlock.WithRedisLockTimeout(100*time.Millisecond))
+	if err != nil {
+		t.Fatalf("预期创建锁成功，但实际返回错误: %v", err)
+	}
+	if err := lock.Lock(ctx); err != nil {
+		t.Fatalf("预期加锁成功，但实际返回错误: %v", err)
+	}
+	defer lock.Unlock(ctx)
+
+	errCh := make(chan error, 1)
+	go func() {
+		other, err := hlock.NewRedisLock(ctx, key, hlock.WithRedisLockTimeout(100*time.Millisecond))
+		if err != nil {
+			errCh <- err
+			return
+		}
+		errCh <- other.Lock(ctx)
+	}()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Errorf("预期超时返回错误，实际返回 nil")
+		}
+	case <-time.After(5 * time.Second):
+		t.Errorf("预期及时超时返回，实际未返回")
+	}
+}
+
+// TestWithRedisLockTimeoutOption 测试组合锁本地锁超时与 redis 锁超时一致
+func TestWithRedisLockTimeoutOption(t *testing.T) {
+	ctx := newTestRedisContext(t)
+	key := newTestRedisKey("test_with_redis_lock_timeout_option")
+
+	// goroutine 1 持有锁（本地+redis），带超时选项
+	holding := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		_, _ = hlock.WithRedis[int](ctx, key, func(ctx context.Context) (int, error) {
+			close(holding)
+			<-release
+			return 0, nil
+		}, hlock.WithRedisLockTimeout(100*time.Millisecond))
+	}()
+	<-holding
+
+	// goroutine 2 带相同超时选项，本地锁等待应在超时后失败
+	start := time.Now()
+	_, err := hlock.WithRedis[int](ctx, key, func(ctx context.Context) (int, error) {
+		return 1, nil
+	}, hlock.WithRedisLockTimeout(100*time.Millisecond))
+	if err == nil {
+		t.Errorf("预期本地锁超时返回错误，实际返回 nil")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("预期按时超时，但耗时 %v", elapsed)
+	}
+
+	close(release)
+}
+
 // TestRedisLockTTLExpire 测试 TTL 过期后锁自动释放
 func TestRedisLockTTLExpire(t *testing.T) {
 	ctx := newTestRedisContext(t)

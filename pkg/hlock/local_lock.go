@@ -17,6 +17,10 @@ const shardCount = 128
 // lockPollInterval Lock 等待锁期间的轮询间隔。
 const lockPollInterval = 10 * time.Millisecond
 
+// DefaultLocalLockTimeout 组合锁（localEtcd/localRedis）中本地锁的默认等待超时，
+// 防止 ctx 无 deadline 时本地锁永久阻塞。
+var DefaultLocalLockTimeout = 30 * time.Second
+
 type shard struct {
 	mu sync.RWMutex
 	m  map[string]*localLock
@@ -66,10 +70,22 @@ func goroutineID() uint64 {
 // 创建锁
 // =========================
 
+// LocalLockOption 本地锁选项。
+type LocalLockOption func(l *localLock)
+
+// WithLocalLockTimeout 设置 Lock 等待锁的最大时长。
+// 与 ctx deadline 同时存在时取更早者生效，ctx 取消始终即时响应；
+// 选项仅在锁实例首次创建时生效，后续 NewLocalLock 复用已有实例时忽略。
+func WithLocalLockTimeout(timeout time.Duration) LocalLockOption {
+	return func(l *localLock) {
+		l.timeout.Store(int64(timeout))
+	}
+}
+
 // NewLocalLock 创建或复用 key 对应的本地锁实例。
 // 每获取一次实例引用计数 +1，调用方用完（含 TryLock 失败后放弃）应调用 Unlock 释放引用，
 // 引用归零且实例仍在分片 map 中时才会被回收。
-func NewLocalLock(key string) Locker {
+func NewLocalLock(key string, options ...LocalLockOption) Locker {
 	s := getShard(key)
 
 	// fast path：读锁
@@ -96,6 +112,9 @@ func NewLocalLock(key string) Locker {
 		shard: s,
 	}
 	l.refs.Store(1)
+	for _, option := range options {
+		option(l)
+	}
 
 	s.m[key] = l
 	return l
@@ -110,6 +129,7 @@ type localLock struct {
 	owner   atomic.Uint64 // 持有者 goroutine id，0 表示未持有
 	reentry int           // 可重入深度，仅在持有 mu 时读写
 	refs    atomic.Int32  // 引用计数，控制实例在分片 map 中的回收时机
+	timeout atomic.Int64  // Lock 等待锁的最大时长（纳秒），0 表示无超时，仅依赖 ctx
 	key     string
 	shard   *shard
 }
@@ -140,6 +160,15 @@ func (l *localLock) Lock(ctx context.Context) error {
 
 	if l.tryAcquire() {
 		return nil
+	}
+
+	// 锁实例超时与 ctx deadline 取更早者生效，ctx 取消始终即时响应
+	if timeout := time.Duration(l.timeout.Load()); timeout > 0 {
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > timeout {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 	}
 
 	ticker := time.NewTicker(lockPollInterval)
