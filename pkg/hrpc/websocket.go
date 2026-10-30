@@ -348,12 +348,20 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 	})(ctx, strings.TrimLeft(data.Path, "/"), response, data, data.Header)
 	if err != nil {
 		var e *Result[hbuf.Data]
-		if errors.As(err, &e) && e.Code == CodeNotFound {
+		if errors.As(err, &e) {
 			// 必须用 NewResult 构造,字面量缺少 descriptor,HBuf 编码会 panic
-			err = s.encoder(response)(NewResult[hbuf.Data](http.StatusNotFound, "Not Found", nil))
-			if err != nil {
-				herror.PrintStack(ctx, err)
-				return
+			if e.Code == CodeNotFound {
+				err = s.encoder(response)(NewResult[hbuf.Data](http.StatusNotFound, "Not Found", nil))
+				if err != nil {
+					herror.PrintStack(ctx, err)
+					return
+				}
+			} else {
+				err = s.encoder(response)(e)
+				if err != nil {
+					herror.PrintStack(ctx, err)
+					return
+				}
 			}
 		} else {
 			herror.PrintStack(ctx, err)
