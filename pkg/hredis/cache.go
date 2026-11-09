@@ -10,6 +10,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hgo"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
@@ -55,7 +56,7 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 	err = json.Unmarshal([]byte(cmd.Val()), out)
 	if err != nil {
 		d.Del(ctx, table)
-		herror.PrintStack(ctx, err)
+		hlog.Error(ctx, "Unmarshal Json Error %s , val %s", err.Error(), cmd.Val())
 		return false, nil
 	}
 
