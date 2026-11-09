@@ -2,6 +2,7 @@ package hmq
 
 import (
 	"context"
+	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"reflect"
 	"sort"
@@ -284,9 +285,12 @@ func Publish[T any](ctx context.Context, subject string, msg *T) error {
 	if !ok {
 		return herror.NewError("nats not initialized")
 	}
-	jsonData, err := json.Marshal(msg)
+	jsonData, err := json.Marshal(msg, hrpc.GetMarshalers())
 	if err != nil {
-		return err
+		jsonData, err = jsonv1.Marshal(msg)
+		if err != nil {
+			return err
+		}
 	}
 
 	return n.Publish(ctx, subject, jsonData)
@@ -330,9 +334,12 @@ func Subscribe[T any](ctx context.Context, subject string, callback func(ctx con
 		}()
 
 		var data T
-		err := json.Unmarshal(msg.Data, &data)
+		err := json.Unmarshal(msg.Data, &data, hrpc.GetUnmarshalers())
 		if err != nil {
-			return herror.Wrap(err)
+			err := jsonv1.Unmarshal(msg.Data, &data)
+			if err != nil {
+				return herror.Wrap(err)
+			}
 		}
 		return callback(ctx, msg.Subject, &data)
 	})
@@ -449,10 +456,14 @@ func JetStreamPublish[T any](ctx context.Context, stream, subject string, msg *T
 		return nil, herror.NewError("nats not initialized")
 	}
 
-	jsonData, err := json.Marshal(msg)
+	jsonData, err := json.Marshal(msg, hrpc.GetMarshalers())
 	if err != nil {
-		return nil, err
+		jsonData, err = jsonv1.Marshal(msg)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	pubAck, err := n.JetStreamPublish(ctx, stream, subject, jsonData, options...)
 	if err != nil {
 		return nil, err
@@ -607,9 +618,12 @@ func JetStreamSubscribe[T any](ctx context.Context, stream, subject, durable str
 		}()
 
 		var data T
-		err := json.Unmarshal(msg.Data(), &data)
+		err := json.Unmarshal(msg.Data(), &data, hrpc.GetUnmarshalers())
 		if err != nil {
-			return err
+			err = jsonv1.Unmarshal(msg.Data(), &data)
+			if err != nil {
+				return err
+			}
 		}
 		return callback(ctx, msg.Subject(), msgId, &data)
 	}, options...)
@@ -693,10 +707,13 @@ func (n *Nats) saveErrorMessage(ctx context.Context, stream string, subject stri
 		Server:  n.ServerName + " " + n.Version,
 		Retry:   n.maxDeliver,
 	}
-	jsonData, err := json.Marshal(msg)
+	jsonData, err := json.Marshal(msg, hrpc.GetMarshalers())
 	if err != nil {
-		hlog.Error(ctx, "marshal failed, error: %s", err)
-		return
+		jsonData, err = jsonv1.Marshal(msg)
+		if err != nil {
+			hlog.Error(ctx, "marshal failed, error: %s", err)
+			return
+		}
 	}
 
 	jetStream, err := n.GetJetStream()
@@ -754,9 +771,12 @@ func (n *Nats) ErrorMessageSubscribe(ctx context.Context, callback func(ctx cont
 		_, err = n.middleware(func(ctx context.Context, req any) (any, error) {
 			return nil, n.subscribeMiddleware(func(ctx context.Context, m *nats.Msg) error {
 				var data ErrorMessage
-				err := json.Unmarshal(msg.Data(), &data)
+				err := json.Unmarshal(msg.Data(), &data, hrpc.GetUnmarshalers())
 				if err != nil {
-					return herror.Wrap(err)
+					err = jsonv1.Unmarshal(msg.Data(), &data)
+					if err != nil {
+						return herror.Wrap(err)
+					}
 				}
 				return callback(hlog.WithContext(ctx, m.Header.Get("X-Trace-Id")), msgId, &data)
 			})(ctx, &nats.Msg{
