@@ -270,7 +270,9 @@ func (s *Service) SetConfig(ctx context.Context, cfg *Config) error {
 	if cfg.Client != nil && cfg.Client.Find {
 		go func() {
 			err := s.Discovery(ctx)
-			if err != nil {
+			if err.Error() == "context canceled" {
+				hlog.Warn(ctx, "discovery service failed: %s", err.Error())
+			} else {
 				hlog.Error(ctx, "discovery service failed: %s", err)
 			}
 		}()
