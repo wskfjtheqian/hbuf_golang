@@ -2,6 +2,7 @@ package hrpc
 
 import (
 	"context"
+	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
@@ -313,7 +314,10 @@ func NewJsonEncode() Encoder {
 		return func(v hbuf.Data) error {
 			buffer, err := json.Marshal(v, marshalers)
 			if err != nil {
-				return herror.Wrap(err)
+				buffer, err = jsonv1.Marshal(v)
+				if err != nil {
+					return herror.Wrap(err)
+				}
 			}
 			_, err = writer.Write(buffer)
 			return err
@@ -380,7 +384,11 @@ func NewJsonDecode() Decoder {
 			if err != nil {
 				return err
 			}
-			return json.Unmarshal(buffer, v, unmarshalers)
+			err = json.Unmarshal(buffer, v, unmarshalers)
+			if err != nil {
+				return jsonv1.Unmarshal(buffer, v)
+			}
+			return nil
 		}
 	}
 }
