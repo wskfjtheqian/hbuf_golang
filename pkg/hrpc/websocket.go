@@ -364,7 +364,11 @@ func (s *webSocket) onResponse(data *WebSocketData, notification bool) {
 				}
 			}
 		} else {
-			herror.PrintStack(ctx, err)
+			if err.Error() == "context canceled" {
+				hlog.Warn(ctx, "%s", err.Error())
+			} else {
+				herror.PrintStack(ctx, err)
+			}
 		}
 	} else {
 		response.Status = http.StatusOK

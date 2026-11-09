@@ -223,7 +223,11 @@ func (h *HttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status, serverError := StatusFromError(err)
 		w.WriteHeader(status)
 		if serverError {
-			herror.PrintStack(ctx, err)
+			if err.Error() == "context canceled" {
+				hlog.Warn(ctx, "%s", err.Error())
+			} else {
+				herror.PrintStack(ctx, err)
+			}
 		}
 	}
 }
