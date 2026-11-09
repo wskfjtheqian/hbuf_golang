@@ -40,7 +40,11 @@ func WrapMsg(err error, msg string) *Error {
 
 // PrintStack 打印错误的堆栈跟踪信息。
 func (e *Error) PrintStack(ctx context.Context, calldepth int) {
-	_ = hlog.Output(ctx, 2, hlog.ERROR, e.Error()+"\n"+string(e.stack))
+	if (e.Error() == "context canceled"){
+		_ = hlog.Output(ctx, calldepth, hlog.WARN, e.Error())
+	}else{
+		_ = hlog.Output(ctx, calldepth, hlog.ERROR, e.Error()+"\n"+string(e.stack))
+	}
 }
 
 // Unwrap 返回错误的底层错误。
