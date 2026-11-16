@@ -234,11 +234,11 @@ func Diff[E any, T comparable](src []E, dsc []E, get func(v E) T) []E {
 }
 
 // Batch 对一个切片进行分批处理。
-func Batch[E any](list []E, limit int, fun func(list []E) error) error {
-	for j := 0; j < len(list); j += limit {
+func Batch[E any](start int, list []E, limit int, fun func(end int ,list []E) error) error {
+	for j := start; j < len(list); j += limit {
 		end := min(j+limit, len(list))
 
-		if err := fun(list[j:end]); err != nil {
+		if err := fun(end, list[j:end]); err != nil {
 			return err
 		}
 	}
