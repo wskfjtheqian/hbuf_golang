@@ -194,6 +194,47 @@ func WithTaskRetry(retries int, delay time.Duration) TaskOption {
 	}
 }
 
+// SetName 修改任务的处理器名（配合 UpdateWith 使用，可把任务换成另一个已注册的处理器）。
+func SetName(name string) TaskOption {
+	return func(r *Record) {
+		r.Name = name
+	}
+}
+
+// SetPayload 修改任务的业务参数（配合 UpdateWith 使用）。传 nil 表示清空。
+func SetPayload(payload []byte) TaskOption {
+	return func(r *Record) {
+		r.Payload = cloneBytes(payload)
+	}
+}
+
+// SetRetries 修改任务的剩余重试次数（配合 UpdateWith 使用，可在不改变间隔的前提下增减次数）。
+func SetRetries(n int) TaskOption {
+	return func(r *Record) {
+		if n < 0 {
+			n = 0
+		}
+		r.Retries = n
+	}
+}
+
+// SetRetryDelay 修改任务的重试间隔（配合 UpdateWith 使用）。
+func SetRetryDelay(d time.Duration) TaskOption {
+	return func(r *Record) {
+		if d > 0 {
+			r.RetryDelay = d
+		}
+	}
+}
+
+// cloneBytes 深拷贝字节切片，避免调用方后续改动影响已持久化的记录。
+func cloneBytes(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
+	return append([]byte(nil), b...)
+}
+
 /*
 ========================
    PersistentScheduler
@@ -312,12 +353,36 @@ func (p *PersistentScheduler) ScheduleWith(id uint64, at time.Time, name string,
 	return nil
 }
 
-// Update 修改任务执行时间并保持其余字段不变。
+// Upsert 按 ID 新增或整体更新一条任务：可同时改执行时间、处理器名、业务参数与重试策略。
+//
+//   - ID 已存在：整体替换为 rec 的内容（语义等同「改」），并把内存里的旧任务同 ID 覆盖；
+//   - ID 不存在：新增一条（语义等同「增」）。
+//
+// 与 ScheduleWith 的区别在于：Upsert 直接用给定的 Record（包含 Name/Payload/Retries/RetryDelay），
+// 不套用全局默认重试策略。传入 nil 的 Payload 表示清空业务参数。
+func (p *PersistentScheduler) Upsert(rec Record) error {
+	if p.closed.Load() {
+		return ErrClosed
+	}
+	if rec.Name == "" {
+		return fmt.Errorf("htwheel: record name is empty")
+	}
+	if err := p.store.Put(cloneRecord(rec)); err != nil {
+		return err
+	}
+	p.load(rec)
+	return nil
+}
+
+// Update 修改任务执行时间并保持其余字段（Name/Payload/重试策略）不变。
 func (p *PersistentScheduler) Update(id uint64, at time.Time) error {
 	return p.UpdateWith(id, at)
 }
 
-// UpdateWith 修改任务执行时间，并可选地重置重试策略（如失败后想再给几次机会）。
+// UpdateWith 修改任务，可改执行时间、处理器名、业务参数与重试策略。
+//
+// 传入的 TaskOption（如 WithTaskRetry）会应用到记录上；用 SetName/SetPayload
+// 可同时替换处理器名与业务参数。不传选项时仅改期，其余字段保持不变。
 func (p *PersistentScheduler) UpdateWith(id uint64, at time.Time, opts ...TaskOption) error {
 	if p.closed.Load() {
 		return ErrClosed
@@ -364,6 +429,15 @@ func (p *PersistentScheduler) TTL(id uint64) (time.Duration, bool, error) {
 // Cancel 取消任务：先从存储层删除，再撤销内存中的调度。
 // 处于重试等待期的任务同样可以取消。
 func (p *PersistentScheduler) Cancel(id uint64) error {
+	return p.remove(id)
+}
+
+// Remove 删除任务（Cancel 的别名）。返回 nil 表示删除成功（无论任务是否存在）。
+func (p *PersistentScheduler) Remove(id uint64) error {
+	return p.remove(id)
+}
+
+func (p *PersistentScheduler) remove(id uint64) error {
 	if p.closed.Load() {
 		return ErrClosed
 	}
@@ -590,8 +664,6 @@ func (p *PersistentScheduler) report(err error) {
 }
 
 func cloneRecord(r Record) Record {
-	if r.Payload != nil {
-		r.Payload = append([]byte(nil), r.Payload...)
-	}
+	r.Payload = cloneBytes(r.Payload)
 	return r
 }

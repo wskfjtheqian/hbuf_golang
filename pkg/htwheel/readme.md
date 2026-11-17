@@ -26,6 +26,8 @@ HtWheel 是一个分层时间轮（Hierarchical Timing Wheel）定时调度器�
 | [htwheel_test.go](htwheel_test.go) | 测试：正常触发、跨层查询/改期/取消、覆盖语义、并发压测、Stop 幂等、远期任务 |
 | [persist_test.go](persist_test.go) | 测试：持久化调度、外部插入、取消/改期、文件恢复、慢任务防重、处理器缺失重试 |
 | [retry_test.go](retry_test.go) | 测试：重试成功/用尽、默认与任务级策略、退避、panic、等待期取消 |
+| [crud_test.go](crud_test.go) | 测试：Upsert 新增/整体替换、UpdateWith 改名与参数、Remove 删除 |
+| [deep_test.go](deep_test.go) | 测试：缓冲饱和、远期稳定、Stop 竞争、覆盖并发、覆盖率盲区 |
 
 ## 核心概念
 
@@ -196,12 +198,56 @@ p.Cancel(1001)
 | `Register(name, h)` | 注册处理器 `func(id uint64, exec time.Time, payload []byte) error` |
 | `Schedule(id, at, name, payload)` | 落库并预热，使用全局默认重试策略 |
 | `ScheduleWith(id, at, name, payload, opts...)` | 同上，可用 `WithTaskRetry` 覆盖重试策略 |
-| `Update(id, at)` | 改期，重试次数保持不变 |
-| `UpdateWith(id, at, opts...)` | 改期并可重置重试策略 |
+| `Upsert(rec)` | 按 ID 新增或整体替换（可改 Name/Payload/Expire/重试字段） |
+| `Update(id, at)` | 改期，其余字段保持不变 |
+| `UpdateWith(id, at, opts...)` | 改期并可改 Name/Payload/重试策略 |
 | `Get(id)` / `TTL(id)` | 读存储层的最新记录 / 距下次执行（或下次重试）的剩余时间 |
-| `Cancel(id)` | 删除记录并撤销内存调度，重试等待期同样有效 |
+| `Cancel(id)` / `Remove(id)` | 删除记录并撤销内存调度，重试等待期同样有效 |
 | `Stop()` | 停止扫描与内存调度，幂等 |
 | `Scheduler()` | 取回底层内存 `Scheduler` |
+
+### 任务的增删改
+
+任务的完整增删改操作：
+
+```go
+// 增：新增（或覆盖）一条任务，套用默认重试策略
+p.ScheduleWith(1001, at, "send_email", payload, htwheel.WithTaskRetry(3, 5*time.Second))
+
+// 增/改合一：按 ID 直接写入完整记录，不套用默认重试策略
+p.Upsert(htwheel.Record{
+    ID: 1001, Expire: at, Name: "send_email", Payload: payload,
+    Retries: 3, RetryDelay: 5 * time.Second,
+})
+
+// 改：改期 + 换处理器 + 换参数 + 调重试（可组合，也可只改其中一项）
+p.UpdateWith(1001, newTime,
+    htwheel.SetName("send_sms"),           // 换处理器名
+    htwheel.SetPayload(smsPayload),        // 换业务参数
+    htwheel.SetRetries(5),                 // 单独调次数
+    htwheel.SetRetryDelay(time.Minute),    // 单独调间隔
+)
+
+// 删：取消任务（Cancel 与 Remove 等价，幂等）
+p.Cancel(1001)   // 或 p.Remove(1001)
+```
+
+可用的 `TaskOption`（`ScheduleWith` / `UpdateWith` 均可用）：
+
+| Option | 说明 |
+|---|---|
+| `WithTaskRetry(retries, delay)` | 覆盖重试次数与首次间隔（`retries=0` 即关闭重试） |
+| `SetName(name)` | 修改处理器名 |
+| `SetPayload(payload)` | 修改业务参数（传 `nil` 清空） |
+| `SetRetries(n)` | 修改剩余重试次数 |
+| `SetRetryDelay(d)` | 修改重试间隔 |
+
+要点：
+
+- `Upsert` 是「有则整体替换、无则新增」，`Record` 里的 `Name`/`Payload`/`Retries`/`RetryDelay` 都会原样落库，不套用全局默认策略；空 `Name` 会报错。
+- `Update`（不带 With）只改执行时间，其余字段不变；`UpdateWith` 可组合多个 `TaskOption` 精准修改任意字段。
+- 改处理器名后，任务到期会按新 `Name` 查找处理器执行，旧处理器的内存任务会被同 ID 覆盖。
+- 所有增删改都先写存储层、再更新内存时间轮，因此即使任务尚未预热、或正处于重试等待期，也能正确增删改。
 
 ### Store 接口
 
@@ -372,7 +418,7 @@ p.UpdateWith(1001, nextRun, htwheel.WithTaskRetry(3, time.Minute))
 | `WithMaxRetryDelay(d)` | 不限 | 退避后的间隔上限 |
 | `WithErrorHandler(fn)` | 无 | 存储/处理器错误回调 |
 
-任务级配置通过 `TaskOption` 传入 `ScheduleWith` / `UpdateWith`：
+任务级配置通过 `TaskOption` 传入 `ScheduleWith` / `UpdateWith`（完整列表见「任务的增删改」一节）：
 
 | Option | 说明 |
 |---|---|
@@ -386,4 +432,4 @@ p.UpdateWith(1001, nextRun, htwheel.WithTaskRetry(3, time.Minute))
 go test -race ./pkg/htwheel/
 ```
 
-测试覆盖：正常触发与执行时间参数、跨层 `Get`/`TTL`/`Update`、跨层 `Cancel`、同 id 覆盖、取消后更新、并发读写压测、`Stop` 幂等、极端远期任务与多层安置；持久化部分覆盖调度与执行、外部写入、取消/改期、文件重启恢复、慢任务防重、处理器缺失重试；重试部分覆盖失败后成功、重试用尽、默认与任务级策略、退避增长、panic 触发重试、等待期取消、重试字段持久化。建议始终带 `-race` 运行。
+测试覆盖：正常触发与执行时间参数、跨层 `Get`/`TTL`/`Update`、跨层 `Cancel`、同 id 覆盖、取消后更新、并发读写压测、`Stop` 幂等、极端远期任务与多层安置；持久化部分覆盖调度与执行、外部写入、取消/改期、文件重启恢复、慢任务防重、处理器缺失重试；重试部分覆盖失败后成功、重试用尽、默认与任务级策略、退避增长、panic 触发重试、等待期取消、重试字段持久化；增删改部分覆盖 Upsert 新增/整体替换/空名报错、UpdateWith 改处理器名与参数、参数清空、Remove 删除、停止后增删改报 ErrClosed。建议始终带 `-race` 运行。
