@@ -3,6 +3,7 @@ package htwheel
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,8 @@ var (
 	ErrClosed = errors.New("htwheel: scheduler closed")
 	// ErrNotFound 表示任务不存在。
 	ErrNotFound = errors.New("htwheel: task not found")
+	// ErrRetriesExhausted 表示任务执行失败且重试次数已用尽，记录已被删除。
+	ErrRetriesExhausted = errors.New("htwheel: retries exhausted")
 )
 
 /*
@@ -36,6 +39,13 @@ type Record struct {
 	Expire  time.Time `json:"expire"`
 	Name    string    `json:"name"`
 	Payload []byte    `json:"payload,omitempty"`
+
+	// Retries 是剩余重试次数：每次执行失败后减 1，减到 0 后不再重试。
+	// 为 0 表示失败即放弃。
+	Retries int `json:"retries,omitempty"`
+	// RetryDelay 是「本次失败后等待多久再重试」。单位为纳秒（JSON 中为整数）。
+	// 开启退避时，每次重试后该字段会按倍数增长并回写到记录中。
+	RetryDelay time.Duration `json:"retry_delay,omitempty"`
 }
 
 // Store 是存储层接口，可对接数据库、文件或任意后端。
@@ -53,7 +63,10 @@ type Store interface {
 }
 
 // Handler 是任务的执行逻辑。exec 为计划执行时间，payload 为持久化时写入的业务参数。
-type Handler func(id uint64, exec time.Time, payload []byte)
+//
+// 返回非 nil 表示本次执行失败：调度器会按记录里的重试策略改期重试。
+// Handler 内 panic 也被视为失败（会被捕获并转为 error）。
+type Handler func(id uint64, exec time.Time, payload []byte) error
 
 /*
 ========================
@@ -65,20 +78,27 @@ const (
 	defaultPollInterval = time.Second
 	defaultLookahead    = 30 * time.Second
 	defaultBatchSize    = 256
+	// minRetryDelay 是重试间隔下限，避免重试风暴打满 CPU。
+	minRetryDelay = time.Millisecond
 )
 
 type persistConfig struct {
-	poll  time.Duration
-	ahead time.Duration
-	batch int
-	onErr func(error)
+	poll    time.Duration
+	ahead   time.Duration
+	batch   int
+	onErr   func(error)
+	retries int           // 新任务默认重试次数
+	delay   time.Duration // 新任务默认重试间隔
+	backoff float64       // 重试间隔增长倍数
+	maxWait time.Duration // 重试间隔上限
 }
 
 func defaultPersistConfig() persistConfig {
 	return persistConfig{
-		poll:  defaultPollInterval,
-		ahead: defaultLookahead,
-		batch: defaultBatchSize,
+		poll:    defaultPollInterval,
+		ahead:   defaultLookahead,
+		batch:   defaultBatchSize,
+		backoff: 1,
 	}
 }
 
@@ -113,9 +133,64 @@ func WithBatchSize(n int) PersistOption {
 }
 
 // WithErrorHandler 设置存储层/处理器错误的回调（默认忽略）。
+//
+// 每次失败尝试与被放弃的任务都会通过它上报，可用 errors.Is(err, ErrRetriesExhausted)
+// 区分「这次失败还会重试」与「重试已用完、任务被丢弃」。
 func WithErrorHandler(fn func(error)) PersistOption {
 	return func(c *persistConfig) {
 		c.onErr = fn
+	}
+}
+
+// WithDefaultRetry 设置新建任务的默认重试策略：失败后最多重试 retries 次，
+// 每次间隔 delay（默认 0，即不重试）。单条任务可用 WithTaskRetry 覆盖。
+//
+// 仅影响之后 Schedule 的任务；直接写入存储层的记录以 Record 自身字段为准。
+func WithDefaultRetry(retries int, delay time.Duration) PersistOption {
+	return func(c *persistConfig) {
+		if retries < 0 {
+			retries = 0
+		}
+		c.retries = retries
+		if delay > 0 {
+			c.delay = delay
+		}
+	}
+}
+
+// WithRetryBackoff 设置重试间隔的增长倍数（默认 1，即固定间隔）。
+//
+// 例如 2 表示间隔依次为 delay、2*delay、4*delay……便于给下游故障留出恢复时间。
+func WithRetryBackoff(factor float64) PersistOption {
+	return func(c *persistConfig) {
+		if factor >= 1 {
+			c.backoff = factor
+		}
+	}
+}
+
+// WithMaxRetryDelay 设置退避后的间隔上限（0 表示不限制）。
+func WithMaxRetryDelay(d time.Duration) PersistOption {
+	return func(c *persistConfig) {
+		if d > 0 {
+			c.maxWait = d
+		}
+	}
+}
+
+// TaskOption 用于定制单条任务。
+type TaskOption func(*Record)
+
+// WithTaskRetry 覆盖该任务的重试策略：失败后最多重试 retries 次，首次间隔 delay。
+func WithTaskRetry(retries int, delay time.Duration) TaskOption {
+	return func(r *Record) {
+		if retries < 0 {
+			retries = 0
+		}
+		r.Retries = retries
+		if delay > 0 {
+			r.RetryDelay = delay
+		}
 	}
 }
 
@@ -125,11 +200,13 @@ func WithErrorHandler(fn func(error)) PersistOption {
 ========================
 */
 
-// PersistentScheduler 在 Scheduler 之上增加持久化：
+// PersistentScheduler 在 Scheduler 之上增加持久化与重试：
 //
 //   - Schedule/Cancel/Update 同时写存储层；
 //   - 后台按 PollInterval 扫描 Expire <= now+Lookahead 的记录，把尚未加载的任务预热进内存时间轮；
-//   - 任务触发时按 Name 找到注册的 Handler 执行，成功后从存储层删除。
+//   - 任务触发时按 Name 找到注册的 Handler 执行，成功后从存储层删除；
+//   - Handler 返回 error（或 panic）时，按 Record 里的重试策略扣减 Retries 并改期到
+//     now+RetryDelay 后重新入轮；Retries 用尽则删除记录并上报 ErrRetriesExhausted。
 //
 // 存储层是事实来源（source of truth）：Get/TTL/Update 直接读存储层，
 // 因此尚未预热进内存的远期任务同样可以被查询和修改。
@@ -139,10 +216,14 @@ type PersistentScheduler struct {
 	s     *Scheduler
 	store Store
 
-	poll  time.Duration
-	ahead time.Duration
-	batch int
-	onErr func(error)
+	poll    time.Duration
+	ahead   time.Duration
+	batch   int
+	onErr   func(error)
+	retries int
+	delay   time.Duration
+	backoff float64
+	maxWait time.Duration
 
 	mu       sync.RWMutex
 	handlers map[string]Handler
@@ -177,6 +258,10 @@ func NewPersistentScheduler(store Store, s *Scheduler, opts ...PersistOption) *P
 		ahead:    cfg.ahead,
 		batch:    cfg.batch,
 		onErr:    cfg.onErr,
+		retries:  cfg.retries,
+		delay:    cfg.delay,
+		backoff:  cfg.backoff,
+		maxWait:  cfg.maxWait,
 		handlers: make(map[string]Handler),
 		loaded:   make(map[uint64]int64),
 		running:  make(map[uint64]bool),
@@ -197,12 +282,29 @@ func (p *PersistentScheduler) Register(name string, h Handler) {
 	p.mu.Unlock()
 }
 
-// Schedule 持久化并在 at 时刻执行名为 name 的处理器（同 ID 覆盖）。
+// Schedule 持久化并在 at 时刻执行名为 name 的处理器（同 ID 覆盖），使用默认重试策略。
 func (p *PersistentScheduler) Schedule(id uint64, at time.Time, name string, payload []byte) error {
+	return p.ScheduleWith(id, at, name, payload)
+}
+
+// ScheduleWith 与 Schedule 相同，但可以覆盖重试策略，例如：
+//
+//	p.ScheduleWith(1001, at, "send_email", payload, htwheel.WithTaskRetry(3, 5*time.Second))
+func (p *PersistentScheduler) ScheduleWith(id uint64, at time.Time, name string, payload []byte, opts ...TaskOption) error {
 	if p.closed.Load() {
 		return ErrClosed
 	}
-	rec := Record{ID: id, Expire: at, Name: name, Payload: payload}
+	rec := Record{
+		ID:         id,
+		Expire:     at,
+		Name:       name,
+		Payload:    payload,
+		Retries:    p.retries,
+		RetryDelay: p.delay,
+	}
+	for _, o := range opts {
+		o(&rec)
+	}
 	if err := p.store.Put(cloneRecord(rec)); err != nil {
 		return err
 	}
@@ -212,6 +314,11 @@ func (p *PersistentScheduler) Schedule(id uint64, at time.Time, name string, pay
 
 // Update 修改任务执行时间并保持其余字段不变。
 func (p *PersistentScheduler) Update(id uint64, at time.Time) error {
+	return p.UpdateWith(id, at)
+}
+
+// UpdateWith 修改任务执行时间，并可选地重置重试策略（如失败后想再给几次机会）。
+func (p *PersistentScheduler) UpdateWith(id uint64, at time.Time, opts ...TaskOption) error {
 	if p.closed.Load() {
 		return ErrClosed
 	}
@@ -223,6 +330,9 @@ func (p *PersistentScheduler) Update(id uint64, at time.Time) error {
 		return ErrNotFound
 	}
 	rec.Expire = at
+	for _, o := range opts {
+		o(&rec)
+	}
 	if err := p.store.Put(rec); err != nil {
 		return err
 	}
@@ -237,7 +347,8 @@ func (p *PersistentScheduler) Get(id uint64) (Record, bool, error) {
 	return p.store.Get(id)
 }
 
-// TTL 返回剩余时间；任务不存在或已到期返回 false。
+// TTL 返回距离下一次执行的剩余时间；任务不存在或已到期返回 false。
+// 处于重试等待期的任务，返回的是距下次重试的时间。
 func (p *PersistentScheduler) TTL(id uint64) (time.Duration, bool, error) {
 	rec, ok, err := p.store.Get(id)
 	if err != nil || !ok {
@@ -251,6 +362,7 @@ func (p *PersistentScheduler) TTL(id uint64) (time.Duration, bool, error) {
 }
 
 // Cancel 取消任务：先从存储层删除，再撤销内存中的调度。
+// 处于重试等待期的任务同样可以取消。
 func (p *PersistentScheduler) Cancel(id uint64) error {
 	if p.closed.Load() {
 		return ErrClosed
@@ -340,7 +452,7 @@ func (p *PersistentScheduler) load(rec Record) {
 	}
 }
 
-// fire 在校验存储层状态后执行处理器，并删除记录。
+// fire 在校验存储层状态后执行处理器：成功则删除记录，失败则按重试策略改期。
 func (p *PersistentScheduler) fire(rec Record) {
 	// 标记运行中：handler 执行期间轮询不会重复预热同一任务。
 	p.mu.Lock()
@@ -351,12 +463,16 @@ func (p *PersistentScheduler) fire(rec Record) {
 	p.running[rec.ID] = true
 	p.mu.Unlock()
 
-	// 结束时清掉 loaded，使失败/panic 的任务能在下一轮被重新预热重试。
+	var retry *Record
 	defer func() {
 		p.mu.Lock()
 		delete(p.running, rec.ID)
 		delete(p.loaded, rec.ID)
 		p.mu.Unlock()
+		// 重排必须放在清理之后：load 会重新写入 loaded。
+		if retry != nil {
+			p.load(*retry)
+		}
 	}()
 
 	cur, ok, err := p.store.Get(rec.ID)
@@ -374,16 +490,97 @@ func (p *PersistentScheduler) fire(rec Record) {
 	h := p.handlers[cur.Name]
 	p.mu.RUnlock()
 	if h == nil {
-		// 处理器尚未注册：保留记录，等待注册后的轮询重试。
+		// 处理器尚未注册：保留记录，等待注册后的轮询重试（不消耗重试次数）。
 		p.report(fmt.Errorf("htwheel: handler %q not registered (task %d)", cur.Name, cur.ID))
 		return
 	}
 
-	h(cur.ID, cur.Expire, cur.Payload)
+	if cause := invoke(h, cur); cause != nil {
+		if next, ok := p.reschedule(cur, cause); ok {
+			retry = &next
+		}
+		return
+	}
 
 	if err := p.store.Delete(cur.ID); err != nil {
 		p.report(err)
 	}
+}
+
+// reschedule 处理一次执行失败：扣减重试次数并把记录改期到 now+间隔。
+// 返回 false 表示不再重试（记录已删除或已被外部改动）。
+func (p *PersistentScheduler) reschedule(cur Record, cause error) (Record, bool) {
+	// 执行期间可能被取消或改期，此时不覆盖外部改动。
+	latest, ok, err := p.store.Get(cur.ID)
+	if err != nil {
+		p.report(err)
+		return Record{}, false
+	}
+	if !ok || !latest.Expire.Equal(cur.Expire) {
+		return Record{}, false
+	}
+
+	if latest.Retries <= 0 {
+		p.report(fmt.Errorf("htwheel: task %d (%s) failed: %w: %v", latest.ID, latest.Name, ErrRetriesExhausted, cause))
+		if err := p.store.Delete(latest.ID); err != nil {
+			p.report(err)
+		}
+		return Record{}, false
+	}
+
+	delay := latest.RetryDelay
+	if delay <= 0 {
+		delay = p.delay
+	}
+	if delay <= 0 {
+		delay = minRetryDelay
+	}
+	if p.maxWait > 0 && delay > p.maxWait {
+		delay = p.maxWait
+	}
+
+	latest.Retries--
+	latest.Expire = time.Now().Add(delay)
+	latest.RetryDelay = p.nextDelay(delay)
+
+	p.report(fmt.Errorf("htwheel: task %d (%s) failed, retry in %s (%d left): %v",
+		latest.ID, latest.Name, delay, latest.Retries, cause))
+
+	if err := p.store.Put(cloneRecord(latest)); err != nil {
+		p.report(err)
+		return Record{}, false
+	}
+	return latest, true
+}
+
+// nextDelay 计算下一次重试的间隔；backoff <= 1 时为固定间隔。
+func (p *PersistentScheduler) nextDelay(cur time.Duration) time.Duration {
+	if p.backoff <= 1 {
+		return cur
+	}
+	f := float64(cur) * p.backoff
+	if math.IsInf(f, 0) || f >= float64(math.MaxInt64) {
+		// 溢出：停在当前间隔，避免退化成负数导致忙循环。
+		return cur
+	}
+	next := time.Duration(f)
+	if next <= cur {
+		next = cur + time.Millisecond
+	}
+	if p.maxWait > 0 && next > p.maxWait {
+		next = p.maxWait
+	}
+	return next
+}
+
+// invoke 执行处理器并把 panic 转成 error，使 panic 也能走重试流程。
+func invoke(h Handler, rec Record) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	return h(rec.ID, rec.Expire, rec.Payload)
 }
 
 func (p *PersistentScheduler) report(err error) {

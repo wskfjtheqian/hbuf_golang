@@ -36,8 +36,9 @@ func TestPersistentScheduleFires(t *testing.T) {
 	p := newPersistent(t, store)
 
 	got := make(chan firedCall, 1)
-	p.Register("greet", func(id uint64, exec time.Time, payload []byte) {
+	p.Register("greet", func(id uint64, exec time.Time, payload []byte) error {
 		got <- firedCall{id: id, exec: exec, payload: string(payload)}
+		return nil
 	})
 
 	at := time.Now().Add(30 * time.Millisecond)
@@ -69,7 +70,7 @@ func TestPersistentExternalInsert(t *testing.T) {
 	p := newPersistent(t, store)
 
 	fired := make(chan uint64, 1)
-	p.Register("job", func(id uint64, _ time.Time, _ []byte) { fired <- id })
+	p.Register("job", func(id uint64, _ time.Time, _ []byte) error { fired <- id; return nil })
 
 	if err := store.Put(htwheel.Record{ID: 6, Expire: time.Now().Add(30 * time.Millisecond), Name: "job"}); err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestPersistentCancel(t *testing.T) {
 	p := newPersistent(t, store)
 
 	var fired int32
-	p.Register("job", func(uint64, time.Time, []byte) { atomic.AddInt32(&fired, 1) })
+	p.Register("job", func(uint64, time.Time, []byte) error { atomic.AddInt32(&fired, 1); return nil })
 
 	if err := p.Schedule(3, time.Now().Add(80*time.Millisecond), "job", nil); err != nil {
 		t.Fatal(err)
@@ -115,7 +116,7 @@ func TestPersistentUpdate(t *testing.T) {
 	p := newPersistent(t, store)
 
 	fired := make(chan uint64, 2)
-	p.Register("job", func(id uint64, _ time.Time, _ []byte) { fired <- id })
+	p.Register("job", func(id uint64, _ time.Time, _ []byte) error { fired <- id; return nil })
 
 	// 远期任务：超出 lookahead，不会被预热进内存。
 	if err := store.Put(htwheel.Record{ID: 5, Expire: time.Now().Add(time.Hour), Name: "job"}); err != nil {
@@ -155,7 +156,7 @@ func TestPersistentMissingHandlerRetry(t *testing.T) {
 	}
 
 	fired := make(chan struct{}, 1)
-	p.Register("later", func(uint64, time.Time, []byte) { fired <- struct{}{} })
+	p.Register("later", func(uint64, time.Time, []byte) error { fired <- struct{}{}; return nil })
 
 	select {
 	case <-fired:
@@ -180,7 +181,7 @@ func TestFileStoreRecovery(t *testing.T) {
 	}
 
 	p := newPersistent(t, store1)
-	p.Register("job", func(uint64, time.Time, []byte) {})
+	p.Register("job", func(uint64, time.Time, []byte) error { return nil })
 
 	// 等待一次轮询，确认远期记录未被删除。
 	time.Sleep(60 * time.Millisecond)
@@ -207,9 +208,10 @@ func TestPersistentSlowHandlerNoDuplicate(t *testing.T) {
 
 	var calls int32
 	block := make(chan struct{})
-	p.Register("slow", func(uint64, time.Time, []byte) {
+	p.Register("slow", func(uint64, time.Time, []byte) error {
 		atomic.AddInt32(&calls, 1)
 		<-block
+		return nil
 	})
 
 	if err := p.Schedule(8, time.Now().Add(10*time.Millisecond), "slow", nil); err != nil {
