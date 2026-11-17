@@ -1,6 +1,7 @@
 package htwheel_test
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -163,7 +164,7 @@ func TestOverwriteConcurrent(t *testing.T) {
 func TestRecordJSONRoundTrip(t *testing.T) {
 	// 通过 FileStore 间接验证：写入带重试字段的记录，读回字段一致。
 	// 直接依赖 encoding/json 语义，这里验证 time.Duration 的持久化。
-	rec := htwheel.Record{
+	rec := &htwheel.TaskRecord{
 		ID:         42,
 		Expire:     time.Now().Add(time.Hour).Truncate(time.Millisecond),
 		Name:       "job",
@@ -175,20 +176,20 @@ func TestRecordJSONRoundTrip(t *testing.T) {
 	// 用 FileStore 的写读验证（内部走 json.Marshal/Unmarshal）。
 	path := t.TempDir() + "/rt.json"
 	fs := htwheel.NewFileStore(path)
-	if err := fs.Put(rec); err != nil {
+	if err := fs.Put(context.Background(), rec); err != nil {
 		t.Fatal(err)
 	}
 
 	fs2 := htwheel.NewFileStore(path) // 新实例重新读盘
-	got, ok, err := fs2.Get(42)
+	got, ok, err := fs2.Get(context.Background(), 42)
 	if err != nil || !ok {
 		t.Fatalf("读取失败: ok=%v err=%v", ok, err)
 	}
 	if got.Retries != 7 || got.RetryDelay != 1234*time.Millisecond {
 		t.Fatalf("重试字段未正确持久化: %+v", got)
 	}
-	if got.Expire.Equal(rec.Expire) != true {
-		t.Fatalf("Expire 持久化不一致: %v != %v", got.Expire, rec.Expire)
+	if got.Expire.Equal(rec.GetExpire()) != true {
+		t.Fatalf("Expire 持久化不一致: %v != %v", got.Expire, rec.GetExpire())
 	}
 }
 
@@ -198,20 +199,22 @@ func TestMissingHandlerDoesNotConsumeRetries(t *testing.T) {
 	p := newRetryScheduler(t, store)
 
 	// 先调度一个处理器未注册、且配置了重试的任务。
-	if err := p.ScheduleWith(1, time.Now().Add(10*time.Millisecond), "ghost", nil,
-		htwheel.WithTaskRetry(2, 20*time.Millisecond)); err != nil {
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 1, Expire: time.Now().Add(10 * time.Millisecond), Name: "ghost",
+		Retries: 2, RetryDelay: 20 * time.Millisecond,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	// 等它到期并触发「处理器缺失」路径。
 	time.Sleep(120 * time.Millisecond)
 
-	rec, ok, _ := store.Get(1)
+	rec, ok, _ := store.Get(context.Background(), 1)
 	if !ok {
 		t.Fatal("处理器缺失时应保留记录")
 	}
-	if rec.Retries != 2 {
-		t.Fatalf("处理器缺失不应消耗重试次数，期望 2，实际 %d", rec.Retries)
+	if rec.GetRetries() != 2 {
+		t.Fatalf("处理器缺失不应消耗重试次数，期望 2，实际 %d", rec.GetRetries())
 	}
 }
 
@@ -225,13 +228,15 @@ func TestRetryPutFailureKeepsRecord(t *testing.T) {
 	p := newRetryScheduler(t, wrapped)
 
 	var calls int32
-	p.Register("job", func(uint64, time.Time, []byte) error {
+	p.Register("job", func(uint64, time.Time, *htwheel.TaskRecord) error {
 		atomic.AddInt32(&calls, 1)
 		return fmt.Errorf("fail %d", atomic.LoadInt32(&calls))
 	})
 
-	if err := p.ScheduleWith(2, time.Now().Add(10*time.Millisecond), "job", nil,
-		htwheel.WithTaskRetry(2, 10*time.Millisecond)); err != nil {
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 2, Expire: time.Now().Add(10 * time.Millisecond), Name: "job",
+		Retries: 2, RetryDelay: 10 * time.Millisecond,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,7 +247,7 @@ func TestRetryPutFailureKeepsRecord(t *testing.T) {
 
 	// 无论 Put 失败与否，记录都不应因 Put 错误被删除。
 	// Put 失败时 reschedule 直接 return false，不调用 Delete。
-	if _, ok, _ := wrapped.Get(2); !ok {
+	if _, ok, _ := wrapped.Get(context.Background(), 2); !ok {
 		t.Fatal("重试 Put 失败不应导致记录被删除")
 	}
 }
@@ -255,12 +260,12 @@ type putFailStore struct {
 	remaining int
 }
 
-func (s *putFailStore) Put(rec htwheel.Record) error {
+func (s *putFailStore) Put(ctx context.Context, rec *htwheel.TaskRecord) error {
 	s.mu.Lock()
 	if s.remaining > 0 {
 		s.remaining--
 		s.mu.Unlock()
-		return s.MemoryStore.Put(rec)
+		return s.MemoryStore.Put(ctx, rec)
 	}
 	s.mu.Unlock()
 	return fmt.Errorf("injected put failure")
@@ -270,22 +275,25 @@ func (s *putFailStore) Put(rec htwheel.Record) error {
 func TestPersistentGetTTL(t *testing.T) {
 	store := htwheel.NewMemoryStore()
 	p := newRetryScheduler(t, store)
-	p.Register("job", func(uint64, time.Time, []byte) error { return nil })
+	p.Register("job", func(uint64, time.Time, *htwheel.TaskRecord) error { return nil })
 
 	at := time.Now().Add(200 * time.Millisecond)
-	if err := p.ScheduleWith(1, at, "job", []byte("p"), htwheel.WithTaskRetry(2, 5*time.Second)); err != nil {
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 1, Expire: at, Name: "job", Payload: []byte("p"),
+		Retries: 2, RetryDelay: 5 * time.Second,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
-	rec, ok, err := p.Get(1)
+	rec, ok, err := p.Get(context.Background(), 1)
 	if err != nil || !ok {
 		t.Fatalf("Get 失败: ok=%v err=%v", ok, err)
 	}
-	if rec.Name != "job" || string(rec.Payload) != "p" || rec.Retries != 2 {
+	if rec.GetName() != "job" || string(rec.GetPayload()) != "p" || rec.GetRetries() != 2 {
 		t.Fatalf("Get 返回异常: %+v", rec)
 	}
 
-	ttl, ok, err := p.TTL(1)
+	ttl, ok, err := p.TTL(context.Background(), 1)
 	if err != nil || !ok {
 		t.Fatalf("TTL 失败: ok=%v err=%v", ok, err)
 	}
@@ -294,10 +302,10 @@ func TestPersistentGetTTL(t *testing.T) {
 	}
 
 	// 不存在的任务。
-	if _, ok, _ := p.Get(999); ok {
+	if _, ok, _ := p.Get(context.Background(), 999); ok {
 		t.Fatal("不存在任务 Get 应返回 ok=false")
 	}
-	if _, ok, _ := p.TTL(999); ok {
+	if _, ok, _ := p.TTL(context.Background(), 999); ok {
 		t.Fatal("不存在任务 TTL 应返回 ok=false")
 	}
 }
@@ -307,36 +315,36 @@ func TestFileStoreDelete(t *testing.T) {
 	path := t.TempDir() + "/del.json"
 	fs := htwheel.NewFileStore(path)
 
-	if err := fs.Put(htwheel.Record{ID: 1, Expire: time.Now().Add(time.Hour), Name: "x"}); err != nil {
+	if err := fs.Put(context.Background(), &htwheel.TaskRecord{ID: 1, Expire: time.Now().Add(time.Hour), Name: "x"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := fs.Put(htwheel.Record{ID: 2, Expire: time.Now().Add(time.Hour), Name: "y"}); err != nil {
+	if err := fs.Put(context.Background(), &htwheel.TaskRecord{ID: 2, Expire: time.Now().Add(time.Hour), Name: "y"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := fs.Delete(1); err != nil {
+	if err := fs.Delete(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, _ := fs.Get(1); ok {
+	if _, ok, _ := fs.Get(context.Background(), 1); ok {
 		t.Fatal("删除后仍可读")
 	}
-	if _, ok, _ := fs.Get(2); !ok {
+	if _, ok, _ := fs.Get(context.Background(), 2); !ok {
 		t.Fatal("未删除的记录不应消失")
 	}
 	// 删除不存在的记录不报错。
-	if err := fs.Delete(1); err != nil {
+	if err := fs.Delete(context.Background(), 1); err != nil {
 		t.Fatalf("重复删除不应报错: %v", err)
 	}
-	if err := fs.Delete(999); err != nil {
+	if err := fs.Delete(context.Background(), 999); err != nil {
 		t.Fatalf("删除不存在记录不应报错: %v", err)
 	}
 
 	// 新实例重读盘，确认删除已落盘。
 	fs2 := htwheel.NewFileStore(path)
-	if _, ok, _ := fs2.Get(1); ok {
+	if _, ok, _ := fs2.Get(context.Background(), 1); ok {
 		t.Fatal("重启后已删除的记录不应存在")
 	}
-	if _, ok, _ := fs2.Get(2); !ok {
+	if _, ok, _ := fs2.Get(context.Background(), 2); !ok {
 		t.Fatal("重启后未删除的记录应保留")
 	}
 }
@@ -369,11 +377,11 @@ func TestAddLevelOverflowGuard(t *testing.T) {
 	}
 }
 
-// WithBatchSize 与 WithDefaultRetry 的边界值（非法输入被安全忽略）。
+// WithBatchSize 等 Option 的边界值（非法输入被安全忽略，不 panic）。
 func TestOptionBoundaries(t *testing.T) {
 	store := htwheel.NewMemoryStore()
 	// 非法值不应 panic：batch<=0 走默认，retries<0 归零。
-	p := htwheel.NewPersistentScheduler(store, nil,
+	p := htwheel.NewPersistentScheduler(store, nil, nil,
 		htwheel.WithBatchSize(0),
 		htwheel.WithDefaultRetry(-5, -1),
 		htwheel.WithRetryBackoff(0.5), // <1 被忽略
@@ -381,15 +389,17 @@ func TestOptionBoundaries(t *testing.T) {
 	)
 	defer p.Stop()
 
-	p.Register("job", func(uint64, time.Time, []byte) error { return nil })
-	if err := p.Schedule(1, time.Now().Add(time.Hour), "job", nil); err != nil {
+	p.Register("job", func(uint64, time.Time, *htwheel.TaskRecord) error { return nil })
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 1, Expire: time.Now().Add(time.Hour), Name: "job",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	rec, ok, _ := p.Get(1)
+	rec, ok, _ := p.Get(context.Background(), 1)
 	if !ok {
 		t.Fatal("任务应已入库")
 	}
-	if rec.Retries != 0 {
-		t.Fatalf("非法负数重试次数应归零，实际 %d", rec.Retries)
+	if rec.GetRetries() != 0 {
+		t.Fatalf("未设置重试次数应为 0，实际 %d", rec.GetRetries())
 	}
 }

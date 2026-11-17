@@ -1,6 +1,7 @@
 package htwheel_test
 
 import (
+	"context"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -15,14 +16,14 @@ type firedCall struct {
 	payload string
 }
 
-func newPersistent(t *testing.T, store htwheel.Store) *htwheel.PersistentScheduler {
+func newPersistent(t *testing.T, store htwheel.Store[*htwheel.TaskRecord]) *htwheel.PersistentScheduler[*htwheel.TaskRecord] {
 	t.Helper()
 	s := htwheel.NewScheduler(
 		htwheel.WithTick(5*time.Millisecond),
 		htwheel.WithSize(16),
 		htwheel.WithWorkers(2),
 	)
-	p := htwheel.NewPersistentScheduler(store, s,
+	p := htwheel.NewPersistentScheduler(store, s, nil,
 		htwheel.WithPollInterval(10*time.Millisecond),
 		htwheel.WithLookahead(100*time.Millisecond),
 	)
@@ -36,13 +37,15 @@ func TestPersistentScheduleFires(t *testing.T) {
 	p := newPersistent(t, store)
 
 	got := make(chan firedCall, 1)
-	p.Register("greet", func(id uint64, exec time.Time, payload []byte) error {
-		got <- firedCall{id: id, exec: exec, payload: string(payload)}
+	p.Register("greet", func(id uint64, exec time.Time, t *htwheel.TaskRecord) error {
+		got <- firedCall{id: id, exec: exec, payload: string(t.GetPayload())}
 		return nil
 	})
 
 	at := time.Now().Add(30 * time.Millisecond)
-	if err := p.Schedule(1, at, "greet", []byte("hello")); err != nil {
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 1, Expire: at, Name: "greet", Payload: []byte("hello"),
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,7 +62,7 @@ func TestPersistentScheduleFires(t *testing.T) {
 	}
 
 	eventually(t, time.Second, func() bool {
-		_, ok, _ := store.Get(1)
+		_, ok, _ := store.Get(context.Background(), 1)
 		return !ok
 	}, "执行后存储层应删除记录")
 }
@@ -70,9 +73,9 @@ func TestPersistentExternalInsert(t *testing.T) {
 	p := newPersistent(t, store)
 
 	fired := make(chan uint64, 1)
-	p.Register("job", func(id uint64, _ time.Time, _ []byte) error { fired <- id; return nil })
+	p.Register("job", func(id uint64, _ time.Time, _ *htwheel.TaskRecord) error { fired <- id; return nil })
 
-	if err := store.Put(htwheel.Record{ID: 6, Expire: time.Now().Add(30 * time.Millisecond), Name: "job"}); err != nil {
+	if err := store.Put(context.Background(), &htwheel.TaskRecord{ID: 6, Expire: time.Now().Add(30 * time.Millisecond), Name: "job"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,12 +95,14 @@ func TestPersistentCancel(t *testing.T) {
 	p := newPersistent(t, store)
 
 	var fired int32
-	p.Register("job", func(uint64, time.Time, []byte) error { atomic.AddInt32(&fired, 1); return nil })
+	p.Register("job", func(uint64, time.Time, *htwheel.TaskRecord) error { atomic.AddInt32(&fired, 1); return nil })
 
-	if err := p.Schedule(3, time.Now().Add(80*time.Millisecond), "job", nil); err != nil {
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 3, Expire: time.Now().Add(80 * time.Millisecond), Name: "job",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.Cancel(3); err != nil {
+	if err := p.Cancel(context.Background(), 3); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,7 +110,7 @@ func TestPersistentCancel(t *testing.T) {
 	if n := atomic.LoadInt32(&fired); n != 0 {
 		t.Fatalf("取消后仍执行 %d 次", n)
 	}
-	if _, ok, _ := store.Get(3); ok {
+	if _, ok, _ := store.Get(context.Background(), 3); ok {
 		t.Fatal("取消后存储层仍有记录")
 	}
 }
@@ -116,10 +121,10 @@ func TestPersistentUpdate(t *testing.T) {
 	p := newPersistent(t, store)
 
 	fired := make(chan uint64, 2)
-	p.Register("job", func(id uint64, _ time.Time, _ []byte) error { fired <- id; return nil })
+	p.Register("job", func(id uint64, _ time.Time, _ *htwheel.TaskRecord) error { fired <- id; return nil })
 
 	// 远期任务：超出 lookahead，不会被预热进内存。
-	if err := store.Put(htwheel.Record{ID: 5, Expire: time.Now().Add(time.Hour), Name: "job"}); err != nil {
+	if err := store.Put(context.Background(), &htwheel.TaskRecord{ID: 5, Expire: time.Now().Add(time.Hour), Name: "job"}); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -128,7 +133,7 @@ func TestPersistentUpdate(t *testing.T) {
 	}
 
 	// 改到 50ms 后，应能执行。
-	if err := p.Update(5, time.Now().Add(50*time.Millisecond)); err != nil {
+	if err := p.Update(context.Background(), 5, time.Now().Add(50*time.Millisecond)); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -146,17 +151,17 @@ func TestPersistentMissingHandlerRetry(t *testing.T) {
 	store := htwheel.NewMemoryStore()
 	p := newPersistent(t, store)
 
-	if err := store.Put(htwheel.Record{ID: 7, Expire: time.Now().Add(10 * time.Millisecond), Name: "later"}); err != nil {
+	if err := store.Put(context.Background(), &htwheel.TaskRecord{ID: 7, Expire: time.Now().Add(10 * time.Millisecond), Name: "later"}); err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(120 * time.Millisecond)
-	if _, ok, _ := store.Get(7); !ok {
+	if _, ok, _ := store.Get(context.Background(), 7); !ok {
 		t.Fatal("处理器缺失时应保留记录")
 	}
 
 	fired := make(chan struct{}, 1)
-	p.Register("later", func(uint64, time.Time, []byte) error { fired <- struct{}{}; return nil })
+	p.Register("later", func(uint64, time.Time, *htwheel.TaskRecord) error { fired <- struct{}{}; return nil })
 
 	select {
 	case <-fired:
@@ -165,7 +170,7 @@ func TestPersistentMissingHandlerRetry(t *testing.T) {
 	}
 
 	eventually(t, time.Second, func() bool {
-		_, ok, _ := store.Get(7)
+		_, ok, _ := store.Get(context.Background(), 7)
 		return !ok
 	}, "成功后应删除记录")
 }
@@ -176,28 +181,28 @@ func TestFileStoreRecovery(t *testing.T) {
 
 	store1 := htwheel.NewFileStore(path)
 	future := time.Now().Add(time.Hour).Truncate(time.Second)
-	if err := store1.Put(htwheel.Record{ID: 1, Expire: future, Name: "job"}); err != nil {
+	if err := store1.Put(context.Background(), &htwheel.TaskRecord{ID: 1, Expire: future, Name: "job"}); err != nil {
 		t.Fatal(err)
 	}
 
 	p := newPersistent(t, store1)
-	p.Register("job", func(uint64, time.Time, []byte) error { return nil })
+	p.Register("job", func(uint64, time.Time, *htwheel.TaskRecord) error { return nil })
 
 	// 等待一次轮询，确认远期记录未被删除。
 	time.Sleep(60 * time.Millisecond)
-	if _, ok, _ := store1.Get(1); !ok {
+	if _, ok, _ := store1.Get(context.Background(), 1); !ok {
 		t.Fatal("远期记录不应被删除")
 	}
 	p.Stop()
 
 	// 新的存储实例从同一文件恢复。
 	store2 := htwheel.NewFileStore(path)
-	rec, ok, err := store2.Get(1)
+	rec, ok, err := store2.Get(context.Background(), 1)
 	if err != nil || !ok {
 		t.Fatalf("重启后应能读到记录: ok=%v err=%v", ok, err)
 	}
-	if !rec.Expire.Equal(future) {
-		t.Fatalf("expire 不符: %v != %v", rec.Expire, future)
+	if !rec.GetExpire().Equal(future) {
+		t.Fatalf("expire 不符: %v != %v", rec.GetExpire(), future)
 	}
 }
 
@@ -208,13 +213,15 @@ func TestPersistentSlowHandlerNoDuplicate(t *testing.T) {
 
 	var calls int32
 	block := make(chan struct{})
-	p.Register("slow", func(uint64, time.Time, []byte) error {
+	p.Register("slow", func(uint64, time.Time, *htwheel.TaskRecord) error {
 		atomic.AddInt32(&calls, 1)
 		<-block
 		return nil
 	})
 
-	if err := p.Schedule(8, time.Now().Add(10*time.Millisecond), "slow", nil); err != nil {
+	if err := p.Schedule(context.Background(), &htwheel.TaskRecord{
+		ID: 8, Expire: time.Now().Add(10 * time.Millisecond), Name: "slow",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -234,7 +241,7 @@ func TestMemoryStoreSemantics(t *testing.T) {
 
 	mustPut := func(id uint64, d time.Duration) {
 		t.Helper()
-		if err := store.Put(htwheel.Record{ID: id, Expire: now.Add(d), Name: "n"}); err != nil {
+		if err := store.Put(context.Background(), &htwheel.TaskRecord{ID: id, Expire: now.Add(d), Name: "n"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -242,7 +249,7 @@ func TestMemoryStoreSemantics(t *testing.T) {
 	mustPut(2, 10*time.Millisecond)
 	mustPut(3, time.Hour)
 
-	recs, err := store.Scan(now.Add(time.Minute), 0)
+	recs, err := store.Scan(context.Background(), now.Add(time.Minute), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +257,7 @@ func TestMemoryStoreSemantics(t *testing.T) {
 		t.Fatalf("Scan 结果不符: %+v", recs)
 	}
 
-	limited, err := store.Scan(now.Add(time.Minute), 1)
+	limited, err := store.Scan(context.Background(), now.Add(time.Minute), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,13 +265,13 @@ func TestMemoryStoreSemantics(t *testing.T) {
 		t.Fatalf("limit 未生效: %+v", limited)
 	}
 
-	if err := store.Delete(999); err != nil {
+	if err := store.Delete(context.Background(), 999); err != nil {
 		t.Fatalf("删除不存在的记录不应报错: %v", err)
 	}
-	if err := store.Delete(1); err != nil {
+	if err := store.Delete(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, _ := store.Get(1); ok {
+	if _, ok, _ := store.Get(context.Background(), 1); ok {
 		t.Fatal("删除后仍可读到")
 	}
 }

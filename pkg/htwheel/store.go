@@ -2,6 +2,7 @@ package htwheel
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -18,46 +19,63 @@ import (
 
 // MemoryStore 是基于 map 的存储实现，进程退出后数据丢失。
 // 适合测试，或作为自定义存储层的参考实现。
+//
+// 它实现了 Store[TaskRecord] 接口。
 type MemoryStore struct {
 	mu   sync.RWMutex
-	data map[uint64]Record
+	data map[uint64]*TaskRecord
 }
 
 // NewMemoryStore 创建内存存储。
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{data: make(map[uint64]Record)}
+	return &MemoryStore{data: make(map[uint64]*TaskRecord)}
 }
 
-func (m *MemoryStore) Put(rec Record) error {
+// 编译期断言：MemoryStore 实现了 Store[*TaskRecord]。
+var _ Store[*TaskRecord] = (*MemoryStore)(nil)
+
+func (m *MemoryStore) Put(ctx context.Context, rec *TaskRecord) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	m.mu.Lock()
-	m.data[rec.ID] = cloneRecord(rec)
+	m.data[rec.ID] = rec
 	m.mu.Unlock()
 	return nil
 }
 
-func (m *MemoryStore) Get(id uint64) (Record, bool, error) {
+func (m *MemoryStore) Get(ctx context.Context, id uint64) (*TaskRecord, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	m.mu.RLock()
 	rec, ok := m.data[id]
 	m.mu.RUnlock()
 	if !ok {
-		return Record{}, false, nil
+		return nil, false, nil
 	}
-	return cloneRecord(rec), true, nil
+	return rec, true, nil
 }
 
-func (m *MemoryStore) Delete(id uint64) error {
+func (m *MemoryStore) Delete(ctx context.Context, id uint64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	delete(m.data, id)
 	m.mu.Unlock()
 	return nil
 }
 
-func (m *MemoryStore) Scan(before time.Time, limit int) ([]Record, error) {
+func (m *MemoryStore) Scan(ctx context.Context, before time.Time, limit int) ([]*TaskRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	m.mu.RLock()
-	recs := make([]Record, 0, len(m.data))
+	recs := make([]*TaskRecord, 0, len(m.data))
 	for _, rec := range m.data {
 		if !rec.Expire.After(before) {
-			recs = append(recs, cloneRecord(rec))
+			recs = append(recs, rec)
 		}
 	}
 	m.mu.RUnlock()
@@ -73,10 +91,12 @@ func (m *MemoryStore) Scan(before time.Time, limit int) ([]Record, error) {
 // FileStore 把全部记录以 JSON 数组保存在单个文件中，每次变更整体原子重写。
 //
 // 适用于任务量不大（万级以内）、单写者的场景。并发写同一文件的多个进程不保证一致。
+//
+// 它实现了 Store[TaskRecord] 接口。
 type FileStore struct {
 	mu     sync.Mutex
 	path   string
-	data   map[uint64]Record
+	data   map[uint64]*TaskRecord
 	loaded bool
 }
 
@@ -85,30 +105,42 @@ func NewFileStore(path string) *FileStore {
 	return &FileStore{path: path}
 }
 
-func (f *FileStore) Put(rec Record) error {
+// 编译期断言：FileStore 实现了 Store[*TaskRecord]。
+var _ Store[*TaskRecord] = (*FileStore)(nil)
+
+func (f *FileStore) Put(ctx context.Context, rec *TaskRecord) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.ensure(); err != nil {
 		return err
 	}
-	f.data[rec.ID] = cloneRecord(rec)
+	f.data[rec.ID] = rec
 	return f.flush()
 }
 
-func (f *FileStore) Get(id uint64) (Record, bool, error) {
+func (f *FileStore) Get(ctx context.Context, id uint64) (*TaskRecord, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.ensure(); err != nil {
-		return Record{}, false, err
+		return nil, false, err
 	}
 	rec, ok := f.data[id]
 	if !ok {
-		return Record{}, false, nil
+		return nil, false, nil
 	}
-	return cloneRecord(rec), true, nil
+	return rec, true, nil
 }
 
-func (f *FileStore) Delete(id uint64) error {
+func (f *FileStore) Delete(ctx context.Context, id uint64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.ensure(); err != nil {
@@ -121,16 +153,19 @@ func (f *FileStore) Delete(id uint64) error {
 	return f.flush()
 }
 
-func (f *FileStore) Scan(before time.Time, limit int) ([]Record, error) {
+func (f *FileStore) Scan(ctx context.Context, before time.Time, limit int) ([]*TaskRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.ensure(); err != nil {
 		return nil, err
 	}
-	recs := make([]Record, 0, len(f.data))
+	recs := make([]*TaskRecord, 0, len(f.data))
 	for _, rec := range f.data {
 		if !rec.Expire.After(before) {
-			recs = append(recs, cloneRecord(rec))
+			recs = append(recs, rec)
 		}
 	}
 	return sortAndLimit(recs, limit), nil
@@ -144,20 +179,20 @@ func (f *FileStore) ensure() error {
 	b, err := os.ReadFile(f.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			f.data = make(map[uint64]Record)
+			f.data = make(map[uint64]*TaskRecord)
 			f.loaded = true
 			return nil
 		}
 		return err
 	}
 
-	var recs []Record
+	var recs []*TaskRecord
 	if len(bytes.TrimSpace(b)) > 0 {
 		if err := json.Unmarshal(b, &recs); err != nil {
 			return err
 		}
 	}
-	f.data = make(map[uint64]Record, len(recs))
+	f.data = make(map[uint64]*TaskRecord, len(recs))
 	for _, rec := range recs {
 		f.data[rec.ID] = rec
 	}
@@ -167,7 +202,7 @@ func (f *FileStore) ensure() error {
 
 // flush 先写临时文件再 rename，保证不会读到写了一半的文件。
 func (f *FileStore) flush() error {
-	recs := make([]Record, 0, len(f.data))
+	recs := make([]*TaskRecord, 0, len(f.data))
 	for _, rec := range f.data {
 		recs = append(recs, rec)
 	}
@@ -206,13 +241,13 @@ func (f *FileStore) flush() error {
 	return os.Rename(name, f.path)
 }
 
-func sortRecords(recs []Record) {
+func sortRecords(recs []*TaskRecord) {
 	sort.Slice(recs, func(i, j int) bool {
 		return recs[i].Expire.Before(recs[j].Expire)
 	})
 }
 
-func sortAndLimit(recs []Record, limit int) []Record {
+func sortAndLimit(recs []*TaskRecord, limit int) []*TaskRecord {
 	sortRecords(recs)
 	if limit > 0 && len(recs) > limit {
 		recs = recs[:limit]

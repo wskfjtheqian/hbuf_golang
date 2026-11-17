@@ -21,12 +21,13 @@ HtWheel 是一个分层时间轮（Hierarchical Timing Wheel）定时调度器�
 | 文件 | 说明 |
 |---|---|
 | [htwheel.go](htwheel.go) | 核心：`Task`、`WorkerPool`、`wheel`（单层时间轮）、`Scheduler`、`Option` |
-| [persist.go](persist.go) | 持久化：`Record`、`Store` 接口、`PersistentScheduler`、`Handler`、重试策略、`PersistOption` |
+| [persist.go](persist.go) | 持久化：`Record` 接口、泛型 `Store[R]`、`PersistentScheduler[R]`、`Handler`、重试策略 |
+| [record.go](record.go) | 内置 `TaskRecord`：`Record` 接口的默认实现 |
 | [store.go](store.go) | 内置存储：`MemoryStore`、`FileStore`（JSON，原子替换写入） |
 | [htwheel_test.go](htwheel_test.go) | 测试：正常触发、跨层查询/改期/取消、覆盖语义、并发压测、Stop 幂等、远期任务 |
 | [persist_test.go](persist_test.go) | 测试：持久化调度、外部插入、取消/改期、文件恢复、慢任务防重、处理器缺失重试 |
 | [retry_test.go](retry_test.go) | 测试：重试成功/用尽、默认与任务级策略、退避、panic、等待期取消 |
-| [crud_test.go](crud_test.go) | 测试：Upsert 新增/整体替换、UpdateWith 改名与参数、Remove 删除 |
+| [crud_test.go](crud_test.go) | 测试：Schedule 新增/整体替换、UpdateWith 改名与参数、Remove 删除 |
 | [deep_test.go](deep_test.go) | 测试：缓冲饱和、远期稳定、Stop 竞争、覆盖并发、覆盖率盲区 |
 
 ## 核心概念
@@ -144,16 +145,35 @@ s := htwheel.NewScheduler(
 
 ### 为什么存的是元数据
 
-Go 的函数值无法序列化，所以存储层保存的是任务描述 `Record`，执行逻辑通过「处理器名」在运行时还原：
+Go 的函数值无法序列化，所以存储层保存的是任务描述 `Record`，执行逻辑通过「处理器名」在运行时还原。
+
+`Record` 是一个**接口**，只需实现字段的 getter/setter；内置 `TaskRecord` 是默认实现：
 
 ```go
-type Record struct {
+type Record interface {
+	GetID() uint64
+	GetExpire() time.Time
+	GetName() string
+	GetPayload() []byte
+	GetRetries() int
+	GetRetryDelay() time.Duration
+
+	SetID(uint64)
+	SetExpire(time.Time)
+	SetName(string)
+	SetPayload([]byte)
+	SetRetries(int)
+	SetRetryDelay(time.Duration)
+}
+
+// 内置默认实现（可直接使用，也可自定义结构体实现 Record 接口）
+type TaskRecord struct {
 	ID         uint64        `json:"id"`
 	Expire     time.Time     `json:"expire"`
-	Name       string        `json:"name"`        // 处理器名
-	Payload    []byte        `json:"payload"`     // 业务参数，自行序列化
-	Retries    int           `json:"retries"`     // 剩余重试次数
-	RetryDelay time.Duration `json:"retry_delay"` // 本次失败后等待多久再重试（纳秒）
+	Name       string        `json:"name"`
+	Payload    []byte        `json:"payload,omitempty"`
+	Retries    int           `json:"retries,omitempty"`
+	RetryDelay time.Duration `json:"retry_delay,omitempty"`
 }
 ```
 
@@ -164,7 +184,11 @@ type Record struct {
 ```go
 store := htwheel.NewFileStore("./data/tasks.json") // 也可换成自定义 DB 实现
 
-p := htwheel.NewPersistentScheduler(store, htwheel.NewScheduler(),
+// 泛型调度器：R 为记录类型
+// 第三个参数是基础 ctx（可为 nil），后台扫描与异步执行由它派生
+p := htwheel.NewPersistentScheduler(store,
+	htwheel.NewScheduler(),
+	context.Background(), // baseCtx：取消它将停止后台扫描
 	htwheel.WithPollInterval(time.Second),
 	htwheel.WithLookahead(30*time.Second),
 )
@@ -172,37 +196,38 @@ defer p.Stop()
 
 // 处理器在启动阶段注册（必须覆盖存储中出现的所有 Name）
 // 返回 error 表示本次执行失败，会按记录里的重试策略改期重试
-p.Register("send_email", func(id uint64, exec time.Time, payload []byte) error {
+// 第三个参数是任务记录本身（*TaskRecord），可通过 GetPayload() 读取业务参数
+p.Register("send_email", func(id uint64, exec time.Time, rec *htwheel.TaskRecord) error {
 	var m Email
-	if err := json.Unmarshal(payload, &m); err != nil {
+	if err := json.Unmarshal(rec.GetPayload(), &m); err != nil {
 		return err
 	}
 	return sendEmail(m)
 })
 
-// 持久化调度：写存储 + 预热进内存
+// 持久化调度：直接传入完整记录（含 Name/Payload/Expire/重试字段）
 payload, _ := json.Marshal(Email{To: "a@b.com"})
-if err := p.Schedule(1001, time.Now().Add(time.Hour), "send_email", payload); err != nil {
+if err := p.Schedule(ctx, &htwheel.TaskRecord{
+	ID: 1001, Expire: time.Now().Add(time.Hour), Name: "send_email", Payload: payload,
+}); err != nil {
 	panic(err)
 }
 
 // 查询/改期/取消都直接作用于存储层，远期任务无需已加载
-rec, ok, _ := p.Get(1001)
-fmt.Println(rec.Expire, ok)
-p.Update(1001, time.Now().Add(10*time.Minute))
-p.Cancel(1001)
+rec, ok, _ := p.Get(ctx, 1001)
+fmt.Println(rec.GetExpire(), ok)
+p.Update(ctx, 1001, time.Now().Add(10*time.Minute))
+p.Cancel(ctx, 1001)
 ```
 
 | 方法 | 说明 |
 |---|---|
-| `Register(name, h)` | 注册处理器 `func(id uint64, exec time.Time, payload []byte) error` |
-| `Schedule(id, at, name, payload)` | 落库并预热，使用全局默认重试策略 |
-| `ScheduleWith(id, at, name, payload, opts...)` | 同上，可用 `WithTaskRetry` 覆盖重试策略 |
-| `Upsert(rec)` | 按 ID 新增或整体替换（可改 Name/Payload/Expire/重试字段） |
-| `Update(id, at)` | 改期，其余字段保持不变 |
-| `UpdateWith(id, at, opts...)` | 改期并可改 Name/Payload/重试策略 |
-| `Get(id)` / `TTL(id)` | 读存储层的最新记录 / 距下次执行（或下次重试）的剩余时间 |
-| `Cancel(id)` / `Remove(id)` | 删除记录并撤销内存调度，重试等待期同样有效 |
+| `Register(name, h)` | 注册处理器 `func(id uint64, exec time.Time, rec *TaskRecord) error` |
+| `Schedule(ctx, rec)` | 落库并预热：按 ID 新增或整体替换（直接写完整 Record，含 Name/Payload/Expire/重试字段） |
+| `Update(ctx, id, at)` | 改期，其余字段保持不变 |
+| `UpdateWith(ctx, id, at, opts...)` | 改期并可改 Name/Payload/重试策略 |
+| `Get(ctx, id)` / `TTL(ctx, id)` | 读存储层的最新记录 / 距下次执行（或下次重试）的剩余时间 |
+| `Cancel(ctx, id)` / `Remove(ctx, id)` | 删除记录并撤销内存调度，重试等待期同样有效 |
 | `Stop()` | 停止扫描与内存调度，幂等 |
 | `Scheduler()` | 取回底层内存 `Scheduler` |
 
@@ -211,60 +236,57 @@ p.Cancel(1001)
 任务的完整增删改操作：
 
 ```go
-// 增：新增（或覆盖）一条任务，套用默认重试策略
-p.ScheduleWith(1001, at, "send_email", payload, htwheel.WithTaskRetry(3, 5*time.Second))
-
-// 增/改合一：按 ID 直接写入完整记录，不套用默认重试策略
-p.Upsert(htwheel.Record{
+// 增/改合一：Schedule 按 ID 新增或整体替换，直接写完整 Record（含重试字段）
+p.Schedule(ctx, &htwheel.TaskRecord{
     ID: 1001, Expire: at, Name: "send_email", Payload: payload,
     Retries: 3, RetryDelay: 5 * time.Second,
 })
 
 // 改：改期 + 换处理器 + 换参数 + 调重试（可组合，也可只改其中一项）
-p.UpdateWith(1001, newTime,
-    htwheel.SetName("send_sms"),           // 换处理器名
-    htwheel.SetPayload(smsPayload),        // 换业务参数
-    htwheel.SetRetries(5),                 // 单独调次数
-    htwheel.SetRetryDelay(time.Minute),    // 单独调间隔
+p.UpdateWith(ctx, 1001, newTime,
+    htwheel.SetName[*htwheel.TaskRecord]("send_sms"),           // 换处理器名
+    htwheel.SetPayload[*htwheel.TaskRecord](smsPayload),        // 换业务参数
+    htwheel.SetRetries[*htwheel.TaskRecord](5),                 // 单独调次数
+    htwheel.SetRetryDelay[*htwheel.TaskRecord](time.Minute),    // 单独调间隔
 )
 
 // 删：取消任务（Cancel 与 Remove 等价，幂等）
-p.Cancel(1001)   // 或 p.Remove(1001)
+p.Cancel(ctx, 1001)   // 或 p.Remove(ctx, 1001)
 ```
 
-可用的 `TaskOption`（`ScheduleWith` / `UpdateWith` 均可用）：
+可用的 `TaskOption`（仅 `UpdateWith` 使用，需显式指定类型参数）：
 
 | Option | 说明 |
 |---|---|
-| `WithTaskRetry(retries, delay)` | 覆盖重试次数与首次间隔（`retries=0` 即关闭重试） |
-| `SetName(name)` | 修改处理器名 |
-| `SetPayload(payload)` | 修改业务参数（传 `nil` 清空） |
-| `SetRetries(n)` | 修改剩余重试次数 |
-| `SetRetryDelay(d)` | 修改重试间隔 |
+| `WithTaskRetry[R](retries, delay)` | 覆盖重试次数与首次间隔（`retries=0` 即关闭重试） |
+| `SetName[R](name)` | 修改处理器名 |
+| `SetPayload[R](payload)` | 修改业务参数（传 `nil` 清空） |
+| `SetRetries[R](n)` | 修改剩余重试次数 |
+| `SetRetryDelay[R](d)` | 修改重试间隔 |
 
 要点：
 
-- `Upsert` 是「有则整体替换、无则新增」，`Record` 里的 `Name`/`Payload`/`Retries`/`RetryDelay` 都会原样落库，不套用全局默认策略；空 `Name` 会报错。
+- `Schedule` 是「有则整体替换、无则新增」，`Record` 里的 `Name`/`Payload`/`Retries`/`RetryDelay` 都会原样落库，不套用全局默认策略；空 `Name` 会报错。
 - `Update`（不带 With）只改执行时间，其余字段不变；`UpdateWith` 可组合多个 `TaskOption` 精准修改任意字段。
 - 改处理器名后，任务到期会按新 `Name` 查找处理器执行，旧处理器的内存任务会被同 ID 覆盖。
 - 所有增删改都先写存储层、再更新内存时间轮，因此即使任务尚未预热、或正处于重试等待期，也能正确增删改。
 
 ### Store 接口
 
-自定义存储只需实现四个方法（实现须并发安全）：
+`Store` 是泛型接口，方法带 `context.Context`，实现须并发安全：
 
 ```go
-type Store interface {
-	Put(rec Record) error
-	Get(id uint64) (Record, bool, error)
-	Delete(id uint64) error                                    // 不存在不视为错误
-	Scan(before time.Time, limit int) ([]Record, error)        // Expire <= before，按 Expire 升序
+type Store[R Record] interface {
+	Put(ctx context.Context, rec R) error
+	Get(ctx context.Context, id uint64) (R, bool, error)
+	Delete(ctx context.Context, id uint64) error                       // 不存在不视为错误
+	Scan(ctx context.Context, before time.Time, limit int) ([]R, error) // Expire <= before，按 Expire 升序
 }
 ```
 
 | 内置实现 | 说明 |
 |---|---|
-| `NewMemoryStore()` | map 实现，进程退出即丢失，适合测试或作为参考 |
+| `NewMemoryStore()` | map 实现，进程退出即丢失，适合测试或作为参考（实现 `Store[*TaskRecord]`） |
 | `NewFileStore(path)` | JSON 数组存单文件，每次变更原子重写（临时文件 + rename），适合万级以内、单写者场景 |
 
 ### 自定义存储：数据库示例
@@ -284,45 +306,46 @@ CREATE TABLE scheduled_task (
 ```
 
 ```go
+// SQLStore 实现 Store[*htwheel.TaskRecord]
 type SQLStore struct{ db *sql.DB }
 
-func (s *SQLStore) Put(r htwheel.Record) error {
-	_, err := s.db.Exec(
+func (s *SQLStore) Put(ctx context.Context, r *htwheel.TaskRecord) error {
+	_, err := s.db.ExecContext(ctx,
 		`REPLACE INTO scheduled_task(id, expire_at, name, payload, retries, retry_delay) VALUES(?,?,?,?,?,?)`,
 		r.ID, r.Expire.UnixMilli(), r.Name, r.Payload, r.Retries, int64(r.RetryDelay))
 	return err
 }
 
-func (s *SQLStore) Get(id uint64) (htwheel.Record, bool, error) {
+func (s *SQLStore) Get(ctx context.Context, id uint64) (*htwheel.TaskRecord, bool, error) {
 	var ms, delay int64
 	var name string
 	var payload []byte
 	var retries int
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT expire_at, name, payload, retries, retry_delay FROM scheduled_task WHERE id=?`, id,
 	).Scan(&ms, &name, &payload, &retries, &delay)
 	if err == sql.ErrNoRows {
-		return htwheel.Record{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return htwheel.Record{}, false, err
+		return nil, false, err
 	}
-	return htwheel.Record{
+	return &htwheel.TaskRecord{
 		ID: id, Expire: time.UnixMilli(ms), Name: name, Payload: payload,
 		Retries: retries, RetryDelay: time.Duration(delay),
 	}, true, nil
 }
 
-func (s *SQLStore) Delete(id uint64) error {
-	_, err := s.db.Exec(`DELETE FROM scheduled_task WHERE id=?`, id)
+func (s *SQLStore) Delete(ctx context.Context, id uint64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM scheduled_task WHERE id=?`, id)
 	return err
 }
 
-func (s *SQLStore) Scan(before time.Time, limit int) ([]htwheel.Record, error) {
+func (s *SQLStore) Scan(ctx context.Context, before time.Time, limit int) ([]*htwheel.TaskRecord, error) {
 	if limit <= 0 {
 		limit = 1000
 	}
-	rows, err := s.db.Query(
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, expire_at, name, payload, retries, retry_delay FROM scheduled_task
 		 WHERE expire_at <= ? ORDER BY expire_at LIMIT ?`,
 		before.UnixMilli(), limit)
@@ -331,9 +354,9 @@ func (s *SQLStore) Scan(before time.Time, limit int) ([]htwheel.Record, error) {
 	}
 	defer rows.Close()
 
-	var out []htwheel.Record
+	var out []*htwheel.TaskRecord
 	for rows.Next() {
-		var r htwheel.Record
+		r := &htwheel.TaskRecord{}
 		var ms, delay int64
 		if err := rows.Scan(&r.ID, &ms, &r.Name, &r.Payload, &r.Retries, &delay); err != nil {
 			return nil, err
@@ -344,6 +367,9 @@ func (s *SQLStore) Scan(before time.Time, limit int) ([]htwheel.Record, error) {
 	}
 	return out, rows.Err()
 }
+
+// 使用：传入底层 Scheduler 与基础 ctx
+p := htwheel.NewPersistentScheduler(&SQLStore{db}, nil, ctx)
 ```
 
 ### 加载与执行语义
@@ -364,8 +390,8 @@ func (s *SQLStore) Scan(before time.Time, limit int) ([]htwheel.Record, error) {
 `Handler` 的返回值为 `error`，非 `nil` 即表示本次执行失败，调度器按记录里的策略处理：
 
 ```go
-p.Register("send_email", func(id uint64, exec time.Time, payload []byte) error {
-	return sendEmail(payload) // 返回 error 就会重试
+p.Register("send_email", func(id uint64, exec time.Time, rec *htwheel.TaskRecord) error {
+	return sendEmail(rec.GetPayload()) // 返回 error 就会重试
 })
 ```
 
@@ -376,8 +402,8 @@ p.Register("send_email", func(id uint64, exec time.Time, payload []byte) error {
 策略分两层：全局默认值 + 单条任务覆盖。
 
 ```go
-p := htwheel.NewPersistentScheduler(store, nil,
-	htwheel.WithDefaultRetry(3, 5*time.Second), // 新任务默认：3 次重试，间隔 5s
+p := htwheel.NewPersistentScheduler(store, nil, ctx,
+	htwheel.WithDefaultRetry(3, 5*time.Second), // 重试间隔兜底：任务未设 RetryDelay 时用 5s
 	htwheel.WithRetryBackoff(2),                // 间隔按 5s → 10s → 20s 递增（可选）
 	htwheel.WithMaxRetryDelay(time.Minute),     // 退避上限（可选）
 	htwheel.WithErrorHandler(func(err error) {
@@ -387,14 +413,20 @@ p := htwheel.NewPersistentScheduler(store, nil,
 	}),
 )
 
-// 单条任务覆盖：5 次重试、间隔 30s
-p.ScheduleWith(1001, at, "send_email", payload, htwheel.WithTaskRetry(5, 30*time.Second))
+// 单条任务：在记录里直接写重试字段（5 次重试、间隔 30s）
+p.Schedule(ctx, &htwheel.TaskRecord{
+	ID: 1001, Expire: at, Name: "send_email", Payload: payload,
+	Retries: 5, RetryDelay: 30 * time.Second,
+})
 
-// 单条任务关闭重试（覆盖全局默认值）
-p.ScheduleWith(1002, at, "send_email", payload, htwheel.WithTaskRetry(0, 0))
+// 关闭单条任务的重试
+p.Schedule(ctx, &htwheel.TaskRecord{
+	ID: 1002, Expire: at, Name: "send_email", Payload: payload,
+	Retries: 0, RetryDelay: 0,
+})
 
 // 人工再给几次机会，或改期时一并重置策略
-p.UpdateWith(1001, nextRun, htwheel.WithTaskRetry(3, time.Minute))
+p.UpdateWith(ctx, 1001, nextRun, htwheel.WithTaskRetry[*htwheel.TaskRecord](3, time.Minute))
 ```
 
 要点：
@@ -404,7 +436,7 @@ p.UpdateWith(1001, nextRun, htwheel.WithTaskRetry(3, time.Minute))
 - 每次失败尝试都会上报一次错误（含「retry in 5s (2 left)」信息），便于观测；用尽时上报的错误可被 `errors.Is(err, ErrRetriesExhausted)` 识别。
 - 处于重试等待期的任务可以 `Cancel`，也可以 `Update` 改期；执行期间被取消/改期的任务不会用旧状态覆盖记录。
 - 间隔有 1ms 下限，避免 `RetryDelay=0` 时退化成忙循环。
-- `Schedule` 使用全局默认策略，`ScheduleWith` 才接受 `TaskOption`；只有 `Schedule`/`ScheduleWith`/`UpdateWith` 会写入重试策略，`Update` 保持原有次数不变。
+- `Schedule` 直接写完整记录（含重试字段）；`Update` 只改时间、保留原重试次数；`UpdateWith` 才接受 `TaskOption` 改策略。
 
 ### 配置项
 
@@ -413,18 +445,18 @@ p.UpdateWith(1001, nextRun, htwheel.WithTaskRetry(3, time.Minute))
 | `WithPollInterval(d)` | `1s` | 扫描存储层的间隔 |
 | `WithLookahead(d)` | `30s` | 预热窗口：加载 `Expire <= now+d` 的任务 |
 | `WithBatchSize(n)` | `256` | 单次扫描最多读取的条数 |
-| `WithDefaultRetry(retries, delay)` | `0, 0` | 新任务的默认重试次数与间隔（0 表示不重试） |
+| `WithDefaultRetry(retries, delay)` | `0, 0` | 重试间隔兜底：任务 `RetryDelay<=0` 时用 `delay` 作为重试间隔 |
 | `WithRetryBackoff(factor)` | `1` | 重试间隔增长倍数，`2` 表示 5s → 10s → 20s |
 | `WithMaxRetryDelay(d)` | 不限 | 退避后的间隔上限 |
 | `WithErrorHandler(fn)` | 无 | 存储/处理器错误回调 |
 
-任务级配置通过 `TaskOption` 传入 `ScheduleWith` / `UpdateWith`（完整列表见「任务的增删改」一节）：
+任务级配置通过 `TaskOption` 传入 `UpdateWith`（完整列表见「任务的增删改」一节）：
 
 | Option | 说明 |
 |---|---|
 | `WithTaskRetry(retries, delay)` | 覆盖该任务的重试次数与首次间隔（`retries=0` 即关闭重试） |
 
-`NewPersistentScheduler(store, s, opts...)` 的 `s` 传 `nil` 时使用默认 `NewScheduler()`；也可以传入自定义配置的内存调度器，或通过 `p.Scheduler()` 取回底层实例。
+`NewPersistentScheduler(store, s, baseCtx, opts...)` 的 `s` 传 `nil` 时使用默认 `NewScheduler()`；`baseCtx` 是后台扫描与异步执行所使用的基础上下文（传 `nil` 时回退到 `context.Background()`）。所有公开方法（`Schedule`/`Get`/`Update`/`Cancel` 等）都要求显式传入 `ctx`，存储访问从上层一路传递，不再在内部创建 `context.Background()`。也可以通过 `p.Scheduler()` 取回底层实例。
 
 ## 测试
 
@@ -432,4 +464,4 @@ p.UpdateWith(1001, nextRun, htwheel.WithTaskRetry(3, time.Minute))
 go test -race ./pkg/htwheel/
 ```
 
-测试覆盖：正常触发与执行时间参数、跨层 `Get`/`TTL`/`Update`、跨层 `Cancel`、同 id 覆盖、取消后更新、并发读写压测、`Stop` 幂等、极端远期任务与多层安置；持久化部分覆盖调度与执行、外部写入、取消/改期、文件重启恢复、慢任务防重、处理器缺失重试；重试部分覆盖失败后成功、重试用尽、默认与任务级策略、退避增长、panic 触发重试、等待期取消、重试字段持久化；增删改部分覆盖 Upsert 新增/整体替换/空名报错、UpdateWith 改处理器名与参数、参数清空、Remove 删除、停止后增删改报 ErrClosed。建议始终带 `-race` 运行。
+测试覆盖：正常触发与执行时间参数、跨层 `Get`/`TTL`/`Update`、跨层 `Cancel`、同 id 覆盖、取消后更新、并发读写压测、`Stop` 幂等、极端远期任务与多层安置；持久化部分覆盖调度与执行、外部写入、取消/改期、文件重启恢复、慢任务防重、处理器缺失重试；重试部分覆盖失败后成功、重试用尽、任务级策略、退避增长、panic 触发重试、等待期取消、重试字段持久化；增删改部分覆盖 Schedule 新增/整体替换/空名报错、UpdateWith 改处理器名与参数、参数清空、Remove 删除、停止后增删改报 ErrClosed。建议始终带 `-race` 运行。

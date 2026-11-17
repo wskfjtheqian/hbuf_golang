@@ -1,6 +1,7 @@
 package htwheel
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -34,39 +35,43 @@ var (
 //
 // 回调函数无法序列化，因此用 Name 标识处理器、Payload 承载业务参数；
 // 恢复任务时通过 Register 注册的处理器按 Name 还原执行逻辑。
-type Record struct {
-	ID      uint64    `json:"id"`
-	Expire  time.Time `json:"expire"`
-	Name    string    `json:"name"`
-	Payload []byte    `json:"payload,omitempty"`
+//
+// 用户可用自定义结构体实现该接口，以接入任意存储后端；调度器只通过
+// 方法访问字段，不关心底层具体类型。内置实现见 TaskRecord。
+type Record interface {
+	GetID() uint64
+	GetExpire() time.Time
+	GetName() string
+	GetRetries() int32
+	GetRetryDelay() time.Duration
 
-	// Retries 是剩余重试次数：每次执行失败后减 1，减到 0 后不再重试。
-	// 为 0 表示失败即放弃。
-	Retries int `json:"retries,omitempty"`
-	// RetryDelay 是「本次失败后等待多久再重试」。单位为纳秒（JSON 中为整数）。
-	// 开启退避时，每次重试后该字段会按倍数增长并回写到记录中。
-	RetryDelay time.Duration `json:"retry_delay,omitempty"`
+	SetID(uint64)
+	SetExpire(time.Time)
+	SetName(string)
+	SetRetries(int32)
+	SetRetryDelay(time.Duration)
 }
 
 // Store 是存储层接口，可对接数据库、文件或任意后端。
 //
 // 实现须保证方法并发安全：PersistentScheduler 的轮询协程与业务协程会同时访问。
-type Store interface {
+// 所有方法都应尊重 ctx 的取消。
+type Store[R Record] interface {
 	// Put 新增或覆盖一条记录（按 ID 去重）。
-	Put(rec Record) error
+	Put(ctx context.Context, rec R) error
 	// Get 读取一条记录。
-	Get(id uint64) (Record, bool, error)
+	Get(ctx context.Context, id uint64) (R, bool, error)
 	// Delete 删除一条记录；记录不存在不应视为错误。
-	Delete(id uint64) error
+	Delete(ctx context.Context, id uint64) error
 	// Scan 返回 Expire <= before 的记录，按 Expire 升序排列；limit>0 时最多返回 limit 条。
-	Scan(before time.Time, limit int) ([]Record, error)
+	Scan(ctx context.Context, before time.Time, limit int) ([]R, error)
 }
 
-// Handler 是任务的执行逻辑。exec 为计划执行时间，payload 为持久化时写入的业务参数。
+// Handler 是任务的执行逻辑。exec 为计划执行时间，t 为任务记录本身（含 Payload 等字段）。
 //
 // 返回非 nil 表示本次执行失败：调度器会按记录里的重试策略改期重试。
 // Handler 内 panic 也被视为失败（会被捕获并转为 error）。
-type Handler func(id uint64, exec time.Time, payload []byte) error
+type Handler[T Record] func(id uint64, exec time.Time, t T) error
 
 /*
 ========================
@@ -179,50 +184,43 @@ func WithMaxRetryDelay(d time.Duration) PersistOption {
 }
 
 // TaskOption 用于定制单条任务。
-type TaskOption func(*Record)
+type TaskOption[R Record] func(R)
 
 // WithTaskRetry 覆盖该任务的重试策略：失败后最多重试 retries 次，首次间隔 delay。
-func WithTaskRetry(retries int, delay time.Duration) TaskOption {
-	return func(r *Record) {
+func WithTaskRetry[R Record](retries int32, delay time.Duration) TaskOption[R] {
+	return func(r R) {
 		if retries < 0 {
 			retries = 0
 		}
-		r.Retries = retries
+		r.SetRetries(retries)
 		if delay > 0 {
-			r.RetryDelay = delay
+			r.SetRetryDelay(delay)
 		}
 	}
 }
 
 // SetName 修改任务的处理器名（配合 UpdateWith 使用，可把任务换成另一个已注册的处理器）。
-func SetName(name string) TaskOption {
-	return func(r *Record) {
-		r.Name = name
-	}
-}
-
-// SetPayload 修改任务的业务参数（配合 UpdateWith 使用）。传 nil 表示清空。
-func SetPayload(payload []byte) TaskOption {
-	return func(r *Record) {
-		r.Payload = cloneBytes(payload)
+func SetName[R Record](name string) TaskOption[R] {
+	return func(r R) {
+		r.SetName(name)
 	}
 }
 
 // SetRetries 修改任务的剩余重试次数（配合 UpdateWith 使用，可在不改变间隔的前提下增减次数）。
-func SetRetries(n int) TaskOption {
-	return func(r *Record) {
+func SetRetries[R Record](n int32) TaskOption[R] {
+	return func(r R) {
 		if n < 0 {
 			n = 0
 		}
-		r.Retries = n
+		r.SetRetries(n)
 	}
 }
 
 // SetRetryDelay 修改任务的重试间隔（配合 UpdateWith 使用）。
-func SetRetryDelay(d time.Duration) TaskOption {
-	return func(r *Record) {
+func SetRetryDelay[R Record](d time.Duration) TaskOption[R] {
+	return func(r R) {
 		if d > 0 {
-			r.RetryDelay = d
+			r.SetRetryDelay(d)
 		}
 	}
 }
@@ -253,9 +251,11 @@ func cloneBytes(b []byte) []byte {
 // 因此尚未预热进内存的远期任务同样可以被查询和修改。
 //
 // 语义为「至少一次」：若进程在执行完 Handler、删除记录前崩溃，重启后会再次执行。
-type PersistentScheduler struct {
+type PersistentScheduler[R Record] struct {
 	s     *Scheduler
-	store Store
+	store Store[R]
+
+	baseCtx context.Context // 后台扫描/异步执行等无上层请求场景的根 ctx
 
 	poll    time.Duration
 	ahead   time.Duration
@@ -267,7 +267,7 @@ type PersistentScheduler struct {
 	maxWait time.Duration
 
 	mu       sync.RWMutex
-	handlers map[string]Handler
+	handlers map[string]Handler[R]
 	loaded   map[uint64]int64 // id -> 已预热到内存的 expire（UnixNano）
 	running  map[uint64]bool  // 正在执行中的任务，防止轮询重复预热
 
@@ -278,13 +278,19 @@ type PersistentScheduler struct {
 }
 
 // NewPersistentScheduler 创建持久化调度器并启动后台扫描。
-// s 为 nil 时使用 NewScheduler() 的默认配置。
-func NewPersistentScheduler(store Store, s *Scheduler, opts ...PersistOption) *PersistentScheduler {
+//
+//   - s：为 nil 时使用 NewScheduler() 的默认配置。
+//   - baseCtx：后台扫描与异步执行所使用的基础上下文（可为 nil，nil 时用 context.Background()）。
+//     所有存储访问都由此 ctx 派生，取消它将停止后台扫描与后续任务的存储操作。
+func NewPersistentScheduler[R Record](store Store[R], s *Scheduler, baseCtx context.Context, opts ...PersistOption) *PersistentScheduler[R] {
 	if store == nil {
 		panic("htwheel: nil store")
 	}
 	if s == nil {
 		s = NewScheduler()
+	}
+	if baseCtx == nil {
+		baseCtx = context.Background()
 	}
 
 	cfg := defaultPersistConfig()
@@ -292,9 +298,10 @@ func NewPersistentScheduler(store Store, s *Scheduler, opts ...PersistOption) *P
 		o(&cfg)
 	}
 
-	p := &PersistentScheduler{
+	p := &PersistentScheduler[R]{
 		s:        s,
 		store:    store,
+		baseCtx:  baseCtx,
 		poll:     cfg.poll,
 		ahead:    cfg.ahead,
 		batch:    cfg.batch,
@@ -303,7 +310,7 @@ func NewPersistentScheduler(store Store, s *Scheduler, opts ...PersistOption) *P
 		delay:    cfg.delay,
 		backoff:  cfg.backoff,
 		maxWait:  cfg.maxWait,
-		handlers: make(map[string]Handler),
+		handlers: make(map[string]Handler[R]),
 		loaded:   make(map[uint64]int64),
 		running:  make(map[uint64]bool),
 		stopCh:   make(chan struct{}),
@@ -314,60 +321,30 @@ func NewPersistentScheduler(store Store, s *Scheduler, opts ...PersistOption) *P
 }
 
 // Scheduler 返回底层的内存调度器，便于使用 Get/TTL 等内存能力。
-func (p *PersistentScheduler) Scheduler() *Scheduler { return p.s }
+func (p *PersistentScheduler[R]) Scheduler() *Scheduler { return p.s }
 
 // Register 注册处理器。同名重复注册会覆盖。应在任务到期前完成注册。
-func (p *PersistentScheduler) Register(name string, h Handler) {
+func (p *PersistentScheduler[R]) Register(name string, h Handler[R]) {
 	p.mu.Lock()
 	p.handlers[name] = h
 	p.mu.Unlock()
 }
 
-// Schedule 持久化并在 at 时刻执行名为 name 的处理器（同 ID 覆盖），使用默认重试策略。
-func (p *PersistentScheduler) Schedule(id uint64, at time.Time, name string, payload []byte) error {
-	return p.ScheduleWith(id, at, name, payload)
-}
-
-// ScheduleWith 与 Schedule 相同，但可以覆盖重试策略，例如：
-//
-//	p.ScheduleWith(1001, at, "send_email", payload, htwheel.WithTaskRetry(3, 5*time.Second))
-func (p *PersistentScheduler) ScheduleWith(id uint64, at time.Time, name string, payload []byte, opts ...TaskOption) error {
-	if p.closed.Load() {
-		return ErrClosed
-	}
-	rec := Record{
-		ID:         id,
-		Expire:     at,
-		Name:       name,
-		Payload:    payload,
-		Retries:    p.retries,
-		RetryDelay: p.delay,
-	}
-	for _, o := range opts {
-		o(&rec)
-	}
-	if err := p.store.Put(cloneRecord(rec)); err != nil {
-		return err
-	}
-	p.load(rec)
-	return nil
-}
-
-// Upsert 按 ID 新增或整体更新一条任务：可同时改执行时间、处理器名、业务参数与重试策略。
+// Schedule 按 ID 新增或整体更新一条任务：可同时设置执行时间、处理器名、业务参数与重试策略。
 //
 //   - ID 已存在：整体替换为 rec 的内容（语义等同「改」），并把内存里的旧任务同 ID 覆盖；
 //   - ID 不存在：新增一条（语义等同「增」）。
 //
-// 与 ScheduleWith 的区别在于：Upsert 直接用给定的 Record（包含 Name/Payload/Retries/RetryDelay），
-// 不套用全局默认重试策略。传入 nil 的 Payload 表示清空业务参数。
-func (p *PersistentScheduler) Upsert(rec Record) error {
+// Schedule 直接使用给定的 Record（包含 Name/Payload/Retries/RetryDelay），不套用全局默认重试策略；
+// 因此需要调用方自行填充完整的记录字段。传入 nil 的 Payload 表示清空业务参数。
+func (p *PersistentScheduler[R]) Schedule(ctx context.Context, rec R) error {
 	if p.closed.Load() {
 		return ErrClosed
 	}
-	if rec.Name == "" {
+	if rec.GetName() == "" {
 		return fmt.Errorf("htwheel: record name is empty")
 	}
-	if err := p.store.Put(cloneRecord(rec)); err != nil {
+	if err := p.store.Put(ctx, rec); err != nil {
 		return err
 	}
 	p.load(rec)
@@ -375,30 +352,30 @@ func (p *PersistentScheduler) Upsert(rec Record) error {
 }
 
 // Update 修改任务执行时间并保持其余字段（Name/Payload/重试策略）不变。
-func (p *PersistentScheduler) Update(id uint64, at time.Time) error {
-	return p.UpdateWith(id, at)
+func (p *PersistentScheduler[R]) Update(ctx context.Context, id uint64, at time.Time) error {
+	return p.UpdateWith(ctx, id, at)
 }
 
 // UpdateWith 修改任务，可改执行时间、处理器名、业务参数与重试策略。
 //
 // 传入的 TaskOption（如 WithTaskRetry）会应用到记录上；用 SetName/SetPayload
 // 可同时替换处理器名与业务参数。不传选项时仅改期，其余字段保持不变。
-func (p *PersistentScheduler) UpdateWith(id uint64, at time.Time, opts ...TaskOption) error {
+func (p *PersistentScheduler[R]) UpdateWith(ctx context.Context, id uint64, at time.Time, opts ...TaskOption[R]) error {
 	if p.closed.Load() {
 		return ErrClosed
 	}
-	rec, ok, err := p.store.Get(id)
+	rec, ok, err := p.store.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return ErrNotFound
 	}
-	rec.Expire = at
+	rec.SetExpire(at)
 	for _, o := range opts {
-		o(&rec)
+		o(rec)
 	}
-	if err := p.store.Put(rec); err != nil {
+	if err := p.store.Put(ctx, rec); err != nil {
 		return err
 	}
 	// 内存中的旧任务会被同 ID 覆盖；即使已经提交执行，
@@ -408,18 +385,18 @@ func (p *PersistentScheduler) UpdateWith(id uint64, at time.Time, opts ...TaskOp
 }
 
 // Get 从存储层读取任务。
-func (p *PersistentScheduler) Get(id uint64) (Record, bool, error) {
-	return p.store.Get(id)
+func (p *PersistentScheduler[R]) Get(ctx context.Context, id uint64) (R, bool, error) {
+	return p.store.Get(ctx, id)
 }
 
 // TTL 返回距离下一次执行的剩余时间；任务不存在或已到期返回 false。
 // 处于重试等待期的任务，返回的是距下次重试的时间。
-func (p *PersistentScheduler) TTL(id uint64) (time.Duration, bool, error) {
-	rec, ok, err := p.store.Get(id)
+func (p *PersistentScheduler[R]) TTL(ctx context.Context, id uint64) (time.Duration, bool, error) {
+	rec, ok, err := p.store.Get(ctx, id)
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	ttl := time.Until(rec.Expire)
+	ttl := time.Until(rec.GetExpire())
 	if ttl <= 0 {
 		return 0, false, nil
 	}
@@ -428,20 +405,20 @@ func (p *PersistentScheduler) TTL(id uint64) (time.Duration, bool, error) {
 
 // Cancel 取消任务：先从存储层删除，再撤销内存中的调度。
 // 处于重试等待期的任务同样可以取消。
-func (p *PersistentScheduler) Cancel(id uint64) error {
-	return p.remove(id)
+func (p *PersistentScheduler[R]) Cancel(ctx context.Context, id uint64) error {
+	return p.remove(ctx, id)
 }
 
 // Remove 删除任务（Cancel 的别名）。返回 nil 表示删除成功（无论任务是否存在）。
-func (p *PersistentScheduler) Remove(id uint64) error {
-	return p.remove(id)
+func (p *PersistentScheduler[R]) Remove(ctx context.Context, id uint64) error {
+	return p.remove(ctx, id)
 }
 
-func (p *PersistentScheduler) remove(id uint64) error {
+func (p *PersistentScheduler[R]) remove(ctx context.Context, id uint64) error {
 	if p.closed.Load() {
 		return ErrClosed
 	}
-	if err := p.store.Delete(id); err != nil {
+	if err := p.store.Delete(ctx, id); err != nil {
 		return err
 	}
 	p.mu.Lock()
@@ -452,7 +429,7 @@ func (p *PersistentScheduler) remove(id uint64) error {
 }
 
 // Stop 停止后台扫描与内存调度，等待已触发任务执行完毕。可重复调用。
-func (p *PersistentScheduler) Stop() {
+func (p *PersistentScheduler[R]) Stop() {
 	p.stopOnce.Do(func() {
 		p.closed.Store(true)
 		close(p.stopCh)
@@ -467,7 +444,7 @@ func (p *PersistentScheduler) Stop() {
 ========================
 */
 
-func (p *PersistentScheduler) run() {
+func (p *PersistentScheduler[R]) run() {
 	ticker := time.NewTicker(p.poll)
 	defer ticker.Stop()
 	defer close(p.doneCh)
@@ -484,21 +461,20 @@ func (p *PersistentScheduler) run() {
 }
 
 // pollOnce 把即将到期（或已到期）且尚未预热的任务读入内存。
-func (p *PersistentScheduler) pollOnce() {
+func (p *PersistentScheduler[R]) pollOnce() {
 	if p.closed.Load() {
 		return
 	}
-	recs, err := p.store.Scan(time.Now().Add(p.ahead), p.batch)
+	recs, err := p.store.Scan(p.baseCtx, time.Now().Add(p.ahead), p.batch)
 	if err != nil {
 		p.report(err)
 		return
 	}
 	for _, rec := range recs {
-		rec = cloneRecord(rec)
 		p.mu.RLock()
-		exp, ok := p.loaded[rec.ID]
+		exp, ok := p.loaded[rec.GetID()]
 		p.mu.RUnlock()
-		if ok && exp == rec.Expire.UnixNano() {
+		if ok && exp == rec.GetExpire().UnixNano() {
 			continue
 		}
 		p.load(rec)
@@ -506,103 +482,110 @@ func (p *PersistentScheduler) pollOnce() {
 }
 
 // load 把一条记录预热进内存时间轮（同 ID 覆盖）。
-func (p *PersistentScheduler) load(rec Record) {
+func (p *PersistentScheduler[R]) load(rec R) {
 	if p.closed.Load() {
 		return
 	}
-	r := cloneRecord(rec)
+
+	id := rec.GetID()
+	expire := rec.GetExpire()
 
 	p.mu.Lock()
-	p.loaded[r.ID] = r.Expire.UnixNano()
+	p.loaded[id] = expire.UnixNano()
 	p.mu.Unlock()
 
-	ok := p.s.Schedule(r.ID, r.Expire, func(uint64, time.Time) {
-		p.fire(r)
+	ok := p.s.Schedule(id, expire, func(uint64, time.Time) {
+		p.fire(rec)
 	})
 	if !ok {
 		p.mu.Lock()
-		delete(p.loaded, r.ID)
+		delete(p.loaded, id)
 		p.mu.Unlock()
 	}
 }
 
 // fire 在校验存储层状态后执行处理器：成功则删除记录，失败则按重试策略改期。
-func (p *PersistentScheduler) fire(rec Record) {
+func (p *PersistentScheduler[R]) fire(rec R) {
+	id := rec.GetID()
+	expire := rec.GetExpire()
+
 	// 标记运行中：handler 执行期间轮询不会重复预热同一任务。
 	p.mu.Lock()
-	if p.running[rec.ID] {
+	if p.running[id] {
 		p.mu.Unlock()
 		return
 	}
-	p.running[rec.ID] = true
+	p.running[id] = true
 	p.mu.Unlock()
 
-	var retry *Record
+	var retry R
+	hasRetry := false
 	defer func() {
 		p.mu.Lock()
-		delete(p.running, rec.ID)
-		delete(p.loaded, rec.ID)
+		delete(p.running, id)
+		delete(p.loaded, id)
 		p.mu.Unlock()
 		// 重排必须放在清理之后：load 会重新写入 loaded。
-		if retry != nil {
-			p.load(*retry)
+		if hasRetry {
+			p.load(retry)
 		}
 	}()
 
-	cur, ok, err := p.store.Get(rec.ID)
+	cur, ok, err := p.store.Get(p.baseCtx, id)
 	if err != nil {
 		p.report(err)
 		return
 	}
 	// 已被取消：直接跳过。
 	// 已被改期：跳过，由下一次轮询按新时间重新预热。
-	if !ok || !cur.Expire.Equal(rec.Expire) {
+	if !ok || !cur.GetExpire().Equal(expire) {
 		return
 	}
 
 	p.mu.RLock()
-	h := p.handlers[cur.Name]
+	h := p.handlers[cur.GetName()]
 	p.mu.RUnlock()
 	if h == nil {
 		// 处理器尚未注册：保留记录，等待注册后的轮询重试（不消耗重试次数）。
-		p.report(fmt.Errorf("htwheel: handler %q not registered (task %d)", cur.Name, cur.ID))
+		p.report(fmt.Errorf("htwheel: handler %q not registered (task %d)", cur.GetName(), cur.GetID()))
 		return
 	}
 
 	if cause := invoke(h, cur); cause != nil {
 		if next, ok := p.reschedule(cur, cause); ok {
-			retry = &next
+			retry = next
+			hasRetry = true
 		}
 		return
 	}
 
-	if err := p.store.Delete(cur.ID); err != nil {
+	if err := p.store.Delete(p.baseCtx, cur.GetID()); err != nil {
 		p.report(err)
 	}
 }
 
 // reschedule 处理一次执行失败：扣减重试次数并把记录改期到 now+间隔。
 // 返回 false 表示不再重试（记录已删除或已被外部改动）。
-func (p *PersistentScheduler) reschedule(cur Record, cause error) (Record, bool) {
+func (p *PersistentScheduler[R]) reschedule(cur R, cause error) (R, bool) {
 	// 执行期间可能被取消或改期，此时不覆盖外部改动。
-	latest, ok, err := p.store.Get(cur.ID)
+	latest, ok, err := p.store.Get(p.baseCtx, cur.GetID())
 	if err != nil {
 		p.report(err)
-		return Record{}, false
+		return latest, false
 	}
-	if !ok || !latest.Expire.Equal(cur.Expire) {
-		return Record{}, false
+	if !ok || !latest.GetExpire().Equal(cur.GetExpire()) {
+		return latest, false
 	}
 
-	if latest.Retries <= 0 {
-		p.report(fmt.Errorf("htwheel: task %d (%s) failed: %w: %v", latest.ID, latest.Name, ErrRetriesExhausted, cause))
-		if err := p.store.Delete(latest.ID); err != nil {
+	if latest.GetRetries() <= 0 {
+		p.report(fmt.Errorf("htwheel: task %d (%s) failed: %w: %v", latest.GetID(), latest.GetName(), ErrRetriesExhausted, cause))
+		if err := p.store.Delete(p.baseCtx, latest.GetID()); err != nil {
 			p.report(err)
 		}
-		return Record{}, false
+		return latest, false
 	}
 
-	delay := latest.RetryDelay
+	delay := latest.GetRetryDelay()
 	if delay <= 0 {
 		delay = p.delay
 	}
@@ -613,22 +596,22 @@ func (p *PersistentScheduler) reschedule(cur Record, cause error) (Record, bool)
 		delay = p.maxWait
 	}
 
-	latest.Retries--
-	latest.Expire = time.Now().Add(delay)
-	latest.RetryDelay = p.nextDelay(delay)
+	latest.SetRetries(latest.GetRetries() - 1)
+	latest.SetExpire(time.Now().Add(delay))
+	latest.SetRetryDelay(p.nextDelay(delay))
 
 	p.report(fmt.Errorf("htwheel: task %d (%s) failed, retry in %s (%d left): %v",
-		latest.ID, latest.Name, delay, latest.Retries, cause))
+		latest.GetID(), latest.GetName(), delay, latest.GetRetries(), cause))
 
-	if err := p.store.Put(cloneRecord(latest)); err != nil {
+	if err := p.store.Put(p.baseCtx, latest); err != nil {
 		p.report(err)
-		return Record{}, false
+		return latest, false
 	}
 	return latest, true
 }
 
 // nextDelay 计算下一次重试的间隔；backoff <= 1 时为固定间隔。
-func (p *PersistentScheduler) nextDelay(cur time.Duration) time.Duration {
+func (p *PersistentScheduler[R]) nextDelay(cur time.Duration) time.Duration {
 	if p.backoff <= 1 {
 		return cur
 	}
@@ -648,22 +631,17 @@ func (p *PersistentScheduler) nextDelay(cur time.Duration) time.Duration {
 }
 
 // invoke 执行处理器并把 panic 转成 error，使 panic 也能走重试流程。
-func invoke(h Handler, rec Record) (err error) {
+func invoke[R Record](h Handler[R], rec R) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
-	return h(rec.ID, rec.Expire, rec.Payload)
+	return h(rec.GetID(), rec.GetExpire(), rec)
 }
 
-func (p *PersistentScheduler) report(err error) {
+func (p *PersistentScheduler[R]) report(err error) {
 	if err != nil && p.onErr != nil {
 		p.onErr(err)
 	}
-}
-
-func cloneRecord(r Record) Record {
-	r.Payload = cloneBytes(r.Payload)
-	return r
 }
