@@ -615,7 +615,7 @@ func (s *Scheduler[P]) get(id uint64) (*Task[P], error) {
 	}
 	// 内存中没有时，回退到存储层查询（例如重启前遗留、尚未被 Load 拉回的任务）。
 	if s.store != nil {
-		if p, exp, ok := s.store.Get(id); ok {
+		if p, exp, err := s.store.Get(id); err == nil {
 			return &Task[P]{id: id, expire: exp.UnixNano(), param: p, persist: true, name: p.Name()}, nil
 		}
 	}
@@ -684,7 +684,9 @@ func (s *Scheduler[P]) add(task *Task[P], now int64) {
 	if persist {
 		t := time.Unix(0, task.expire)
 		if existed {
-			s.store.Update(task.id, t, task.param)
+			if err := s.store.Update(task.id, t, task.param); err != nil {
+				s.report(err)
+			}
 		} else if err := s.store.Add(task.id, t, task.param); err != nil {
 			s.report(err)
 		}
@@ -707,13 +709,15 @@ func (s *Scheduler[P]) cancel(id uint64) error {
 			delete(s.sunk, id)
 			atomic.StoreInt32(&t.canceled, 1)
 			if s.store != nil {
-				s.store.Remove(id)
+				if err := s.store.Remove(id); err != nil {
+					s.report(err)
+				}
 			}
 			return nil
 		}
 		// 也不在下沉索引：尝试从存储移除（可能是重启前遗留的持久化任务）。
 		if s.store != nil {
-			if s.store.Remove(id) {
+			if err := s.store.Remove(id); err == nil {
 				return nil
 			}
 		}
@@ -727,7 +731,9 @@ func (s *Scheduler[P]) cancel(id uint64) error {
 	delete(s.index, id)
 	// 命中且该任务曾持久化时，同步移除存储记录。
 	if hit && t.persist && s.store != nil {
-		s.store.Remove(id)
+		if err := s.store.Remove(id); err != nil {
+			s.report(err)
+		}
 	}
 	if !hit {
 		return ErrNotFound
@@ -857,7 +863,9 @@ func (s *Scheduler[P]) finish(id uint64) {
 	if s.store == nil {
 		return
 	}
-	s.store.Remove(id)
+	if err := s.store.Remove(id); err != nil {
+		s.report(err)
+	}
 	s.deleteLoaded(id)
 }
 

@@ -193,30 +193,36 @@ type memStore struct {
 	items map[uint64]recoverable
 }
 
+// errStoreNotFound 表示存储中不存在该记录。
+var errStoreNotFound = errors.New("store: not found")
+
 func newMemStore() *memStore { return &memStore{items: map[uint64]recoverable{}} }
 func (m *memStore) Add(id uint64, t time.Time, task recoverable) error {
+	task.expire = t
 	m.items[id] = task
 	return nil
 }
-func (m *memStore) Remove(id uint64) bool {
-	_, ok := m.items[id]
+func (m *memStore) Remove(id uint64) error {
+	if _, ok := m.items[id]; !ok {
+		return errStoreNotFound
+	}
 	delete(m.items, id)
-	return ok
+	return nil
 }
-func (m *memStore) Get(id uint64) (recoverable, time.Time, bool) {
+func (m *memStore) Get(id uint64) (recoverable, time.Time, error) {
 	r, ok := m.items[id]
 	if !ok {
-		return recoverable{}, time.Time{}, false
+		return recoverable{}, time.Time{}, errStoreNotFound
 	}
-	return r, r.expire, true
+	return r, r.expire, nil
 }
-func (m *memStore) Update(id uint64, t time.Time, task recoverable) bool {
+func (m *memStore) Update(id uint64, t time.Time, task recoverable) error {
 	if _, ok := m.items[id]; !ok {
-		return false
+		return errStoreNotFound
 	}
 	task.expire = t
 	m.items[id] = task
-	return true
+	return nil
 }
 func (m *memStore) Load(before time.Time, limit int) ([]recoverable, error) {
 	var out []recoverable
@@ -272,12 +278,12 @@ func TestSchedulePersists(t *testing.T) {
 	// 等任务入轮（持久化 Add 被调用）。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, _, ok := st.Get(1); ok {
+		if _, _, err := st.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if _, _, ok := st.Get(1); !ok {
+	if _, _, err := st.Get(1); err != nil {
 		t.Fatal("expected store.Add to be called after schedule")
 	}
 
@@ -287,12 +293,12 @@ func TestSchedulePersists(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	for time.Now().Before(deadline) {
-		if _, _, ok := st.Get(1); !ok {
+		if _, _, err := st.Get(1); err != nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if _, _, ok := st.Get(1); ok {
+	if _, _, err := st.Get(1); err == nil {
 		t.Fatal("expected store.Remove to be called after execution completes")
 	}
 }
@@ -311,7 +317,7 @@ func TestCancelPersistedTaskRemoves(t *testing.T) {
 	// 等入轮（Add 生效）。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, _, ok := st.Get(1); ok {
+		if _, _, err := st.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -319,7 +325,7 @@ func TestCancelPersistedTaskRemoves(t *testing.T) {
 	if err := s.Cancel(1); err != nil {
 		t.Fatalf("cancel should hit, got %v", err)
 	}
-	if _, _, ok := st.Get(1); ok {
+	if _, _, err := st.Get(1); err == nil {
 		t.Fatal("expected store.Remove to be called after cancel")
 	}
 }
@@ -348,13 +354,13 @@ func TestFarTaskSinksToStore(t *testing.T) {
 	// 等 add 处理完。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, _, ok := st.Get(1); ok {
+		if _, _, err := st.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	// 1) 存储里有（Add 被调用）。
-	if _, _, ok := st.Get(1); !ok {
+	if _, _, err := st.Get(1); err != nil {
 		t.Fatal("far task should be persisted to store")
 	}
 	// 2) 任务可查询（已下沉到 sunk 索引）。

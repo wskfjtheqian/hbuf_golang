@@ -39,11 +39,11 @@ type Store[P Recoverable] interface {
 	// Add 添加
 	Add(id uint64, t time.Time, task P) error
 	// Remove 移除
-	Remove(id uint64) bool
+	Remove(id uint64) error
 	// Update 更新
-	Update(id uint64, t time.Time, task P) bool
+	Update(id uint64, t time.Time, task P) error
 	// Get 获取
-	Get(id uint64) (P, time.Time, bool)
+	Get(id uint64) (P, time.Time, error)
 	// Load 加载
 	Load(before time.Time, limit int) ([]P, error)
 }
