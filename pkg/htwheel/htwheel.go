@@ -13,6 +13,17 @@ import (
 // 「本次失败仍会重试」与「重试已用完、任务被丢弃」。
 var ErrRetriesExhausted = errors.New("htwheel: retries exhausted")
 
+// ErrStopped 表示调度器已停止，无法再接收/操作任务。
+var ErrStopped = errors.New("htwheel: scheduler stopped")
+
+// ErrNotFound 表示任务不存在（Get/TTL/Update/Cancel 未命中）。
+var ErrNotFound = errors.New("htwheel: task not found")
+
+// ErrNilTask 表示传入的任务为 nil。
+var ErrNilTask = errors.New("htwheel: nil task")
+
+type Handler[P Recoverable] func(id uint64, name string, execTime time.Time, param P) error
+
 /*
 ========================
    Task
@@ -23,18 +34,31 @@ var ErrRetriesExhausted = errors.New("htwheel: retries exhausted")
 // 因此外部通过 Expire 读取是安全的。
 type Task[P Recoverable] struct {
 	id       uint64
-	fn       func(uint64, time.Time)
 	expire   int64 // 计划执行时间（UnixNano）
 	canceled int32
 	retries  int           // 剩余可重试次数（默认 0，即不重试）。
 	delay    time.Duration // 重试间隔。
 	param    P             // 参数
 	persist  bool          // 是否持久化到 Store（由 ScheduleWithParam / load 置位）。
+	name     string        // 任务名称
 }
 
 // Expire 返回计划执行时间（纳秒）。
 // 使用指针接收者，避免复制含 atomic 字段的结构体。
 func (t *Task[P]) Expire() int64 { return t.expire }
+
+// WithTaskRetry 覆盖单条任务的重试策略：失败后最多重试 retries 次，每次间隔 delay。
+// 需配合 ScheduleTask 使用（先构造 Task 再传入）。
+func (t *Task[P]) WithTaskRetry(retries int, delay time.Duration) *Task[P] {
+	if retries < 0 {
+		retries = 0
+	}
+	t.retries = retries
+	if delay > 0 {
+		t.delay = delay
+	}
+	return t
+}
 
 /*
 ========================
@@ -311,7 +335,8 @@ type Scheduler[P Recoverable] struct {
 
 	// loaded 记录已从存储加载过、且到期时间未变的任务 id -> expire，
 	// 用于在轮询加载时去重，避免重复入轮。
-	loaded map[uint64]int64
+	loaded  map[uint64]int64
+	handler Handler[P]
 }
 
 type addReq[P Recoverable] struct{ task *Task[P] }
@@ -323,28 +348,29 @@ type getReq[P Recoverable] struct {
 
 type getResp[P Recoverable] struct {
 	task *Task[P]
-	ok   bool
+	err  error
 }
 
 type updReq struct {
 	id     uint64
 	expire int64
-	resp   chan bool
+	resp   chan error
 }
 
 type cancelReq struct {
 	id   uint64
-	resp chan bool
+	resp chan error
 }
 
 // NewScheduler 创建并启动一个调度器。
-func NewScheduler[P Recoverable](opts ...Option[P]) *Scheduler[P] {
+func NewScheduler[P Recoverable](handler Handler[P], opts ...Option[P]) *Scheduler[P] {
 	cfg := defaultConfig[P]()
 	for _, o := range opts {
 		o(&cfg)
 	}
 
 	s := &Scheduler[P]{
+		handler:  handler,
 		store:    cfg.store,
 		tick:     cfg.tick,
 		poll:     cfg.poll,
@@ -390,8 +416,8 @@ func (s *Scheduler[P]) loop() {
 		case req := <-s.cancelCh:
 			req.resp <- s.cancel(req.id)
 		case req := <-s.getCh:
-			t, ok := s.get(req.id)
-			req.resp <- getResp[P]{task: t, ok: ok}
+			t, err := s.get(req.id)
+			req.resp <- getResp[P]{task: t, err: err}
 		case req := <-s.updCh:
 			req.resp <- s.update(req.id, req.expire)
 		case id := <-s.finishCh:
@@ -410,21 +436,34 @@ func (s *Scheduler[P]) loop() {
 ========================
 */
 
-// Schedule 在 t 时刻执行 fn（同 id 覆盖旧任务）。返回 false 表示调度器已停止。
+// Schedule 在 t 时刻执行任务（同 id 覆盖旧任务）。返回错误表示调度器已停止。
 //
-// 入轮是异步的：返回 true 仅代表命令已投递，若要确认任务已可查询请用 Get 轮询。
-func (s *Scheduler[P]) Schedule(id uint64, t time.Time, fn func(uint64, time.Time)) bool {
-	if fn == nil || s.stopped.Load() {
-		return false
+// 入轮是异步的：返回 nil 仅代表命令已投递，若要确认任务已可查询请用 Get 轮询。
+// 配置了 Store 时任务会自动持久化；p 需实现 Recoverable，重启后可经 Store.Load 恢复。
+func (s *Scheduler[P]) Schedule(id uint64, name string, t time.Time, p P) error {
+	if s.stopped.Load() {
+		return ErrStopped
 	}
-	task := &Task[P]{id: id, fn: fn, expire: t.UnixNano()}
+	task := &Task[P]{
+		id:      id,
+		expire:  t.UnixNano(),
+		name:    name,
+		param:   p,
+		persist: s.store != nil,
+		retries: s.retries,
+		delay:   s.delay,
+	}
 	return s.ScheduleTask(task)
 }
 
-// ScheduleTask 提交一条已构造好的任务（可携带单条任务的重试策略）。返回 false 表示调度器已停止。
-func (s *Scheduler[P]) ScheduleTask(task *Task[P]) bool {
-	if task == nil || task.fn == nil || s.stopped.Load() {
-		return false
+// ScheduleTask 提交一条已构造好的任务（可携带单条任务的重试策略）。
+// task 为 nil 时返回 ErrNilTask，调度器已停止时返回 ErrStopped。
+func (s *Scheduler[P]) ScheduleTask(task *Task[P]) error {
+	if task == nil {
+		return ErrNilTask
+	}
+	if s.stopped.Load() {
+		return ErrStopped
 	}
 	// 未显式指定重试时，套用默认重试策略。
 	if task.retries == 0 && s.retries > 0 {
@@ -433,106 +472,81 @@ func (s *Scheduler[P]) ScheduleTask(task *Task[P]) bool {
 	}
 	select {
 	case s.addCh <- addReq[P]{task: task}:
-		return true
+		return nil
 	case <-s.stopCh:
-		return false
+		return ErrStopped
 	}
 }
 
-// ScheduleWithParam 与 Schedule 相同，但额外携带参数 p 并持久化到 Store（若已配置）。
-// p 需实现 Recoverable，重启后可经 Store.Load 恢复并重建回调执行。
-// 未配置 Store 时退化为普通 Schedule。
-func (s *Scheduler[P]) ScheduleWithParam(id uint64, t time.Time, fn func(uint64, time.Time), p P) bool {
-	if fn == nil || s.stopped.Load() {
-		return false
-	}
-	task := &Task[P]{id: id, fn: fn, expire: t.UnixNano(), param: p, persist: s.store != nil}
-	return s.ScheduleTask(task)
-}
-
-// WithTaskRetry 覆盖单条任务的重试策略：失败后最多重试 retries 次，每次间隔 delay。
-// 需配合 ScheduleTask 使用（先构造 Task 再传入）。
-func (t *Task[P]) WithTaskRetry(retries int, delay time.Duration) *Task[P] {
-	if retries < 0 {
-		retries = 0
-	}
-	t.retries = retries
-	if delay > 0 {
-		t.delay = delay
-	}
-	return t
-}
-
-// Update 修改已有任务的执行时间（保持原回调）。任务不存在或调度器已停止时返回 false。
-// 对已下沉到存储的远任务同样生效：更新后若新时间仍很远则继续下沉，
-// 否则拉回内存时间轮。
-func (s *Scheduler[P]) Update(id uint64, t time.Time) bool {
-	resp := make(chan bool, 1)
+// Update 修改已有任务的执行时间（保持原回调）。任务不存在返回 ErrNotFound，
+// 调度器已停止返回 ErrStopped。对已下沉到存储的远任务同样生效。
+func (s *Scheduler[P]) Update(id uint64, t time.Time) error {
+	resp := make(chan error, 1)
 	if !s.sendUpd(updReq{id: id, expire: t.UnixNano(), resp: resp}) {
-		return false
+		return ErrStopped
 	}
 	select {
-	case ok := <-resp:
-		return ok
+	case err := <-resp:
+		return err
 	case <-s.doneCh:
 		select {
-		case ok := <-resp:
-			return ok
+		case err := <-resp:
+			return err
 		default:
-			return false
+			return ErrStopped
 		}
 	}
 }
 
-// Get 查询任务快照（只读，返回的 *Task 不可改）。
-// 已下沉到存储的远任务同样可查询（保留其 id/expire/回调等元信息）。
-func (s *Scheduler[P]) Get(id uint64) (*Task[P], bool) {
+// Get 查询任务快照（只读，返回的 *Task 不可改）。任务不存在返回 ErrNotFound，
+// 调度器已停止返回 ErrStopped。已下沉到存储的远任务同样可查询。
+func (s *Scheduler[P]) Get(id uint64) (*Task[P], error) {
 	resp := make(chan getResp[P], 1)
 	if !s.sendGet(getReq[P]{id: id, resp: resp}) {
-		return nil, false
+		return nil, ErrStopped
 	}
 	select {
 	case r := <-resp:
-		return r.task, r.ok
+		return r.task, r.err
 	case <-s.doneCh:
 		select {
 		case r := <-resp:
-			return r.task, r.ok
+			return r.task, r.err
 		default:
-			return nil, false
+			return nil, ErrStopped
 		}
 	}
 }
 
-// TTL 返回剩余时间；任务不存在或已到期返回 false。
-func (s *Scheduler[P]) TTL(id uint64) (time.Duration, bool) {
-	task, ok := s.Get(id)
-	if !ok {
-		return 0, false
+// TTL 返回剩余时间；任务不存在返回 ErrNotFound，已到期或已停止返回相应错误。
+func (s *Scheduler[P]) TTL(id uint64) (time.Duration, error) {
+	task, err := s.Get(id)
+	if err != nil {
+		return 0, err
 	}
 	ttl := time.Until(time.Unix(0, task.expire))
 	if ttl <= 0 {
-		return 0, false
+		return 0, ErrNotFound
 	}
-	return ttl, true
+	return ttl, nil
 }
 
-// Cancel 取消任务并返回是否命中。已进入执行队列的任务会在真正运行前
-// 再次检查取消标记（尽力而为）。
-func (s *Scheduler[P]) Cancel(id uint64) bool {
-	resp := make(chan bool, 1)
+// Cancel 取消任务。任务不存在返回 ErrNotFound，调度器已停止返回 ErrStopped。
+// 已进入执行队列的任务会在真正运行前再次检查取消标记（尽力而为）。
+func (s *Scheduler[P]) Cancel(id uint64) error {
+	resp := make(chan error, 1)
 	if !s.sendCancel(cancelReq{id: id, resp: resp}) {
-		return false
+		return ErrStopped
 	}
 	select {
-	case ok := <-resp:
-		return ok
+	case err := <-resp:
+		return err
 	case <-s.doneCh:
 		select {
-		case ok := <-resp:
-			return ok
+		case err := <-resp:
+			return err
 		default:
-			return false
+			return ErrStopped
 		}
 	}
 }
@@ -589,61 +603,60 @@ func (s *Scheduler[P]) sendUpd(req updReq) bool {
 	}
 }
 
-func (s *Scheduler[P]) get(id uint64) (*Task[P], bool) {
+func (s *Scheduler[P]) get(id uint64) (*Task[P], error) {
 	if b, ok := s.index[id]; ok {
 		if t, ok := b.tasks[id]; ok {
-			return t, true
+			return t, nil
 		}
 	}
 	// 下沉到存储的远任务也能查到（保留 id/expire/fn 等元信息）。
 	if t, ok := s.sunk[id]; ok {
-		return t, true
+		return t, nil
 	}
 	// 内存中没有时，回退到存储层查询（例如重启前遗留、尚未被 Load 拉回的任务）。
 	if s.store != nil {
 		if p, exp, ok := s.store.Get(id); ok {
-			// 用 P 自身重建回调；Recover 返回 nil 时无法执行，仍返回任务元信息。
-			return &Task[P]{id: id, fn: p.Recover(), expire: exp.UnixNano(), param: p, persist: true}, true
+			return &Task[P]{id: id, expire: exp.UnixNano(), param: p, persist: true, name: p.Name()}, nil
 		}
 	}
-	return nil, false
+	return nil, ErrNotFound
 }
 
-func (s *Scheduler[P]) update(id uint64, expire int64) bool {
-	t, ok := s.get(id)
-	if !ok {
+func (s *Scheduler[P]) update(id uint64, expire int64) error {
+	t, err := s.get(id)
+	if err != nil {
 		// 不在内存轮：查下沉索引，仍可更新（保留原回调与参数）。
 		if st, sunk := s.sunk[id]; sunk {
 			// 已取消的下沉任务不应被更新复活。
 			if atomic.LoadInt32(&st.canceled) == 1 {
-				return false
+				return ErrNotFound
 			}
 			s.add(&Task[P]{
 				id:      id,
-				fn:      st.fn,
 				expire:  expire,
 				param:   st.param,
 				persist: st.persist,
 				retries: st.retries,
 				delay:   st.delay,
+				name:    st.name,
 			}, time.Now().UnixNano())
-			return true
+			return nil
 		}
-		return false
+		return ErrNotFound
 	}
 	// 复用原回调与参数，通过 add 完成覆盖语义（旧条目会被标记取消，
 	// 持久化任务会经 add 自动调用 Store.Add/Update 完成更新；若新时间仍很远，
 	// add 会继续将其下沉到存储）。
 	s.add(&Task[P]{
 		id:      id,
-		fn:      t.fn,
 		expire:  expire,
 		param:   t.param,
 		persist: t.persist,
 		retries: t.retries,
 		delay:   t.delay,
+		name:    t.name,
 	}, time.Now().UnixNano())
-	return true
+	return nil
 }
 
 // add 负责覆盖旧任务并把新任务放到合适的层级。
@@ -686,7 +699,7 @@ func (s *Scheduler[P]) add(task *Task[P], now int64) {
 	s.place(task, now)
 }
 
-func (s *Scheduler[P]) cancel(id uint64) bool {
+func (s *Scheduler[P]) cancel(id uint64) error {
 	b, ok := s.index[id]
 	if !ok {
 		// 不在内存轮：可能是已下沉到存储的远任务。
@@ -696,13 +709,15 @@ func (s *Scheduler[P]) cancel(id uint64) bool {
 			if s.store != nil {
 				s.store.Remove(id)
 			}
-			return true
+			return nil
 		}
 		// 也不在下沉索引：尝试从存储移除（可能是重启前遗留的持久化任务）。
 		if s.store != nil {
-			return s.store.Remove(id)
+			if s.store.Remove(id) {
+				return nil
+			}
 		}
-		return false
+		return ErrNotFound
 	}
 	t, hit := b.tasks[id]
 	if hit {
@@ -714,7 +729,10 @@ func (s *Scheduler[P]) cancel(id uint64) bool {
 	if hit && t.persist && s.store != nil {
 		s.store.Remove(id)
 	}
-	return hit
+	if !hit {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // place 把任务放进「能装下它的最细一层」；已经到期则立即提交执行。
@@ -795,31 +813,34 @@ func (s *Scheduler[P]) advance(i int, now int64) {
 func (s *Scheduler[P]) submit(task *Task[P]) {
 	execTime := time.Unix(0, task.expire)
 	id := task.id
-	fn := task.fn
 	// 提交时再查一次取消标记，缩小「已取消仍执行」的窗口。
 	s.wp.Submit(func() {
 		if atomic.LoadInt32(&task.canceled) == 1 {
 			return
 		}
-		s.execTask(task, id, execTime, fn)
+		s.execTask(task, id, execTime)
 	})
 }
 
-// execTask 真正执行一次任务；panic 被捕获后走重试流程。
+// execTask 真正执行一次任务；handler 返回 error 或发生 panic 都会走重试流程。
 // 它运行在 worker 协程内，重试会重新入轮（走 addCh），由驱动协程串行处理。
-func (s *Scheduler[P]) execTask(task *Task[P], id uint64, execTime time.Time, fn func(uint64, time.Time)) {
-	panicked := false
+func (s *Scheduler[P]) execTask(task *Task[P], id uint64, execTime time.Time) {
+	failed := false
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				panicked = true
-				s.onTaskPanic(task, id, execTime, fn, r)
+				failed = true
+				s.onTaskPanic(task, id)
 			}
 		}()
-		fn(id, execTime)
+		// handler 返回 error 等价于失败，触发重试。
+		if err := s.handler(id, task.name, execTime, task.param); err != nil {
+			failed = true
+			s.onTaskPanic(task, id)
+		}
 	}()
-	// 执行成功（未 panic）时，通知驱动协程清理持久化记录。
-	if !panicked && task.persist {
+	// 执行成功（未失败）时，通知驱动协程清理持久化记录。
+	if !failed && task.persist {
 		s.notifyFinish(id)
 	}
 }
@@ -846,7 +867,7 @@ func (s *Scheduler[P]) deleteLoaded(id uint64) {
 }
 
 // onTaskPanic 在回调 panic 后决定重试或放弃。
-func (s *Scheduler[P]) onTaskPanic(task *Task[P], id uint64, execTime time.Time, fn func(uint64, time.Time), r any) {
+func (s *Scheduler[P]) onTaskPanic(task *Task[P], id uint64) {
 	if atomic.LoadInt32(&task.canceled) == 1 {
 		return
 	}
@@ -858,12 +879,12 @@ func (s *Scheduler[P]) onTaskPanic(task *Task[P], id uint64, execTime time.Time,
 		}
 		next := &Task[P]{
 			id:      id,
-			fn:      fn,
 			expire:  time.Now().Add(delay).UnixNano(),
 			retries: task.retries,
 			delay:   task.delay,
 			param:   task.param,
 			persist: task.persist,
+			name:    task.name,
 		}
 		// 重新入轮；调度器停止时直接放弃。
 		select {
@@ -925,15 +946,13 @@ func (s *Scheduler[P]) load(rec P) {
 		return
 	}
 
-	fn := rec.Recover()
-	if fn == nil {
-		// 不可重放，跳过执行但仍记录，避免下次再尝试。
-		s.loaded[id] = exp
-		return
-	}
-
 	s.loaded[id] = exp
-	s.add(&Task[P]{id: id, fn: fn, expire: exp, param: rec, persist: true}, time.Now().UnixNano())
+	s.add(&Task[P]{id: id,
+		expire:  exp,
+		param:   rec,
+		persist: true,
+		name:    rec.Name(),
+	}, time.Now().UnixNano())
 }
 
 // report 上报存储层/处理器错误；未设置 onErr 时静默忽略。

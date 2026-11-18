@@ -7,16 +7,33 @@ import (
 	"time"
 )
 
+// recoverable 是实现了 Recoverable 的参数类型，用于测试存储恢复。
+type recoverable struct {
+	id     uint64
+	expire time.Time
+	fired  *atomic.Int32
+	name   string
+}
+
+func (r recoverable) ID() uint64        { return r.id }
+func (r recoverable) Expire() time.Time { return r.expire }
+func (r recoverable) Name() string      { return r.name }
+
+// handler 根据 param 触发计数，用于测试。
+func countingHandler(id uint64, name string, execTime time.Time, p recoverable) error {
+	if p.fired != nil {
+		p.fired.Add(1)
+	}
+	return nil
+}
+
 func TestScheduleAndFire(t *testing.T) {
-	s := NewScheduler[recoverable](WithTick[recoverable](10 * time.Millisecond))
+	var n atomic.Int32
+	s := NewScheduler[recoverable](countingHandler, WithTick[recoverable](10*time.Millisecond))
 	defer s.Stop()
 
-	var n atomic.Int32
-	ok := s.Schedule(1, time.Now().Add(50*time.Millisecond), func(id uint64, at time.Time) {
-		n.Add(1)
-	})
-	if !ok {
-		t.Fatal("schedule should succeed")
+	if err := s.Schedule(1, "task", time.Now().Add(50*time.Millisecond), recoverable{fired: &n}); err != nil {
+		t.Fatalf("schedule should succeed, got %v", err)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -29,12 +46,23 @@ func TestScheduleAndFire(t *testing.T) {
 }
 
 func TestScheduleOverwrite(t *testing.T) {
-	s := NewScheduler[recoverable](WithTick[recoverable](10 * time.Millisecond))
+	var a, b atomic.Int32
+	s := NewScheduler[recoverable](
+		func(id uint64, name string, execTime time.Time, p recoverable) error {
+			// 依据 name 区分新旧任务。
+			if name == "old" {
+				a.Add(1)
+			} else {
+				b.Add(1)
+			}
+			return nil
+		},
+		WithTick[recoverable](10*time.Millisecond),
+	)
 	defer s.Stop()
 
-	var a, b atomic.Int32
-	s.Schedule(1, time.Now().Add(50*time.Millisecond), func(id uint64, at time.Time) { a.Add(1) })
-	s.Schedule(1, time.Now().Add(50*time.Millisecond), func(id uint64, at time.Time) { b.Add(1) })
+	s.Schedule(1, "old", time.Now().Add(50*time.Millisecond), recoverable{})
+	s.Schedule(1, "new", time.Now().Add(50*time.Millisecond), recoverable{})
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) && b.Load() == 0 {
@@ -49,23 +77,23 @@ func TestScheduleOverwrite(t *testing.T) {
 }
 
 func TestCancel(t *testing.T) {
-	s := NewScheduler[recoverable](WithTick[recoverable](10 * time.Millisecond))
+	var n atomic.Int32
+	s := NewScheduler[recoverable](countingHandler, WithTick[recoverable](10*time.Millisecond))
 	defer s.Stop()
 
-	var n atomic.Int32
-	s.Schedule(1, time.Now().Add(30*time.Millisecond), func(id uint64, at time.Time) { n.Add(1) })
+	s.Schedule(1, "task", time.Now().Add(30*time.Millisecond), recoverable{fired: &n})
 
 	// Schedule 是异步的，先等任务入轮（可查询）再取消，避免竞态。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok := s.Get(1); ok {
+		if _, err := s.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	if !s.Cancel(1) {
-		t.Fatal("cancel should hit")
+	if err := s.Cancel(1); err != nil {
+		t.Fatalf("cancel should hit, got %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if n.Load() != 0 {
@@ -74,44 +102,45 @@ func TestCancel(t *testing.T) {
 }
 
 func TestGetTTL(t *testing.T) {
-	s := NewScheduler[recoverable](WithTick[recoverable](10 * time.Millisecond))
+	s := NewScheduler[recoverable](countingHandler, WithTick[recoverable](10*time.Millisecond))
 	defer s.Stop()
 
-	s.Schedule(1, time.Now().Add(time.Second), func(id uint64, at time.Time) {})
+	s.Schedule(1, "task", time.Now().Add(time.Second), recoverable{})
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok := s.Get(1); ok {
+		if _, err := s.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	ttl, ok := s.TTL(1)
-	if !ok || ttl <= 0 || ttl > time.Second {
-		t.Fatalf("unexpected ttl: %v ok=%v", ttl, ok)
+	ttl, err := s.TTL(1)
+	if err != nil || ttl <= 0 || ttl > time.Second {
+		t.Fatalf("unexpected ttl: %v err=%v", ttl, err)
 	}
 }
 
-func TestRetryOnPanic(t *testing.T) {
+func TestRetryOnError(t *testing.T) {
 	var errs atomic.Int32
+	var n atomic.Int32
 	s := NewScheduler[recoverable](
+		func(id uint64, name string, execTime time.Time, p recoverable) error {
+			if n.Add(1) < 2 {
+				return errors.New("boom")
+			}
+			return nil
+		},
 		WithTick[recoverable](10*time.Millisecond),
 		WithErrorHandler[recoverable](func(err error) { errs.Add(1) }),
 	)
 	defer s.Stop()
 
-	var n atomic.Int32
 	task := &Task[recoverable]{
 		id:     1,
 		expire: time.Now().Add(20 * time.Millisecond).UnixNano(),
-		fn: func(id uint64, at time.Time) {
-			if n.Add(1) < 2 {
-				panic("boom")
-			}
-		},
 	}
 	task.WithTaskRetry(3, 10*time.Millisecond)
-	if !s.ScheduleTask(task) {
-		t.Fatal("schedule task should succeed")
+	if err := s.ScheduleTask(task); err != nil {
+		t.Fatalf("schedule task should succeed, got %v", err)
 	}
 
 	deadline := time.Now().Add(3 * time.Second)
@@ -119,13 +148,16 @@ func TestRetryOnPanic(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	if n.Load() != 2 {
-		t.Fatalf("expected 2 invocations (1 panic + 1 retry), got %d", n.Load())
+		t.Fatalf("expected 2 invocations (1 error + 1 retry), got %d", n.Load())
 	}
 }
 
 func TestRetryExhausted(t *testing.T) {
 	var gotErr error
 	s := NewScheduler[recoverable](
+		func(id uint64, name string, execTime time.Time, p recoverable) error {
+			return errors.New("always")
+		},
 		WithTick[recoverable](10*time.Millisecond),
 		WithErrorHandler[recoverable](func(err error) { gotErr = err }),
 	)
@@ -134,7 +166,6 @@ func TestRetryExhausted(t *testing.T) {
 	task := &Task[recoverable]{
 		id:     1,
 		expire: time.Now().Add(20 * time.Millisecond).UnixNano(),
-		fn:     func(id uint64, at time.Time) { panic("always") },
 	}
 	task.WithTaskRetry(1, 10*time.Millisecond)
 	s.ScheduleTask(task)
@@ -148,17 +179,13 @@ func TestRetryExhausted(t *testing.T) {
 	}
 }
 
-// recoverable 是实现了 Recoverable 的参数类型，用于测试存储恢复。
-type recoverable struct {
-	id     uint64
-	expire time.Time
-	fired  *atomic.Int32
-}
+func TestScheduleTaskNil(t *testing.T) {
+	s := NewScheduler[recoverable](countingHandler, WithTick[recoverable](10*time.Millisecond))
+	defer s.Stop()
 
-func (r recoverable) ID() uint64        { return r.id }
-func (r recoverable) Expire() time.Time { return r.expire }
-func (r recoverable) Recover() func(uint64, time.Time) {
-	return func(id uint64, at time.Time) { r.fired.Add(1) }
+	if err := s.ScheduleTask(nil); !errors.Is(err, ErrNilTask) {
+		t.Fatalf("expected ErrNilTask, got %v", err)
+	}
 }
 
 // memStore 是内存实现的 Store（值类型 P），用于测试。
@@ -210,6 +237,7 @@ func TestStoreRecovery(t *testing.T) {
 	st.Add(1, time.Now().Add(30*time.Millisecond), recoverable{id: 1, fired: &fired})
 
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 		WithPollInterval[recoverable](20*time.Millisecond),
@@ -225,22 +253,20 @@ func TestStoreRecovery(t *testing.T) {
 	}
 }
 
-func TestScheduleWithParamPersists(t *testing.T) {
+func TestSchedulePersists(t *testing.T) {
 	var fired atomic.Int32
 	st := newMemStore()
 
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 	)
 	defer s.Stop()
 
 	p := recoverable{id: 1, fired: &fired}
-	ok := s.ScheduleWithParam(1, time.Now().Add(40*time.Millisecond), func(id uint64, at time.Time) {
-		fired.Add(1)
-	}, p)
-	if !ok {
-		t.Fatal("schedule with param should succeed")
+	if err := s.Schedule(1, "task", time.Now().Add(40*time.Millisecond), p); err != nil {
+		t.Fatalf("schedule should succeed, got %v", err)
 	}
 
 	// 等任务入轮（持久化 Add 被调用）。
@@ -274,12 +300,13 @@ func TestScheduleWithParamPersists(t *testing.T) {
 func TestCancelPersistedTaskRemoves(t *testing.T) {
 	st := newMemStore()
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 	)
 	defer s.Stop()
 
-	s.ScheduleWithParam(1, time.Now().Add(time.Second), func(id uint64, at time.Time) {}, recoverable{id: 1})
+	s.Schedule(1, "task", time.Now().Add(time.Second), recoverable{id: 1})
 
 	// 等入轮（Add 生效）。
 	deadline := time.Now().Add(2 * time.Second)
@@ -289,8 +316,8 @@ func TestCancelPersistedTaskRemoves(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if !s.Cancel(1) {
-		t.Fatal("cancel should hit")
+	if err := s.Cancel(1); err != nil {
+		t.Fatalf("cancel should hit, got %v", err)
 	}
 	if _, _, ok := st.Get(1); ok {
 		t.Fatal("expected store.Remove to be called after cancel")
@@ -304,6 +331,7 @@ func TestFarTaskSinksToStore(t *testing.T) {
 	st := newMemStore()
 
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 		WithLookahead[recoverable](50*time.Millisecond),    // ahead=50ms
@@ -313,11 +341,8 @@ func TestFarTaskSinksToStore(t *testing.T) {
 
 	// 到期时间 250ms 后，远超 ahead(50ms) → 应下沉到存储。
 	p := recoverable{id: 1, fired: &fired}
-	ok := s.ScheduleWithParam(1, time.Now().Add(250*time.Millisecond), func(id uint64, at time.Time) {
-		fired.Add(1)
-	}, p)
-	if !ok {
-		t.Fatal("schedule with param should succeed")
+	if err := s.Schedule(1, "task", time.Now().Add(250*time.Millisecond), p); err != nil {
+		t.Fatalf("schedule should succeed, got %v", err)
 	}
 
 	// 等 add 处理完。
@@ -333,8 +358,8 @@ func TestFarTaskSinksToStore(t *testing.T) {
 		t.Fatal("far task should be persisted to store")
 	}
 	// 2) 任务可查询（已下沉到 sunk 索引）。
-	if _, ok := s.Get(1); !ok {
-		t.Fatal("far task should be queryable via sunk index")
+	if _, err := s.Get(1); err != nil {
+		t.Fatalf("far task should be queryable via sunk index, got %v", err)
 	}
 
 	// 3) 临近到期时被 loadTasks 拉回并执行。
@@ -348,12 +373,12 @@ func TestFarTaskSinksToStore(t *testing.T) {
 }
 
 // TestUpdateSunkTask 验证：对已下沉到存储的远任务，Update 仍能命中并更新。
-// 更新到很近的未来时会被拉回内存轮执行；更新到仍很远的未来则继续下沉。
 func TestUpdateSunkTask(t *testing.T) {
 	var fired atomic.Int32
 	st := newMemStore()
 
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 		WithLookahead[recoverable](50*time.Millisecond),
@@ -363,25 +388,23 @@ func TestUpdateSunkTask(t *testing.T) {
 
 	// 先下沉一个远任务（300ms 后到期）。
 	p := recoverable{id: 1, fired: &fired}
-	s.ScheduleWithParam(1, time.Now().Add(300*time.Millisecond), func(id uint64, at time.Time) {
-		fired.Add(1)
-	}, p)
+	s.Schedule(1, "task", time.Now().Add(300*time.Millisecond), p)
 
 	// 等 add 处理完、任务下沉。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok := s.Get(1); ok {
+		if _, err := s.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if _, ok := s.Get(1); !ok {
-		t.Fatal("sunk task should be queryable")
+	if _, err := s.Get(1); err != nil {
+		t.Fatalf("sunk task should be queryable, got %v", err)
 	}
 
 	// Update 到很近的未来（30ms，≤ ahead）→ 应拉回内存轮并尽快执行。
-	if !s.Update(1, time.Now().Add(30*time.Millisecond)) {
-		t.Fatal("update on sunk task should succeed")
+	if err := s.Update(1, time.Now().Add(30*time.Millisecond)); err != nil {
+		t.Fatalf("update on sunk task should succeed, got %v", err)
 	}
 
 	deadline = time.Now().Add(3 * time.Second)
@@ -399,6 +422,7 @@ func TestUpdateCanceledSunkTask(t *testing.T) {
 	st := newMemStore()
 
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 		WithLookahead[recoverable](50*time.Millisecond),
@@ -407,27 +431,25 @@ func TestUpdateCanceledSunkTask(t *testing.T) {
 	defer s.Stop()
 
 	// 下沉一个远任务。
-	s.ScheduleWithParam(1, time.Now().Add(300*time.Millisecond), func(id uint64, at time.Time) {
-		fired.Add(1)
-	}, recoverable{id: 1, fired: &fired})
+	s.Schedule(1, "task", time.Now().Add(300*time.Millisecond), recoverable{id: 1, fired: &fired})
 
 	// 等下沉完成。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok := s.Get(1); ok {
+		if _, err := s.Get(1); err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 
 	// 取消它。
-	if !s.Cancel(1) {
-		t.Fatal("cancel should hit sunk task")
+	if err := s.Cancel(1); err != nil {
+		t.Fatalf("cancel should hit sunk task, got %v", err)
 	}
 
 	// 再 Update：应被拒绝（不复活已取消任务）。
-	if s.Update(1, time.Now().Add(30*time.Millisecond)) {
-		t.Fatal("update on canceled sunk task should fail")
+	if err := s.Update(1, time.Now().Add(30*time.Millisecond)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("update on canceled sunk task should fail with ErrNotFound, got %v", err)
 	}
 
 	// 确认任务确实没有执行。
@@ -444,6 +466,7 @@ func TestGetFallsBackToStore(t *testing.T) {
 	st := newMemStore()
 
 	s := NewScheduler[recoverable](
+		countingHandler,
 		WithTick[recoverable](10*time.Millisecond),
 		WithStore[recoverable](st),
 		// ahead 设得很小，让远任务永远不会被 Load 拉回内存。
@@ -460,11 +483,21 @@ func TestGetFallsBackToStore(t *testing.T) {
 	time.Sleep(120 * time.Millisecond)
 
 	// Get 应通过 Store.Get 回退查到它。
-	task, ok := s.Get(7)
-	if !ok {
-		t.Fatal("Get should fall back to Store and find the task")
+	task, err := s.Get(7)
+	if err != nil {
+		t.Fatalf("Get should fall back to Store and find the task, got %v", err)
 	}
 	if task.Expire() != far.UnixNano() {
 		t.Fatalf("unexpected expire: got %d want %d", task.Expire(), far.UnixNano())
+	}
+}
+
+// TestGetNotFound 验证：Get 未命中时返回 ErrNotFound。
+func TestGetNotFound(t *testing.T) {
+	s := NewScheduler[recoverable](countingHandler, WithTick[recoverable](10*time.Millisecond))
+	defer s.Stop()
+
+	if _, err := s.Get(999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
