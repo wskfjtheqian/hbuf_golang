@@ -1,11 +1,17 @@
 package htwheel
 
 import (
+	"errors"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// ErrRetriesExhausted 表示任务重试次数已用尽、被最终放弃。
+// 可通过 errors.Is(err, ErrRetriesExhausted) 在错误回调中区分
+// 「本次失败仍会重试」与「重试已用完、任务被丢弃」。
+var ErrRetriesExhausted = errors.New("htwheel: retries exhausted")
 
 /*
 ========================
@@ -15,16 +21,19 @@ import (
 
 // Task 是一条调度条目。除 canceled 外，字段在发布给调度器后不再被修改，
 // 因此外部通过 Expire 读取是安全的。
-type Task struct {
+type Task[P Recoverable] struct {
 	id       uint64
 	fn       func(uint64, time.Time)
 	expire   int64 // 计划执行时间（UnixNano）
 	canceled int32
+	retries  int           // 剩余可重试次数（默认 0，即不重试）。
+	delay    time.Duration // 重试间隔。
+	param    P             // 参数
 }
 
 // Expire 返回计划执行时间（纳秒）。
 // 使用指针接收者，避免复制含 atomic 字段的结构体。
-func (t *Task) Expire() int64 { return t.expire }
+func (t *Task[P]) Expire() int64 { return t.expire }
 
 /*
 ========================
@@ -102,32 +111,32 @@ func (wp *WorkerPool) Stop() {
 ========================
 */
 
-type bucket struct {
-	tasks map[uint64]*Task
+type bucket[P Recoverable] struct {
+	tasks map[uint64]*Task[P]
 }
 
-func newBucket() *bucket {
-	return &bucket{tasks: make(map[uint64]*Task)}
+func newBucket[P Recoverable]() *bucket[P] {
+	return &bucket[P]{tasks: make(map[uint64]*Task[P])}
 }
 
 // wheel 是单层时间轮。它不持有 goroutine、也不做任何加锁：
 // 所有读写都只发生在 Scheduler 的驱动协程内，由结构保证串行。
-type wheel struct {
+type wheel[P Recoverable] struct {
 	tick    time.Duration
 	size    int
 	cursor  int
-	buckets []*bucket
+	buckets []*bucket[P]
 }
 
-func newWheel(tick time.Duration, size int) *wheel {
+func newWheel[P Recoverable](tick time.Duration, size int) *wheel[P] {
 	// size 必须 >= 2，否则单层永远装不下任何任务（ticks 恒 >= 1）。
 	if size < 2 {
 		size = 2
 	}
-	w := &wheel{tick: tick, size: size}
-	w.buckets = make([]*bucket, size)
+	w := &wheel[P]{tick: tick, size: size}
+	w.buckets = make([]*bucket[P], size)
 	for i := range w.buckets {
-		w.buckets[i] = newBucket()
+		w.buckets[i] = newBucket[P]()
 	}
 	return w
 }
@@ -144,22 +153,38 @@ const (
 	defaultWorkers = 8
 )
 
-type config struct {
-	tick    time.Duration
-	size    int
-	workers int
+type config[P Recoverable] struct {
+	tick    time.Duration // 设置最小时间刻度（默认 100ms）。
+	size    int           // 设置每层时间轮的槽位数（默认 512，最小 2）。
+	workers int           // 设置执行任务的 worker 数量（默认 8）。
+	store   Store[P]
+	delay   time.Duration // 设置默认重试间隔（默认 0，即不重试）。
+	retries int           // 设置默认重试次数（默认 0，即不重试）。
+	batch   int           // 设置单次扫描的最大条数（默认 256）。
+	ahead   time.Duration // 设置扫描窗口（默认 30s）。
+	poll    time.Duration // 设置扫描存储层的间隔（默认 1s）。
+	onErr   func(error)
 }
 
-func defaultConfig() config {
-	return config{tick: defaultTick, size: defaultSize, workers: defaultWorkers}
+func defaultConfig[P Recoverable]() config[P] {
+	return config[P]{
+		tick:    defaultTick,
+		size:    defaultSize,
+		workers: defaultWorkers,
+		poll:    time.Second,
+		ahead:   30 * time.Second,
+		batch:   256,
+		delay:   0,
+		retries: 0,
+	}
 }
 
 // Option 用于定制 Scheduler。
-type Option func(*config)
+type Option[P Recoverable] func(*config[P])
 
 // WithTick 设置最小时间刻度（默认 100ms）。
-func WithTick(d time.Duration) Option {
-	return func(c *config) {
+func WithTick[P Recoverable](d time.Duration) Option[P] {
+	return func(c *config[P]) {
 		if d > 0 {
 			c.tick = d
 		}
@@ -167,8 +192,8 @@ func WithTick(d time.Duration) Option {
 }
 
 // WithSize 设置每层时间轮的槽位数（默认 512，最小 2）。
-func WithSize(n int) Option {
-	return func(c *config) {
+func WithSize[P Recoverable](n int) Option[P] {
+	return func(c *config[P]) {
 		if n >= 2 {
 			c.size = n
 		}
@@ -176,10 +201,68 @@ func WithSize(n int) Option {
 }
 
 // WithWorkers 设置执行任务的 worker 数量（默认 8）。
-func WithWorkers(n int) Option {
-	return func(c *config) {
+func WithWorkers[P Recoverable](n int) Option[P] {
+	return func(c *config[P]) {
 		if n > 0 {
 			c.workers = n
+		}
+	}
+}
+
+// WithStore 设置任务存储。
+func WithStore[P Recoverable](s Store[P]) Option[P] {
+	return func(c *config[P]) {
+		c.store = s
+	}
+}
+
+// WithPollInterval 设置扫描存储层的间隔（默认 1s）。
+func WithPollInterval[P Recoverable](d time.Duration) Option[P] {
+	return func(c *config[P]) {
+		if d > 0 {
+			c.poll = d
+		}
+	}
+}
+
+// WithLookahead 设置扫描窗口：把 Expire 在 now+lookahead 之前的任务提前读入内存（默认 30s）。
+func WithLookahead[P Recoverable](d time.Duration) Option[P] {
+	return func(c *config[P]) {
+		if d > 0 {
+			c.ahead = d
+		}
+	}
+}
+
+// WithBatchSize 设置单次扫描的最大条数（默认 256）。
+func WithBatchSize[P Recoverable](n int) Option[P] {
+	return func(c *config[P]) {
+		if n > 0 {
+			c.batch = n
+		}
+	}
+}
+
+// WithErrorHandler 设置存储层/处理器错误的回调（默认忽略）。
+// 每次失败尝试与被放弃的任务都会通过它上报，可用 errors.Is(err, ErrRetriesExhausted)
+// 区分「这次失败还会重试」与「重试已用完、任务被丢弃」。
+func WithErrorHandler[P Recoverable](fn func(error)) Option[P] {
+	return func(c *config[P]) {
+		c.onErr = fn
+	}
+}
+
+// WithDefaultRetry 设置新建任务的默认重试策略：失败后最多重试 retries 次，
+// 每次间隔 delay（默认 0，即不重试）。单条任务可用 WithTaskRetry 覆盖。
+// 仅影响之后 Schedule 的任务；直接写入存储层的记录以 Record 自身字段为准。
+func WithDefaultRetry[P Recoverable](retries int, delay time.Duration) Option[P] {
+	return func(c *config[P]) {
+		if retries < 0 {
+			retries = 0
+		}
+		c.retries = retries
+		if delay > 0 {
+			c.delay = delay
 		}
 	}
 }
@@ -195,33 +278,48 @@ func WithWorkers(n int) Option {
 // 线程模型：所有状态（各层时间轮、全局任务索引）只由唯一的驱动协程读写。
 // 外部 API 通过 channel 把命令投递给驱动协程，查询/更新通过带响应 channel
 // 的请求完成，因此不存在并发读写 map 的问题。
-type Scheduler struct {
+type Scheduler[P Recoverable] struct {
 	tick time.Duration
 	wp   *WorkerPool
 
-	levels []*wheel           // levels[0] 最细，tick 逐层放大 size 倍
-	index  map[uint64]*bucket // 全局索引：id -> 所在桶，跨层可见
+	levels []*wheel[P]           // levels[0] 最细，tick 逐层放大 size 倍
+	index  map[uint64]*bucket[P] // 全局索引：id -> 所在桶，跨层可见
 
-	addCh    chan addReq
+	addCh    chan addReq[P]
 	cancelCh chan cancelReq
-	getCh    chan getReq
+	getCh    chan getReq[P]
 	updCh    chan updReq
 	stopCh   chan struct{}
 	doneCh   chan struct{}
 
 	stopped  atomic.Bool
 	stopOnce sync.Once
+
+	store Store[P]
+	poll  time.Duration //设置扫描存储层的间隔（默认 1s）。
+	ahead time.Duration //设置扫描窗口（默认 30s）。
+	batch int           //设置单次扫描的最大条数（默认 256）。
+
+	// 默认重试策略（新建任务时生效，单条任务可用 WithTaskRetry 覆盖）。
+	retries int
+	delay   time.Duration
+
+	onErr func(error) // 存储层/处理器错误回调（默认忽略）。
+
+	// loaded 记录已从存储加载过、且到期时间未变的任务 id -> expire，
+	// 用于在轮询加载时去重，避免重复入轮。
+	loaded map[uint64]int64
 }
 
-type addReq struct{ task *Task }
+type addReq[P Recoverable] struct{ task *Task[P] }
 
-type getReq struct {
+type getReq[P Recoverable] struct {
 	id   uint64
-	resp chan getResp
+	resp chan getResp[P]
 }
 
-type getResp struct {
-	task *Task
+type getResp[P Recoverable] struct {
+	task *Task[P]
 	ok   bool
 }
 
@@ -237,33 +335,46 @@ type cancelReq struct {
 }
 
 // NewScheduler 创建并启动一个调度器。
-func NewScheduler(opts ...Option) *Scheduler {
-	cfg := defaultConfig()
+func NewScheduler[P Recoverable](opts ...Option[P]) *Scheduler[P] {
+	cfg := defaultConfig[P]()
 	for _, o := range opts {
 		o(&cfg)
 	}
 
-	s := &Scheduler{
+	s := &Scheduler[P]{
+		store:    cfg.store,
 		tick:     cfg.tick,
+		poll:     cfg.poll,
+		ahead:    cfg.ahead,
+		batch:    cfg.batch,
+		retries:  cfg.retries,
+		delay:    cfg.delay,
+		onErr:    cfg.onErr,
 		wp:       NewWorkerPool(cfg.workers),
-		levels:   []*wheel{newWheel(cfg.tick, cfg.size)},
-		index:    make(map[uint64]*bucket),
-		addCh:    make(chan addReq, 1024),
+		levels:   []*wheel[P]{newWheel[P](cfg.tick, cfg.size)},
+		index:    make(map[uint64]*bucket[P]),
+		loaded:   make(map[uint64]int64),
+		addCh:    make(chan addReq[P], 1024),
 		cancelCh: make(chan cancelReq, 1024),
-		getCh:    make(chan getReq, 64),
+		getCh:    make(chan getReq[P], 64),
 		updCh:    make(chan updReq, 64),
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
 	}
+
 	go s.loop()
 	return s
 }
 
-func (s *Scheduler) loop() {
+func (s *Scheduler[P]) loop() {
 	ticker := time.NewTicker(s.tick)
 	defer ticker.Stop()
 	defer close(s.doneCh)
 
+	poll := time.NewTicker(s.poll)
+	defer poll.Stop()
+
+	s.loadTasks()
 	for {
 		select {
 		case <-ticker.C:
@@ -275,9 +386,11 @@ func (s *Scheduler) loop() {
 			req.resp <- s.cancel(req.id)
 		case req := <-s.getCh:
 			t, ok := s.get(req.id)
-			req.resp <- getResp{task: t, ok: ok}
+			req.resp <- getResp[P]{task: t, ok: ok}
 		case req := <-s.updCh:
 			req.resp <- s.update(req.id, req.expire)
+		case <-poll.C:
+			s.loadTasks()
 		case <-s.stopCh:
 			return
 		}
@@ -293,21 +406,47 @@ func (s *Scheduler) loop() {
 // Schedule 在 t 时刻执行 fn（同 id 覆盖旧任务）。返回 false 表示调度器已停止。
 //
 // 入轮是异步的：返回 true 仅代表命令已投递，若要确认任务已可查询请用 Get 轮询。
-func (s *Scheduler) Schedule(id uint64, t time.Time, fn func(uint64, time.Time)) bool {
+func (s *Scheduler[P]) Schedule(id uint64, t time.Time, fn func(uint64, time.Time)) bool {
 	if fn == nil || s.stopped.Load() {
 		return false
 	}
-	task := &Task{id: id, fn: fn, expire: t.UnixNano()}
+	task := &Task[P]{id: id, fn: fn, expire: t.UnixNano()}
+	return s.ScheduleTask(task)
+}
+
+// ScheduleTask 提交一条已构造好的任务（可携带单条任务的重试策略）。返回 false 表示调度器已停止。
+func (s *Scheduler[P]) ScheduleTask(task *Task[P]) bool {
+	if task == nil || task.fn == nil || s.stopped.Load() {
+		return false
+	}
+	// 未显式指定重试时，套用默认重试策略。
+	if task.retries == 0 && s.retries > 0 {
+		task.retries = s.retries
+		task.delay = s.delay
+	}
 	select {
-	case s.addCh <- addReq{task: task}:
+	case s.addCh <- addReq[P]{task: task}:
 		return true
 	case <-s.stopCh:
 		return false
 	}
 }
 
+// WithTaskRetry 覆盖单条任务的重试策略：失败后最多重试 retries 次，每次间隔 delay。
+// 需配合 ScheduleTask 使用（先构造 Task 再传入）。
+func (t *Task[P]) WithTaskRetry(retries int, delay time.Duration) *Task[P] {
+	if retries < 0 {
+		retries = 0
+	}
+	t.retries = retries
+	if delay > 0 {
+		t.delay = delay
+	}
+	return t
+}
+
 // Update 修改已有任务的执行时间（保持原回调）。任务不存在或调度器已停止时返回 false。
-func (s *Scheduler) Update(id uint64, t time.Time) bool {
+func (s *Scheduler[P]) Update(id uint64, t time.Time) bool {
 	resp := make(chan bool, 1)
 	if !s.sendUpd(updReq{id: id, expire: t.UnixNano(), resp: resp}) {
 		return false
@@ -326,9 +465,9 @@ func (s *Scheduler) Update(id uint64, t time.Time) bool {
 }
 
 // Get 查询任务快照（只读，返回的 *Task 不可改）。
-func (s *Scheduler) Get(id uint64) (*Task, bool) {
-	resp := make(chan getResp, 1)
-	if !s.sendGet(getReq{id: id, resp: resp}) {
+func (s *Scheduler[P]) Get(id uint64) (*Task[P], bool) {
+	resp := make(chan getResp[P], 1)
+	if !s.sendGet(getReq[P]{id: id, resp: resp}) {
 		return nil, false
 	}
 	select {
@@ -345,7 +484,7 @@ func (s *Scheduler) Get(id uint64) (*Task, bool) {
 }
 
 // TTL 返回剩余时间；任务不存在或已到期返回 false。
-func (s *Scheduler) TTL(id uint64) (time.Duration, bool) {
+func (s *Scheduler[P]) TTL(id uint64) (time.Duration, bool) {
 	task, ok := s.Get(id)
 	if !ok {
 		return 0, false
@@ -359,7 +498,7 @@ func (s *Scheduler) TTL(id uint64) (time.Duration, bool) {
 
 // Cancel 取消任务并返回是否命中。已进入执行队列的任务会在真正运行前
 // 再次检查取消标记（尽力而为）。
-func (s *Scheduler) Cancel(id uint64) bool {
+func (s *Scheduler[P]) Cancel(id uint64) bool {
 	resp := make(chan bool, 1)
 	if !s.sendCancel(cancelReq{id: id, resp: resp}) {
 		return false
@@ -378,7 +517,7 @@ func (s *Scheduler) Cancel(id uint64) bool {
 }
 
 // Stop 停止调度器，等待驱动协程退出并执行完已提交的任务。可重复调用。
-func (s *Scheduler) Stop() {
+func (s *Scheduler[P]) Stop() {
 	s.stopOnce.Do(func() {
 		s.stopped.Store(true)
 		close(s.stopCh)
@@ -393,7 +532,7 @@ func (s *Scheduler) Stop() {
 ========================
 */
 
-func (s *Scheduler) sendGet(req getReq) bool {
+func (s *Scheduler[P]) sendGet(req getReq[P]) bool {
 	if s.stopped.Load() {
 		return false
 	}
@@ -405,7 +544,7 @@ func (s *Scheduler) sendGet(req getReq) bool {
 	}
 }
 
-func (s *Scheduler) sendCancel(req cancelReq) bool {
+func (s *Scheduler[P]) sendCancel(req cancelReq) bool {
 	if s.stopped.Load() {
 		return false
 	}
@@ -417,7 +556,7 @@ func (s *Scheduler) sendCancel(req cancelReq) bool {
 	}
 }
 
-func (s *Scheduler) sendUpd(req updReq) bool {
+func (s *Scheduler[P]) sendUpd(req updReq) bool {
 	if s.stopped.Load() {
 		return false
 	}
@@ -429,7 +568,7 @@ func (s *Scheduler) sendUpd(req updReq) bool {
 	}
 }
 
-func (s *Scheduler) get(id uint64) (*Task, bool) {
+func (s *Scheduler[P]) get(id uint64) (*Task[P], bool) {
 	if b, ok := s.index[id]; ok {
 		if t, ok := b.tasks[id]; ok {
 			return t, true
@@ -438,18 +577,18 @@ func (s *Scheduler) get(id uint64) (*Task, bool) {
 	return nil, false
 }
 
-func (s *Scheduler) update(id uint64, expire int64) bool {
+func (s *Scheduler[P]) update(id uint64, expire int64) bool {
 	t, ok := s.get(id)
 	if !ok {
 		return false
 	}
 	// 复用原回调，通过 add 完成覆盖语义（旧条目会被标记取消）。
-	s.add(&Task{id: id, fn: t.fn, expire: expire}, time.Now().UnixNano())
+	s.add(&Task[P]{id: id, fn: t.fn, expire: expire}, time.Now().UnixNano())
 	return true
 }
 
 // add 负责覆盖旧任务并把新任务放到合适的层级。
-func (s *Scheduler) add(task *Task, now int64) {
+func (s *Scheduler[P]) add(task *Task[P], now int64) {
 	if b, ok := s.index[task.id]; ok {
 		if old, ok := b.tasks[task.id]; ok {
 			atomic.StoreInt32(&old.canceled, 1)
@@ -460,7 +599,7 @@ func (s *Scheduler) add(task *Task, now int64) {
 	s.place(task, now)
 }
 
-func (s *Scheduler) cancel(id uint64) bool {
+func (s *Scheduler[P]) cancel(id uint64) bool {
 	b, ok := s.index[id]
 	if !ok {
 		return false
@@ -475,7 +614,7 @@ func (s *Scheduler) cancel(id uint64) bool {
 }
 
 // place 把任务放进「能装下它的最细一层」；已经到期则立即提交执行。
-func (s *Scheduler) place(task *Task, now int64) {
+func (s *Scheduler[P]) place(task *Task[P], now int64) {
 	delay := task.expire - now
 	if delay <= 0 {
 		s.submit(task)
@@ -510,22 +649,22 @@ func (s *Scheduler) place(task *Task, now int64) {
 }
 
 // addLevel 追加更粗的一层；tick 会溢出 int64 时返回 false。
-func (s *Scheduler) addLevel() bool {
+func (s *Scheduler[P]) addLevel() bool {
 	last := s.levels[len(s.levels)-1]
 	if int64(last.tick) > math.MaxInt64/int64(last.size) {
 		return false
 	}
-	next := newWheel(time.Duration(int64(last.tick)*int64(last.size)), last.size)
+	next := newWheel[P](time.Duration(int64(last.tick)*int64(last.size)), last.size)
 	s.levels = append(s.levels, next)
 	return true
 }
 
 // advance 推进第 i 层；某层转满一圈时，让上一层前进一格。
-func (s *Scheduler) advance(i int, now int64) {
+func (s *Scheduler[P]) advance(i int, now int64) {
 	lv := s.levels[i]
 	b := lv.buckets[lv.cursor]
 	// 先换上新桶，保证重新入桶（place）不会写回正在遍历的 map。
-	lv.buckets[lv.cursor] = newBucket()
+	lv.buckets[lv.cursor] = newBucket[P]()
 
 	for id, task := range b.tasks {
 		delete(s.index, id)
@@ -548,7 +687,8 @@ func (s *Scheduler) advance(i int, now int64) {
 	}
 }
 
-func (s *Scheduler) submit(task *Task) {
+// submit 把到期任务交给 worker 池执行；回调 panic 时按重试策略重试。
+func (s *Scheduler[P]) submit(task *Task[P]) {
 	execTime := time.Unix(0, task.expire)
 	id := task.id
 	fn := task.fn
@@ -557,6 +697,92 @@ func (s *Scheduler) submit(task *Task) {
 		if atomic.LoadInt32(&task.canceled) == 1 {
 			return
 		}
-		fn(id, execTime)
+		s.execTask(task, id, execTime, fn)
 	})
+}
+
+// execTask 真正执行一次任务；panic 被捕获后走重试流程。
+// 它运行在 worker 协程内，重试会重新入轮（走 addCh），由驱动协程串行处理。
+func (s *Scheduler[P]) execTask(task *Task[P], id uint64, execTime time.Time, fn func(uint64, time.Time)) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.onTaskPanic(task, id, execTime, fn, r)
+		}
+	}()
+	fn(id, execTime)
+}
+
+// onTaskPanic 在回调 panic 后决定重试或放弃。
+func (s *Scheduler[P]) onTaskPanic(task *Task[P], id uint64, execTime time.Time, fn func(uint64, time.Time), r any) {
+	if atomic.LoadInt32(&task.canceled) == 1 {
+		return
+	}
+	if task.retries > 0 {
+		task.retries--
+		delay := task.delay
+		if delay <= 0 {
+			delay = s.tick
+		}
+		next := &Task[P]{
+			id:      id,
+			fn:      fn,
+			expire:  time.Now().Add(delay).UnixNano(),
+			retries: task.retries,
+			delay:   task.delay,
+			param:   task.param,
+		}
+		// 重新入轮；调度器停止时直接放弃。
+		select {
+		case s.addCh <- addReq[P]{task: next}:
+		default:
+			s.report(ErrRetriesExhausted)
+		}
+		return
+	}
+	// 重试次数用尽：上报并丢弃。
+	s.report(ErrRetriesExhausted)
+}
+
+// loadTasks 从存储层加载待执行任务（重启恢复 + 周期性轮询）。
+func (s *Scheduler[P]) loadTasks() {
+	if s.store == nil {
+		return
+	}
+	recs, err := s.store.Load(time.Now().Add(s.ahead), s.batch)
+	if err != nil {
+		s.report(err)
+		return
+	}
+	for _, rec := range recs {
+		s.load(rec)
+	}
+}
+
+// load 把从存储恢复出的一条记录重新入轮，并按「id + 到期时间」去重。
+func (s *Scheduler[P]) load(rec P) {
+	id := rec.ID()
+	exp := rec.Expire().UnixNano()
+
+	// 去重：已加载且到期时间未变的记录不再重复入轮。
+	if prev, ok := s.loaded[id]; ok && prev == exp {
+		return
+	}
+
+	fn := rec.Recover()
+	if fn == nil {
+		// 不可重放，跳过执行但仍记录，避免下次再尝试。
+		s.loaded[id] = exp
+		return
+	}
+
+	s.loaded[id] = exp
+	s.add(&Task[P]{id: id, fn: fn, expire: exp, param: rec}, time.Now().UnixNano())
+}
+
+// report 上报存储层/处理器错误；未设置 onErr 时静默忽略。
+func (s *Scheduler[P]) report(err error) {
+	if err == nil || s.onErr == nil {
+		return
+	}
+	s.onErr(err)
 }

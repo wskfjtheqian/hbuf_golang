@@ -1,256 +1,39 @@
 package htwheel
 
-import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"sort"
-	"sync"
-	"time"
-)
+import "time"
 
-/*
-========================
-   MemoryStore
-========================
-*/
-
-// MemoryStore 是基于 map 的存储实现，进程退出后数据丢失。
-// 适合测试，或作为自定义存储层的参考实现。
+// Recoverable 是持久化任务参数 P 需要实现的能力接口：
+// 存储层只保存裸的 *P，进程重启后要恢复任务，必须能从 P 自身
+// 重建出「到期时间」与「执行回调」。因此任何想要跨进程持久化并
+// 恢复执行的 P 都应实现该接口。
 //
-// 它实现了 Store[TaskRecord] 接口。
-type MemoryStore struct {
-	mu   sync.RWMutex
-	data map[uint64]*TaskRecord
+//   - ID / Expire：用于去重与重新入轮，恢复后无需外部再传 id/时间。
+//   - Recover：根据参数重建执行回调；返回 nil 表示该参数不可执行，
+//     加载时会被跳过（例如参数已失效、业务已不可重放）。
+type Recoverable interface {
+	// ID 返回任务唯一标识。
+	ID() uint64
+	// Expire 返回计划执行时间。
+	Expire() time.Time
+	// Recover 返回重建后的执行回调，签名与 Schedule 的 fn 一致。
+	Recover() func(uint64, time.Time)
 }
 
-// NewMemoryStore 创建内存存储。
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{data: make(map[uint64]*TaskRecord)}
-}
-
-// 编译期断言：MemoryStore 实现了 Store[*TaskRecord]。
-var _ Store[*TaskRecord] = (*MemoryStore)(nil)
-
-func (m *MemoryStore) Put(ctx context.Context, rec *TaskRecord) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	m.mu.Lock()
-	m.data[rec.ID] = rec
-	m.mu.Unlock()
-	return nil
-}
-
-func (m *MemoryStore) Get(ctx context.Context, id uint64) (*TaskRecord, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, false, err
-	}
-	m.mu.RLock()
-	rec, ok := m.data[id]
-	m.mu.RUnlock()
-	if !ok {
-		return nil, false, nil
-	}
-	return rec, true, nil
-}
-
-func (m *MemoryStore) Delete(ctx context.Context, id uint64) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	m.mu.Lock()
-	delete(m.data, id)
-	m.mu.Unlock()
-	return nil
-}
-
-func (m *MemoryStore) Scan(ctx context.Context, before time.Time, limit int) ([]*TaskRecord, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	m.mu.RLock()
-	recs := make([]*TaskRecord, 0, len(m.data))
-	for _, rec := range m.data {
-		if !rec.Expire.After(before) {
-			recs = append(recs, rec)
-		}
-	}
-	m.mu.RUnlock()
-	return sortAndLimit(recs, limit), nil
-}
-
-/*
-========================
-   FileStore
-========================
-*/
-
-// FileStore 把全部记录以 JSON 数组保存在单个文件中，每次变更整体原子重写。
+// Store 是任务持久化抽象，用于在进程重启后恢复定时任务。
 //
-// 适用于任务量不大（万级以内）、单写者的场景。并发写同一文件的多个进程不保证一致。
-//
-// 它实现了 Store[TaskRecord] 接口。
-type FileStore struct {
-	mu     sync.Mutex
-	path   string
-	data   map[uint64]*TaskRecord
-	loaded bool
-}
-
-// NewFileStore 创建文件存储；文件不存在时会在首次写入时自动创建（含父目录）。
-func NewFileStore(path string) *FileStore {
-	return &FileStore{path: path}
-}
-
-// 编译期断言：FileStore 实现了 Store[*TaskRecord]。
-var _ Store[*TaskRecord] = (*FileStore)(nil)
-
-func (f *FileStore) Put(ctx context.Context, rec *TaskRecord) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if err := f.ensure(); err != nil {
-		return err
-	}
-	f.data[rec.ID] = rec
-	return f.flush()
-}
-
-func (f *FileStore) Get(ctx context.Context, id uint64) (*TaskRecord, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, false, err
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if err := f.ensure(); err != nil {
-		return nil, false, err
-	}
-	rec, ok := f.data[id]
-	if !ok {
-		return nil, false, nil
-	}
-	return rec, true, nil
-}
-
-func (f *FileStore) Delete(ctx context.Context, id uint64) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if err := f.ensure(); err != nil {
-		return err
-	}
-	if _, ok := f.data[id]; !ok {
-		return nil
-	}
-	delete(f.data, id)
-	return f.flush()
-}
-
-func (f *FileStore) Scan(ctx context.Context, before time.Time, limit int) ([]*TaskRecord, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if err := f.ensure(); err != nil {
-		return nil, err
-	}
-	recs := make([]*TaskRecord, 0, len(f.data))
-	for _, rec := range f.data {
-		if !rec.Expire.After(before) {
-			recs = append(recs, rec)
-		}
-	}
-	return sortAndLimit(recs, limit), nil
-}
-
-// ensure 惰性加载文件；仅第一次访问时真正读盘。
-func (f *FileStore) ensure() error {
-	if f.loaded {
-		return nil
-	}
-	b, err := os.ReadFile(f.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			f.data = make(map[uint64]*TaskRecord)
-			f.loaded = true
-			return nil
-		}
-		return err
-	}
-
-	var recs []*TaskRecord
-	if len(bytes.TrimSpace(b)) > 0 {
-		if err := json.Unmarshal(b, &recs); err != nil {
-			return err
-		}
-	}
-	f.data = make(map[uint64]*TaskRecord, len(recs))
-	for _, rec := range recs {
-		f.data[rec.ID] = rec
-	}
-	f.loaded = true
-	return nil
-}
-
-// flush 先写临时文件再 rename，保证不会读到写了一半的文件。
-func (f *FileStore) flush() error {
-	recs := make([]*TaskRecord, 0, len(f.data))
-	for _, rec := range f.data {
-		recs = append(recs, rec)
-	}
-	sortRecords(recs)
-
-	b, err := json.MarshalIndent(recs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	dir := filepath.Dir(f.path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp(dir, ".htwheel-*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(name)
-		return err
-	}
-	return os.Rename(name, f.path)
-}
-
-func sortRecords(recs []*TaskRecord) {
-	sort.Slice(recs, func(i, j int) bool {
-		return recs[i].Expire.Before(recs[j].Expire)
-	})
-}
-
-func sortAndLimit(recs []*TaskRecord, limit int) []*TaskRecord {
-	sortRecords(recs)
-	if limit > 0 && len(recs) > limit {
-		recs = recs[:limit]
-	}
-	return recs
+// 约定：
+//   - 实现方保存的是参数 *P 及其 id/到期时间（由 P 自身实现 Recoverable 提供）。
+//   - Load 返回 before 之前到期、且按到期时间升序的前 limit 条，
+//     供调度器轮询拉取并重新入轮；返回空切片表示当前没有待加载任务。
+//   - Add / Remove / Update / Get 由使用方自行决定是否调用；
+//     调度器核心只在「从存储恢复」时消费 Load，其余写入由业务侧驱动。
+type Store[P Recoverable] interface {
+	// Add 添加
+	Add(id uint64, t time.Time, task P) error
+	// Remove 移除
+	Remove(id uint64) bool
+	// Update 更新
+	Update(id uint64, t time.Time, task P) bool
+	// Load 加载
+	Load(before time.Time, limit int) ([]P, error)
 }
