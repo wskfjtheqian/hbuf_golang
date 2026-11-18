@@ -314,7 +314,7 @@ type Scheduler[P Recoverable] struct {
 	addCh    chan addReq[P]
 	cancelCh chan cancelReq
 	getCh    chan getReq[P]
-	updCh    chan updReq
+	updCh    chan updReq[P]
 	finishCh chan uint64
 	stopCh   chan struct{}
 	doneCh   chan struct{}
@@ -351,10 +351,11 @@ type getResp[P Recoverable] struct {
 	err  error
 }
 
-type updReq struct {
+type updReq[P Recoverable] struct {
 	id     uint64
 	expire int64
 	resp   chan error
+	param  P
 }
 
 type cancelReq struct {
@@ -387,7 +388,7 @@ func NewScheduler[P Recoverable](handler Handler[P], opts ...Option[P]) *Schedul
 		addCh:    make(chan addReq[P], 1024),
 		cancelCh: make(chan cancelReq, 1024),
 		getCh:    make(chan getReq[P], 64),
-		updCh:    make(chan updReq, 64),
+		updCh:    make(chan updReq[P], 64),
 		finishCh: make(chan uint64, 1024),
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
@@ -419,7 +420,7 @@ func (s *Scheduler[P]) loop() {
 			t, err := s.get(req.id)
 			req.resp <- getResp[P]{task: t, err: err}
 		case req := <-s.updCh:
-			req.resp <- s.update(req.id, req.expire)
+			req.resp <- s.update(req.id, req.expire, req.param)
 		case id := <-s.finishCh:
 			s.finish(id)
 		case <-poll.C:
@@ -480,9 +481,9 @@ func (s *Scheduler[P]) ScheduleTask(task *Task[P]) error {
 
 // Update 修改已有任务的执行时间（保持原回调）。任务不存在返回 ErrNotFound，
 // 调度器已停止返回 ErrStopped。对已下沉到存储的远任务同样生效。
-func (s *Scheduler[P]) Update(id uint64, t time.Time) error {
+func (s *Scheduler[P]) Update(id uint64, t time.Time, p P) error {
 	resp := make(chan error, 1)
-	if !s.sendUpd(updReq{id: id, expire: t.UnixNano(), resp: resp}) {
+	if !s.sendUpd(updReq[P]{id: id, expire: t.UnixNano(), resp: resp, param: p}) {
 		return ErrStopped
 	}
 	select {
@@ -591,7 +592,7 @@ func (s *Scheduler[P]) sendCancel(req cancelReq) bool {
 	}
 }
 
-func (s *Scheduler[P]) sendUpd(req updReq) bool {
+func (s *Scheduler[P]) sendUpd(req updReq[P]) bool {
 	if s.stopped.Load() {
 		return false
 	}
@@ -622,7 +623,7 @@ func (s *Scheduler[P]) get(id uint64) (*Task[P], error) {
 	return nil, ErrNotFound
 }
 
-func (s *Scheduler[P]) update(id uint64, expire int64) error {
+func (s *Scheduler[P]) update(id uint64, expire int64, param P) error {
 	t, err := s.get(id)
 	if err != nil {
 		// 不在内存轮：查下沉索引，仍可更新（保留原回调与参数）。
@@ -634,7 +635,7 @@ func (s *Scheduler[P]) update(id uint64, expire int64) error {
 			s.add(&Task[P]{
 				id:      id,
 				expire:  expire,
-				param:   st.param,
+				param:   param,
 				persist: st.persist,
 				retries: st.retries,
 				delay:   st.delay,
@@ -650,7 +651,7 @@ func (s *Scheduler[P]) update(id uint64, expire int64) error {
 	s.add(&Task[P]{
 		id:      id,
 		expire:  expire,
-		param:   t.param,
+		param:   param,
 		persist: t.persist,
 		retries: t.retries,
 		delay:   t.delay,

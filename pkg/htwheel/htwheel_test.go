@@ -409,7 +409,7 @@ func TestUpdateSunkTask(t *testing.T) {
 	}
 
 	// Update 到很近的未来（30ms，≤ ahead）→ 应拉回内存轮并尽快执行。
-	if err := s.Update(1, time.Now().Add(30*time.Millisecond)); err != nil {
+	if err := s.Update(1, time.Now().Add(30*time.Millisecond), p); err != nil {
 		t.Fatalf("update on sunk task should succeed, got %v", err)
 	}
 
@@ -454,7 +454,7 @@ func TestUpdateCanceledSunkTask(t *testing.T) {
 	}
 
 	// 再 Update：应被拒绝（不复活已取消任务）。
-	if err := s.Update(1, time.Now().Add(30*time.Millisecond)); !errors.Is(err, ErrNotFound) {
+	if err := s.Update(1, time.Now().Add(30*time.Millisecond), recoverable{id: 1}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("update on canceled sunk task should fail with ErrNotFound, got %v", err)
 	}
 
