@@ -11,11 +11,33 @@ services:
       - TZ=UTC                  # 💡 保持 0时区 (UTC)
       - FE_SERVERS=fe1:127.0.0.1:9010
       - BE_SERVERS=be1:127.0.0.1:9050
+      # 💡 关键：Doris BE 的 start_be.sh 默认会检查 swap（swapon -s）并在宿主机开启 swap 时拒绝启动。
+      #    但容器内 /proc/swaps 反映的是宿主机，无法也不应在容器里关闭宿主机 swap。
+      #    设 SKIP_CHECK_ULIMIT=true 可跳过该检查块（含 swap/max_map_count 检查），
+      #    从而既不用 swapoff 关宿主机 swap，也不需要 privileged 特权模式。
+      - SKIP_CHECK_ULIMIT=true
     volumes:
       # 💡 关键 2：Windows 下挂载目录建议使用相对路径，Docker Desktop 会自动处理权限
       - ./doris/fe_meta:/opt/apache-doris/fe/doris-meta
       - ./doris/be_storage:/opt/apache-doris/be/storage
       - ./doris/logs:/opt/apache-doris/log
-      - ./doris_fe.conf:/opt/apache-doris/fe/conf/fe.conf
-    command: sh -c " swapoff -a 2>/dev/null || true && /usr/local/bin/entry_point.sh"
-    privileged: true
+    # 💡 覆盖镜像 ENTRYPOINT（原为 ["bash","entry_point.sh"]），在启动前先调低 FE 的 JVM 堆内存。
+    #    镜像默认 fe.conf 里 -Xmx8192m / -Xms8192m 会让 FE 一启动就预留 8G 堆，
+    #    与 BE 共抢 12G 容器限额导致 OOM。这里用 sed 降到 2G，从而无需再挂载 doris_fe.conf。
+    entrypoint: >-
+      bash -c "
+        sed -i 's/-Xmx8192m/-Xmx2048m/g; s/-Xms8192m/-Xms2048m/g' /opt/apache-doris/fe/conf/fe.conf &&
+        exec bash /usr/local/bin/entry_point.sh
+      "
+    # 💡 关键：不要用 privileged: true。特权容器内执行的 swapoff/sysctl 等命令会直接作用于宿主机，
+    #    这是之前"启动 Doris 关掉了宿主机 swap"的根因。Doris 的 entry_point 脚本并不需要特权模式。
+    # 💡 2. 修复 mem_limit 的缩进位置（移入 deploy 块中）
+    deploy:
+      resources:
+        limits:
+          memory: 12g
+    # 💡 BE 要求 max open file descriptors >= 60000，否则 start_be.sh 直接退出
+    ulimits:
+      nofile:
+        soft: 655350
+        hard: 655350
