@@ -43,12 +43,18 @@ type DorisResponse struct {
 	CommitAndPublishTimeMs int    `json:"CommitAndPublishTimeMs"`
 }
 
+// defaultMaxBacklog 本地 CSV 缓冲积压的默认告警阈值（10GB）。超过仅告警不中断。
+const defaultMaxBacklog = int64(10 * 1024 * 1024 * 1024)
+
 type DorisConfig struct {
 	Host     string `yaml:"host"`     // 数据库主机地址
 	Username string `yaml:"username"` // 数据库用户名
 	Password string `yaml:"password"` // 数据库密码
 	Schema   string `yaml:"schema"`   // 数据库名称
 	LoadURL  string `yaml:"loadURL"`
+	// MaxBacklogBytes 本地 CSV 缓冲积压的告警阈值（字节）。超过时仅告警不中断。
+	// 为 0 时使用默认值（见 Doris.defaultMaxBacklog）。
+	MaxBacklogBytes int64 `yaml:"maxBacklogBytes"`
 }
 
 func (c *DorisConfig) Validate(ctx context.Context) bool {
@@ -102,6 +108,13 @@ type Doris struct {
 
 	// monitor 监控器：采集/上传吞吐、延迟、错误、DDL、暂停事件等指标。
 	monitor *Monitor
+
+	// maxBacklog 本地 CSV 缓冲积压的告警阈值（字节），超过时仅告警不中断同步。
+	maxBacklog int64
+
+	// backlogWarned 是否已因积压超限告警过（避免每个周期重复告警刷屏），
+	// 积压回落到阈值以下后复位。
+	backlogWarned bool
 }
 
 func NewDoris(cfg *DorisConfig) *Doris {
@@ -111,6 +124,11 @@ func NewDoris(cfg *DorisConfig) *Doris {
 		client:  &http.Client{Timeout: 60 * time.Second},
 		change:  make(chan []TableInfo),
 		monitor: NewMonitor(),
+	}
+	if cfg != nil && cfg.MaxBacklogBytes > 0 {
+		d.maxBacklog = cfg.MaxBacklogBytes
+	} else {
+		d.maxBacklog = defaultMaxBacklog
 	}
 	d.initializing.Store(true)
 	return d
@@ -149,6 +167,10 @@ func (d *Doris) Open(ctx context.Context) error {
 	if err != nil {
 		return herror.Wrap(err)
 	}
+	// 连接池参数：限制并发连接数、空闲连接数与连接生命周期，避免连接泄漏。
+	d.sql.SetMaxOpenConns(8)
+	d.sql.SetMaxIdleConns(4)
+	d.sql.SetConnMaxLifetime(5 * time.Minute)
 	err = d.createCDCRecord(ctx)
 	if err != nil {
 		return err
@@ -159,20 +181,30 @@ func (d *Doris) Open(ctx context.Context) error {
 }
 
 func (d *Doris) loop(ctx context.Context) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	// 用 timer 实现动态重试间隔：上传失败时指数退避（Doris 故障时不高频打请求），
+	// 成功则回到基准间隔。
+	const baseInterval = 2 * time.Second
+	const maxBackoff = 30 * time.Second
+	interval := baseInterval
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			if d.IsPaused() {
-				continue
-			}
-			if err := d.scanFile(ctx); err != nil {
+				interval = baseInterval
+			} else if err := d.scanFile(ctx); err != nil {
 				herror.PrintStack(ctx, err)
+				if interval < maxBackoff {
+					interval *= 2
+				}
+			} else {
+				interval = baseInterval
 			}
+			timer.Reset(interval)
 		case val := <-d.change:
 			// 源表结构发生变化：先自动暂停 svc -> Doris 的数据上传，
 			// 待 Doris 侧 DDL 同步完成并经人工确认后，再手动 Resume 恢复。
@@ -1002,52 +1034,102 @@ func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, tab
 
 func (d *Doris) scanFile(ctx context.Context) error {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
-	if len(d.workers) == 0 {
+	workers := make([]*Worker, 0, len(d.workers))
+	for _, worker := range d.workers {
+		workers = append(workers, worker)
+	}
+	d.mu.RUnlock()
+	if len(workers) == 0 {
 		return nil
 	}
 
 	// 统计当前积压（待上传的 .active 文件数与字节数），用于监控。
 	var backlogFiles, backlogBytes int64
-	for _, worker := range d.workers {
+	for _, worker := range workers {
 		f, b := worker.Backlog()
 		backlogFiles += f
 		backlogBytes += b
 	}
 	d.monitor.setBacklog(backlogFiles, backlogBytes)
 
-	reader := bytes.Buffer{}
-	for _, worker := range d.workers {
-		id, pos, gtid, err := worker.ScanFile(ctx, func(ctx context.Context, schema Schema, table Table, columns string, capturedAt time.Time, r io.Reader) error {
-			err := d.StreamSave(ctx, schema, table, columns, r)
-			if err == nil && !capturedAt.IsZero() {
-				// 记录端到端延迟：从数据被采集到上传完成。
-				d.monitor.recordDelay(time.Since(capturedAt).Milliseconds())
-			}
-			return err
-		})
-		if err != nil {
-			d.monitor.UploadErrors.Add(1)
-			hlog.Error(ctx, "scan file error: %v", err)
-			return err
+	// 磁盘水位检测：积压超过阈值时仅告警，不中断同步。采用「进入告警/解除告警」
+	// 的边沿触发，避免每个扫描周期重复刷屏。
+	d.checkBacklog(ctx, backlogBytes)
+
+	// 并发上传各 worker（每 worker 对应一个 MySQL 实例，彼此独立），提升吞吐、降低延迟。
+	// 位点结果用互斥锁保护汇总，供写入 cdc_record.log_position。
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		reader   bytes.Buffer
+		firstErr error
+	)
+	upload := func(ctx context.Context, schema Schema, table Table, columns string, capturedAt time.Time, r io.Reader) error {
+		err := d.StreamSave(ctx, schema, table, columns, r)
+		if err == nil && !capturedAt.IsZero() {
+			// 记录端到端延迟：从数据被采集到上传完成。
+			d.monitor.recordDelay(time.Since(capturedAt).Milliseconds())
 		}
-		if pos != nil {
-			reader.WriteString(strconv.FormatInt(int64(id), 10))
-			reader.WriteString(",")
-			reader.WriteString(pos.Name)
-			reader.WriteString(",")
-			reader.WriteString(strconv.FormatUint(uint64(pos.Pos), 10))
-			reader.WriteString(",")
-			// GTID 作为第 4 列（CSV 内逗号会破坏列结构，做转义）。
-			reader.WriteString(strings.ReplaceAll(gtid, ",", " "))
-			reader.WriteString(",0\n")
-		}
+		return err
 	}
 
+	for _, worker := range workers {
+		wg.Add(1)
+		go func(w *Worker) {
+			defer wg.Done()
+			id, pos, gtid, err := w.ScanFile(ctx, upload)
+			if err != nil {
+				d.monitor.UploadErrors.Add(1)
+				hlog.Error(ctx, "scan file error: %v", err)
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+				return
+			}
+			if pos != nil {
+				mu.Lock()
+				reader.WriteString(strconv.FormatInt(int64(id), 10))
+				reader.WriteString(",")
+				reader.WriteString(pos.Name)
+				reader.WriteString(",")
+				reader.WriteString(strconv.FormatUint(uint64(pos.Pos), 10))
+				reader.WriteString(",")
+				// GTID 作为第 4 列（CSV 内逗号会破坏列结构，做转义）。
+				reader.WriteString(strings.ReplaceAll(gtid, ",", " "))
+				reader.WriteString(",0\n")
+				mu.Unlock()
+			}
+		}(worker)
+	}
+	wg.Wait()
+
+	if firstErr != nil {
+		return firstErr
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
 	if reader.Len() == 0 {
 		return nil
 	}
 	return d.StreamSave(ctx, "cdc_record", "log_position", "instance_id,file,position,gtid,__op", &reader)
+}
+
+// checkBacklog 磁盘水位检测：本地 CSV 缓冲积压超过阈值时仅告警（不中断同步）。
+// 采用边沿触发（进入告警/解除告警各打一次），避免每个扫描周期重复刷屏。
+// 仅在 loop 的单 goroutine 内调用，无需加锁。
+func (d *Doris) checkBacklog(ctx context.Context, backlogBytes int64) {
+	if backlogBytes > d.maxBacklog {
+		if !d.backlogWarned {
+			d.backlogWarned = true
+			hlog.Warn(ctx, "csv backlog %d bytes exceeds threshold %d bytes (%.2f GB), upload may lag behind",
+				backlogBytes, d.maxBacklog, float64(backlogBytes)/1024/1024/1024)
+		}
+		return
+	}
+	d.backlogWarned = false
 }
 
 func (d *Doris) createCDCRecord(ctx context.Context) error {

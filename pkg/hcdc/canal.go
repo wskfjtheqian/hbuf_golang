@@ -72,6 +72,12 @@ func (c *CanalConfig) Validate(ctx context.Context) bool {
 		hlog.Error(ctx, "canal config schema is empty")
 		return false
 	}
+	// ServerID 未显式配置时 go-mysql 会随机生成，多实例部署可能冲突。
+	// 生产环境建议显式配置一个全局唯一的 serverID（用于 binlog 订阅的 replica 标识）。
+	if c.ServerID == nil {
+		hlog.Warn(ctx, "canal config serverID is not set, go-mysql will generate a random one; "+
+			"set a globally unique serverID for production to avoid replica id conflict")
+	}
 	return true
 }
 
@@ -153,6 +159,9 @@ type Canal struct {
 	worker         *Worker
 	monitor        *Monitor
 	gtidSet        mysql.GTIDSet // 已采集事务的 GTID 集合，仅在 RunFrom goroutine 内串行读写
+
+	// 同步生命周期：cancel 用于在 Close 时终止后台同步 goroutine 与重连循环。
+	cancel context.CancelFunc
 }
 
 func (c *Canal) setMonitor(m *Monitor) {
@@ -177,36 +186,21 @@ func (c *Canal) Open(ctx context.Context) error {
 		return err
 	}
 
-	// 建立直连，用于执行查询和锁表操作
+	// 建立直连，用于执行查询和锁表操作。
 	c.sql, err = sql.Open("mysql", c.cfg.Username+":"+c.cfg.Password+"@tcp("+c.cfg.Host+")/"+c.cfg.Schema)
 	if err != nil {
 		return err
 	}
+	// 连接池参数：限制并发连接数、空闲连接数与连接生命周期，避免连接泄漏。
+	c.sql.SetMaxOpenConns(8)
+	c.sql.SetMaxIdleConns(4)
+	c.sql.SetConnMaxLifetime(5 * time.Minute)
 
 	// 建立 canal 实例（需在取位点之前，GetMasterPos 依赖它）。
-	cfg := canal.NewDefaultConfig()
-	if c.cfg.ServerID != nil {
-		cfg.ServerID = *c.cfg.ServerID
-	}
-	cfg.Addr = c.cfg.Host
-	cfg.User = c.cfg.Username
-	cfg.Password = c.cfg.Password
-	cfg.Charset = c.cfg.Charset
-	// 仅当显式配置时才覆盖默认 flavor（NewDefaultConfig 默认 "mysql"），
-	// 否则空字符串会覆盖默认值，导致 MariaDB 等场景 GTID 无法解析。
-	if c.cfg.Flavor != "" {
-		cfg.Flavor = c.cfg.Flavor
-	}
-	cfg.TimestampStringLocation = time.UTC
-	cfg.Dump.ExecutionPath = ""
-	cfg.IncludeTableRegex = c.cfg.IncludeTables
-	cfg.ExcludeTableRegex = c.cfg.ExcludeTables
-
-	c.canal, err = canal.NewCanal(cfg)
+	c.canal, err = c.newCanal()
 	if err != nil {
-		return herror.Wrap(err)
+		return err
 	}
-	c.canal.SetEventHandler(c)
 
 	// 建立表元数据（OnRow 依赖 c.schemas 查找列结构），并在 Doris 侧建库建表。
 	// createSchemaTable 内部走 CREATE IF NOT EXISTS，幂等，断点续传时也可安全重跑。
@@ -243,26 +237,124 @@ func (c *Canal) Open(ctx context.Context) error {
 		hlog.Info(ctx, "resume from persisted position: %s:%d gtid=%s", last.Position.Name, last.Position.Pos, last.Gtid)
 	}
 
-	// 优先用 GTID 恢复（跨主从切换、幂等不重），无 GTID 时回退物理位点。
-	// flavor 用 cfg.Flavor（已应用默认值 "mysql"，且仅在显式配置时覆盖）。
-	go func() {
-		var err error
-		if last.Gtid != "" {
-			if gtidSet, parseErr := mysql.ParseGTIDSet(cfg.Flavor, last.Gtid); parseErr == nil {
-				hlog.Info(ctx, "resume from persisted gtid: %s", last.Gtid)
-				err = c.canal.StartFromGTID(gtidSet)
+	// 后台启动同步循环（含断线重连）。使用独立 context，Close 时通过 cancel 终止。
+	syncCtx, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
+	go c.runSync(syncCtx, *last)
+	return nil
+}
+
+// newCanal 创建 go-mysql canal 实例并注册事件处理器。
+func (c *Canal) newCanal() (*canal.Canal, error) {
+	cfg := canal.NewDefaultConfig()
+	if c.cfg.ServerID != nil {
+		cfg.ServerID = *c.cfg.ServerID
+	}
+	cfg.Addr = c.cfg.Host
+	cfg.User = c.cfg.Username
+	cfg.Password = c.cfg.Password
+	cfg.Charset = c.cfg.Charset
+	// 仅当显式配置时才覆盖默认 flavor（NewDefaultConfig 默认 "mysql"），
+	// 否则空字符串会覆盖默认值，导致 MariaDB 等场景 GTID 无法解析。
+	if c.cfg.Flavor != "" {
+		cfg.Flavor = c.cfg.Flavor
+	}
+	cfg.TimestampStringLocation = time.UTC
+	cfg.Dump.ExecutionPath = ""
+	cfg.IncludeTableRegex = c.cfg.IncludeTables
+	cfg.ExcludeTableRegex = c.cfg.ExcludeTables
+
+	cInst, err := canal.NewCanal(cfg)
+	if err != nil {
+		return nil, herror.Wrap(err)
+	}
+	cInst.SetEventHandler(c)
+	return cInst, nil
+}
+
+// runSync 后台同步循环：从给定初始位点（优先 GTID）启动 binlog 订阅，失败后指数退避并重建
+// canal 实例重连（go-mysql 的 canal 实例失败后不可复用，须重新创建）。
+// 初始位点由 Open 传入（全量起始位点或断点续传位点）；重连时则重新查询持久化位点。
+func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
+	backoff := time.Second
+	const maxBackoff = 30 * time.Second
+
+	pos := initial
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		cInst := c.canal
+		var runErr error
+		if pos.Gtid != "" {
+			if gtidSet, parseErr := mysql.ParseGTIDSet(c.canalCfgFlavor(), pos.Gtid); parseErr == nil {
+				hlog.Info(ctx, "start sync from persisted gtid: %s", pos.Gtid)
+				runErr = cInst.StartFromGTID(gtidSet)
 			} else {
 				hlog.Error(ctx, "parse persisted gtid failed (%v), fallback to position", parseErr)
-				err = c.canal.RunFrom(last.Position)
+				runErr = cInst.RunFrom(pos.Position)
 			}
 		} else {
-			err = c.canal.RunFrom(last.Position)
+			runErr = cInst.RunFrom(pos.Position)
 		}
-		if err != nil {
-			hlog.Error(ctx, "canal run error: %v", err)
+
+		if runErr == nil {
+			// RunFrom/StartFromGTID 正常返回通常是 canal 已关闭（Close 触发），正常退出。
+			return
 		}
-	}()
-	return nil
+		if ctx.Err() != nil {
+			return
+		}
+
+		hlog.Error(ctx, "canal sync error: %v, will reconnect after %v", runErr, backoff)
+
+		// 重建 canal 实例（旧的已不可复用）。
+		if nc, err := c.newCanal(); err != nil {
+			hlog.Error(ctx, "recreate canal failed: %v", err)
+		} else {
+			if c.canal != nil {
+				c.canal.Close()
+			}
+			c.canal = nc
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		if backoff < maxBackoff {
+			backoff *= 2
+		}
+
+		// 重连前重新查询上次已上传位点（可能已被 scanFile 持续推进）。
+		if p := c.syncedPosition(ctx); p.Position.Name != "" || p.Gtid != "" {
+			pos = p
+		}
+	}
+}
+
+// syncedPosition 返回当前应作为同步起点的位点：优先从 Doris 持久化位点读取（断点续传），
+// 读不到时回退到 canal 当前 synced 位点（避免从零开始）。
+func (c *Canal) syncedPosition(ctx context.Context) SyncPosition {
+	if c.onGetPosition != nil {
+		if p, err := c.onGetPosition(ctx, c.cfg.InstanceId); err == nil && p != nil {
+			return *p
+		}
+	}
+	if c.canal != nil {
+		return SyncPosition{Position: c.canal.SyncedPosition()}
+	}
+	return SyncPosition{}
+}
+
+// canalCfgFlavor 返回用于 GTID 解析的 flavor（与 newCanal 应用默认值后一致）。
+func (c *Canal) canalCfgFlavor() string {
+	if c.cfg.Flavor != "" {
+		return c.cfg.Flavor
+	}
+	return mysql.MySQLFlavor
 }
 
 // OnTableChanged 当表结构被修改，或者是由于 DDL 导致 Canal 内部缓存的元数据失效时触发。
@@ -863,6 +955,11 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 }
 
 func (c *Canal) Close() {
+	// 先终止后台同步循环与重连循环，再关闭 canal 与直连。
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
+	}
 	if c.canal != nil {
 		c.canal.Close()
 		c.canal = nil
