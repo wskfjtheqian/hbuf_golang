@@ -1,3 +1,5 @@
 /pkg/hcdc/logs/
+/logs/
+/cdctest
 .workbuddy
 /pkg/hcdc/doris/

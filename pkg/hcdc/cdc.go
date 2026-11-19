@@ -186,6 +186,9 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 		}
 	}
 	h.canal.Store(&canals)
+
+	// 初始化（建库建表 + 全量拉取）完成，此后源表结构变化才会触发自动暂停。
+	doris.setInitialized()
 	return nil
 }
 

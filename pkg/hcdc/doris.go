@@ -95,32 +95,42 @@ type Doris struct {
 	stateMu sync.RWMutex
 	state   SyncState
 
+	// initializing 表示是否处于初始化阶段（建库建表 + 全量拉取）。
+	// 初始化阶段源表结构变化（建表）不应触发自动暂停，待初始化完成后再启用。
+	initializing atomic.Bool
+
 	// monitor 监控器：采集/上传吞吐、延迟、错误、DDL、暂停事件等指标。
 	monitor *Monitor
 }
 
 func NewDoris(cfg *DorisConfig) *Doris {
-	return &Doris{
+	d := &Doris{
 		cfg:     cfg,
 		workers: make(map[InstanceId]*Worker),
 		client:  &http.Client{Timeout: 60 * time.Second},
 		change:  make(chan []TableInfo),
 		monitor: NewMonitor(),
 	}
+	d.initializing.Store(true)
+	return d
 }
 
 func (d *Doris) RegisterWorker(ctx context.Context, worker *Worker) {
 	d.mu.Lock()
-	d.workers[worker.instanceId] = worker
+	if _, exists := d.workers[worker.instanceId]; !exists {
+		d.workers[worker.instanceId] = worker
+		// worker 的 loop 在注册时启动，确保后续 AddData 有消费者。
+		// 注意：不能放在 Open 里启动，因为 Open 早于 RegisterWorker 被调用，
+		// 那时 workers 还为空，会导致 loadData 时 AddData 永久阻塞。
+		go worker.loop(ctx)
+	}
 	d.mu.Unlock()
 }
 
 func (d *Doris) Open(ctx context.Context) error {
-	d.mu.RLock()
-	for _, worker := range d.workers {
-		go worker.loop(ctx)
-	}
-	d.mu.RUnlock()
+	// worker 的 loop 已改为在 RegisterWorker 时启动，这里不再重复启动。
+	// 早期实现在这里启动 worker.loop，但 Open 早于 RegisterWorker，
+	// 导致 worker.loop 从未启动、AddData 阻塞。
 
 	//// 建立直连，用于执行查询和锁表操作
 	var err error
@@ -198,6 +208,7 @@ func (d *Doris) Pause(ctx context.Context, reason string) {
 }
 
 // pauseForSchemaChange 在源表结构变化时自动暂停同步。
+// 仅由 loop 的 change 分支调用（运行时 DDL）；初始化建表走 ChangeTables 的同步路径，不会经过这里。
 func (d *Doris) pauseForSchemaChange(ctx context.Context, info TableInfo) {
 	reason := fmt.Sprintf("source table schema changed: %s.%s (action=%s)", info.Schema, info.Table, info.Action)
 	d.stateMu.Lock()
@@ -218,6 +229,11 @@ func (d *Doris) pauseForSchemaChange(ctx context.Context, info TableInfo) {
 	d.monitor.PauseCount.Add(1)
 	d.monitor.autoPause.Add(1)
 	hlog.Warn(ctx, "svc -> doris sync auto paused: %s", reason)
+}
+
+// setInitialized 标记初始化阶段结束，此后源表结构变化才会触发自动暂停。
+func (d *Doris) setInitialized() {
+	d.initializing.Store(false)
 }
 
 // Resume 手动恢复 svc -> Doris 的数据同步。
@@ -243,6 +259,17 @@ func (d *Doris) GetSyncState() SyncState {
 }
 
 func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
+	// 初始化阶段（建库建表 + 全量拉取）：同步执行建表，不走异步 change channel，
+	// 从而避免把初始化建表误判为“源表结构变化”触发自动暂停。
+	if d.initializing.Load() {
+		for i := range infos {
+			if err := d.changeTable(ctx, &infos[i]); err != nil {
+				herror.PrintStack(ctx, err)
+			}
+		}
+		return
+	}
+	// 运行时（binlog 捕获到的 DDL）：走异步 channel，由 loop 处理并触发自动暂停。
 	d.change <- infos
 }
 
