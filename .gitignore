@@ -5,3 +5,5 @@
 /pkg/hcdc/doris/
 /.Trash-0/
 logs_bench_*/
+logs_benchmulti_*/
+.tmp/

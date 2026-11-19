@@ -78,55 +78,55 @@ func main() {
 
 ### CanalConfig（源 MySQL）
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `InstanceId` | `int64` | 是 | 实例 ID，位点持久化的主键，多实例须唯一 |
-| `Host` | `string` | 是 | MySQL 地址，如 `127.0.0.1:3306` |
-| `Username` | `string` | 是 | 账号（需 REPLICATION SLAVE 权限） |
-| `Password` | `string` | 否 | 密码 |
-| `Schema` | `string` | 是 | 数据库名 |
-| `IncludeDBs` / `ExcludeDBs` | `[]string` | 否 | 库级白名单/黑名单（正则） |
-| `IncludeTables` / `ExcludeTables` | `[]string` | 否 | 表级白名单/黑名单（正则） |
-| `ServerID` | `*uint32` | 否 | binlog 订阅的 replica 标识，生产建议全局唯一；未设则随机生成 |
-| `Charset` | `string` | 否 | 字符集，默认 `utf8mb4` |
-| `Flavor` | `string` | 否 | 数据库类型；MySQL 留空，MariaDB 填 `"mariadb"` |
-| `LogDir` | `string` | 否 | 本地 CSV 缓冲目录 |
+| 字段                                | 类型         | 必填 | 说明                                     |
+| --------------------------------- | ---------- | -- | -------------------------------------- |
+| `InstanceId`                      | `int64`    | 是  | 实例 ID，位点持久化的主键，多实例须唯一                  |
+| `Host`                            | `string`   | 是  | MySQL 地址，如 `127.0.0.1:3306`            |
+| `Username`                        | `string`   | 是  | 账号（需 REPLICATION SLAVE 权限）             |
+| `Password`                        | `string`   | 否  | 密码                                     |
+| `Schema`                          | `string`   | 是  | 数据库名                                   |
+| `IncludeDBs` / `ExcludeDBs`       | `[]string` | 否  | 库级白名单/黑名单（正则）                          |
+| `IncludeTables` / `ExcludeTables` | `[]string` | 否  | 表级白名单/黑名单（正则）                          |
+| `ServerID`                        | `*uint32`  | 否  | binlog 订阅的 replica 标识，生产建议全局唯一；未设则随机生成 |
+| `Charset`                         | `string`   | 否  | 字符集，默认 `utf8mb4`                       |
+| `Flavor`                          | `string`   | 否  | 数据库类型；MySQL 留空，MariaDB 填 `"mariadb"`   |
+| `LogDir`                          | `string`   | 否  | 本地 CSV 缓冲目录                            |
 
 > **Flavor 注意**：源库为 MariaDB 时必须设 `Flavor="mariadb"`，否则 go-mysql 报 misconfigured flavor 且增量 DML 丢失（全量走 SQL SELECT 不受影响）。
 
 ### DorisConfig（目标 Doris）
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `Host` | `string` | 是 | Doris FE 地址，如 `127.0.0.1:9030` |
-| `Username` | `string` | 是 | 账号 |
-| `Password` | `string` | 否 | 密码 |
-| `Schema` | `string` | 否 | 目标库名 |
-| `LoadURL` | `string` | 是 | Stream Load 地址，如 `http://127.0.0.1:8040` |
-| `MaxBacklogBytes` | `int64` | 否 | 本地 CSV 积压告警阈值（字节），0 用默认 10GB |
+| 字段                | 类型       | 必填 | 说明                                       |
+| ----------------- | -------- | -- | ---------------------------------------- |
+| `Host`            | `string` | 是  | Doris FE 地址，如 `127.0.0.1:9030`           |
+| `Username`        | `string` | 是  | 账号                                       |
+| `Password`        | `string` | 否  | 密码                                       |
+| `Schema`          | `string` | 否  | 目标库名                                     |
+| `LoadURL`         | `string` | 是  | Stream Load 地址，如 `http://127.0.0.1:8040` |
+| `MaxBacklogBytes` | `int64`  | 否  | 本地 CSV 积压告警阈值（字节），0 用默认 10GB             |
 
 ## API
 
 ### 生命周期
 
-| 方法 | 说明 |
-|------|------|
-| `NewHCDC()` | 创建引擎实例 |
+| 方法                    | 说明                                     |
+| --------------------- | -------------------------------------- |
+| `NewHCDC()`           | 创建引擎实例                                 |
 | `SetConfig(ctx, cfg)` | 应用配置并启动同步；`cfg=nil` 关闭所有 canal 与 Doris |
-| `Close()` | 关闭单个 Canal（内部由 `SetConfig(nil)` 触发） |
+| `Close()`             | 关闭单个 Canal（内部由 `SetConfig(nil)` 触发）    |
 
 ### 同步状态控制
 
-| 方法 | 说明 |
-|------|------|
-| `Pause(ctx, reason)` | 暂停 svc → Doris 上传（采集继续，数据缓冲到本地） |
-| `Resume(ctx)` | 手动恢复上传 |
+| 方法                         | 说明                                                                 |
+| -------------------------- | ------------------------------------------------------------------ |
+| `Pause(ctx, reason)`       | 暂停 svc → Doris 上传（采集继续，数据缓冲到本地）                                    |
+| `Resume(ctx)`              | 手动恢复上传                                                             |
 | `GetSyncState() SyncState` | 返回状态快照（`Status`/`Reason`/`PausedAt`/`Schema`/`Table`/`InstanceId`） |
 
 ### 监控
 
-| 方法 | 说明 |
-|------|------|
+| 方法                      | 说明     |
+| ----------------------- | ------ |
 | `GetMetrics() Snapshot` | 返回监控快照 |
 
 `Snapshot` 覆盖：采集/上传吞吐（`CaptureRows`/`UploadRows`/`UploadBytes`）、错误计数（`CaptureErrors`/`UploadErrors`/`DDLErrors`）、延迟统计（`DelayAvgMs`/`DelayMaxMs`/`DelaySamples`）、上传耗时（`UploadAvgMs`/`UploadMaxMs`）、DDL（`DDLCount`/`CreateTable`/`AlterTable`/`DropTable`）、暂停事件（`PauseCount`/`ResumeCount`/`AutoPause`）、缓冲积压（`PendingFiles`/`PendingBytes`）。
@@ -191,15 +191,15 @@ go run ./pkg/hcdc/cmd/bench -bench incr      -rows 100000  -batch 5000
 
 ### 测试矩阵
 
-| 类别 | 用例 | 覆盖点 | 状态 |
-|------|------|--------|------|
-| **单元** | `Test_ParseCaptureTime` / `Test_Monitor*` | 延迟解析、监控计数器/快照 | ✅ |
-| **单元** | `Test_File_Backlog` / `Test_File_TxnBoundary` | 积压统计、事务边界对齐（GTID 变化 flush） | ✅ |
-| **单元** | `Test_DorisSyncState` / `Test_DorisSyncStateString` | 同步状态机 | ✅ |
-| **集成** | `Test_BinlogSync` | 全量 + 增量 INSERT/UPDATE/DELETE + **批量 INSERT（多行 RowsEvent 不漏行）** | ✅ |
-| **集成** | `Test_BinlogDDLTriggersPause` | DDL 触发自动暂停 + 手动恢复 | ✅ |
-| **集成** | `Test_BinlogDeleteSynced` | DELETE 位点推进 + MERGE 最终一致 | ✅ |
-| **集成** | `Test_BinlogResumeFromPersistedPosition` | 位点持久化 + 断点续传 | ✅ |
+| 类别     | 用例                                                  | 覆盖点                                                            | 状态 |
+| ------ | --------------------------------------------------- | -------------------------------------------------------------- | -- |
+| **单元** | `Test_ParseCaptureTime` / `Test_Monitor*`           | 延迟解析、监控计数器/快照                                                  | ✅  |
+| **单元** | `Test_File_Backlog` / `Test_File_TxnBoundary`       | 积压统计、事务边界对齐（GTID 变化 flush）                                     | ✅  |
+| **单元** | `Test_DorisSyncState` / `Test_DorisSyncStateString` | 同步状态机                                                          | ✅  |
+| **集成** | `Test_BinlogSync`                                   | 全量 + 增量 INSERT/UPDATE/DELETE + **批量 INSERT（多行 RowsEvent 不漏行）** | ✅  |
+| **集成** | `Test_BinlogDDLTriggersPause`                       | DDL 触发自动暂停 + 手动恢复                                              | ✅  |
+| **集成** | `Test_BinlogDeleteSynced`                           | DELETE 位点推进 + MERGE 最终一致                                       | ✅  |
+| **集成** | `Test_BinlogResumeFromPersistedPosition`            | 位点持久化 + 断点续传                                                   | ✅  |
 
 > 集成测试均验证「可重复运行」：每个用例启动前清理自身 `instance_id` 的 `log_position` 残留位点，避免上次运行遗留位点触发断点续传、跳过全量拉取。
 
@@ -209,34 +209,46 @@ go run ./pkg/hcdc/cmd/bench -bench incr      -rows 100000  -batch 5000
 
 **1. Stream Load 单文件导入吞吐**（隔离「上传」环节）
 
-| 行宽 | 并发 1 | 并发 2 | 并发 4 | 并发 8 |
-|------|--------|--------|--------|--------|
+| 行宽        | 并发 1                | 并发 2    | 并发 4     | 并发 8    |
+| --------- | ------------------- | ------- | -------- | ------- |
 | 120B（普通行） | 105 万行/s · 164 MB/s | 90 万行/s | 100 万行/s | 84 万行/s |
-| 512B（大字段） | 56 万行/s · 294 MB/s | 47 万行/s | 52 万行/s | — |
+| 512B（大字段） | 56 万行/s · 294 MB/s  | 47 万行/s | 52 万行/s  | —       |
 
 **结论**：Doris 单表 Stream Load 吞吐天花板约 **110 万行/s / 160~300 MB/s**；并发导入到同一张 UNIQUE KEY 表不线性提升，并发 8 反而退化——瓶颈在 Doris 端 commit + MERGE，不在 hcdc。
 
 **2. 全量拉取端到端吞吐**（MySQL → Doris，100 万行 / 200MB）
 
-| 指标 | 数值 |
-|------|------|
-| 源端插入 | 16.4 万行/s |
+| 指标   | 数值                                        |
+| ---- | ----------------------------------------- |
+| 源端插入 | 16.4 万行/s                                 |
 | 全量同步 | **4.58 万行/s · 9.2 MB/s**（完整上传 100 万行，无丢行） |
 
 **3. 增量 DML 端到端吞吐**（binlog 增量，10 万行）
 
-| 指标 | 数值 |
-|------|------|
-| 源端写入 | 9344 行/s（批量 INSERT） |
+| 指标   | 数值                                                   |
+| ---- | ---------------------------------------------------- |
+| 源端写入 | 9344 行/s（批量 INSERT）                                  |
 | 增量同步 | **5912 行/s**（写入 + binlog 捕获 + CSV + Stream Load 全链路） |
 
 > 全量/增量端到端吞吐受 `flushDuration`(5s) + `scanFile`(2s 周期) 固定延迟主导；数据量越大，该固定开销摊薄越多。单表高吞吐优化方向是分片并发 Stream Load。
 
-### 测试过程中发现并修复的关键缺陷
+**4. 多实例吞吐曲线**（`cmd/benchmulti`，多台 MariaDB 各写 50 万行）
 
-1. **批量 DML 静默丢行（严重）**：go-mysql 的一个 `RowsEvent` 可携带多行（批量 INSERT/多行 UPDATE），原 `OnRow` 只取 `e.Rows[0]` 首行，导致批量 INSERT 只同步第一行、其余全丢。已修复为遍历全部行（UPDATE 按 `[before, after]` 成对取 after 行），并新增批量 INSERT 集成断言防回归。
-2. **集成测试位点残留导致不可重复**：`Test_BinlogSync`/`DDL`/`Delete` 三个用例硬编码 instanceId 且不清理 `log_position` 残留，二次运行会读旧位点跳过全量。已加 `defer` 清理。
-3. **增量断言时序脆弱**：`Test_BinlogSync` 的 UPDATE/DELETE 断言在 `waitFor id=4` 后立即执行（未等待各自事件同步），改为各自独立 `waitFor`。
+测试环境：3 台 MariaDB（3316/3317/3318，Docker 各自独立 binlog + server-id），单 Doris BE。
+
+| 实例数 | separate（各写独立表） | shared（汇聚同一张表） |
+| ------ | --------------------- | --------------------- |
+| 1      | 71272 行/s            | 70155 行/s            |
+| 2      | 123502 行/s (1.73x)   | 119560 行/s (1.70x)   |
+| 3      | 120104 行/s (1.68x)   | 114350 行/s (1.63x)   |
+
+**结论（修正）**：
+
+1. **多实例对 hcdc 侧无负面影响**：1→2 实例吞吐近似翻倍（separate 1.73x / shared 1.70x），采集与落盘完全并行、互不干扰。
+2. **真正的天花板是 Doris 单 BE 的聚合导入/compaction 容量**（约 12 万行/s）：2→3 实例几乎不再提升，separate 与 shared 收敛到同一上限。**瓶颈在 BE，不在 hcdc，也不在「是否同一张表」**。
+3. 早前「并发导入同一张 UNIQUE KEY 表退化」的结论来自**单表内多并发 Stream Load**（进程内 8 并发退化成 84 万行/s）；而多实例场景是**多张表/多 worker 并发**，不会触发同样的 MERGE 竞争。纯 INSERT 下 per-table MERGE 竞争是次因；只有**大量并发 UPDATE 到同一 key** 时才会显著暴露。
+
+> 运行方式见脚本头部注释；多实例需多台 MySQL（`-mysql "host1,host2"`），可用 Docker 一键起（`--server-id` 必须互不相同）。
 
 ## 限制
 
@@ -244,3 +256,4 @@ go run ./pkg/hcdc/cmd/bench -bench incr      -rows 100000  -batch 5000
 - **源/目标单一**：仅支持 MySQL/MariaDB 源、Doris 目标。
 - **单机无编排**：无分布式调度、HA、水平扩展能力。
 - **类型映射**：字段级映射，已覆盖 enum/set→VARCHAR、year→SMALLINT、geometry 系列→STRING；JSON 等特殊类型仍建议自行扩展 `GetColumnType`。
+
