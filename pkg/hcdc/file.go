@@ -151,7 +151,13 @@ func (t *File) CloseFileUnderLock(ctx context.Context) error {
 
 func (t *File) save(ctx context.Context, action Action, columns []ColumnInfo, rows [][]RawBytes, position mysql.Position, gtid string) error {
 	file := t.file
-	if file == nil || !hutl.EqualSlice(t.columns, columns) {
+	// 事务边界检测：GTID 变化表示「新事务开始」。此时先 flush 上一个事务的数据，
+	// 保证单个 .active 文件不跨事务切分（Doris 单次 Stream Load 具备事务性，
+	// 崩溃时该事务要么完整、要么完全未上传，绝不出现半截事务）。
+	// 仅当新旧 GTID 都非空时才判定（空 GTID 表示源库未开启 GTID，无法识别边界，
+	// 退化为按 rotateSize/flushDuration 切分）。
+	newTxn := gtid != "" && t.gtid != "" && t.gtid != gtid
+	if file == nil || !hutl.EqualSlice(t.columns, columns) || newTxn {
 		t.columns = columns
 		var err error
 		if err = t.CloseFileUnderLock(ctx); err != nil {

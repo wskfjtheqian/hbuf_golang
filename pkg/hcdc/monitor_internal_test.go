@@ -1,11 +1,14 @@
 package hcdc
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
 // Test_ParseCaptureTime 验证 .active 文件名中采集时间戳的解析。
@@ -104,5 +107,45 @@ func Test_File_Backlog(t *testing.T) {
 	}
 	if bytes != int64(len(content)+len("header\nrow3\n")) {
 		t.Fatalf("bytes = %d, want %d", bytes, len(content)+len("header\nrow3\n"))
+	}
+}
+
+// Test_File_TxnBoundary 验证事务原子性：GTID 变化触发 flush，同一事务不跨文件切分。
+func Test_File_TxnBoundary(t *testing.T) {
+	dir := t.TempDir()
+	f := NewFile(0, "db", "tbl", dir)
+
+	cols := []ColumnInfo{{Name: "id", Type: "bigint"}}
+	row := func(v string) [][]RawBytes {
+		return [][]RawBytes{{RawBytes(v)}}
+	}
+	pos := mysql.Position{Name: "bin.000001", Pos: 100}
+
+	// 事务 A：同一 GTID 写两行，应落在同一个 .active 文件。
+	if err := f.AddData(context.Background(), Insert, cols, row("1"), pos, "0-1-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.AddData(context.Background(), Insert, cols, row("2"), pos, "0-1-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 事务 B：GTID 变化，应触发 flush，产生第二个 .active 文件。
+	if err := f.AddData(context.Background(), Insert, cols, row("3"), pos, "0-1-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 强制 flush，确保当前文件也落成 .active。
+	if err := f.CloseFileUnderLock(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	activeDir := filepath.Join(dir, "db", "tbl")
+	matches, err := filepath.Glob(filepath.Join(activeDir, "*.active"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 期望 2 个文件：事务 A 一个，事务 B 一个（B 触发 flush 后 A 已闭合，加上 B 自己）。
+	if len(matches) != 2 {
+		t.Fatalf("active files = %d, want 2 (txn A + txn B)", len(matches))
 	}
 }
