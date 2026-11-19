@@ -45,8 +45,23 @@ type CanalConfig struct {
 }
 
 func (c *CanalConfig) Validate(ctx context.Context) bool {
-	var valid bool = true
-	return valid
+	if c == nil {
+		hlog.Error(ctx, "canal config is nil")
+		return false
+	}
+	if strings.TrimSpace(c.Host) == "" {
+		hlog.Error(ctx, "canal config host is empty")
+		return false
+	}
+	if strings.TrimSpace(c.Username) == "" {
+		hlog.Error(ctx, "canal config username is empty")
+		return false
+	}
+	if strings.TrimSpace(c.Schema) == "" {
+		hlog.Error(ctx, "canal config schema is empty")
+		return false
+	}
+	return true
 }
 
 func (c *CanalConfig) Equal(other *CanalConfig) bool {
@@ -212,11 +227,15 @@ func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, t
 	if err != nil {
 		return err
 	}
-	if info != nil {
-		err = c.onCreateTable(ctx, []TableInfo{*info})
-		if err != nil {
-			return err
-		}
+	if info == nil {
+		return nil
+	}
+	if c.onCreateTable == nil {
+		return nil
+	}
+	err = c.onCreateTable(ctx, []TableInfo{*info})
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -233,7 +252,25 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 		return nil
 	}
 
-	return c.onCreateTable(hlog.NewContext(), []TableInfo{*ddl})
+	if c.onCreateTable == nil {
+		return nil
+	}
+
+	// DROP 只需要表名即可；CREATE/ALTER 需要带上游最新的完整表结构，
+	// 因为 ParseDDL 只解析出表名与列变更，不足以在 Doris 侧正确建表/改表。
+	if ddl.IsDrop {
+		return c.onCreateTable(hlog.NewContext(), []TableInfo{*ddl})
+	}
+
+	ctx := hlog.NewContext()
+	info, err := c.GetTableInfo(ctx, Schema(queryEvent.Schema), ddl.Table)
+	if err != nil {
+		return err
+	}
+	if info == nil {
+		return nil
+	}
+	return c.onCreateTable(ctx, []TableInfo{*info})
 }
 
 // OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
@@ -432,14 +469,11 @@ func (c *Canal) GetDatabases(ctx context.Context) ([]Schema, error) {
 
 	var dbs []Schema
 	for query.Next() {
-		var db *Schema
+		var db string
 		if err := query.Scan(&db); err != nil {
 			return nil, herror.Wrap(err)
 		}
-		if db == nil {
-			continue
-		}
-		dbs = append(dbs, *db)
+		dbs = append(dbs, Schema(db))
 	}
 	if err := query.Err(); err != nil {
 		return nil, herror.Wrap(err)
@@ -447,12 +481,15 @@ func (c *Canal) GetDatabases(ctx context.Context) ([]Schema, error) {
 	return dbs, nil
 }
 
-// FilterDatabase 过滤库
+// FilterDatabase 过滤库：exclude 优先排除；include 为空表示不限制，否则仅放行命中的库。
 func (c *Canal) FilterDatabase(name Schema) bool {
 	for _, exclude := range c.excludeDBs {
 		if exclude.MatchString(string(name)) {
 			return false
 		}
+	}
+	if len(c.includeDBs) == 0 {
+		return true
 	}
 	for _, include := range c.includeDBs {
 		if include.MatchString(string(name)) {
@@ -488,14 +525,11 @@ func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]Table, error) {
 
 	var tables []Table
 	for query.Next() {
-		var table *Table
+		var table string
 		if err := query.Scan(&table); err != nil {
 			return nil, herror.Wrap(err)
 		}
-		if table == nil {
-			continue
-		}
-		tables = append(tables, *table)
+		tables = append(tables, Table(table))
 	}
 	if err := query.Err(); err != nil {
 		return nil, herror.Wrap(err)
@@ -504,12 +538,15 @@ func (c *Canal) GetTables(ctx context.Context, schema Schema) ([]Table, error) {
 	return tables, nil
 }
 
-// FilterTable 过滤库
+// FilterTable 过滤表：exclude 优先排除；include 为空表示不限制，否则仅放行命中的表。
 func (c *Canal) FilterTable(name Table) bool {
 	for _, exclude := range c.excludeTables {
 		if exclude.MatchString(string(name)) {
 			return false
 		}
+	}
+	if len(c.includeTables) == 0 {
+		return true
 	}
 	for _, include := range c.includeTables {
 		if include.MatchString(string(name)) {
@@ -631,7 +668,7 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 			}
 		}
 		if ret.PartitionField == "" {
-			println("table", table, "ret.PartitionField", ret.PartitionField)
+			hlog.Error(ctx, "GetTableInfo: table %s.%s has RANGE partition but no datetime/timestamp partition field", schema, table)
 		}
 	}
 
@@ -758,16 +795,13 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 			c.schemas[Schema(db)] = make(map[Table]TableInfo)
 		}
 		for _, table := range tables {
-			if c.FilterTable(table) {
-
-				info, err := c.GetTableInfo(ctx, Schema(db), Table(table))
-				if err != nil {
-					return err
-				}
-				if info != nil {
-					c.schemas[Schema(db)][Table(table)] = *info
-					infos = append(infos, *info)
-				}
+			info, err := c.GetTableInfo(ctx, Schema(db), Table(table))
+			if err != nil {
+				return err
+			}
+			if info != nil {
+				c.schemas[Schema(db)][Table(table)] = *info
+				infos = append(infos, *info)
 			}
 		}
 	}
@@ -794,20 +828,6 @@ func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table
 	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
 	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
 
-	//result, err := c.conn.Execute(query, string(schema), string(table))
-	//if err != nil {
-	//	return "", err
-	//}
-	//defer result.Close()
-	//
-	//// 如果没有查询到分区记录，说明是普通表，不启用分区
-	//if len(result.Values) == 0 {
-	//	return "", nil
-	//}
-	//ret := string(result.Values[0][0].AsString())
-	//println("result", ret)
-
-	////////////////////////////////////////////
 	rows, err := c.sql.QueryContext(ctx, query, string(schema), string(table))
 	if err != nil {
 		return "", herror.Wrap(err)

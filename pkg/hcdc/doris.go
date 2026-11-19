@@ -50,8 +50,23 @@ type DorisConfig struct {
 }
 
 func (c *DorisConfig) Validate(ctx context.Context) bool {
-	var valid bool = true
-	return valid
+	if c == nil {
+		hlog.Error(ctx, "doris config is nil")
+		return false
+	}
+	if strings.TrimSpace(c.Host) == "" {
+		hlog.Error(ctx, "doris config host is empty")
+		return false
+	}
+	if strings.TrimSpace(c.Username) == "" {
+		hlog.Error(ctx, "doris config username is empty")
+		return false
+	}
+	if strings.TrimSpace(c.LoadURL) == "" {
+		hlog.Error(ctx, "doris config loadURL is empty")
+		return false
+	}
+	return true
 }
 
 func (c *DorisConfig) Equal(other *DorisConfig) bool {
@@ -131,7 +146,9 @@ func (d *Doris) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			d.scanFile(ctx)
+			if err := d.scanFile(ctx); err != nil {
+				herror.PrintStack(ctx, err)
+			}
 		case val := <-d.change:
 			for _, info := range val {
 				err := d.changeTable(ctx, &info)
@@ -217,28 +234,34 @@ func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
 // GetReplicationNum 动态探测并计算最安全的副本数
 func (d *Doris) GetReplicationNum(ctx context.Context) int {
 	// 1. 默认降级策略为 1
-	var defaultNum *int
-
-	// 2. 查出健康的 BE (Backend) 节点数量
 	query, err := d.sql.QueryContext(ctx, "SELECT COUNT(*) AS available_be_count FROM BACKENDS() WHERE `Alive` = true;")
 	if err != nil {
 		return 1
 	}
 	defer query.Close()
 
+	var count int
 	for query.Next() {
-		query.Scan(&defaultNum)
+		if err := query.Scan(&count); err != nil {
+			return 1
+		}
 	}
-
-	if defaultNum == nil {
+	if err := query.Err(); err != nil {
 		return 1
 	}
-	if *defaultNum > 3 {
+
+	if count > 3 {
 		return 3
 	}
-	return *defaultNum
+	if count <= 0 {
+		return 1
+	}
+	return count
 }
 func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
+	if info.IsDrop {
+		return d.dropTable(ctx, info)
+	}
 	newInfo := d.ToDorisTable(info)
 	oldInfo, err := d.GetTableInfo(ctx, info.Schema, info.Table)
 	if err != nil {
@@ -249,6 +272,17 @@ func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 	}
 
 	return d.modifyTable(ctx, oldInfo, newInfo)
+}
+
+// dropTable 删除 Doris 侧的对应表
+func (d *Doris) dropTable(ctx context.Context, info *TableInfo) error {
+	query := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", info.Schema, info.Table)
+	hlog.Info(ctx, "doris drop table: %s", query)
+	_, err := d.sql.ExecContext(ctx, query)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	return nil
 }
 
 // createTable 增强版：支持动态主键、自适应副本及 Range 时间分区
@@ -302,9 +336,10 @@ func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
 	// 4. 动态拼接 PARTITION BY RANGE 逻辑
 	if info.PartitionType == "RANGE" {
 		if info.PartitionField == "" {
-			println("info.PartitionField is empty")
+			hlog.Error(ctx, "createTable: PartitionType is RANGE but PartitionField is empty for table %s.%s", info.Schema, info.Table)
+		} else {
+			s.WriteString(fmt.Sprintf("AUTO PARTITION BY RANGE (DATE_TRUNC(`%s`, 'DAY')) ()\n", info.PartitionField))
 		}
-		s.WriteString(fmt.Sprintf("AUTO PARTITION BY RANGE (DATE_TRUNC(`%s`, 'DAY')) ()\n", info.PartitionField))
 	}
 	// 6. 动态获取系统推荐的副本数并组装 PROPERTIES
 	repNum := d.GetReplicationNum(ctx)
@@ -578,7 +613,7 @@ func (c *Doris) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 			}
 		}
 		if ret.PartitionField == "" {
-			println("table", table, "ret.PartitionField", ret.PartitionField)
+			hlog.Error(ctx, "GetTableInfo: table %s.%s has RANGE partition but no datetime/timestamp partition field", schema, table)
 		}
 	}
 
@@ -590,20 +625,6 @@ func (c *Doris) GetPartitionType(ctx context.Context, schema Schema, table Table
 	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
 	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
 
-	//result, err := c.conn.Execute(query, string(schema), string(table))
-	//if err != nil {
-	//	return "", err
-	//}
-	//defer result.Close()
-	//
-	//// 如果没有查询到分区记录，说明是普通表，不启用分区
-	//if len(result.Values) == 0 {
-	//	return "", nil
-	//}
-	//ret := string(result.Values[0][0].AsString())
-	//println("result", ret)
-
-	////////////////////////////////////////////
 	rows, err := c.sql.QueryContext(ctx, query, string(schema), string(table))
 	if err != nil {
 		return "", herror.Wrap(err)
@@ -769,10 +790,10 @@ func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, tab
 		if err != nil {
 			return herror.Wrap(err)
 		}
-		defer rows.Close()
 
 		columns, err := rows.Columns()
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		maps := make(map[string]int, len(columns))
@@ -782,30 +803,56 @@ func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, tab
 			maps[strings.ToLower(columns[i])] = i
 		}
 		if !rows.Next() {
+			rows.Close()
 			return nil
 		}
 
 		err = rows.Scan(values...)
 		if err != nil {
+			rows.Close()
 			return herror.Wrap(err)
 		}
-		state := values[maps["state"]]
+		rows.Close()
+
+		stateIdx, ok := maps["state"]
+		if !ok {
+			return fmt.Errorf("SHOW ALTER TABLE COLUMN result missing 'state' column")
+		}
+		state := values[stateIdx]
 		if state != nil {
 			state = *state.(*any)
 		}
-
-		progress := values[maps["progress"]]
-		if progress != nil {
-			progress = *progress.(*any)
+		var stateStr string
+		if state != nil {
+			switch v := state.(type) {
+			case []byte:
+				stateStr = string(v)
+			case string:
+				stateStr = v
+			default:
+				stateStr = fmt.Sprintf("%v", state)
+			}
 		}
-		switch string(state.([]byte)) {
+
+		var progressStr string
+		if idx, ok := maps["progress"]; ok {
+			progress := values[idx]
+			if progress != nil {
+				progress = *progress.(*any)
+			}
+			if progress != nil {
+				progressStr = fmt.Sprintf("%v", progress)
+			}
+		}
+
+		switch stateStr {
 		case "FINISHED", "CANCELLED":
 			return nil
 		case "RUNNING", "PENDING", "WAITING_TXN":
-			hlog.Info(ctx, "Schema Change %s, progress: %s, waiting...", state, progress)
+			hlog.Info(ctx, "Schema Change %s, progress: %s, waiting...", stateStr, progressStr)
 			time.Sleep(1 * time.Second)
 		default:
-			return fmt.Errorf("unknown state: %s", state)
+			return fmt.Errorf("unknown state: %s", stateStr)
 		}
 	}
 	return fmt.Errorf("wait schema change timeout after %d seconds", maxRetries)
@@ -824,7 +871,8 @@ func (d *Doris) scanFile(ctx context.Context) error {
 			return d.StreamSave(ctx, schema, table, columns, reader)
 		})
 		if err != nil {
-			return nil
+			hlog.Error(ctx, "scan file error: %v", err)
+			return err
 		}
 		if pos != nil {
 			reader.WriteString(strconv.FormatInt(int64(id), 10))

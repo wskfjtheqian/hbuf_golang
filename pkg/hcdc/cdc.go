@@ -4,6 +4,9 @@ import (
 	"context"
 	"strings"
 	"sync/atomic"
+
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
 type InstanceId int64
@@ -57,8 +60,23 @@ type Config struct {
 }
 
 func (c *Config) Validate(ctx context.Context) bool {
-	var valid bool = true
-	return valid
+	if c == nil {
+		hlog.Error(ctx, "config is nil")
+		return false
+	}
+	if c.Doris == nil {
+		hlog.Error(ctx, "config doris is nil")
+		return false
+	}
+	if !c.Doris.Validate(ctx) {
+		return false
+	}
+	for i := range c.Canals {
+		if !c.Canals[i].Validate(ctx) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Config) Equal(other *Config) bool {
@@ -109,6 +127,10 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 		}
 		h.canal.Store(nil)
 		return nil
+	}
+
+	if !cfg.Validate(ctx) {
+		return herror.NewError("config validate failed")
 	}
 
 	doris := NewDoris(cfg.Doris)

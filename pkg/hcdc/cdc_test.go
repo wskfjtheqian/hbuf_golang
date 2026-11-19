@@ -1,6 +1,7 @@
 package hcdc_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -9,12 +10,29 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
+const (
+	defaultMysqlHost  = "127.0.0.1:3306"
+	defaultDorisHost  = "127.0.0.1:9030"
+	defaultLoadURL    = "http://127.0.0.1:8040/"
+	defaultMysqlUser  = "root"
+	defaultMysqlPass  = "123456"
+	defaultDorisUser  = "admin"
+	defaultDorisPass  = ""
+)
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func Test_CanalGetDatabase(t *testing.T) {
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
 		InstanceId:    0,
-		Host:          "192.168.1.24:3316",
-		Username:      "root",
-		Password:      "123456",
+		Host:          envOr("CDC_MYSQL_HOST", defaultMysqlHost),
+		Username:      envOr("CDC_MYSQL_USER", defaultMysqlUser),
+		Password:      envOr("CDC_MYSQL_PASS", defaultMysqlPass),
 		Schema:        "game",
 		IncludeDBs:    []string{"game(.*)"},
 		ExcludeDBs:    []string{"game_(.*)"},
@@ -43,9 +61,9 @@ func Test_CanalGetDatabase(t *testing.T) {
 
 func Test_CanalGetTable(t *testing.T) {
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
-		Host:          "192.168.1.24:3316",
-		Username:      "root",
-		Password:      "123456",
+		Host:          envOr("CDC_MYSQL_HOST", defaultMysqlHost),
+		Username:      envOr("CDC_MYSQL_USER", defaultMysqlUser),
+		Password:      envOr("CDC_MYSQL_PASS", defaultMysqlPass),
 		Schema:        "game",
 		IncludeDBs:    []string{"game(.*)"},
 		ExcludeDBs:    []string{"game_(.*)"},
@@ -71,9 +89,9 @@ func Test_CanalGetTable(t *testing.T) {
 
 func Test_CanalGetColumns(t *testing.T) {
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
-		Host:     "192.168.1.24:3316",
-		Username: "root",
-		Password: "123456",
+		Host:     envOr("CDC_MYSQL_HOST", defaultMysqlHost),
+		Username: envOr("CDC_MYSQL_USER", defaultMysqlUser),
+		Password: envOr("CDC_MYSQL_PASS", defaultMysqlPass),
 		Schema:   "game",
 		LogDir:   "./logs",
 	})
@@ -91,10 +109,10 @@ func Test_CanalGetColumns(t *testing.T) {
 
 func Test_DorisCreateSchema(t *testing.T) {
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
-		Host:     "192.168.1.24:9030",
-		LoadURL:  "192.168.1.24:8040",
-		Password: "",
-		Username: "admin",
+		Host:     envOr("CDC_DORIS_HOST", defaultDorisHost),
+		LoadURL:  envOr("CDC_DORIS_LOAD_URL", defaultLoadURL),
+		Password: envOr("CDC_DORIS_PASS", defaultDorisPass),
+		Username: envOr("CDC_DORIS_USER", defaultDorisUser),
 	})
 	err := d.Open(t.Context())
 	if err != nil {
@@ -111,9 +129,9 @@ func Test_DorisCreateTable(t *testing.T) {
 	table := hcdc.Table("stats_agent_reward_report")
 
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
-		Host:     "192.168.1.24:3316",
-		Username: "root",
-		Password: "123456",
+		Host:     envOr("CDC_MYSQL_HOST", defaultMysqlHost),
+		Username: envOr("CDC_MYSQL_USER", defaultMysqlUser),
+		Password: envOr("CDC_MYSQL_PASS", defaultMysqlPass),
 		Schema:   "game",
 		LogDir:   "./logs",
 	})
@@ -129,10 +147,10 @@ func Test_DorisCreateTable(t *testing.T) {
 	t.Logf("Columns: %v", info)
 
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
-		Host:     "192.168.1.24:9030",
-		LoadURL:  "192.168.1.24:8040",
-		Password: "",
-		Username: "admin",
+		Host:     envOr("CDC_DORIS_HOST", defaultDorisHost),
+		LoadURL:  envOr("CDC_DORIS_LOAD_URL", defaultLoadURL),
+		Password: envOr("CDC_DORIS_PASS", defaultDorisPass),
+		Username: envOr("CDC_DORIS_USER", defaultDorisUser),
 	})
 	err = d.Open(t.Context())
 	if err != nil {
@@ -146,9 +164,9 @@ func Test_DorisCreateTable(t *testing.T) {
 
 func Test_DorisCopyTable(t *testing.T) {
 	c := hcdc.NewCanal(&hcdc.CanalConfig{
-		Host:     "192.168.1.24:3316",
-		Username: "root",
-		Password: "123456",
+		Host:     envOr("CDC_MYSQL_HOST", defaultMysqlHost),
+		Username: envOr("CDC_MYSQL_USER", defaultMysqlUser),
+		Password: envOr("CDC_MYSQL_PASS", defaultMysqlPass),
 		Schema:   "game",
 		LogDir:   "./logs",
 	})
@@ -167,10 +185,10 @@ func Test_DorisCopyTable(t *testing.T) {
 	t.Logf("Columns: %v", info)
 
 	d := hcdc.NewDoris(&hcdc.DorisConfig{
-		Host:     "192.168.1.24:9030",
-		LoadURL:  "http://192.168.1.24:8040/",
-		Password: "",
-		Username: "admin",
+		Host:     envOr("CDC_DORIS_HOST", defaultDorisHost),
+		LoadURL:  envOr("CDC_DORIS_LOAD_URL", defaultLoadURL),
+		Password: envOr("CDC_DORIS_PASS", defaultDorisPass),
+		Username: envOr("CDC_DORIS_USER", defaultDorisUser),
 	})
 
 	d.RegisterWorker(t.Context(), c.GetWorker())
@@ -194,9 +212,9 @@ func Test_HCDC(t *testing.T) {
 	err := cdc.SetConfig(t.Context(), &hcdc.Config{
 		Canals: []hcdc.CanalConfig{
 			{
-				Host:          "192.168.1.24:3316",
-				Username:      "root",
-				Password:      "123456",
+				Host:          envOr("CDC_MYSQL_HOST", defaultMysqlHost),
+				Username:      envOr("CDC_MYSQL_USER", defaultMysqlUser),
+				Password:      envOr("CDC_MYSQL_PASS", defaultMysqlPass),
 				Schema:        "game",
 				IncludeDBs:    []string{"game_usa"},
 				IncludeTables: []string{"(.*)"},
@@ -204,10 +222,10 @@ func Test_HCDC(t *testing.T) {
 			},
 		},
 		Doris: &hcdc.DorisConfig{
-			Host:     "192.168.1.24:9030",
-			LoadURL:  "http://192.168.1.24:8040/",
-			Password: "",
-			Username: "admin",
+			Host:     envOr("CDC_DORIS_HOST", defaultDorisHost),
+			LoadURL:  envOr("CDC_DORIS_LOAD_URL", defaultLoadURL),
+			Password: envOr("CDC_DORIS_PASS", defaultDorisPass),
+			Username: envOr("CDC_DORIS_USER", defaultDorisUser),
 		},
 	})
 	if err != nil {
@@ -215,39 +233,3 @@ func Test_HCDC(t *testing.T) {
 	}
 	time.Sleep(time.Hour)
 }
-
-//func Test_StreamSave(t *testing.T) {
-//	c := hcdc.NewCanal(&hcdc.CanalConfig{
-//		Host:     "192.168.1.24:3316",
-//		Username: "root",
-//		Password: "123456",
-//		Schema:   "game",
-//	})
-//	err := c.Open(t.Context())
-//	if err != nil {
-//		t.Fatalf("Open Canal failed: %v", err)
-//
-//	}
-//	table := hcdc.Table("stats_user_activity_trend") // Changed from string to hcdc.Table
-//	info, err := c.GetTableInfo(t.Context(), "game_usa", table)
-//	if err != nil {
-//		t.Fatalf("GetTableInfo failed: %v", err)
-//	}
-//
-//	d := hcdc.NewDoris(&hcdc.DorisConfig{
-//		Host:     "192.168.1.24:9030",
-//		LoadURL:  "http://192.168.1.24:8040/",
-//		LogDir:   "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs",
-//		Password: "",
-//		Username: "admin",
-//	})
-//
-//	w := hcdc.NewWorker("game_usa", table, "/Users/dev/2.hbuf/hbuf_golang/pkg/hcdc/logs")
-//
-//	_, err = w.ScanFile(t.Context(), func(ctx context.Context, infos []hcdc.ColumnInfo, columns string, reader io.Reader) error {
-//		return d.StreamSave(t.Context(), "game_usa", table, info.Columns, columns, reader)
-//	})
-//	if err != nil {
-//		herror.PrintStack(t.Context(), err)
-//	}
-//}
