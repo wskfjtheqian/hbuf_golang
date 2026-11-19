@@ -209,6 +209,12 @@ func Test_BinlogSync(t *testing.T) {
 	}
 	defer dorisDB.Close()
 
+	// 清理该 instanceId 在 log_position 表中的残留，保证测试可重复运行
+	// （否则上次运行留下的位点会触发断点续传、跳过全量拉取）。
+	defer func() {
+		_, _ = dorisDB.Exec("DELETE FROM cdc_record.log_position WHERE instance_id = 1")
+	}()
+
 	// 1. 全量同步：3 行应落地。
 	waitFor(t, 30*time.Second, "全量同步", func() bool {
 		return queryInt(t, dorisDB, "SELECT COUNT(*) FROM `"+env.schema+"`.`user`") == 3
@@ -227,12 +233,20 @@ func Test_BinlogSync(t *testing.T) {
 	waitFor(t, 30*time.Second, "增量 DML 同步（id=4 出现）", func() bool {
 		return queryInt(t, dorisDB, "SELECT COUNT(*) FROM `"+env.schema+"`.`user` WHERE id = 4") == 1
 	})
-	if got := queryInt(t, dorisDB, "SELECT age FROM `"+env.schema+"`.`user` WHERE id = 2"); got != 31 {
-		t.Fatalf("UPDATE 未同步：id=2 的 age 期望 31，实际 %d", got)
-	}
-	if got := queryInt(t, dorisDB, "SELECT COUNT(*) FROM `"+env.schema+"`.`user` WHERE id = 1"); got != 0 {
-		t.Fatalf("DELETE 未同步：id=1 应已删除")
-	}
+	// UPDATE 与 DELETE 是独立事件，需各自等待其 binlog 事件同步，而非立即断言。
+	waitFor(t, 30*time.Second, "UPDATE 同步（id=2 age=31）", func() bool {
+		return queryInt(t, dorisDB, "SELECT age FROM `"+env.schema+"`.`user` WHERE id = 2") == 31
+	})
+	waitFor(t, 30*time.Second, "DELETE 同步（id=1 删除）", func() bool {
+		return queryInt(t, dorisDB, "SELECT COUNT(*) FROM `"+env.schema+"`.`user` WHERE id = 1") == 0
+	})
+
+	// 2.5 批量 INSERT（单条语句多行，验证多行 RowsEvent 不漏行）。
+	// go-mysql 会把批量 INSERT 的多行放在同一个 RowsEvent.Rows 里，若 OnRow 只取首行会丢行。
+	env.execMySQL(t, `INSERT INTO `+"`"+env.schema+"`.`user`"+` (id, name, age) VALUES (10, 'b1', 1), (11, 'b2', 2), (12, 'b3', 3), (13, 'b4', 4), (14, 'b5', 5)`)
+	waitFor(t, 30*time.Second, "批量 INSERT 同步（5 行全部落地）", func() bool {
+		return queryInt(t, dorisDB, "SELECT COUNT(*) FROM `"+env.schema+"`.`user` WHERE id BETWEEN 10 AND 14") == 5
+	})
 
 	// 3. 采集与上传指标应一致（无错误、无丢数据）。
 	m := cdc.GetMetrics()
@@ -274,6 +288,11 @@ func Test_BinlogDDLTriggersPause(t *testing.T) {
 		t.Fatalf("open doris: %v", err)
 	}
 	defer dorisDB.Close()
+
+	// 清理该 instanceId 在 log_position 表中的残留，保证测试可重复运行。
+	defer func() {
+		_, _ = dorisDB.Exec("DELETE FROM cdc_record.log_position WHERE instance_id = 2")
+	}()
 
 	// 等全量完成，此时应处于 running 状态。
 	waitFor(t, 30*time.Second, "全量同步完成", func() bool {
@@ -332,6 +351,11 @@ func Test_BinlogDeleteSynced(t *testing.T) {
 		t.Fatalf("open doris: %v", err)
 	}
 	defer dorisDB.Close()
+
+	// 清理该 instanceId 在 log_position 表中的残留，保证测试可重复运行。
+	defer func() {
+		_, _ = dorisDB.Exec("DELETE FROM cdc_record.log_position WHERE instance_id = 3")
+	}()
 
 	waitFor(t, 30*time.Second, "全量同步完成", func() bool {
 		return queryInt(t, dorisDB, "SELECT COUNT(*) FROM `"+env.schema+"`.`user`") == 3

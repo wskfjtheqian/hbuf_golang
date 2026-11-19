@@ -285,6 +285,29 @@ func benchFull(ctx context.Context, md *sql.DB, schema string) {
 func benchIncr(ctx context.Context, md *sql.DB, schema string) {
 	hlog.Info(ctx, "--- 场景 3: binlog 增量 DML 吞吐 ---")
 	// 先全量建立基线，再测增量。
+	line := genLine(*rowWidth)
+
+	// 预插一小批全量基线数据（正 id），让全量拉取走完整链路、位点正确推进。
+	const baseRows = 1000
+	t0 := time.Now()
+	for off := 0; off < baseRows; off += *batch {
+		var sb strings.Builder
+		sb.WriteString("INSERT INTO t (id,name,age,ts,payload) VALUES ")
+		end := off + *batch
+		if end > baseRows {
+			end = baseRows
+		}
+		for i := off; i < end; i++ {
+			if i > off {
+				sb.WriteString(",")
+			}
+			sb.WriteString(fmt.Sprintf("(%d,'name_%d',%d,'2026-01-01 00:00:00','%s')", i, i, i%100, line))
+		}
+		if _, err := md.Exec(sb.String()); err != nil {
+			fatal(ctx, "base insert failed: %v", err)
+		}
+	}
+
 	serverID := uint32(time.Now().UnixNano() & 0x7fffffff)
 	cfg := &hcdc.Config{
 		Canals: []hcdc.CanalConfig{{
@@ -296,7 +319,7 @@ func benchIncr(ctx context.Context, md *sql.DB, schema string) {
 			ServerID:   &serverID,
 			Charset:    "utf8mb4",
 			Flavor:     "mariadb",
-			LogDir:     "./logs_bench_incr",
+			LogDir:     fmt.Sprintf("./logs_bench_incr_%d", time.Now().UnixNano()),
 		}},
 		Doris: &hcdc.DorisConfig{
 			Host:     *dorisHost,
@@ -306,20 +329,20 @@ func benchIncr(ctx context.Context, md *sql.DB, schema string) {
 		},
 	}
 	cfg.Canals[0].IncludeDBs = []string{"^" + schema + "$"}
+	// 无需额外 IncludeTables：bench_xxx 库是本次专用库，IncludeDBs 已限定范围。
 
 	cdc := hcdc.NewHCDC()
 	if err := cdc.SetConfig(ctx, cfg); err != nil {
 		fatal(ctx, "SetConfig failed: %v", err)
 	}
 	// 全量数据 flush 成 .active 需 5s(flushDuration) + scan 2s + 上传，固定等待覆盖即可。
-	time.Sleep(8 * time.Second)
+	time.Sleep(10 * time.Second)
 
-	// 记录基线，然后做增量 INSERT。
+	// 记录基线，然后做增量 INSERT（用大正 id 区间，避免与基线 id 冲突）。
 	base := cdc.GetMetrics()
 	hlog.Info(ctx, "基线: 已上传 %d 行，开始增量写入 %d 行...", base.UploadRows, *rows)
 
-	line := genLine(*rowWidth)
-	t0 := time.Now()
+	const idBase = 1000000 // 增量 id 起始，避开基线 0~baseRows。
 	for off := 0; off < *rows; off += *batch {
 		var sb strings.Builder
 		sb.WriteString("INSERT INTO t (id,name,age,ts,payload) VALUES ")
@@ -331,8 +354,7 @@ func benchIncr(ctx context.Context, md *sql.DB, schema string) {
 			if i > off {
 				sb.WriteString(",")
 			}
-			// 用负 id 区分增量数据（与全量正 id 不冲突）。
-			sb.WriteString(fmt.Sprintf("(%d,'incr_%d',%d,'2026-01-01 00:00:00','%s')", -i-1, i, i%100, line))
+			sb.WriteString(fmt.Sprintf("(%d,'incr_%d',%d,'2026-01-01 00:00:00','%s')", idBase+i, i, i%100, line))
 		}
 		if _, err := md.Exec(sb.String()); err != nil {
 			fatal(ctx, "incr insert failed: %v", err)

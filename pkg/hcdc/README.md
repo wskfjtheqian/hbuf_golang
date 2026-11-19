@@ -164,9 +164,14 @@ func main() {
 
 ## 测试
 
+### 运行方式
+
 ```bash
 # 单元测试（无需外部环境）
-go test ./pkg/hcdc/ -run 'Test_Monitor|Test_DorisSyncState|Test_File_Backlog|Test_ParseCaptureTime' -v
+go test ./pkg/hcdc/ -run 'Test_ParseCaptureTime|Test_Monitor|Test_File|Test_DorisSyncState' -v
+
+# 单元测试（含 race 检测）
+go test -race ./pkg/hcdc/ -run 'Test_ParseCaptureTime|Test_Monitor|Test_File|Test_DorisSyncState' -count=1
 
 # binlog 集成测试（需真实 MySQL + Doris，通过环境变量注入连接）
 CDC_RUN_INTEGRATION=1 \
@@ -175,9 +180,63 @@ CDC_MYSQL_FLAVOR=mariadb \
 CDC_DORIS_HOST=127.0.0.1:9030 \
 CDC_DORIS_LOAD_URL=http://127.0.0.1:8040/ \
   go test ./pkg/hcdc -run Test_Binlog -v -timeout 10m
+
+# 性能基准（需真实 MySQL + Doris）
+go run ./pkg/hcdc/cmd/bench -bench streamload -rows 300000 -row-width 120 -concur 8
+go run ./pkg/hcdc/cmd/bench -bench full      -rows 1000000 -batch 5000
+go run ./pkg/hcdc/cmd/bench -bench incr      -rows 100000  -batch 5000
 ```
 
 集成测试默认跳过（无环境不报错），需设置 `CDC_RUN_INTEGRATION=1` 才会真正运行。
+
+### 测试矩阵
+
+| 类别 | 用例 | 覆盖点 | 状态 |
+|------|------|--------|------|
+| **单元** | `Test_ParseCaptureTime` / `Test_Monitor*` | 延迟解析、监控计数器/快照 | ✅ |
+| **单元** | `Test_File_Backlog` / `Test_File_TxnBoundary` | 积压统计、事务边界对齐（GTID 变化 flush） | ✅ |
+| **单元** | `Test_DorisSyncState` / `Test_DorisSyncStateString` | 同步状态机 | ✅ |
+| **集成** | `Test_BinlogSync` | 全量 + 增量 INSERT/UPDATE/DELETE + **批量 INSERT（多行 RowsEvent 不漏行）** | ✅ |
+| **集成** | `Test_BinlogDDLTriggersPause` | DDL 触发自动暂停 + 手动恢复 | ✅ |
+| **集成** | `Test_BinlogDeleteSynced` | DELETE 位点推进 + MERGE 最终一致 | ✅ |
+| **集成** | `Test_BinlogResumeFromPersistedPosition` | 位点持久化 + 断点续传 | ✅ |
+
+> 集成测试均验证「可重复运行」：每个用例启动前清理自身 `instance_id` 的 `log_position` 残留位点，避免上次运行遗留位点触发断点续传、跳过全量拉取。
+
+### 压力测试结果
+
+测试环境：MariaDB 10.6（binlog ROW）@ 3316，Doris 3.0 单 BE @ 9030/8040，本机单进程。
+
+**1. Stream Load 单文件导入吞吐**（隔离「上传」环节）
+
+| 行宽 | 并发 1 | 并发 2 | 并发 4 | 并发 8 |
+|------|--------|--------|--------|--------|
+| 120B（普通行） | 105 万行/s · 164 MB/s | 90 万行/s | 100 万行/s | 84 万行/s |
+| 512B（大字段） | 56 万行/s · 294 MB/s | 47 万行/s | 52 万行/s | — |
+
+**结论**：Doris 单表 Stream Load 吞吐天花板约 **110 万行/s / 160~300 MB/s**；并发导入到同一张 UNIQUE KEY 表不线性提升，并发 8 反而退化——瓶颈在 Doris 端 commit + MERGE，不在 hcdc。
+
+**2. 全量拉取端到端吞吐**（MySQL → Doris，100 万行 / 200MB）
+
+| 指标 | 数值 |
+|------|------|
+| 源端插入 | 16.4 万行/s |
+| 全量同步 | **4.58 万行/s · 9.2 MB/s**（完整上传 100 万行，无丢行） |
+
+**3. 增量 DML 端到端吞吐**（binlog 增量，10 万行）
+
+| 指标 | 数值 |
+|------|------|
+| 源端写入 | 9344 行/s（批量 INSERT） |
+| 增量同步 | **5912 行/s**（写入 + binlog 捕获 + CSV + Stream Load 全链路） |
+
+> 全量/增量端到端吞吐受 `flushDuration`(5s) + `scanFile`(2s 周期) 固定延迟主导；数据量越大，该固定开销摊薄越多。单表高吞吐优化方向是分片并发 Stream Load。
+
+### 测试过程中发现并修复的关键缺陷
+
+1. **批量 DML 静默丢行（严重）**：go-mysql 的一个 `RowsEvent` 可携带多行（批量 INSERT/多行 UPDATE），原 `OnRow` 只取 `e.Rows[0]` 首行，导致批量 INSERT 只同步第一行、其余全丢。已修复为遍历全部行（UPDATE 按 `[before, after]` 成对取 after 行），并新增批量 INSERT 集成断言防回归。
+2. **集成测试位点残留导致不可重复**：`Test_BinlogSync`/`DDL`/`Delete` 三个用例硬编码 instanceId 且不清理 `log_position` 残留，二次运行会读旧位点跳过全量。已加 `defer` 清理。
+3. **增量断言时序脆弱**：`Test_BinlogSync` 的 UPDATE/DELETE 断言在 `waitFor id=4` 后立即执行（未等待各自事件同步），改为各自独立 `waitFor`。
 
 ## 限制
 
