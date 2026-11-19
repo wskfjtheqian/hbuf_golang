@@ -20,6 +20,7 @@ type AddData struct {
 	columns  []ColumnInfo
 	rows     [][]RawBytes
 	position mysql.Position
+	gtid     string
 }
 
 func WithFlushDuration(d time.Duration) WorkerOption {
@@ -65,7 +66,7 @@ type Worker struct {
 	files         map[SchemaTable]*File
 }
 
-func (t *Worker) AddData(ctx context.Context, schema Schema, table Table, action Action, columns []ColumnInfo, rows [][]RawBytes, position mysql.Position) error {
+func (t *Worker) AddData(ctx context.Context, schema Schema, table Table, action Action, columns []ColumnInfo, rows [][]RawBytes, position mysql.Position, gtid string) error {
 	key := SchemaTable(string(schema) + "." + string(table))
 	t.lock.RLock()
 	_, ok := t.files[key]
@@ -92,6 +93,7 @@ func (t *Worker) AddData(ctx context.Context, schema Schema, table Table, action
 		schema:   schema,
 		table:    table,
 		position: position,
+		gtid:     gtid,
 	}
 	return nil
 }
@@ -141,7 +143,7 @@ func (t *Worker) loop(ctx context.Context) {
 				t.lock.RLock()
 				defer t.lock.RUnlock()
 				if val, ok := t.files[SchemaTable(string(data.schema)+"."+string(data.table))]; ok {
-					err := val.AddData(ctx, data.action, data.columns, data.rows, data.position)
+					err := val.AddData(ctx, data.action, data.columns, data.rows, data.position, data.gtid)
 					if err != nil {
 						return err
 					}
@@ -156,21 +158,25 @@ func (t *Worker) loop(ctx context.Context) {
 	}
 }
 
-func (t *Worker) ScanFile(ctx context.Context, fn ScanFileCall) (InstanceId, *mysql.Position, error) {
+func (t *Worker) ScanFile(ctx context.Context, fn ScanFileCall) (InstanceId, *mysql.Position, string, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	var position *mysql.Position
+	var gtid string
 	for _, val := range t.files {
-		pos, err := val.ScanFile(ctx, fn)
+		pos, g, err := val.ScanFile(ctx, fn)
 		if err != nil {
-			return t.instanceId, nil, err
+			return t.instanceId, nil, "", err
 		}
 		if pos != nil && (position == nil || pos.Compare(*position) < 0) {
 			position = pos // pos is *mysql.Position
 		}
+		if g != "" {
+			gtid = g
+		}
 	}
-	return t.instanceId, position, nil
+	return t.instanceId, position, gtid, nil
 }
 
 // Backlog 聚合该 worker 下所有表的积压 .active 文件数与总字节数。

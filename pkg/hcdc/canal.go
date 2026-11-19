@@ -28,9 +28,16 @@ type OnData func(ctx context.Context, schema Schema, table Table, action Action,
 type OnCreateTable func(ctx context.Context, infos []TableInfo) error
 type OnCreateSchema func(ctx context.Context, schema Schema) error
 
-// OnGetPosition 查询指定实例上次成功上传的 binlog 位点，用于断点续传。
+// SyncPosition 断点续传位点：物理位点（binlog 文件 + offset）加上可选的 GTID 集合。
+// Gtid 为空表示源库未开启 GTID，恢复时回退用物理位点 RunFrom。
+type SyncPosition struct {
+	Position mysql.Position
+	Gtid     string
+}
+
+// OnGetPosition 查询指定实例上次成功上传的 binlog 位点（含 GTID），用于断点续传。
 // 返回 nil 表示无记录（首次启动）。由 SetConfig 注入，内部委托 Doris.GetPosition。
-type OnGetPosition func(ctx context.Context, instanceId InstanceId) (*mysql.Position, error)
+type OnGetPosition func(ctx context.Context, instanceId InstanceId) (*SyncPosition, error)
 
 type CanalConfig struct {
 	InstanceId    InstanceId `yaml:"instanceId"`    // 实例ID
@@ -145,6 +152,7 @@ type Canal struct {
 	sql            *sql.DB
 	worker         *Worker
 	monitor        *Monitor
+	gtidSet        mysql.GTIDSet // 已采集事务的 GTID 集合，仅在 RunFrom goroutine 内串行读写
 }
 
 func (c *Canal) setMonitor(m *Monitor) {
@@ -184,7 +192,11 @@ func (c *Canal) Open(ctx context.Context) error {
 	cfg.User = c.cfg.Username
 	cfg.Password = c.cfg.Password
 	cfg.Charset = c.cfg.Charset
-	cfg.Flavor = c.cfg.Flavor
+	// 仅当显式配置时才覆盖默认 flavor（NewDefaultConfig 默认 "mysql"），
+	// 否则空字符串会覆盖默认值，导致 MariaDB 等场景 GTID 无法解析。
+	if c.cfg.Flavor != "" {
+		cfg.Flavor = c.cfg.Flavor
+	}
 	cfg.TimestampStringLocation = time.UTC
 	cfg.Dump.ExecutionPath = ""
 	cfg.IncludeTableRegex = c.cfg.IncludeTables
@@ -207,17 +219,16 @@ func (c *Canal) Open(ctx context.Context) error {
 	//  1. 有上次已上传位点 → 从该位点断点续传，跳过全量拉取（避免重复全量）。
 	//  2. 无位点（首次启动）→ 先在全量拉取之前记录当前位点，全量拉取完成后从该位点开始，
 	//     这样全量拉取期间源库产生的新增 DML 会被随后的 binlog 重放，不会丢失。
-	startPos := (*mysql.Position)(nil)
+	last := (*SyncPosition)(nil)
 	if c.onGetPosition != nil {
-		if last, err := c.onGetPosition(ctx, c.cfg.InstanceId); err != nil {
+		if p, err := c.onGetPosition(ctx, c.cfg.InstanceId); err != nil {
 			return herror.Wrap(err)
-		} else if last != nil {
-			startPos = last
-			hlog.Info(ctx, "resume from persisted position: %s:%d", last.Name, last.Pos)
+		} else if p != nil {
+			last = p
 		}
 	}
 
-	if startPos == nil {
+	if last == nil {
 		// 首次启动：先记录全量起始位点，再做全量拉取。
 		pos, err := c.canal.GetMasterPos()
 		if err != nil {
@@ -226,12 +237,27 @@ func (c *Canal) Open(ctx context.Context) error {
 		if err = c.loadData(ctx); err != nil {
 			return err
 		}
-		startPos = &pos
-		hlog.Info(ctx, "full load done, start incremental from: %s:%d", startPos.Name, startPos.Pos)
+		last = &SyncPosition{Position: pos}
+		hlog.Info(ctx, "full load done, start incremental from: %s:%d", pos.Name, pos.Pos)
+	} else {
+		hlog.Info(ctx, "resume from persisted position: %s:%d gtid=%s", last.Position.Name, last.Position.Pos, last.Gtid)
 	}
 
+	// 优先用 GTID 恢复（跨主从切换、幂等不重），无 GTID 时回退物理位点。
+	// flavor 用 cfg.Flavor（已应用默认值 "mysql"，且仅在显式配置时覆盖）。
 	go func() {
-		err := c.canal.RunFrom(*startPos)
+		var err error
+		if last.Gtid != "" {
+			if gtidSet, parseErr := mysql.ParseGTIDSet(cfg.Flavor, last.Gtid); parseErr == nil {
+				hlog.Info(ctx, "resume from persisted gtid: %s", last.Gtid)
+				err = c.canal.StartFromGTID(gtidSet)
+			} else {
+				hlog.Error(ctx, "parse persisted gtid failed (%v), fallback to position", parseErr)
+				err = c.canal.RunFrom(last.Position)
+			}
+		} else {
+			err = c.canal.RunFrom(last.Position)
+		}
 		if err != nil {
 			hlog.Error(ctx, "canal run error: %v", err)
 		}
@@ -302,6 +328,26 @@ func (c *Canal) OnPosSynced(header *replication.EventHeader, pos mysql.Position,
 	return nil
 }
 
+// OnGTID 在收到 GTID 事件时被调用，用于累积「已采集事务」的 GTID 集合。
+// 注意：go-mysql 对 MariaDB 的 MariadbGTIDEvent 只触发本回调、并不更新 master 的
+// GTID set（SyncedGTIDSet 因此恒为 nil），所以必须在这里自行累积。
+// 本方法与 OnRow 都在 RunFrom 的同步 goroutine 内串行执行，无并发写入。
+func (c *Canal) OnGTID(header *replication.EventHeader, e mysql.BinlogGTIDEvent) error {
+	if e == nil {
+		return nil
+	}
+	next, err := e.GTIDNext()
+	if err != nil || next == nil {
+		return nil
+	}
+	if c.gtidSet == nil {
+		c.gtidSet = next.Clone()
+	} else if err := c.gtidSet.Update(next.String()); err != nil {
+		return nil
+	}
+	return nil
+}
+
 func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	val, ok := c.schemas[Schema(e.Table.Schema)]
 	if !ok || val == nil {
@@ -320,6 +366,14 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	// 真实 binlog 文件名；若依赖 OnPosSynced 缓存，首个事务的 OnRow 时尚未更新会是空，
 	// 导致写入 cdc_record.log_position 的 file 为空、断点续传失败。
 	binlogName := c.canal.SyncedPosition().Name
+	// GTID 用于断点续传（优先于物理位点）。优先用 OnGTID 累积的 c.gtidSet（覆盖
+	// MySQL 与 MariaDB），回退 SyncedGTIDSet（仅 MySQL XID 路径会更新 master gset）。
+	gtid := ""
+	if c.gtidSet != nil {
+		gtid = c.gtidSet.String()
+	} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
+		gtid = gset.String()
+	}
 	var err error
 	if e.Action == "insert" {
 		rows := [][]RawBytes{
@@ -327,7 +381,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName})
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "update" {
@@ -336,7 +390,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName})
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "delete" {
@@ -345,7 +399,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName})
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	}
@@ -742,7 +796,8 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 
 	fields := make([]ColumnInfo, 0)
 	batch := hutl.NewBatchProcess(500, func(values [][]RawBytes) error {
-		return c.worker.AddData(ctx, schema, table, Insert, fields, values, mysql.Position{Pos: uint32(time.Now().Unix()), Name: "SELECT"})
+		// 全量拉取无真实 binlog 位点（Name="SELECT" 标记），GTID 留空。
+		return c.worker.AddData(ctx, schema, table, Insert, fields, values, mysql.Position{Pos: uint32(time.Now().Unix()), Name: "SELECT"}, "")
 	})
 
 	//query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + string(key) + "` > " + start + " AND `" + string(key) + "` <= " + end

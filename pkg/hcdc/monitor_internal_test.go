@@ -13,10 +13,18 @@ func Test_ParseCaptureTime(t *testing.T) {
 	nano := int64(1700000000123456789)
 	want := time.Unix(0, nano)
 
-	path := filepath.Join("tmp", "schema", "table", "mysql-bin.000001_1234_"+strconv.FormatInt(nano, 10)+".csv.active")
+	// 标准 4 段格式：{binlogName}_{pos}_{gtidB64}_{captureNano}.csv.active
+	// gtidB64 为空字符串（未开启 GTID）时对应文件名里是连续两个下划线。
+	path := filepath.Join("tmp", "schema", "table", "mysql-bin.000001_1234__"+strconv.FormatInt(nano, 10)+".csv.active")
 	got := parseCaptureTime(path)
 	if !got.Equal(want) {
 		t.Fatalf("parseCaptureTime = %v, want %v", got, want)
+	}
+
+	// gtid 段非空（base64）时仍能正确解析出时间戳。
+	pathGTID := filepath.Join("tmp", "schema", "table", "mysql-bin.000001_1234_MDUyNzE3_"+strconv.FormatInt(nano, 10)+".csv.active")
+	if !parseCaptureTime(pathGTID).Equal(want) {
+		t.Fatalf("含 GTID 段的文件名应正确解析时间戳")
 	}
 
 	// 位点文件（SELECT_ 前缀）无采集时间语义，返回零值。

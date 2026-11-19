@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
@@ -211,7 +210,7 @@ func (h *HCDC) setCanalCall(ctx context.Context, canal *Canal) {
 		return nil
 	})
 
-	canal.setOnGetPosition(func(ctx context.Context, instanceId InstanceId) (*mysql.Position, error) {
+	canal.setOnGetPosition(func(ctx context.Context, instanceId InstanceId) (*SyncPosition, error) {
 		doris := h.doris.Load()
 		if doris == nil {
 			return nil, nil
