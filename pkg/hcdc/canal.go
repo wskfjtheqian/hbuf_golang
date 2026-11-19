@@ -466,32 +466,35 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
 		gtid = gset.String()
 	}
+	// 关键：go-mysql 的一个 RowsEvent 可能携带多行数据（尤其批量 INSERT/多行 UPDATE/DELETE），
+	// e.Rows 是 [][]any：insert/delete 每行一条记录；update 是 [before, after, before, after, ...] 成对。
+	// 必须遍历全部行，否则批量 DML 会静默丢行（只同步首行）。
+	convertRow := func(vals []any) []RawBytes {
+		return hutl.Slice(vals, func(i int, v any) RawBytes {
+			return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
+		})
+	}
+
 	var err error
-	if e.Action == "insert" {
-		rows := [][]RawBytes{
-			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
-			}),
+	if e.Action == "insert" || e.Action == "delete" {
+		rows := make([][]RawBytes, 0, len(e.Rows))
+		for _, r := range e.Rows {
+			rows = append(rows, convertRow(r))
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
+		action := Insert
+		if e.Action == "delete" {
+			action = Delete
+		}
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), action, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "update" {
-		rows := [][]RawBytes{
-			hutl.Slice(e.Rows[1], func(i int, v any) RawBytes {
-				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
-			}),
+		// update 的 Rows 成对：[before, after, before, after, ...]，取 after 行（索引 1,3,5...）。
+		rows := make([][]RawBytes, 0, len(e.Rows)/2)
+		for i := 1; i < len(e.Rows); i += 2 {
+			rows = append(rows, convertRow(e.Rows[i]))
 		}
 		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
-		c.recordCapture(ctx, err, rows)
-		return err
-	} else if e.Action == "delete" {
-		rows := [][]RawBytes{
-			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
-				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
-			}),
-		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	}
