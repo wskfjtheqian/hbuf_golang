@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	//"github.com/go-mysql-org/go-mysql/client"
@@ -88,6 +89,14 @@ type Doris struct {
 	//conn    *client.Conn
 	sql    *sql.DB
 	change chan []TableInfo
+
+	// 同步状态：paused 为 true 时停止 svc -> Doris 的数据上传，但 MySQL -> svc 的采集继续。
+	paused  atomic.Bool
+	stateMu sync.RWMutex
+	state   SyncState
+
+	// monitor 监控器：采集/上传吞吐、延迟、错误、DDL、暂停事件等指标。
+	monitor *Monitor
 }
 
 func NewDoris(cfg *DorisConfig) *Doris {
@@ -96,6 +105,7 @@ func NewDoris(cfg *DorisConfig) *Doris {
 		workers: make(map[InstanceId]*Worker),
 		client:  &http.Client{Timeout: 60 * time.Second},
 		change:  make(chan []TableInfo),
+		monitor: NewMonitor(),
 	}
 }
 
@@ -146,11 +156,17 @@ func (d *Doris) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if d.IsPaused() {
+				continue
+			}
 			if err := d.scanFile(ctx); err != nil {
 				herror.PrintStack(ctx, err)
 			}
 		case val := <-d.change:
+			// 源表结构发生变化：先自动暂停 svc -> Doris 的数据上传，
+			// 待 Doris 侧 DDL 同步完成并经人工确认后，再手动 Resume 恢复。
 			for _, info := range val {
+				d.pauseForSchemaChange(ctx, info)
 				err := d.changeTable(ctx, &info)
 				if err != nil {
 					herror.PrintStack(ctx, err)
@@ -159,6 +175,73 @@ func (d *Doris) loop(ctx context.Context) {
 		}
 	}
 }
+
+// Pause 手动暂停 svc -> Doris 的数据同步。MySQL -> svc 的采集不受影响，数据会继续缓冲到本地文件。
+func (d *Doris) Pause(ctx context.Context, reason string) {
+	d.stateMu.Lock()
+	if !d.paused.Load() {
+		d.state = SyncState{
+			Status:   SyncPaused,
+			Reason:   reason,
+			PausedAt: time.Now(),
+		}
+	} else {
+		// 已暂停时仅补充原因，保留首次暂停时间与触发源。
+		if reason != "" {
+			d.state.Reason = reason
+		}
+	}
+	d.paused.Store(true)
+	d.stateMu.Unlock()
+	d.monitor.PauseCount.Add(1)
+	hlog.Warn(ctx, "svc -> doris sync paused: %s", reason)
+}
+
+// pauseForSchemaChange 在源表结构变化时自动暂停同步。
+func (d *Doris) pauseForSchemaChange(ctx context.Context, info TableInfo) {
+	reason := fmt.Sprintf("source table schema changed: %s.%s (action=%s)", info.Schema, info.Table, info.Action)
+	d.stateMu.Lock()
+	if !d.paused.Load() {
+		d.state = SyncState{
+			Status:   SyncPaused,
+			Reason:   reason,
+			PausedAt: time.Now(),
+			Schema:   info.Schema,
+			Table:    info.Table,
+		}
+	} else {
+		// 已暂停时仅补充原因，保留首次暂停时间与触发源。
+		d.state.Reason = reason
+	}
+	d.paused.Store(true)
+	d.stateMu.Unlock()
+	d.monitor.PauseCount.Add(1)
+	d.monitor.autoPause.Add(1)
+	hlog.Warn(ctx, "svc -> doris sync auto paused: %s", reason)
+}
+
+// Resume 手动恢复 svc -> Doris 的数据同步。
+func (d *Doris) Resume(ctx context.Context) {
+	d.stateMu.Lock()
+	d.state = SyncState{Status: SyncRunning}
+	d.paused.Store(false)
+	d.stateMu.Unlock()
+	d.monitor.ResumeCount.Add(1)
+	hlog.Info(ctx, "svc -> doris sync resumed")
+}
+
+// IsPaused 返回当前是否处于暂停状态。
+func (d *Doris) IsPaused() bool {
+	return d.paused.Load()
+}
+
+// GetSyncState 返回当前同步状态快照。
+func (d *Doris) GetSyncState() SyncState {
+	d.stateMu.RLock()
+	defer d.stateMu.RUnlock()
+	return d.state
+}
+
 func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
 	d.change <- infos
 }
@@ -185,6 +268,7 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 	req.Header.Set("delete", "__op=2")
 	req.Header.Set("strict_mode", "false")
 
+	start := time.Now()
 	resp, err := d.client.Do(req)
 	if err != nil {
 		return herror.Wrap(err)
@@ -206,6 +290,19 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 	}
 	if dorisResp.Status != "Success" {
 		return herror.NewError("doris stream load failed: " + string(body))
+	}
+
+	// 记录上传指标（业务表与 cdc_record 位点表共用同一上传通道，这里统一统计字节/行数与耗时）
+	elapsedMs := time.Since(start).Milliseconds()
+	d.monitor.UploadFiles.Add(1)
+	d.monitor.UploadBytes.Add(int64(dorisResp.LoadBytes))
+	d.monitor.UploadRows.Add(int64(dorisResp.NumberLoadedRows))
+	d.monitor.UploadTotalMs.Add(elapsedMs)
+	for {
+		max := d.monitor.uploadMaxMs.Load()
+		if elapsedMs <= max || d.monitor.uploadMaxMs.CompareAndSwap(max, elapsedMs) {
+			break
+		}
 	}
 	return nil
 }
@@ -259,19 +356,36 @@ func (d *Doris) GetReplicationNum(ctx context.Context) int {
 	return count
 }
 func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
+	d.monitor.DDLCount.Add(1)
 	if info.IsDrop {
-		return d.dropTable(ctx, info)
+		d.monitor.DropTable.Add(1)
+		err := d.dropTable(ctx, info)
+		if err != nil {
+			d.monitor.DDLErrors.Add(1)
+		}
+		return err
 	}
 	newInfo := d.ToDorisTable(info)
 	oldInfo, err := d.GetTableInfo(ctx, info.Schema, info.Table)
 	if err != nil {
+		d.monitor.DDLErrors.Add(1)
 		return err
 	}
 	if oldInfo == nil {
-		return d.createTable(ctx, newInfo)
+		d.monitor.CreateTable.Add(1)
+		err := d.createTable(ctx, newInfo)
+		if err != nil {
+			d.monitor.DDLErrors.Add(1)
+		}
+		return err
 	}
 
-	return d.modifyTable(ctx, oldInfo, newInfo)
+	d.monitor.AlterTable.Add(1)
+	err = d.modifyTable(ctx, oldInfo, newInfo)
+	if err != nil {
+		d.monitor.DDLErrors.Add(1)
+	}
+	return err
 }
 
 // dropTable 删除 Doris 侧的对应表
@@ -865,12 +979,27 @@ func (d *Doris) scanFile(ctx context.Context) error {
 		return nil
 	}
 
+	// 统计当前积压（待上传的 .active 文件数与字节数），用于监控。
+	var backlogFiles, backlogBytes int64
+	for _, worker := range d.workers {
+		f, b := worker.Backlog()
+		backlogFiles += f
+		backlogBytes += b
+	}
+	d.monitor.setBacklog(backlogFiles, backlogBytes)
+
 	reader := bytes.Buffer{}
 	for _, worker := range d.workers {
-		id, pos, err := worker.ScanFile(ctx, func(ctx context.Context, schema Schema, table Table, columns string, reader io.Reader) error {
-			return d.StreamSave(ctx, schema, table, columns, reader)
+		id, pos, err := worker.ScanFile(ctx, func(ctx context.Context, schema Schema, table Table, columns string, capturedAt time.Time, r io.Reader) error {
+			err := d.StreamSave(ctx, schema, table, columns, r)
+			if err == nil && !capturedAt.IsZero() {
+				// 记录端到端延迟：从数据被采集到上传完成。
+				d.monitor.recordDelay(time.Since(capturedAt).Milliseconds())
+			}
+			return err
 		})
 		if err != nil {
+			d.monitor.UploadErrors.Add(1)
 			hlog.Error(ctx, "scan file error: %v", err)
 			return err
 		}

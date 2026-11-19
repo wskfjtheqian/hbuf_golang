@@ -16,7 +16,9 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
-type ScanFileCall func(ctx context.Context, schema Schema, table Table, columns string, reader io.Reader) error
+// ScanFileCall 上传回调。capturedAt 为该文件的数据被采集（写入 .temp）的时间，
+// 用于在 Doris 侧计算端到端延迟（采集 -> 上传完成）。
+type ScanFileCall func(ctx context.Context, schema Schema, table Table, columns string, capturedAt time.Time, reader io.Reader) error
 
 type FileOption func(w *File)
 
@@ -37,6 +39,7 @@ type File struct {
 	countSize   int64
 	columns     []ColumnInfo
 	position    mysql.Position
+	captureTime time.Time // 当前 .temp 文件首个数据被采集的时间，随 .active 文件名持久化
 }
 
 func NewFile(id InstanceId, schema Schema, table Table, logDir string, options ...FileOption) *File {
@@ -74,7 +77,8 @@ func (t *File) createFileUnderLock(ctx context.Context, columns []ColumnInfo, po
 		return nil, herror.Wrap(err)
 	}
 
-	path := filepath.Join(dir, strconv.FormatInt(time.Now().UnixNano(), 10)+".csv.temp")
+	t.captureTime = time.Now()
+	path := filepath.Join(dir, strconv.FormatInt(t.captureTime.UnixNano(), 10)+".csv.temp")
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -130,7 +134,8 @@ func (t *File) CloseFileUnderLock(ctx context.Context) error {
 
 	name := file.Name()
 	if strings.HasSuffix(name, ".temp") {
-		newName := filepath.Base(t.position.Name) + "_" + strconv.FormatUint(uint64(t.position.Pos), 10) + ".csv.active"
+		// 文件名保留采集时间戳，供上传端计算端到端延迟（采集 -> 上传完成）。
+		newName := filepath.Base(t.position.Name) + "_" + strconv.FormatUint(uint64(t.position.Pos), 10) + "_" + strconv.FormatInt(t.captureTime.UnixNano(), 10) + ".csv.active"
 		path, _ := filepath.Split(name)
 		newName = filepath.Join(path, newName)
 		if err := os.Rename(name, newName); err != nil {
@@ -231,8 +236,12 @@ func (t *File) ReadFile(ctx context.Context, path string, fn ScanFileCall) (*mys
 		return nil, herror.NewError("empty csv header in active file")
 	}
 
+	// 从文件名解析采集时间戳（格式：{binlogName}_{pos}_{captureNano}.csv.active），
+	// 用于在上传端计算端到端延迟。
+	capturedAt := parseCaptureTime(path)
+
 	// 把剥离了首行、剩下纯纯数据行的 bufReader 流直接喂给外部的 Doris 加载器
-	if err = fn(ctx, t.schema, t.table, columns, bufReader); err != nil {
+	if err = fn(ctx, t.schema, t.table, columns, capturedAt, bufReader); err != nil {
 		return nil, err
 	}
 
@@ -241,8 +250,8 @@ func (t *File) ReadFile(ctx context.Context, path string, fn ScanFileCall) (*mys
 		return nil, nil
 	}
 	name = strings.TrimSuffix(name, ".csv.active")
-	parts := strings.SplitN(name, "_", 2)
-	if len(parts) != 2 {
+	parts := strings.SplitN(name, "_", 3)
+	if len(parts) != 3 {
 		return nil, herror.NewError("invalid position line: " + name)
 	}
 	pos, err := strconv.ParseUint(parts[1], 10, 32)
@@ -255,4 +264,42 @@ func (t *File) ReadFile(ctx context.Context, path string, fn ScanFileCall) (*mys
 	}
 
 	return position, nil
+}
+
+// parseCaptureTime 从 .active 文件名中解析采集时间戳。
+// 文件名格式：{binlogName}_{pos}_{captureNano}.csv.active。
+// 解析失败或格式不匹配（如 SELECT_ 前缀的位点文件）时返回零值时间。
+func parseCaptureTime(path string) time.Time {
+	_, name := filepath.Split(path)
+	if strings.HasPrefix(name, "SELECT_") {
+		return time.Time{}
+	}
+	name = strings.TrimSuffix(name, ".csv.active")
+	parts := strings.SplitN(name, "_", 3)
+	if len(parts) != 3 {
+		return time.Time{}
+	}
+	nano, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(0, nano)
+}
+
+// Backlog 返回该表当前积压待上传的 .active 文件数与总字节数。
+func (t *File) Backlog() (files int64, bytes int64) {
+	pattern := filepath.Join(t.logDir, string(t.schema), string(t.table), "*.active")
+	paths, err := filepath.Glob(pattern)
+	if err != nil {
+		return 0, 0
+	}
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		files++
+		bytes += info.Size()
+	}
+	return files, bytes
 }

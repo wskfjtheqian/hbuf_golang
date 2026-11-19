@@ -140,6 +140,11 @@ type Canal struct {
 	sql            *sql.DB
 	worker         *Worker
 	position       mysql.Position
+	monitor        *Monitor
+}
+
+func (c *Canal) setMonitor(m *Monitor) {
+	c.monitor = m
 }
 
 func (c *Canal) setOnCreateTable(fn OnCreateTable) {
@@ -293,27 +298,56 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	})
 
 	ctx := hlog.NewContext()
+	var err error
 	if e.Action == "insert" {
-		return c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, [][]RawBytes{
+		rows := [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
-		}, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		}
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		c.recordCapture(ctx, err, rows)
+		return err
 	} else if e.Action == "update" {
-		return c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, [][]RawBytes{
+		rows := [][]RawBytes{
 			hutl.Slice(e.Rows[1], func(i int, v any) RawBytes {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
-		}, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		}
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		c.recordCapture(ctx, err, rows)
+		return err
 	} else if e.Action == "delete" {
-		return c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, [][]RawBytes{
+		rows := [][]RawBytes{
 			hutl.Slice(e.Rows[0], func(i int, v any) RawBytes {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
-		}, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		}
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		c.recordCapture(ctx, err, rows)
+		return err
 	}
 
 	return nil
+}
+
+// recordCapture 记录采集端指标（行数与字节数，失败时计数错误）。
+func (c *Canal) recordCapture(ctx context.Context, err error, rows [][]RawBytes) {
+	if c.monitor == nil {
+		return
+	}
+	if err != nil {
+		c.monitor.CaptureErrors.Add(1)
+		return
+	}
+	var bytes int64
+	for _, row := range rows {
+		c.monitor.CaptureRows.Add(1)
+		for _, v := range row {
+			bytes += int64(len(v))
+		}
+	}
+	c.monitor.CaptureBytes.Add(bytes)
 }
 func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes {
 	if v == nil {

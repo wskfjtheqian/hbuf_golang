@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -23,6 +24,37 @@ const (
 	Delete
 	Create
 )
+
+// SyncStatus 表示 svc -> Doris 数据同步的运行状态。
+type SyncStatus int32
+
+const (
+	// SyncRunning 同步正常运行。
+	SyncRunning SyncStatus = iota
+	// SyncPaused 同步已暂停（通常是源表结构发生变化后自动暂停，等待人工确认并恢复）。
+	SyncPaused
+)
+
+func (s SyncStatus) String() string {
+	switch s {
+	case SyncRunning:
+		return "running"
+	case SyncPaused:
+		return "paused"
+	default:
+		return "unknown"
+	}
+}
+
+// SyncState 描述当前 svc -> Doris 同步状态快照。
+type SyncState struct {
+	Status     SyncStatus `json:"status"`      // 当前状态
+	Reason     string     `json:"reason"`      // 暂停原因
+	PausedAt   time.Time  `json:"pausedAt"`    // 暂停时间（零值表示未暂停）
+	Schema     Schema     `json:"schema"`      // 触发暂停的表结构变化所在库
+	Table      Table      `json:"table"`       // 触发暂停的表
+	InstanceId InstanceId `json:"instanceId"`  // 触发暂停的实例 ID
+}
 
 type ColumnInfo struct {
 	Name     Column
@@ -174,7 +206,47 @@ func (h *HCDC) setCanalCall(ctx context.Context, canal *Canal) {
 		doris.ChangeTables(ctx, infos)
 		return nil
 	})
-	h.doris.Load().RegisterWorker(ctx, canal.worker)
+	doris := h.doris.Load()
+	doris.RegisterWorker(ctx, canal.worker)
+	// 采集端与上传端共享同一个监控器，便于聚合端到端指标。
+	canal.setMonitor(doris.monitor)
+}
+
+// Pause 暂停 svc -> Doris 的数据同步。MySQL -> svc 的采集不受影响，数据继续缓冲到本地文件。
+// 若 doris 尚未初始化（未 SetConfig），则为无操作。
+func (h *HCDC) Pause(ctx context.Context, reason string) {
+	doris := h.doris.Load()
+	if doris == nil {
+		return
+	}
+	doris.Pause(ctx, reason)
+}
+
+// Resume 手动恢复 svc -> Doris 的数据同步。
+func (h *HCDC) Resume(ctx context.Context) {
+	doris := h.doris.Load()
+	if doris == nil {
+		return
+	}
+	doris.Resume(ctx)
+}
+
+// GetSyncState 返回当前 svc -> Doris 同步状态快照。
+func (h *HCDC) GetSyncState() SyncState {
+	doris := h.doris.Load()
+	if doris == nil {
+		return SyncState{Status: SyncRunning}
+	}
+	return doris.GetSyncState()
+}
+
+// GetMetrics 返回当前监控指标快照（采集/上传吞吐、延迟、错误、DDL、暂停事件等）。
+func (h *HCDC) GetMetrics() Snapshot {
+	doris := h.doris.Load()
+	if doris == nil {
+		return Snapshot{}
+	}
+	return doris.monitor.Snapshot()
 }
 
 func GetColumnType(col *ColumnInfo) string {

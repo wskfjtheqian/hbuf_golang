@@ -172,3 +172,15 @@ func (t *Worker) ScanFile(ctx context.Context, fn ScanFileCall) (InstanceId, *my
 	}
 	return t.instanceId, position, nil
 }
+
+// Backlog 聚合该 worker 下所有表的积压 .active 文件数与总字节数。
+func (t *Worker) Backlog() (files int64, bytes int64) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	for _, val := range t.files {
+		f, b := val.Backlog()
+		files += f
+		bytes += b
+	}
+	return files, bytes
+}
