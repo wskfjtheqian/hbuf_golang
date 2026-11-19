@@ -377,8 +377,10 @@ func (d *Doris) Close() error {
 
 func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
 	var s strings.Builder
-	s.WriteString("CREATE DATABASE IF NOT EXISTS ")
-	s.WriteString(string(schema))
+	s.WriteString("CREATE DATABASE IF NOT EXISTS `")
+	// 库名若含反引号需转义，防止注入或语法错误。
+	s.WriteString(strings.ReplaceAll(string(schema), "`", "``"))
+	s.WriteString("`")
 
 	hlog.Info(ctx, "doris change schema: %s", s.String())
 	_, err := d.sql.ExecContext(ctx, s.String())
@@ -640,6 +642,22 @@ func (d *Doris) ToDorisType(info ColumnInfo) (string, string) {
 	// --- 布尔类型 ---
 	case "boolean", "bool":
 		return "BOOLEAN", ""
+
+	// --- 枚举/集合类型（Doris 无原生对应，退化为字符串） ---
+	case "enum":
+		// MySQL enum 的 args 形如 ('a','b','c')，Doris 无法直接复用，退化为 VARCHAR。
+		return "VARCHAR", "(255)"
+	case "set":
+		return "VARCHAR", "(255)"
+
+	// --- 年份类型 ---
+	case "year":
+		return "SMALLINT", ""
+
+	// --- 几何/空间类型（Doris 无原生 GIS，存 WKT/WKB 文本） ---
+	case "geometry", "point", "linestring", "polygon",
+		"multipoint", "multilinestring", "multipolygon", "geometrycollection":
+		return "STRING", ""
 
 	// --- 兜底策略 ---
 	default:

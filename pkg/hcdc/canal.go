@@ -555,7 +555,8 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes
 		typ := GetColumnType(col)
 		if typ == "date" || typ == "datetime" || typ == "timestamp" {
 			return RawBytes(strings.ReplaceAll(string(val), "0000-00-00", "1970-01-01"))
-		} else if typ == "decimal" || typ == "time" {
+		} else if typ == "decimal" || typ == "time" || typ == "year" {
+			// 数值/日期/时间/年份类型在 CSV header 中为透传列（不加 _base），必须直通、不 base64。
 			return val
 		} else if typ == "bitmap32" || typ == "bitmap64" {
 			val = c.bitmapToArrayString(ctx, val, strings.Contains(col.Comment, "CustomType=Bitmap32"))
@@ -566,7 +567,7 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes
 		typ := GetColumnType(col)
 		if typ == "date" || typ == "datetime" || typ == "timestamp" {
 			return RawBytes(strings.ReplaceAll(val, "0000-00-00", "1970-01-01"))
-		} else if typ == "decimal" || typ == "time" {
+		} else if typ == "decimal" || typ == "time" || typ == "year" {
 			return RawBytes(val)
 		} else if typ == "bitmap32" || typ == "bitmap64" {
 			val = string(c.bitmapToArrayString(ctx, []byte(val), strings.Contains(col.Comment, "CustomType=Bitmap32")))
@@ -683,8 +684,26 @@ func (c *Canal) GetDatabases(ctx context.Context) ([]Schema, error) {
 	return dbs, nil
 }
 
-// FilterDatabase 过滤库：exclude 优先排除；include 为空表示不限制，否则仅放行命中的库。
+// systemSchemas 是 MySQL/MariaDB 的内置系统库，全量同步时应默认跳过，
+// 避免同步到 Doris 后因库名是保留字或内容无业务意义而报错/污染。
+var systemSchemas = map[Schema]struct{}{
+	"information_schema": {},
+	"performance_schema": {},
+	"mysql":              {},
+	"sys":                {},
+}
+
+// isSystemSchema 判断是否为系统库。
+func isSystemSchema(name Schema) bool {
+	_, ok := systemSchemas[Schema(strings.ToLower(string(name)))]
+	return ok
+}
+
+// FilterDatabase 过滤库：系统库与 exclude 优先排除；include 为空表示不限制，否则仅放行命中的库。
 func (c *Canal) FilterDatabase(name Schema) bool {
+	if isSystemSchema(name) {
+		return false
+	}
 	for _, exclude := range c.excludeDBs {
 		if exclude.MatchString(string(name)) {
 			return false
@@ -921,9 +940,19 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 	//	return err
 	//}
 
-	query, err := c.sql.QueryContext(ctx, "SELECT * FROM `"+string(schema)+"`.`"+string(table)+"` WHERE `"+string(key)+"` > ? AND `"+string(key)+"` <= ?", start, end)
-	if err != nil {
-		return herror.Wrap(err)
+	// start 为空表示「无下界」，全量拉取首段（覆盖主键最小值，如 id=0 或负主键）。
+	// 否则用 (start, end] 半开区间做分页，避免遗漏/重复边界行。
+	var (
+		query *sql.Rows
+		qerr  error
+	)
+	if start == "" {
+		query, qerr = c.sql.QueryContext(ctx, "SELECT * FROM `"+string(schema)+"`.`"+string(table)+"` WHERE `"+string(key)+"` <= ?", end)
+	} else {
+		query, qerr = c.sql.QueryContext(ctx, "SELECT * FROM `"+string(schema)+"`.`"+string(table)+"` WHERE `"+string(key)+"` > ? AND `"+string(key)+"` <= ?", start, end)
+	}
+	if qerr != nil {
+		return herror.Wrap(qerr)
 	}
 	defer query.Close()
 	columns, err := query.Columns()
@@ -1022,7 +1051,7 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 func (c *Canal) loadData(ctx context.Context) error {
 	for schema, tables := range c.schemas {
 		for table := range tables {
-			err := c.ReadData(ctx, schema, table, c.schemas[schema][table], "0", "9223372036854775807")
+			err := c.ReadData(ctx, schema, table, c.schemas[schema][table], "", "9223372036854775807")
 			if err != nil {
 				return err
 			}
