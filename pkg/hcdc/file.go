@@ -154,6 +154,10 @@ func (t *File) save(ctx context.Context, action Action, columns []ColumnInfo, ro
 			return err
 		}
 
+		// 先记录位点再建文件：createFileUnderLock 与 CloseFileUnderLock 生成的
+		// .active 文件名依赖 t.position（binlog 文件名 + offset），
+		// 若延后到 save 末尾赋值，首个文件会用零值位点（空文件名）导致断点续传失败。
+		t.position = position
 		file, err = t.createFileUnderLock(ctx, columns, position)
 		if err != nil {
 			return err

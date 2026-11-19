@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
@@ -48,12 +49,12 @@ func (s SyncStatus) String() string {
 
 // SyncState 描述当前 svc -> Doris 同步状态快照。
 type SyncState struct {
-	Status     SyncStatus `json:"status"`      // 当前状态
-	Reason     string     `json:"reason"`      // 暂停原因
-	PausedAt   time.Time  `json:"pausedAt"`    // 暂停时间（零值表示未暂停）
-	Schema     Schema     `json:"schema"`      // 触发暂停的表结构变化所在库
-	Table      Table      `json:"table"`       // 触发暂停的表
-	InstanceId InstanceId `json:"instanceId"`  // 触发暂停的实例 ID
+	Status     SyncStatus `json:"status"`     // 当前状态
+	Reason     string     `json:"reason"`     // 暂停原因
+	PausedAt   time.Time  `json:"pausedAt"`   // 暂停时间（零值表示未暂停）
+	Schema     Schema     `json:"schema"`     // 触发暂停的表结构变化所在库
+	Table      Table      `json:"table"`      // 触发暂停的表
+	InstanceId InstanceId `json:"instanceId"` // 触发暂停的实例 ID
 }
 
 type ColumnInfo struct {
@@ -209,6 +210,15 @@ func (h *HCDC) setCanalCall(ctx context.Context, canal *Canal) {
 		doris.ChangeTables(ctx, infos)
 		return nil
 	})
+
+	canal.setOnGetPosition(func(ctx context.Context, instanceId InstanceId) (*mysql.Position, error) {
+		doris := h.doris.Load()
+		if doris == nil {
+			return nil, nil
+		}
+		return doris.GetPosition(ctx, instanceId)
+	})
+
 	doris := h.doris.Load()
 	doris.RegisterWorker(ctx, canal.worker)
 	// 采集端与上传端共享同一个监控器，便于聚合端到端指标。

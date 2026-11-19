@@ -28,6 +28,10 @@ type OnData func(ctx context.Context, schema Schema, table Table, action Action,
 type OnCreateTable func(ctx context.Context, infos []TableInfo) error
 type OnCreateSchema func(ctx context.Context, schema Schema) error
 
+// OnGetPosition 查询指定实例上次成功上传的 binlog 位点，用于断点续传。
+// 返回 nil 表示无记录（首次启动）。由 SetConfig 注入，内部委托 Doris.GetPosition。
+type OnGetPosition func(ctx context.Context, instanceId InstanceId) (*mysql.Position, error)
+
 type CanalConfig struct {
 	InstanceId    InstanceId `yaml:"instanceId"`    // 实例ID
 	Host          string     `yaml:"host"`          // 数据库主机地址
@@ -135,11 +139,11 @@ type Canal struct {
 	includeTables  []*regexp.Regexp
 	onCreateTable  OnCreateTable
 	onCreateSchema OnCreateSchema
+	onGetPosition  OnGetPosition
 	schemas        map[Schema]map[Table]TableInfo
 	lock           sync.Mutex
 	sql            *sql.DB
 	worker         *Worker
-	position       mysql.Position
 	monitor        *Monitor
 }
 
@@ -155,6 +159,10 @@ func (c *Canal) setOnCreateSchema(fn OnCreateSchema) {
 	c.onCreateSchema = fn
 }
 
+func (c *Canal) setOnGetPosition(fn OnGetPosition) {
+	c.onGetPosition = fn
+}
+
 func (c *Canal) Open(ctx context.Context) error {
 	err := c.initFilter(ctx)
 	if err != nil {
@@ -162,31 +170,12 @@ func (c *Canal) Open(ctx context.Context) error {
 	}
 
 	// 建立直连，用于执行查询和锁表操作
-	//c.conn, err = client.Connect(
-	//	c.cfg.Host,
-	//	c.cfg.Username,
-	//	c.cfg.Password,
-	//	c.cfg.Schema,
-	//)
-	//if err != nil {
-	//	return herror.Wrap(err)
-	//}
-
 	c.sql, err = sql.Open("mysql", c.cfg.Username+":"+c.cfg.Password+"@tcp("+c.cfg.Host+")/"+c.cfg.Schema)
 	if err != nil {
 		return err
 	}
 
-	err = c.createSchemaTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = c.loadData(ctx)
-	if err != nil {
-		return err
-	}
-
+	// 建立 canal 实例（需在取位点之前，GetMasterPos 依赖它）。
 	cfg := canal.NewDefaultConfig()
 	if c.cfg.ServerID != nil {
 		cfg.ServerID = *c.cfg.ServerID
@@ -197,7 +186,6 @@ func (c *Canal) Open(ctx context.Context) error {
 	cfg.Charset = c.cfg.Charset
 	cfg.Flavor = c.cfg.Flavor
 	cfg.TimestampStringLocation = time.UTC
-	//cfg.ParseTime = true
 	cfg.Dump.ExecutionPath = ""
 	cfg.IncludeTableRegex = c.cfg.IncludeTables
 	cfg.ExcludeTableRegex = c.cfg.ExcludeTables
@@ -208,14 +196,42 @@ func (c *Canal) Open(ctx context.Context) error {
 	}
 	c.canal.SetEventHandler(c)
 
-	// 获取当前 master 的 binlog 位置，作为同步起点
-	pos, err := c.canal.GetMasterPos()
+	// 建立表元数据（OnRow 依赖 c.schemas 查找列结构），并在 Doris 侧建库建表。
+	// createSchemaTable 内部走 CREATE IF NOT EXISTS，幂等，断点续传时也可安全重跑。
+	err = c.createSchemaTable(ctx)
 	if err != nil {
-		return herror.Wrap(err)
+		return err
+	}
+
+	// 决定同步起点：
+	//  1. 有上次已上传位点 → 从该位点断点续传，跳过全量拉取（避免重复全量）。
+	//  2. 无位点（首次启动）→ 先在全量拉取之前记录当前位点，全量拉取完成后从该位点开始，
+	//     这样全量拉取期间源库产生的新增 DML 会被随后的 binlog 重放，不会丢失。
+	startPos := (*mysql.Position)(nil)
+	if c.onGetPosition != nil {
+		if last, err := c.onGetPosition(ctx, c.cfg.InstanceId); err != nil {
+			return herror.Wrap(err)
+		} else if last != nil {
+			startPos = last
+			hlog.Info(ctx, "resume from persisted position: %s:%d", last.Name, last.Pos)
+		}
+	}
+
+	if startPos == nil {
+		// 首次启动：先记录全量起始位点，再做全量拉取。
+		pos, err := c.canal.GetMasterPos()
+		if err != nil {
+			return herror.Wrap(err)
+		}
+		if err = c.loadData(ctx); err != nil {
+			return err
+		}
+		startPos = &pos
+		hlog.Info(ctx, "full load done, start incremental from: %s:%d", startPos.Name, startPos.Pos)
 	}
 
 	go func() {
-		err := c.canal.RunFrom(pos)
+		err := c.canal.RunFrom(*startPos)
 		if err != nil {
 			hlog.Error(ctx, "canal run error: %v", err)
 		}
@@ -278,9 +294,11 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 	return c.onCreateTable(ctx, []TableInfo{*info})
 }
 
-// OnPosSynced 这是高可用架构中最为关键的方法。你应该在这里将 pos (包含文件名和 Offset) 持久化存储到 Redis、MySQL 或本地文件中。这样一旦程序崩溃重启，就能从该位点精准恢复，做到不重不漏。
+// OnPosSynced 位点同步回调。当前位点（binlog 文件名 + offset）已由 OnRow 通过
+// c.canal.SyncedPosition() 实时获取并随数据写入 CSV 文件，最终由 Doris.scanFile
+// 持久化到 cdc_record.log_position。这里无需再缓存到内存字段（避免 Close 与
+// RunFrom 两个 goroutine 并发写同一字段的数据竞争）。
 func (c *Canal) OnPosSynced(header *replication.EventHeader, pos mysql.Position, set mysql.GTIDSet, force bool) error {
-	c.position = pos
 	return nil
 }
 
@@ -298,6 +316,10 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	})
 
 	ctx := hlog.NewContext()
+	// 位点文件名用 SyncedPosition().Name：它在 RunFrom(startPos) 时即被正确初始化为
+	// 真实 binlog 文件名；若依赖 OnPosSynced 缓存，首个事务的 OnRow 时尚未更新会是空，
+	// 导致写入 cdc_record.log_position 的 file 为空、断点续传失败。
+	binlogName := c.canal.SyncedPosition().Name
 	var err error
 	if e.Action == "insert" {
 		rows := [][]RawBytes{
@@ -305,7 +327,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Insert, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName})
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "update" {
@@ -314,7 +336,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName})
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "delete" {
@@ -323,7 +345,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 				return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
 			}),
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: c.position.Name})
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Delete, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName})
 		c.recordCapture(ctx, err, rows)
 		return err
 	}

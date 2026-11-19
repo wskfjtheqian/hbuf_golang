@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	//"github.com/go-mysql-org/go-mysql/client"
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
@@ -1066,4 +1067,23 @@ func (d *Doris) createCDCRecord(ctx context.Context) error {
 		return herror.Wrap(err)
 	}
 	return nil
+}
+
+// GetPosition 返回指定实例上次成功上传到 Doris 的 binlog 位点，用于进程重启后的断点续传。
+// 位点来源是 scanFile 上传成功后写入 cdc_record.log_position 的「已上传位点」，
+// 从该位点重放可保证「不丢」（崩溃期间未上传的数据仍在其后的 binlog 中）。
+// 无记录（首次启动或该实例从未成功上传）时返回 nil, nil。
+func (d *Doris) GetPosition(ctx context.Context, instanceId InstanceId) (*mysql.Position, error) {
+	query := "SELECT `file`, `position` FROM cdc_record.log_position WHERE instance_id = ? LIMIT 1"
+	row := d.sql.QueryRowContext(ctx, query, int64(instanceId))
+
+	var name string
+	var pos uint32
+	if err := row.Scan(&name, &pos); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, herror.Wrap(err)
+	}
+	return &mysql.Position{Name: name, Pos: pos}, nil
 }
