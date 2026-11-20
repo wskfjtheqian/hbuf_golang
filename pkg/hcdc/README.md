@@ -154,6 +154,16 @@ func main() {
 - **初始化阶段**（建库建表 + 全量拉取）：源表建表事件同步建 Doris 表，不触发暂停。
 - **运行阶段**：源表 ALTER/DROP 触发自动暂停，人工确认 Doris 侧 DDL 完成后 `Resume` 恢复。
 
+### 列元数据来源（跟随 binlog 权威元数据）
+
+hcdc fork 了 go-mysql 的 `canal` 包（`pkg/hcdc/canal/`），核心改造是让 `RowsEvent` 透传 binlog 自带的 `TableMapEvent` 权威元数据（`ColumnName`/`ColumnType`/`ColumnMeta`/`ColumnCount`）。`OnRow` 解析每一行时：
+
+- **列名**：优先用 binlog 里的 `ColumnNames`（需 `binlog_row_metadata=FULL`），缺失时回退 `Table.Columns`。
+- **列数**：以 binlog 的 `ColumnCount` 为准做校验，与本地 schema 缓存不一致时立即 `refreshTableMeta` 并返回错误触发重放自愈，杜绝「缓存滞后 → 下标越界 / 错列」。
+- **列类型**：优先用 binlog 的 `ColumnType` 做语义分类（date/datetime/time/year/decimal 等），决定是否透传（base64）；缺失时回退 `GetColumnType`。
+
+这相当于 MySQL 原生从库「跟着 binlog 元数据走」的做法，从根上消除「表结构变了但缓存没刷新」导致的错位。前提是源库开启 `binlog_row_metadata=FULL` 以让 binlog 携带列名。
+
 ### 错误自愈
 
 - canal 同步循环失败 → 指数退避（1s 起，上限 30s）→ 重建 canal 实例重连（go-mysql 实例失败后不可复用）→ 重连前重新读取持久化位点。
@@ -163,6 +173,7 @@ func main() {
 
 - **源 MySQL/MariaDB**：
   - 开启 binlog，且 `binlog_format=ROW`
+  - 建议 `binlog_row_metadata=FULL`（MySQL 8.0 / MariaDB 10.5+），使 binlog 自带列名元数据，hcdc 可直接跟随 binlog 权威元数据做列映射与类型解析，彻底消除 schema 缓存滞后风险；未开启时回退走 INFORMATION_SCHEMA 缓存（详见「工作原理 · 列元数据来源」）
   - 同步账号需 `REPLICATION SLAVE`、`REPLICATION CLIENT` 及目标库的 `SELECT` 权限
   - `server_id` 全局唯一
 - **目标 Doris**：FE（查询端口，默认 9030）与 BE 的 HTTP 端口（Stream Load，默认 8040）可访问；账号有建库建表与 Load 权限

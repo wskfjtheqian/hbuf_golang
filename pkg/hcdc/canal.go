@@ -3,6 +3,7 @@ package hcdc
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -14,11 +15,11 @@ import (
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/RoaringBitmap/roaring/roaring64"
-	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc/canal"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
@@ -369,6 +370,8 @@ func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, t
 	if info == nil {
 		return nil
 	}
+	// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
+	c.cacheTableInfo(Schema(schema), Table(table), *info)
 	if c.onCreateTable == nil {
 		return nil
 	}
@@ -409,6 +412,8 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 	if info == nil {
 		return nil
 	}
+	// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射。
+	c.cacheTableInfo(Schema(queryEvent.Schema), ddl.Table, *info)
 	return c.onCreateTable(ctx, []TableInfo{*info})
 }
 
@@ -449,11 +454,36 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	if !ok {
 		return nil
 	}
-	columns := hutl.Slice(e.Table.Columns, func(i int, v schema.TableColumn) ColumnInfo {
-		return info.Columns[info.Index[Column(v.Name)]]
-	})
 
 	ctx := hlog.NewContext()
+
+	// 列名来源：优先用 binlog 自带的权威列名（TableMapEvent.ColumnName，需
+	// binlog_row_metadata=FULL），为空时回退 canal 表缓存列名。彻底摆脱「DDL 后
+	// 缓存滞后导致列名映射错位」的问题。
+	names := e.ColumnNames
+	if len(names) == 0 {
+		names = hutl.Slice(e.Table.Columns, func(i int, v schema.TableColumn) string { return v.Name })
+	}
+
+	// 权威列数（binlog TableMapEvent.ColumnCount）：行值按此解码，列数不一致说明
+	// 缓存滞后（如 INSTANT ADD COLUMN），必须中止同步触发缓存刷新与重放，否则会越界。
+	columnCount := e.ColumnCount
+	if columnCount == 0 {
+		columnCount = len(names)
+	}
+
+	// 按权威列名定位缓存的 ColumnInfo（列名在缓存查不到说明结构已变，刷新缓存并中止）。
+	columnInfos := make([]ColumnInfo, 0, columnCount)
+	for _, name := range names {
+		idx, ok := info.Index[Column(name)]
+		if !ok {
+			c.refreshTableMeta(ctx, e.Table.Schema, e.Table.Name)
+			return fmt.Errorf("hcdc: table %s.%s: binlog column %q not found in cached schema (schema changed?), cache refreshed, resync pending",
+				e.Table.Schema, e.Table.Name, name)
+		}
+		columnInfos = append(columnInfos, info.Columns[idx])
+	}
+
 	// 位点文件名用 SyncedPosition().Name：它在 RunFrom(startPos) 时即被正确初始化为
 	// 真实 binlog 文件名；若依赖 OnPosSynced 缓存，首个事务的 OnRow 时尚未更新会是空，
 	// 导致写入 cdc_record.log_position 的 file 为空、断点续传失败。
@@ -469,37 +499,87 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	// 关键：go-mysql 的一个 RowsEvent 可能携带多行数据（尤其批量 INSERT/多行 UPDATE/DELETE），
 	// e.Rows 是 [][]any：insert/delete 每行一条记录；update 是 [before, after, before, after, ...] 成对。
 	// 必须遍历全部行，否则批量 DML 会静默丢行（只同步首行）。
-	convertRow := func(vals []any) []RawBytes {
-		return hutl.Slice(vals, func(i int, v any) RawBytes {
-			return c.toRawBytes(ctx, &info.Columns[info.Index[Column(e.Table.Columns[i].Name)]], v)
-		})
+	convertRow := func(vals []any) ([]RawBytes, error) {
+		// 行值列数必须与 binlog 权威列数一致（full row image），不一致说明缓存滞后，
+		// 直接索引会越界，须中止同步触发缓存刷新与重放。
+		if len(vals) != columnCount {
+			c.refreshTableMeta(ctx, e.Table.Schema, e.Table.Name)
+			return nil, fmt.Errorf("hcdc: table %s.%s: row has %d values but binlog declares %d columns (schema changed?), cache refreshed, resync pending",
+				e.Table.Schema, e.Table.Name, len(vals), columnCount)
+		}
+		row := make([]RawBytes, 0, len(vals))
+		for i, v := range vals {
+			var bt byte
+			if i < len(e.ColumnTypes) {
+				bt = e.ColumnTypes[i]
+			}
+			row = append(row, c.toRawBytes(ctx, &columnInfos[i], bt, v))
+		}
+		return row, nil
 	}
 
 	var err error
 	if e.Action == "insert" || e.Action == "delete" {
 		rows := make([][]RawBytes, 0, len(e.Rows))
 		for _, r := range e.Rows {
-			rows = append(rows, convertRow(r))
+			row, convErr := convertRow(r)
+			if convErr != nil {
+				c.recordCapture(ctx, convErr, nil)
+				return convErr
+			}
+			rows = append(rows, row)
 		}
 		action := Insert
 		if e.Action == "delete" {
 			action = Delete
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), action, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), action, columnInfos, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "update" {
 		// update 的 Rows 成对：[before, after, before, after, ...]，取 after 行（索引 1,3,5...）。
 		rows := make([][]RawBytes, 0, len(e.Rows)/2)
 		for i := 1; i < len(e.Rows); i += 2 {
-			rows = append(rows, convertRow(e.Rows[i]))
+			row, convErr := convertRow(e.Rows[i])
+			if convErr != nil {
+				c.recordCapture(ctx, convErr, nil)
+				return convErr
+			}
+			rows = append(rows, row)
 		}
-		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columns, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
+		err = c.worker.AddData(ctx, Schema(e.Table.Schema), Table(e.Table.Name), Update, columnInfos, rows, mysql.Position{Pos: e.Header.LogPos, Name: binlogName}, gtid)
 		c.recordCapture(ctx, err, rows)
 		return err
 	}
 
 	return nil
+}
+
+// refreshTableMeta 刷新指定表的元数据缓存（DDL 后自愈）：
+//   - 清除 go-mysql canal 的表缓存，下一个事件触发 GetTable 重新从源库查询；
+//   - 重新查询源表结构并写回 hcdc 本地 c.schemas（OnRow 的列映射依赖它）。
+//
+// 与 OnRow/OnDDL 在 canal 同步 goroutine 内串行调用；OnTableChanged 可能来自
+// canal 内部 goroutine，写 c.schemas 时用 c.lock 保护。
+func (c *Canal) refreshTableMeta(ctx context.Context, schemaName string, tableName string) {
+	if c.canal != nil {
+		c.canal.ClearTableCache([]byte(schemaName), []byte(tableName))
+	}
+	info, err := c.GetTableInfo(ctx, Schema(schemaName), Table(tableName))
+	if err != nil || info == nil {
+		return
+	}
+	c.cacheTableInfo(Schema(schemaName), Table(tableName), *info)
+}
+
+// cacheTableInfo 把最新表结构写回本地缓存（加锁）。
+func (c *Canal) cacheTableInfo(schema Schema, table Table, info TableInfo) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if _, ok := c.schemas[schema]; !ok {
+		c.schemas[schema] = make(map[Table]TableInfo)
+	}
+	c.schemas[schema][table] = info
 }
 
 // recordCapture 记录采集端指标（行数与字节数，失败时计数错误）。
@@ -520,7 +600,49 @@ func (c *Canal) recordCapture(ctx context.Context, err error, rows [][]RawBytes)
 	}
 	c.monitor.CaptureBytes.Add(bytes)
 }
-func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes {
+
+// noBinlogType 表示「无 binlog 类型信息」的哨兵值（全量 SELECT 路径）。
+// 不能用 0：go-mysql 里 MYSQL_TYPE_DECIMAL == 0（iota 从 0 起），会被 binlogTypeKind
+// 误判为 decimal。0xFF 不在任何合法 MYSQL_TYPE_* 枚举值内，是安全的哨兵。
+const noBinlogType byte = 0xFF
+
+// binlogTypeKind 把 binlog TableMapEvent 的 MYSQL_TYPE_*（byte）映射为与 ColumnInfo.Type
+// （INFORMATION_SCHEMA.DATA_TYPE 小写字符串）对齐的语义分类，供 toRawBytes 判断是否直通/base64/
+// 日期替换。tp == noBinlogType 表示无 binlog 类型信息（全量 SELECT 路径），此时上层应回退使用缓存 col.Type。
+//
+// 这是「跟着 binlog 元数据走」的关键：类型语义判断完全脱离可能滞后的表结构缓存。
+func binlogTypeKind(tp byte) string {
+	switch tp {
+	case mysql.MYSQL_TYPE_DATE, mysql.MYSQL_TYPE_NEWDATE:
+		return "date"
+	case mysql.MYSQL_TYPE_DATETIME, mysql.MYSQL_TYPE_DATETIME2:
+		return "datetime"
+	case mysql.MYSQL_TYPE_TIMESTAMP, mysql.MYSQL_TYPE_TIMESTAMP2:
+		return "timestamp"
+	case mysql.MYSQL_TYPE_TIME, mysql.MYSQL_TYPE_TIME2:
+		return "time"
+	case mysql.MYSQL_TYPE_YEAR:
+		return "year"
+	case mysql.MYSQL_TYPE_DECIMAL, mysql.MYSQL_TYPE_NEWDECIMAL:
+		return "decimal"
+	default:
+		return ""
+	}
+}
+
+// isPassthroughType 判断列类型是否「透传列」——CSV header 中不加 _base、值不做 base64，
+// 与 file.go 里 header 生成的透传列清单保持一致。数值/日期/时间/年份等类型都属于透传列。
+func isPassthroughType(typ string) bool {
+	switch typ {
+	case "boolean", "bool", "decimal", "numeric", "double", "real", "float",
+		"tinyint", "smallint", "int", "integer", "mediumint", "bigint", "largeint",
+		"time", "date", "datetime", "timestamp", "year":
+		return true
+	}
+	return false
+}
+
+func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, binlogType byte, v any) RawBytes {
 	if v == nil {
 		return nil
 	}
@@ -555,11 +677,17 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes
 		return RawBytes(strconv.FormatFloat(v.(float64), 'f', -1, 64))
 	case []byte:
 		val := v.([]byte)
-		typ := GetColumnType(col)
+		// 优先用 binlog 权威类型；tp==noBinlogType（全量路径）回退缓存类型。
+		typ := binlogTypeKind(binlogType)
+		if typ == "" {
+			typ = GetColumnType(col)
+		}
 		if typ == "date" || typ == "datetime" || typ == "timestamp" {
 			return RawBytes(strings.ReplaceAll(string(val), "0000-00-00", "1970-01-01"))
-		} else if typ == "decimal" || typ == "time" || typ == "year" {
+		} else if isPassthroughType(typ) {
 			// 数值/日期/时间/年份类型在 CSV header 中为透传列（不加 _base），必须直通、不 base64。
+			// 全量路径 Scan 到 *interface{} 时数值列也是 []byte（如 "20"），须按原样透传，
+			// 否则会被错误 base64 成 "MjA=" 导致 Doris 端类型不匹配、行被过滤。
 			return val
 		} else if typ == "bitmap32" || typ == "bitmap64" {
 			val = c.bitmapToArrayString(ctx, val, strings.Contains(col.Comment, "CustomType=Bitmap32"))
@@ -567,10 +695,13 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, v any) RawBytes
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	case string:
 		val := v.(string)
-		typ := GetColumnType(col)
+		typ := binlogTypeKind(binlogType)
+		if typ == "" {
+			typ = GetColumnType(col)
+		}
 		if typ == "date" || typ == "datetime" || typ == "timestamp" {
 			return RawBytes(strings.ReplaceAll(val, "0000-00-00", "1970-01-01"))
-		} else if typ == "decimal" || typ == "time" || typ == "year" {
+		} else if isPassthroughType(typ) {
 			return RawBytes(val)
 		} else if typ == "bitmap32" || typ == "bitmap64" {
 			val = string(c.bitmapToArrayString(ctx, []byte(val), strings.Contains(col.Comment, "CustomType=Bitmap32")))
@@ -922,7 +1053,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 			return herror.Wrap(err)
 		}
 		if err := batch.AddData(hutl.Slice(values, func(i int, v any) RawBytes {
-			return c.toRawBytes(ctx, &info.Columns[info.Index[Column(columns[i])]], v)
+			return c.toRawBytes(ctx, &info.Columns[info.Index[Column(columns[i])]], noBinlogType, v)
 		})); err != nil {
 			return herror.Wrap(err)
 		}
