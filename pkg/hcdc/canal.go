@@ -911,15 +911,21 @@ func (c *Canal) FilterTable(name Table) bool {
 	return false
 }
 
-// GetKeys 获得指定表的主键
+// GetKeys 获得指定表的主键。
+// KeyIndex 语义：>0 表示是主键列，值越大在复合主键中越靠前（第一列最大）。
+// 必须按 ORDINAL_POSITION ASC 读取，才能给复合主键（如 PRIMARY KEY(id, create_time)）
+// 赋予正确顺序：id 排最前、create_time 次之。若用 DESC 或统一赋 1，排序后会颠倒，
+// 导致 ReadData 全量分页误把 timestamp 列当分页主键（WHERE create_time <= 9223372036854775807 匹配 0 行）、
+// 以及 Doris UNIQUE KEY 顺序与源表主键不一致，最终复合主键表数据静默丢失。
 func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION DESC ", string(schema), string(table))
+	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION ASC ", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
 	}
 	defer query.Close()
 
-	var keys = make(map[string]int)
+	// 先按定义顺序收集主键列名，再逆序赋 KeyIndex（第一列最大），保证排序后顺序正确。
+	var pkOrder []string
 	for query.Next() {
 		var column, constraint *string
 		if err := query.Scan(&column, &constraint); err != nil {
@@ -929,11 +935,17 @@ func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[st
 			continue
 		}
 		if *constraint == "PRIMARY" {
-			keys[*column] = 1
+			pkOrder = append(pkOrder, *column)
 		}
 	}
 	if err := query.Err(); err != nil {
 		return nil, herror.Wrap(err)
+	}
+
+	var keys = make(map[string]int, len(pkOrder))
+	for i, name := range pkOrder {
+		// 第 0 列（主键第一列）赋最大值 len(pkOrder)，最后一列赋 1。
+		keys[name] = len(pkOrder) - i
 	}
 	return keys, nil
 }
