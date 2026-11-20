@@ -102,8 +102,13 @@ func main() {
 | `Username`        | `string` | 是  | 账号                                       |
 | `Password`        | `string` | 否  | 密码                                       |
 | `Schema`          | `string` | 否  | 目标库名                                     |
+| `SchemaPrefix`    | `string` | 否  | 目标库名前缀；同步时源 MySQL 库名会拼接该前缀作为 Doris 库名 |
 | `LoadURL`         | `string` | 是  | Stream Load 地址，如 `http://127.0.0.1:8040` |
 | `MaxBacklogBytes` | `int64`  | 否  | 本地 CSV 积压告警阈值（字节），0 用默认 10GB             |
+
+> **SchemaPrefix（库名前缀）**：源库名与 Doris 目标库名默认一致；配置前缀后，同步到 Doris 的库名 = `前缀 + 源库名`。
+> 例如源库 `game`、前缀 `ods_`，则建表/上传都落在 Doris 的 `ods_game` 库。前缀对「建库、建表、改表、删表、Stream Load 上传」全链路生效。
+> 位点记录表 `cdc_record` 是 hcdc 内部保留库，**不受前缀影响**，始终固定。多个不同 MySQL 源若库名相同，可配合该前缀区分，避免落到同一张 Doris 表。
 
 ## API
 

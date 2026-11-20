@@ -46,12 +46,19 @@ type DorisResponse struct {
 // defaultMaxBacklog 本地 CSV 缓冲积压的默认告警阈值（10GB）。超过仅告警不中断。
 const defaultMaxBacklog = int64(10 * 1024 * 1024 * 1024)
 
+// cdcRecordSchema 位点记录表的保留库名。该库由 hcdc 内部维护，不参与库名前缀映射。
+const cdcRecordSchema = Schema("cdc_record")
+
 type DorisConfig struct {
 	Host     string `yaml:"Host"`     // 数据库主机地址
 	Username string `yaml:"Username"` // 数据库用户名
 	Password string `yaml:"Password"` // 数据库密码
 	Schema   string `yaml:"Schema"`   // 数据库名称
 	LoadURL  string `yaml:"LoadURL"`
+	// SchemaPrefix 目标库名前缀。同步到 Doris 时，源 MySQL 库名会拼接该前缀作为目标库名，
+	// 例如源库 game、前缀 ods_，则落到 Doris 的 ods_game 库。为空表示不加前缀（与源库同名）。
+	// 注意：位点记录表 cdc_record 不受前缀影响，始终使用固定库名。
+	SchemaPrefix string `yaml:"SchemaPrefix"`
 	// MaxBacklogBytes 本地 CSV 缓冲积压的告警阈值（字节）。超过时仅告警不中断。
 	// 为 0 时使用默认值（见 Doris.defaultMaxBacklog）。
 	MaxBacklogBytes int64 `yaml:"MaxBacklogBytes"`
@@ -82,7 +89,8 @@ func (c *DorisConfig) Equal(other *DorisConfig) bool {
 		c.Username == other.Username &&
 		c.Password == other.Password &&
 		c.Schema == other.Schema &&
-		c.LoadURL == other.LoadURL
+		c.LoadURL == other.LoadURL &&
+		c.SchemaPrefix == other.SchemaPrefix
 }
 
 type ActionInfo struct {
@@ -132,6 +140,18 @@ func NewDoris(cfg *DorisConfig) *Doris {
 	}
 	d.initializing.Store(true)
 	return d
+}
+
+// targetSchema 把源 MySQL 库名映射为 Doris 目标库名（拼接 SchemaPrefix 前缀）。
+// 位点表保留库 cdc_record 不参与映射；前缀为空时原样返回，保证无前缀配置下行为不变。
+func (d *Doris) targetSchema(src Schema) Schema {
+	if src == cdcRecordSchema {
+		return src
+	}
+	if d.cfg == nil || d.cfg.SchemaPrefix == "" {
+		return src
+	}
+	return Schema(d.cfg.SchemaPrefix + string(src))
 }
 
 func (d *Doris) RegisterWorker(ctx context.Context, worker *Worker) {
@@ -307,6 +327,8 @@ func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
 }
 
 func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {
+	// 库名前缀映射：源 MySQL 库名 -> Doris 目标库名（位点表 cdc_record 在 targetSchema 内豁免）。
+	schema = d.targetSchema(schema)
 	parse, err := url.Parse(d.cfg.LoadURL)
 	if err != nil {
 		return err
@@ -376,6 +398,7 @@ func (d *Doris) Close() error {
 }
 
 func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
+	schema = d.targetSchema(schema)
 	var s strings.Builder
 	s.WriteString("CREATE DATABASE IF NOT EXISTS `")
 	// 库名若含反引号需转义，防止注入或语法错误。
@@ -428,7 +451,10 @@ func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 		return err
 	}
 	newInfo := d.ToDorisTable(info)
-	oldInfo, err := d.GetTableInfo(ctx, info.Schema, info.Table)
+	// 库名前缀映射：源库名 -> 目标库名。createTable/modifyTable 内部使用 newInfo.Schema 拼 SQL，
+	// 因此只需在此处统一改写一次。
+	newInfo.Schema = d.targetSchema(info.Schema)
+	oldInfo, err := d.GetTableInfo(ctx, newInfo.Schema, info.Table)
 	if err != nil {
 		d.monitor.DDLErrors.Add(1)
 		return err
@@ -452,7 +478,8 @@ func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 
 // dropTable 删除 Doris 侧的对应表
 func (d *Doris) dropTable(ctx context.Context, info *TableInfo) error {
-	query := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", info.Schema, info.Table)
+	schema := d.targetSchema(info.Schema)
+	query := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", schema, info.Table)
 	hlog.Info(ctx, "doris drop table: %s", query)
 	_, err := d.sql.ExecContext(ctx, query)
 	if err != nil {
@@ -1132,7 +1159,7 @@ func (d *Doris) scanFile(ctx context.Context) error {
 	if reader.Len() == 0 {
 		return nil
 	}
-	return d.StreamSave(ctx, "cdc_record", "log_position", "instance_id,file,position,gtid,__op", &reader)
+	return d.StreamSave(ctx, cdcRecordSchema, "log_position", "instance_id,file,position,gtid,__op", &reader)
 }
 
 // checkBacklog 磁盘水位检测：本地 CSV 缓冲积压超过阈值时仅告警（不中断同步）。
