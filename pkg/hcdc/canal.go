@@ -815,29 +815,6 @@ func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 		return nil, herror.Wrap(err)
 	}
 
-	//query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
-	//result, err := c.conn.Execute(query, string(schema), string(table))
-	//if err != nil {
-	//	return nil, herror.Wrap(err)
-	//}
-	//defer result.Close()
-	//
-	//ret := &TableInfo{
-	//	Columns: make([]ColumnInfo, len(result.Values)),
-	//	Keys:    make([]Column, 0),
-	//}
-	//for i, rows := range result.Values {
-	//	ret.Columns[i] = ColumnInfo{
-	//		Name:     Column(rows[0].AsString()),
-	//		Type:     strings.ToLower(string(rows[5].AsString())),
-	//		Comment:  string(rows[2].AsString()),
-	//		KeyIndex: keys[string(rows[0].AsString())],
-	//		IsNull:   string(rows[3].AsString()) == "YES",
-	//		Args:     string(rows[1].AsString()[len(rows[5].AsString()):]),
-	//		Default:  string(rows[4].AsString()),
-	//	}
-	//}
-
 	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -913,35 +890,6 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 		// 全量拉取无真实 binlog 位点（Name="SELECT" 标记），GTID 留空。
 		return c.worker.AddData(ctx, schema, table, Insert, fields, values, mysql.Position{Pos: uint32(time.Now().Unix()), Name: "SELECT"}, "")
 	})
-
-	//query := "SELECT * FROM `" + string(schema) + "`.`" + string(table) + "` WHERE `" + string(key) + "` > " + start + " AND `" + string(key) + "` <= " + end
-	//var result mysql.Result
-	//err := c.conn.ExecuteSelectStreaming(query, &result, func(row []mysql.FieldValue) error {
-	//	return batch.AddData(hutl.Slice(row, func(i int, value mysql.FieldValue) RawBytes {
-	//		switch value.Type {
-	//		case mysql.FieldValueTypeUnsigned:
-	//			return RawBytes(strconv.FormatUint(value.AsUint64(), 10))
-	//		case mysql.FieldValueTypeSigned:
-	//			return RawBytes(strconv.FormatInt(value.AsInt64(), 10))
-	//		case mysql.FieldValueTypeFloat:
-	//			return RawBytes(strconv.FormatFloat(value.AsFloat64(), 'f', -1, 64))
-	//		case mysql.FieldValueTypeString:
-	//			return RawBytes(base64.StdEncoding.EncodeToString(value.AsString()))
-	//		default:
-	//			return nil
-	//		}
-	//	}))
-	//}, func(result *mysql.Result) error {
-	//	for _, field := range result.Fields {
-	//		fields = append(fields, info.Columns[info.Index[Column(field.Name)]])
-	//	}
-	//	return nil
-	//})
-	//
-	//
-	//if err != nil {
-	//	return err
-	//}
 
 	// start 为空表示「无下界」，全量拉取首段（覆盖主键最小值，如 id=0 或负主键）。
 	// 否则用 (start, end] 半开区间做分页，避免遗漏/重复边界行。
@@ -1032,15 +980,15 @@ func (c *Canal) createSchemaTable(ctx context.Context) error {
 			return c.FilterTable(v)
 		})
 		if _, ok := c.schemas[db]; !ok {
-			c.schemas[Schema(db)] = make(map[Table]TableInfo)
+			c.schemas[db] = make(map[Table]TableInfo)
 		}
 		for _, table := range tables {
-			info, err := c.GetTableInfo(ctx, Schema(db), Table(table))
+			info, err := c.GetTableInfo(ctx, db, table)
 			if err != nil {
 				return err
 			}
 			if info != nil {
-				c.schemas[Schema(db)][Table(table)] = *info
+				c.schemas[db][table] = *info
 				infos = append(infos, *info)
 			}
 		}
