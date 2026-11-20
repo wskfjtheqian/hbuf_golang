@@ -47,14 +47,14 @@ type DorisResponse struct {
 const defaultMaxBacklog = int64(10 * 1024 * 1024 * 1024)
 
 type DorisConfig struct {
-	Host     string `yaml:"host"`     // 数据库主机地址
-	Username string `yaml:"username"` // 数据库用户名
-	Password string `yaml:"password"` // 数据库密码
-	Schema   string `yaml:"schema"`   // 数据库名称
-	LoadURL  string `yaml:"loadURL"`
+	Host     string `yaml:"Host"`     // 数据库主机地址
+	Username string `yaml:"Username"` // 数据库用户名
+	Password string `yaml:"Password"` // 数据库密码
+	Schema   string `yaml:"Schema"`   // 数据库名称
+	LoadURL  string `yaml:"LoadURL"`
 	// MaxBacklogBytes 本地 CSV 缓冲积压的告警阈值（字节）。超过时仅告警不中断。
 	// 为 0 时使用默认值（见 Doris.defaultMaxBacklog）。
-	MaxBacklogBytes int64 `yaml:"maxBacklogBytes"`
+	MaxBacklogBytes int64 `yaml:"MaxBacklogBytes"`
 }
 
 func (c *DorisConfig) Validate(ctx context.Context) bool {

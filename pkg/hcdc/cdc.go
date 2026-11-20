@@ -87,8 +87,8 @@ type TableInfo struct {
 }
 
 type Config struct {
-	Canals []CanalConfig `yaml:"canals"` // Canal 配置
-	Doris  *DorisConfig  `yaml:"doris"`  // Doris 配置
+	Canals []CanalConfig `yaml:"Canals"` // Canal 配置
+	Doris  *DorisConfig  `yaml:"Doris"`  // Doris 配置
 }
 
 func (c *Config) Validate(ctx context.Context) bool {

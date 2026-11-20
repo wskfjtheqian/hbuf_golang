@@ -1,7 +1,6 @@
 services:
   doris-all:
     image: apache/doris:3.0.8-all
-    container_name: doris-all
     # 💡 关键 1：在 Windows 上必须通过 ports 显式映射，不能使用 network_mode: "host"
     ports:
       - "9030:9030" # MySQL 协议连接端口 (FE) -> 你的 Go 引擎 JDBC 指向这里

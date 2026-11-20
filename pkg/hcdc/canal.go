@@ -40,19 +40,19 @@ type SyncPosition struct {
 type OnGetPosition func(ctx context.Context, instanceId InstanceId) (*SyncPosition, error)
 
 type CanalConfig struct {
-	InstanceId    InstanceId `yaml:"instanceId"`    // 实例ID
-	Host          string     `yaml:"host"`          // 数据库主机地址
-	Username      string     `yaml:"username"`      // 数据库用户名
-	Password      string     `yaml:"password"`      // 数据库密码
-	Schema        string     `yaml:"schema"`        // 数据库名称
-	IncludeDBs    []string   `yaml:"includeDBs"`    //支持的库
-	ExcludeDBs    []string   `yaml:"excludeDBs"`    //排除的库
-	IncludeTables []string   `yaml:"includeTables"` //支持的表
-	ExcludeTables []string   `yaml:"excludeTables"` //排除的表
-	ServerID      *uint32    `yaml:"serverID"`      // 服务器ID
-	Charset       string     `yaml:"charset"`       // 字符集
-	Flavor        string     `yaml:"flavor"`        // 数据库类型
-	LogDir        string     `yaml:"logDir"`
+	InstanceId    InstanceId `yaml:"InstanceId"`    //实例ID
+	Host          string     `yaml:"Host"`          //数据库主机地址
+	Username      string     `yaml:"Username"`      //数据库用户名
+	Password      string     `yaml:"Password"`      //数据库密码
+	Schema        string     `yaml:"Schema"`        //数据库名称
+	IncludeDBs    []string   `yaml:"IncludeDBs"`    //支持的库
+	ExcludeDBs    []string   `yaml:"ExcludeDBs"`    //排除的库
+	IncludeTables []string   `yaml:"IncludeTables"` //支持的表
+	ExcludeTables []string   `yaml:"ExcludeTables"` //排除的表
+	ServerID      *uint32    `yaml:"ServerID"`      //服务器ID
+	Charset       string     `yaml:"Charset"`       //字符集
+	Flavor        string     `yaml:"Flavor"`        //数据库类型
+	LogDir        string     `yaml:"LogDir"`        //日志目录
 }
 
 func (c *CanalConfig) Validate(ctx context.Context) bool {
