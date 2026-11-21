@@ -374,9 +374,14 @@ func (d *Doris) Close() error {
 	return nil
 }
 
-// CreateSchema 创建 Doris 目标库。
+// CreateSchema 创建 Doris 目标库（源库名拼接 SchemaPrefix 前缀）。
 func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
-	schema = d.targetSchema(schema)
+	return d.ensureSchema(ctx, d.targetSchema(schema))
+}
+
+// ensureSchema 确保指定库存在（库名不再拼接前缀，幂等）。
+// 运行时 DDL 场景（上游新建库）不会走初始化建库路径，建表前必须依赖此方法兜底建库。
+func (d *Doris) ensureSchema(ctx context.Context, schema Schema) error {
 	var s strings.Builder
 	s.WriteString("CREATE DATABASE IF NOT EXISTS `")
 	s.WriteString(strings.ReplaceAll(string(schema), "`", "``"))
@@ -421,7 +426,7 @@ func (d *Doris) GetReplicationNum(ctx context.Context) int {
 // changeTable 执行 Doris DDL
 func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 	d.monitor.DDLCount.Add(1)
-	if info.IsDrop {
+	if info.Action == Drop {
 		d.monitor.DropTable.Add(1)
 		err := d.dropTable(ctx, info)
 		if err != nil {
@@ -467,6 +472,10 @@ func (d *Doris) dropTable(ctx context.Context, info *TableInfo) error {
 
 // createTable 增强版：支持动态主键、自适应副本及 Range 时间分区
 func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
+	// 运行时 DDL（上游新建库）不会触发初始化建库路径，建表前先确保目标库存在。
+	if err := d.ensureSchema(ctx, info.Schema); err != nil {
+		return herror.Wrap(err)
+	}
 	var s strings.Builder
 	columns := info.Columns
 

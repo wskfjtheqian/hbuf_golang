@@ -165,7 +165,8 @@ func (c *Canal) handleEvent(ev *replication.BinlogEvent) error {
 			if len(nodes) > 0 {
 				force = true
 				// Now we only handle Table Changed DDL, maybe we will support more later.
-				if err = c.eventHandler.OnDDL(ev.Header, pos, e); err != nil {
+				// 已解析的 stmt 直接透传，回调方无需对同一 SQL 二次解析。
+				if err = c.eventHandler.OnDDL(ev.Header, pos, e, stmt); err != nil {
 					return errors.Trace(err)
 				}
 			}

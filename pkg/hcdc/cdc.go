@@ -23,8 +23,31 @@ const (
 	Update
 	Delete
 	Create
+	Alter
+	Drop
 	Truncate
 )
+
+func (a Action) String() string {
+	switch a {
+	case Insert:
+		return "insert"
+	case Update:
+		return "update"
+	case Delete:
+		return "delete"
+	case Create:
+		return "create"
+	case Alter:
+		return "alter"
+	case Drop:
+		return "drop"
+	case Truncate:
+		return "truncate"
+	default:
+		return "unknown"
+	}
+}
 
 // SyncStatus 表示 svc -> Doris 数据同步的运行状态。
 type SyncStatus int32
@@ -81,11 +104,7 @@ type TableInfo struct {
 	Keys           []Column
 	PartitionField Column // 分区字段名
 	PartitionType  string // 分区类型，目前主流为 "RANGE"
-	Action         string
-	IsCreate       bool
-	IsAlter        bool
-	IsDrop         bool
-	IsTruncate     bool
+	Action         Action
 }
 
 type Config struct {

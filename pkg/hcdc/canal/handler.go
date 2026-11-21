@@ -4,6 +4,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
 type EventHandler interface {
@@ -12,7 +13,9 @@ type EventHandler interface {
 	// You need to clear the associated data like cache with the table.
 	// It will be called before OnDDL.
 	OnTableChanged(header *replication.EventHeader, schema string, table string) error
-	OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent) error
+	// OnDDL 的 stmt 是 handleEvent 中已解析的 AST 语句（完整数据结构），
+	// 回调方可直接复用，无需对同一 SQL 二次解析。
+	OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent, stmt ast.StmtNode) error
 	OnRow(e *RowsEvent) error
 	OnXID(header *replication.EventHeader, nextPos mysql.Position) error
 	OnGTID(header *replication.EventHeader, gtidEvent mysql.BinlogGTIDEvent) error
@@ -38,7 +41,7 @@ func (h *DummyEventHandler) OnTableChanged(*replication.EventHeader, string, str
 	return nil
 }
 
-func (h *DummyEventHandler) OnDDL(*replication.EventHeader, mysql.Position, *replication.QueryEvent) error {
+func (h *DummyEventHandler) OnDDL(*replication.EventHeader, mysql.Position, *replication.QueryEvent, ast.StmtNode) error {
 	return nil
 }
 func (h *DummyEventHandler) OnRow(*RowsEvent) error                               { return nil }

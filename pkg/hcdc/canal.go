@@ -19,6 +19,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc/canal"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -358,85 +359,70 @@ func (c *Canal) canalCfgFlavor() string {
 	return mysql.MySQLFlavor
 }
 
-// OnTableChanged 当表结构被修改，或者是由于 DDL 导致 Canal 内部缓存的元数据失效时触发。
-func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, table string) error {
-	// 当上游加字段减字段时触发，你可以在这里重新调用 c.GetTableInfo 获取最新结构
-	// 并在 Doris 侧执行 "ALTER TABLE ... ADD COLUMN" 动态同步表结构变更
+// OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE、TRUNCATE 等 SQL 语句时触发。
+// stmt 是 fork 在 handleEvent 中已解析的 AST 语句（完整数据结构），直接用
+// ParseDDLStmts 展开受影响表，不再对同一 SQL 二次解析。
+//   - TRUNCATE：需要位点信息（nextPos），让 worker 落一个独立控制文件，先清理该表
+//     此前积压的全部 .temp/.active（TRUNCATE 前的数据本就要清空，无需上传），
+//     再由上传端识别控制文件、对 Doris 执行 TRUNCATE TABLE。与 OnRow 共用一个
+//     addData channel，保证 TRUNCATE 与前后 DML 严格串行。
+//   - DROP：只需要表名即可，清理本地结构缓存并通知 Doris 侧删表。
+//   - CREATE/ALTER：回源库查最新完整表结构（ALTER 的 AST 只携带列变更，
+//     不足以在 Doris 侧正确建表/改表），写回本地缓存后通知 Doris 侧建表/改表。
+func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent, stmt ast.StmtNode) error {
 	ctx := hlog.NewContext()
-	info, err := c.GetTableInfo(ctx, Schema(schema), Table(table))
-	if err != nil {
-		return err
-	}
-	if info == nil {
-		return nil
-	}
-	// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
-	c.cacheTableInfo(Schema(schema), Table(table), *info)
-	if c.onCreateTable == nil {
-		return nil
-	}
-	err = c.onCreateTable(ctx, []TableInfo{*info})
-	if err != nil {
-		return err
+	infos := ParseDDLStmts(Schema(queryEvent.Schema), stmt)
+	for _, info := range infos {
+		// 与全量拉取保持一致，只处理命中过滤规则的表。
+		if !c.FilterDatabase(info.Schema) || !c.FilterTable(info.Table) {
+			continue
+		}
+		if info.Action == Truncate {
+			binlogName := nextPos.Name
+			if binlogName == "" {
+				binlogName = c.canal.SyncedPosition().Name
+			}
+			gtid := ""
+			if c.gtidSet != nil {
+				gtid = c.gtidSet.String()
+			} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
+				gtid = gset.String()
+			}
+			return c.worker.Truncate(ctx, info.Schema, info.Table, mysql.Position{
+				Name: binlogName,
+				Pos:  nextPos.Pos,
+			}, gtid)
+		}
+		if info.Action == Drop {
+			// DROP 只需要表名即可：清理本地结构缓存，并通知 Doris 侧删表。
+			c.removeTableInfo(info.Schema, info.Table)
+			if c.onCreateTable == nil {
+				continue
+			}
+			if err := c.onCreateTable(ctx, []TableInfo{*info}); err != nil {
+				return err
+			}
+			continue
+		}
+		// CREATE/ALTER：回源库查最新完整表结构（ALTER 的 AST 只携带列变更，
+		// 不足以在 Doris 侧正确建表/改表）。
+		full, err := c.GetTableInfo(ctx, info.Schema, info.Table)
+		if err != nil {
+			return err
+		}
+		if full == nil {
+			continue
+		}
+		// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
+		c.cacheTableInfo(info.Schema, info.Table, *full)
+		if c.onCreateTable == nil {
+			continue
+		}
+		if err := c.onCreateTable(ctx, []TableInfo{*full}); err != nil {
+			return err
+		}
 	}
 	return nil
-}
-
-// OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE 等 SQL 语句时触发。
-func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent) error {
-	// 如果库不满足过滤条件，直接忽略
-	if !c.FilterDatabase(Schema(queryEvent.Schema)) {
-		return nil
-	}
-
-	ddl := ParseDDL(Schema(queryEvent.Schema), string(queryEvent.Query))
-	if ddl == nil || !c.FilterTable(ddl.Table) {
-		return nil
-	}
-
-	// TRUNCATE 不走 onCreateTable（建表/改表回调），而是让 worker 落一个独立控制文件：
-	// 先清理该表此前积压的全部 .temp/.active（TRUNCATE 前的数据本就要清空，无需上传），
-	// 再由上传端识别控制文件、对 Doris 执行 TRUNCATE TABLE。
-	// 与 OnRow 共用一个 addData channel，保证 TRUNCATE 与前后 DML 严格串行。
-	if ddl.IsTruncate {
-		ctx := hlog.NewContext()
-		binlogName := nextPos.Name
-		if binlogName == "" {
-			binlogName = c.canal.SyncedPosition().Name
-		}
-		gtid := ""
-		if c.gtidSet != nil {
-			gtid = c.gtidSet.String()
-		} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
-			gtid = gset.String()
-		}
-		return c.worker.Truncate(ctx, Schema(queryEvent.Schema), ddl.Table, mysql.Position{
-			Name: binlogName,
-			Pos:  nextPos.Pos,
-		}, gtid)
-	}
-
-	if c.onCreateTable == nil {
-		return nil
-	}
-
-	// DROP 只需要表名即可；CREATE/ALTER 需要带上游最新的完整表结构，
-	// 因为 ParseDDL 只解析出表名与列变更，不足以在 Doris 侧正确建表/改表。
-	if ddl.IsDrop {
-		return c.onCreateTable(hlog.NewContext(), []TableInfo{*ddl})
-	}
-
-	ctx := hlog.NewContext()
-	info, err := c.GetTableInfo(ctx, Schema(queryEvent.Schema), ddl.Table)
-	if err != nil {
-		return err
-	}
-	if info == nil {
-		return nil
-	}
-	// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射。
-	c.cacheTableInfo(Schema(queryEvent.Schema), ddl.Table, *info)
-	return c.onCreateTable(ctx, []TableInfo{*info})
 }
 
 // OnPosSynced 位点同步回调。当前位点（binlog 文件名 + offset）已由 OnRow 通过
@@ -581,8 +567,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 //   - 清除 go-mysql canal 的表缓存，下一个事件触发 GetTable 重新从源库查询；
 //   - 重新查询源表结构并写回 hcdc 本地 c.schemas（OnRow 的列映射依赖它）。
 //
-// 与 OnRow/OnDDL 在 canal 同步 goroutine 内串行调用；OnTableChanged 可能来自
-// canal 内部 goroutine，写 c.schemas 时用 c.lock 保护。
+// 与 OnRow/OnDDL 在 canal 同步 goroutine 内串行调用；cacheTableInfo 内部加锁保护。
 func (c *Canal) refreshTableMeta(ctx context.Context, schemaName string, tableName string) {
 	if c.canal != nil {
 		c.canal.ClearTableCache([]byte(schemaName), []byte(tableName))
@@ -602,6 +587,15 @@ func (c *Canal) cacheTableInfo(schema Schema, table Table, info TableInfo) {
 		c.schemas[schema] = make(map[Table]TableInfo)
 	}
 	c.schemas[schema][table] = info
+}
+
+// removeTableInfo 从本地结构缓存移除已删除的表，避免 OnRow 用残留结构继续采集。
+func (c *Canal) removeTableInfo(schema Schema, table Table) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if tables, ok := c.schemas[schema]; ok {
+		delete(tables, table)
+	}
 }
 
 // recordCapture 记录采集端指标（行数与字节数，失败时计数错误）。
