@@ -72,9 +72,9 @@ func (ve *valueExpr) SetValue(val any) {
 	case uint64:
 		ve.text = strconv.FormatUint(x, 10)
 	case float32:
-		ve.text = strconv.FormatFloat(float64(x), 'e', -1, 32)
+		ve.text = strconv.FormatFloat(float64(x), 'f', -1, 32)
 	case float64:
-		ve.text = strconv.FormatFloat(x, 'e', -1, 64)
+		ve.text = strconv.FormatFloat(x, 'f', -1, 64)
 	case string:
 		ve.isStr = true
 		ve.text = x

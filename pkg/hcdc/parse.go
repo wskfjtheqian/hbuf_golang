@@ -226,7 +226,7 @@ func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 				c.Default = &d
 			}
 		case ast.ColumnOptionComment:
-			c.Comment = restoreExpr(opt.Expr)
+			c.Comment = restoreComment(opt.Expr)
 		}
 	}
 	return c
@@ -254,4 +254,13 @@ func restoreExpr(expr ast.ExprNode) string {
 		return ""
 	}
 	return sb.String()
+}
+
+// restoreComment 与 INFORMATION_SCHEMA.COLUMN_COMMENT 语义对齐：返回去引号的
+// 原始文本（下游 doris.go 建表时自行加引号，带 restore 引号会双重包裹）。
+func restoreComment(expr ast.ExprNode) string {
+	if v, ok := expr.(ast.ValueExpr); ok {
+		return v.GetString()
+	}
+	return restoreExpr(expr)
 }
