@@ -90,6 +90,7 @@ type ColumnInfo struct {
 	Default  *string
 	Action   string
 	OldName  Column
+	Charset  string // 源表列字符集（如 utf8mb4），与 INFORMATION_SCHEMA.COLUMNS.CHARACTER_SET_NAME 对齐；数值类型/binary 为空。Doris 原生 UTF-8 不消费，保留供审计与扩展（如转码）。
 }
 
 func (i ColumnInfo) String() string {

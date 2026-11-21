@@ -206,7 +206,8 @@ func extractAlterColumns(t *ast.AlterTableStmt) []ColumnInfo {
 }
 
 // columnToInfo 将 AST 列定义转换为 ColumnInfo。Type/Args 与
-// INFORMATION_SCHEMA 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如 varchar + "(255)"）。
+// INFORMATION_SCHEMA 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如 varchar + "(255)"），
+// Charset 与 CHARACTER_SET_NAME 对齐（数值类型的 binary 归一化为空）。
 // DEFAULT/COMMENT 通过 canal 包注入的 valueExpr 实现（expr.go）从 AST 还原。
 func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 	c := ColumnInfo{
@@ -216,6 +217,11 @@ func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 	}
 	if col.Tp != nil {
 		c.Type, c.Args = splitFieldType(col.Tp)
+		// 字符集从 AST 单独提取存入 Charset（而非混进 Args）：Doris 建表不支持
+		// charset 子句但源信息值得保留。数值/二进制类型的 binary 无意义，置空。
+		if cs := col.Tp.GetCharset(); cs != "" && cs != "binary" {
+			c.Charset = cs
+		}
 	}
 	for _, opt := range col.Options {
 		switch opt.Tp {
@@ -234,11 +240,12 @@ func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 
 // splitFieldType 把 AST 字段类型拆成 Type（小写类型名）与 Args（参数部分），
 // 与 INFORMATION_SCHEMA.COLUMNS 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如
-// "varchar" + "(255)"、"bigint" + "(20) unsigned"）。
-// 必须用 FieldType.String()（含 UNSIGNED/ZEROFILL 修饰），CompactStr() 不带
-// 修饰会丢失 unsigned/zerofill。
+// "varchar" + "(255)"）。
+// 用 CompactStr()（仅类型名 + 参数）：FieldType.String() 会附加 UNSIGNED/
+// ZEROFILL/BINARY/CHARACTER SET/COLLATE 修饰子句，Doris 均不支持，直接用
+// CompactStr 从源头避免修饰混入 Args（建表 SQL 透传会导致 Doris 语法报错）。
 func splitFieldType(tp *types.FieldType) (string, string) {
-	s := strings.ToLower(tp.String())
+	s := strings.ToLower(tp.CompactStr())
 	typ := types.TypeToStr(tp.GetType(), tp.GetCharset())
 	return typ, strings.TrimPrefix(s, typ)
 }
