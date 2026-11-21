@@ -389,6 +389,21 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 	return nil
 }
 
+// TruncateTable 对 Doris 目标表执行 TRUNCATE TABLE。
+// 库名遵循 SchemaPrefix 映射规则，与 StreamSave 保持一致。
+// SQL 里的库名与表名统一转义反引号，防止标识符注入。
+func (d *Doris) TruncateTable(ctx context.Context, schema Schema, table Table) error {
+	target := d.targetSchema(schema)
+	sqlText := "TRUNCATE TABLE `" + strings.ReplaceAll(string(target), "`", "``") + "`.`" + strings.ReplaceAll(string(table), "`", "``") + "`"
+	hlog.Info(ctx, "doris truncate table: %s", sqlText)
+	if _, err := d.sql.ExecContext(ctx, sqlText); err != nil {
+		d.monitor.DDLErrors.Add(1)
+		return herror.Wrap(err)
+	}
+	d.monitor.DDLCount.Add(1)
+	return nil
+}
+
 // Close 关闭 Doris 连接
 func (d *Doris) Close() error {
 	if d.sql != nil {
@@ -1112,12 +1127,17 @@ func (d *Doris) scanFile(ctx context.Context) error {
 		}
 		return err
 	}
+	// TRUNCATE 控制文件的处理回调：对目标库执行 TRUNCATE TABLE。
+	// 位点/GTID 由 scanFile 汇总进 cdc_record，保证崩溃后不会重复执行。
+	truncate := func(ctx context.Context, schema Schema, table Table, pos mysql.Position, gtid string, capturedAt time.Time) error {
+		return d.TruncateTable(ctx, schema, table)
+	}
 
 	for _, worker := range workers {
 		wg.Add(1)
 		go func(w *Worker) {
 			defer wg.Done()
-			id, pos, gtid, err := w.ScanFile(ctx, upload)
+			id, pos, gtid, err := w.ScanFile(ctx, upload, truncate)
 			if err != nil {
 				d.monitor.UploadErrors.Add(1)
 				hlog.Error(ctx, "scan file error: %v", err)

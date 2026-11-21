@@ -84,6 +84,7 @@ type TableInfo struct {
 	IsCreate       bool
 	IsAlter        bool
 	IsDrop         bool
+	IsTruncate     bool
 }
 
 type Config struct {

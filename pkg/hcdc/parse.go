@@ -36,7 +36,25 @@ func ParseDDL(schema Schema, sql string) *TableInfo {
 		return info
 	}
 
+	if strings.Contains(upperSQL, "TRUNCATE") {
+		info.Action = "TRUNCATE"
+		info.IsTruncate = true
+		info.Table = extractTruncateTableName(sql)
+		return info
+	}
+
 	return nil
+}
+
+// extractTruncateTableName 提取 TRUNCATE [TABLE] [db.]table 中的表名。
+// MySQL 允许省略 TABLE 关键字，故单独处理，不复用 extractTableName（其正则写死了 create|alter|drop）。
+func extractTruncateTableName(sql string) Table {
+	re := regexp.MustCompile(`(?i)TRUNCATE\s+(?:TABLE\s+)?(?:` + "`" + `?([a-zA-Z0-9_]+)` + "`" + `?\.)?` + "`" + `?([a-zA-Z0-9_]+)` + "`" + `?`)
+	matches := re.FindStringSubmatch(sql)
+	if len(matches) >= 3 {
+		return Table(matches[2])
+	}
+	return ""
 }
 
 // extractTableName 提取表名

@@ -394,6 +394,28 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 		return nil
 	}
 
+	// TRUNCATE 不走 onCreateTable（建表/改表回调），而是让 worker 落一个独立控制文件：
+	// 先清理该表此前积压的全部 .temp/.active（TRUNCATE 前的数据本就要清空，无需上传），
+	// 再由上传端识别控制文件、对 Doris 执行 TRUNCATE TABLE。
+	// 与 OnRow 共用一个 addData channel，保证 TRUNCATE 与前后 DML 严格串行。
+	if ddl.IsTruncate {
+		ctx := hlog.NewContext()
+		binlogName := nextPos.Name
+		if binlogName == "" {
+			binlogName = c.canal.SyncedPosition().Name
+		}
+		gtid := ""
+		if c.gtidSet != nil {
+			gtid = c.gtidSet.String()
+		} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
+			gtid = gset.String()
+		}
+		return c.worker.Truncate(ctx, Schema(queryEvent.Schema), ddl.Table, mysql.Position{
+			Name: binlogName,
+			Pos:  nextPos.Pos,
+		}, gtid)
+	}
+
 	if c.onCreateTable == nil {
 		return nil
 	}

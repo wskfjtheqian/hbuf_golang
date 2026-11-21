@@ -21,6 +21,10 @@ type AddData struct {
 	rows     [][]RawBytes
 	position mysql.Position
 	gtid     string
+	// truncate 为 true 时，该条是 TRUNCATE 控制指令而非数据行：worker 会清理
+	// 该表的旧 CSV 缓冲并落一个独立控制文件，处理完成后通过 ack 回传结果。
+	truncate bool
+	ack      chan error
 }
 
 func WithFlushDuration(d time.Duration) WorkerOption {
@@ -98,6 +102,40 @@ func (t *Worker) AddData(ctx context.Context, schema Schema, table Table, action
 	return nil
 }
 
+// Truncate 处理上游 TRUNCATE 事件：与 AddData 共用同一 channel，保证该表在
+// TRUNCATE 位点之前的 DML 已全部落盘，之后才清理旧文件并写入控制文件。
+// 调用方（canal.OnDDL）在 canal 同步 goroutine 内串行发起，并阻塞等待 ack。
+func (t *Worker) Truncate(ctx context.Context, schema Schema, table Table, position mysql.Position, gtid string) error {
+	key := SchemaTable(string(schema) + "." + string(table))
+	t.lock.RLock()
+	_, ok := t.files[key]
+	t.lock.RUnlock()
+	if !ok {
+		t.lock.Lock()
+		if _, ok := t.files[key]; !ok {
+			t.files[key] = NewFile(
+				t.instanceId,
+				schema,
+				table,
+				filepath.Join(t.logDir, strconv.FormatInt(int64(t.instanceId), 10)),
+				WithFileRotateSize(t.rotateSize),
+			)
+		}
+		t.lock.Unlock()
+	}
+
+	ack := make(chan error, 1)
+	t.addData <- &AddData{
+		schema:   schema,
+		table:    table,
+		position: position,
+		gtid:     gtid,
+		truncate: true,
+		ack:      ack,
+	}
+	return <-ack
+}
+
 func (t *Worker) loop(ctx context.Context) {
 	flushTicker := time.NewTicker(t.flushDuration)
 	defer flushTicker.Stop()
@@ -142,12 +180,20 @@ func (t *Worker) loop(ctx context.Context) {
 			err := func() error {
 				t.lock.RLock()
 				defer t.lock.RUnlock()
-				if val, ok := t.files[SchemaTable(string(data.schema)+"."+string(data.table))]; ok {
-					err := val.AddData(ctx, data.action, data.columns, data.rows, data.position, data.gtid)
-					if err != nil {
-						return err
-					}
+				val, ok := t.files[SchemaTable(string(data.schema)+"."+string(data.table))]
+				if !ok {
 					return nil
+				}
+				if data.truncate {
+					err := val.Truncate(ctx, data.position, data.gtid)
+					if data.ack != nil {
+						data.ack <- err
+					}
+					return err
+				}
+				err := val.AddData(ctx, data.action, data.columns, data.rows, data.position, data.gtid)
+				if err != nil {
+					return err
 				}
 				return nil
 			}()
@@ -158,14 +204,14 @@ func (t *Worker) loop(ctx context.Context) {
 	}
 }
 
-func (t *Worker) ScanFile(ctx context.Context, fn ScanFileCall) (InstanceId, *mysql.Position, string, error) {
+func (t *Worker) ScanFile(ctx context.Context, fn ScanFileCall, truncateFn ScanTruncateCall) (InstanceId, *mysql.Position, string, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	var position *mysql.Position
 	var gtid string
 	for _, val := range t.files {
-		pos, g, err := val.ScanFile(ctx, fn)
+		pos, g, err := val.ScanFile(ctx, fn, truncateFn)
 		if err != nil {
 			return t.instanceId, nil, "", err
 		}

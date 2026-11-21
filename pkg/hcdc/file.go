@@ -21,6 +21,10 @@ import (
 // 用于在 Doris 侧计算端到端延迟（采集 -> 上传完成）。
 type ScanFileCall func(ctx context.Context, schema Schema, table Table, columns string, capturedAt time.Time, reader io.Reader) error
 
+// ScanTruncateCall 是 TRUNCATE 控制文件的处理回调。由 Doris 侧执行目标表的
+// TRUNCATE TABLE SQL。position / gtid 随控制文件一起传入，用于位点汇总。
+type ScanTruncateCall func(ctx context.Context, schema Schema, table Table, position mysql.Position, gtid string, capturedAt time.Time) error
+
 type FileOption func(w *File)
 
 func WithFileRotateSize(size int64) FileOption {
@@ -70,6 +74,64 @@ func (t *File) CheckAndRotate(ctx context.Context, force bool) error {
 	if (t.writtenSize >= t.rotateSize && t.rotateSize > 0) || (force && t.countSize > 0) {
 		return t.CloseFileUnderLock(ctx)
 	}
+	return nil
+}
+
+// truncateFileSuffix 是 TRUNCATE 控制文件的扩展名。上传端 scanFile 优先识别
+// 该后缀：命中则对目标表执行 TRUNCATE TABLE，成功后删除控制文件并推进位点。
+const truncateFileSuffix = ".csv.truncate"
+
+// Truncate 处理上游 TRUNCATE 事件：
+//  1. 关闭并删除当前 .temp 句柄（TRUNCATE 之前采集的数据全部作废，不再上传）；
+//  2. 删除该表目录下此前积压的全部 .temp / .active / .truncate 文件；
+//  3. 写一个独立的 .truncate 控制文件，文件名携带位点、GTID 与采集时间戳。
+//
+// 由 worker.loop 在持有 worker 读锁的串行上下文中调用，与 DML 严格有序。
+func (t *File) Truncate(ctx context.Context, position mysql.Position, gtid string) error {
+	// 1. 关闭当前写入句柄并从磁盘删除（若已被 rotate 成 .active，会在步骤 2 统一清理）。
+	if t.file != nil {
+		name := t.file.Name()
+		_ = t.file.Close()
+		t.file = nil
+		if err := os.Remove(name); err != nil && !os.IsNotExist(err) {
+			return herror.Wrap(err)
+		}
+	}
+	t.writtenSize = 0
+	t.countSize = 0
+	t.columns = nil
+
+	// 2. 清理该表目录下此前的全部缓冲文件。
+	dir := filepath.Join(t.logDir, string(t.schema), string(t.table))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return herror.Wrap(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasSuffix(name, ".csv.temp") || strings.HasSuffix(name, ".csv.active") || strings.HasSuffix(name, truncateFileSuffix) {
+			if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
+				return herror.Wrap(err)
+			}
+		}
+	}
+
+	// 3. 写独立控制文件。文件名格式与 .active 保持一致的前缀，便于解析位点/GTID。
+	captureTime := time.Now()
+	gtidB64 := base64.RawURLEncoding.EncodeToString([]byte(gtid))
+	name := filepath.Base(position.Name) + "_" + strconv.FormatUint(uint64(position.Pos), 10) + "_" + gtidB64 + "_" + strconv.FormatInt(captureTime.UnixNano(), 10) + truncateFileSuffix
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("TRUNCATE\n"), 0644); err != nil {
+		return herror.Wrap(err)
+	}
+
+	// 同步更新内存位点：TRUNCATE 之后的新 DML 会落在更新的位点之后。
+	t.position = position
+	t.gtid = gtid
+	t.captureTime = captureTime
 	return nil
 }
 
@@ -206,22 +268,53 @@ func (t *File) save(ctx context.Context, action Action, columns []ColumnInfo, ro
 	return nil
 }
 
-func (t *File) ScanFile(ctx context.Context, fn ScanFileCall) (*mysql.Position, string, error) {
-	pattern := filepath.Join(t.logDir, string(t.schema), string(t.table), "*.active")
+func (t *File) ScanFile(ctx context.Context, fn ScanFileCall, truncateFn ScanTruncateCall) (*mysql.Position, string, error) {
+	dir := filepath.Join(t.logDir, string(t.schema), string(t.table))
+
+	var position *mysql.Position
+	var gtid string
+
+	// 1. 优先处理 TRUNCATE 控制文件：必须先清表，再上传该表后续的数据文件。
+	// 控制文件在执行成功后才删除，失败则保留，下个扫描周期重试（TRUNCATE 幂等）。
+	truncates, err := filepath.Glob(filepath.Join(dir, "*"+truncateFileSuffix))
+	if err != nil {
+		return nil, "", herror.Wrap(err)
+	}
+	for _, path := range truncates {
+		pos, g, capturedAt, err := parseTruncateFileName(path)
+		if err != nil {
+			return nil, "", err
+		}
+		if truncateFn != nil {
+			if err := truncateFn(ctx, t.schema, t.table, *pos, g, capturedAt); err != nil {
+				return nil, "", err
+			}
+		}
+		if err := os.Remove(path); err != nil {
+			return nil, "", herror.Wrap(err)
+		}
+		if position == nil || pos.Compare(*position) < 0 {
+			position = pos
+		}
+		if g != "" {
+			gtid = g
+		}
+	}
+
+	// 2. 处理常规 .active 数据文件。
+	pattern := filepath.Join(dir, "*.active")
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, "", herror.Wrap(err)
 	}
 
-	var position *mysql.Position
-	var gtid string
 	for _, path := range paths {
 		pos, g, err := t.ReadFile(ctx, path, fn)
 		if err != nil {
 			return nil, "", err // 失败则保留文件，等下个周期重试
 		}
 
-		if position == nil || pos.Compare(*position) < 0 {
+		if pos != nil && (position == nil || pos.Compare(*position) < 0) {
 			position = pos
 		}
 		if g != "" {
@@ -234,6 +327,32 @@ func (t *File) ScanFile(ctx context.Context, fn ScanFileCall) (*mysql.Position, 
 		}
 	}
 	return position, gtid, nil
+}
+
+// parseTruncateFileName 从 TRUNCATE 控制文件名解析位点、GTID 与采集时间戳。
+// 文件名格式：{binlogName}_{pos}_{gtidB64}_{captureNano}.csv.truncate
+func parseTruncateFileName(path string) (*mysql.Position, string, time.Time, error) {
+	_, name := filepath.Split(path)
+	name = strings.TrimSuffix(name, truncateFileSuffix)
+	parts := strings.SplitN(name, "_", 4)
+	if len(parts) != 4 {
+		return nil, "", time.Time{}, herror.NewError("invalid truncate control file name: " + name)
+	}
+	pos, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return nil, "", time.Time{}, herror.Wrap(err)
+	}
+	gtid := ""
+	if parts[2] != "" {
+		if raw, err := base64.RawURLEncoding.DecodeString(parts[2]); err == nil {
+			gtid = string(raw)
+		}
+	}
+	nano, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		return nil, "", time.Time{}, herror.Wrap(err)
+	}
+	return &mysql.Position{Name: parts[0], Pos: uint32(pos)}, gtid, time.Unix(0, nano), nil
 }
 
 func (t *File) ReadFile(ctx context.Context, path string, fn ScanFileCall) (*mysql.Position, string, error) {
