@@ -281,6 +281,10 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 	const maxBackoff = 30 * time.Second
 
 	pos := initial
+	// StartFromGTID 被服务端拒绝（或 GTID 集解析失败）后置位，本进程内一律改走 Position
+	// 续传。位点表可能持久化了源库未开启 GTID 时的匿名占位集（全零 SID），服务端会拒绝
+	// （ERROR 1773），不置位则重连后再次采纳同一坏 GTID 形成死循环。
+	gtidUnusable := false
 	for {
 		if ctx.Err() != nil {
 			return
@@ -288,12 +292,19 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 
 		cInst := c.canal
 		var runErr error
-		if pos.Gtid != "" {
+		if pos.Gtid != "" && !gtidUnusable {
 			if gtidSet, parseErr := mysql.ParseGTIDSet(c.canalCfgFlavor(), pos.Gtid); parseErr == nil {
 				hlog.Info(ctx, "start sync from persisted gtid: %s", pos.Gtid)
 				runErr = cInst.StartFromGTID(gtidSet)
+				if runErr != nil {
+					hlog.Error(ctx, "start sync from gtid failed (%v), fallback to position %s:%d",
+						runErr, pos.Position.Name, pos.Position.Pos)
+					gtidUnusable = true
+					runErr = cInst.RunFrom(pos.Position)
+				}
 			} else {
 				hlog.Error(ctx, "parse persisted gtid failed (%v), fallback to position", parseErr)
+				gtidUnusable = true
 				runErr = cInst.RunFrom(pos.Position)
 			}
 		} else {
@@ -331,6 +342,9 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 
 		// 重连前重新查询上次已上传位点（可能已被 scanFile 持续推进）。
 		if p := c.syncedPosition(ctx); p.Position.Name != "" || p.Gtid != "" {
+			if gtidUnusable {
+				p.Gtid = "" // GTID 已被证明不可用，仅采纳 Position
+			}
 			pos = p
 		}
 	}
@@ -383,9 +397,9 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 			}
 			gtid := ""
 			if c.gtidSet != nil {
-				gtid = c.gtidSet.String()
+				gtid = normalizeGTID(c.gtidSet.String())
 			} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
-				gtid = gset.String()
+				gtid = normalizeGTID(gset.String())
 			}
 			return c.worker.Truncate(ctx, info.Schema, info.Table, mysql.Position{
 				Name: binlogName,
@@ -454,6 +468,12 @@ func (c *Canal) OnGTID(header *replication.EventHeader, e mysql.BinlogGTIDEvent)
 	if err != nil || next == nil {
 		return nil
 	}
+	// 源库未开启 GTID 时事件流仍可能携带「SID 全零、GNO=0」的匿名占位事件（go-mysql
+	// 解码行为）。累积它会把匿名占位集持久化到位点表，重启续传时 StartFromGTID
+	// 被服务端拒绝（ERROR 1773）导致重连死循环，直接忽略。
+	if normalizeGTID(next.String()) == "" {
+		return nil
+	}
 	if c.gtidSet == nil {
 		c.gtidSet = next.Clone()
 	} else if err := c.gtidSet.Update(next.String()); err != nil {
@@ -509,9 +529,9 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	// MySQL 与 MariaDB），回退 SyncedGTIDSet（仅 MySQL XID 路径会更新 master gset）。
 	gtid := ""
 	if c.gtidSet != nil {
-		gtid = c.gtidSet.String()
+		gtid = normalizeGTID(c.gtidSet.String())
 	} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
-		gtid = gset.String()
+		gtid = normalizeGTID(gset.String())
 	}
 	// 关键：go-mysql 的一个 RowsEvent 可能携带多行数据（尤其批量 INSERT/多行 UPDATE/DELETE），
 	// e.Rows 是 [][]any：insert/delete 每行一条记录；update 是 [before, after, before, after, ...] 成对。
@@ -624,6 +644,17 @@ func (c *Canal) recordCapture(ctx context.Context, err error, rows [][]RawBytes)
 		}
 	}
 	c.monitor.CaptureBytes.Add(bytes)
+}
+
+// normalizeGTID 过滤「源库未开启 GTID」时的匿名占位 GTID 集（SID 全零、GNO=0）。
+// 占位集无断点续传意义，统一返回空字符串（与 cdc_record.log_position 表「gtid 为空
+// 表示未开启 GTID」的语义一致），避免重启续传时 StartFromGTID 被服务端拒绝
+// （ERROR 1773）导致重连死循环。
+func normalizeGTID(gtid string) string {
+	if strings.HasPrefix(gtid, "00000000-0000-0000-0000-000000000000:") {
+		return ""
+	}
+	return gtid
 }
 
 // noBinlogType 表示「无 binlog 类型信息」的哨兵值（全量 SELECT 路径）。

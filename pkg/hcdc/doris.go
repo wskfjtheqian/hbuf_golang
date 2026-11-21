@@ -1104,7 +1104,8 @@ func (d *Doris) scanFile(ctx context.Context) error {
 				reader.WriteString(strconv.FormatUint(uint64(pos.Pos), 10))
 				reader.WriteString(",")
 				// GTID 作为第 4 列（CSV 内逗号会破坏列结构，做转义）。
-				reader.WriteString(strings.ReplaceAll(gtid, ",", " "))
+				// 源库未开启 GTID 时的匿名占位集（全零 SID）无续传意义，统一写空。
+				reader.WriteString(strings.ReplaceAll(normalizeGTID(gtid), ",", " "))
 				reader.WriteString(",0\n")
 				mu.Unlock()
 			}
