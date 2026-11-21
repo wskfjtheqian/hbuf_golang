@@ -7,6 +7,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/parser/types"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
 // ParseDDL 解析 DDL 语句，返回受影响表的结构信息。基于 TiDB parser 的 AST
@@ -38,13 +39,9 @@ func ParseDDL(schema Schema, sql string) *TableInfo {
 func ParseDDLStmts(schema Schema, stmt ast.StmtNode) []*TableInfo {
 	switch t := stmt.(type) {
 	case *ast.CreateTableStmt:
-		return []*TableInfo{
-			{
-				Schema: tableSchema(schema, t.Table),
-				Table:  Table(t.Table.Name.String()),
-				Action: Create,
-			},
-		}
+		// CREATE 的 AST 已携带完整列定义，直接提取 Columns/Keys/分区字段，
+		// 无需回源查询（见 createTableToInfo）。
+		return []*TableInfo{createTableToInfo(schema, t)}
 	case *ast.AlterTableStmt:
 		return []*TableInfo{
 			{
@@ -89,6 +86,78 @@ func tableSchema(schema Schema, t *ast.TableName) Schema {
 		return Schema(t.Schema.String())
 	}
 	return schema
+}
+
+// createTableToInfo 把 CREATE TABLE 的 AST 直接转换为完整 TableInfo，与
+// GetTableInfo（SHOW CREATE TABLE + ParseDDL）的提取语义对齐：
+//   - Columns 按定义顺序，KeyIndex 主键第一列最大，排序后主键列排最前；
+//   - Keys 为排序后的主键列名（Doris UNIQUE KEY 顺序与源表主键一致）；
+//   - PartitionField 为 RANGE 分区时主键中第一个 datetime/timestamp 列（与
+//     GetTableInfo 的启发式一致，供 Doris AUTO PARTITION BY RANGE 使用）。
+//
+// DEFAULT/COMMENT 由 canal 包注入的 valueExpr（expr.go）从 AST 还原，无需回源查询。
+func createTableToInfo(schema Schema, t *ast.CreateTableStmt) *TableInfo {
+	info := &TableInfo{
+		Schema:  tableSchema(schema, t.Table),
+		Table:   Table(t.Table.Name.String()),
+		Action:  Create,
+		Columns: make([]ColumnInfo, 0, len(t.Cols)),
+		Keys:    make([]Column, 0),
+	}
+	// 主键列（定义顺序）：表级 PRIMARY KEY 约束 + 列级 PRIMARY KEY 选项。
+	var pk []Column
+	for _, con := range t.Constraints {
+		if con.Tp != ast.ConstraintPrimaryKey {
+			continue
+		}
+		for _, key := range con.Keys {
+			if key.Column != nil {
+				pk = append(pk, Column(key.Column.Name.String()))
+			}
+		}
+	}
+	for _, col := range t.Cols {
+		for _, opt := range col.Options {
+			if opt.Tp == ast.ColumnOptionPrimaryKey {
+				pk = append(pk, Column(col.Name.Name.String()))
+			}
+		}
+	}
+	// KeyIndex 与 GetKeys 语义一致：主键第一列赋最大值 len(pk)，排序后顺序正确。
+	pkIndex := make(map[Column]int, len(pk))
+	for i, name := range pk {
+		pkIndex[name] = len(pk) - i
+	}
+	for _, col := range t.Cols {
+		c := columnToInfo(col, "")
+		c.KeyIndex = pkIndex[c.Name]
+		info.Columns = append(info.Columns, c)
+	}
+	// 主键列排最前（与 GetTableInfo 排序后一致），保持主键定义顺序。
+	hutl.Sort(info.Columns, func(i, j ColumnInfo) bool {
+		return i.KeyIndex > j.KeyIndex
+	})
+	info.Index = hutl.SliceToMap(info.Columns, func(i int, column ColumnInfo) (Column, int) {
+		return column.Name, i
+	})
+	for _, column := range info.Columns {
+		if column.KeyIndex > 0 {
+			info.Keys = append(info.Keys, column.Name)
+		}
+	}
+	// RANGE 分区：主键中第一个 datetime/timestamp 列作为 Doris 自动分区字段
+	// （与 GetTableInfo 的启发式一致；其他分区类型下游不消费，保持空值）。
+	if t.Partition != nil && t.Partition.Tp == ast.PartitionTypeRange {
+		info.PartitionType = "RANGE"
+		for _, key := range info.Keys {
+			column := info.Columns[info.Index[key]]
+			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
+				info.PartitionField = column.Name
+				break
+			}
+		}
+	}
+	return info
 }
 
 // extractAlterColumns 提取 ALTER TABLE 中的列变更。与旧正则支持的
@@ -138,10 +207,7 @@ func extractAlterColumns(t *ast.AlterTableStmt) []ColumnInfo {
 
 // columnToInfo 将 AST 列定义转换为 ColumnInfo。Type/Args 与
 // INFORMATION_SCHEMA 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如 varchar + "(255)"）。
-// 注意：canal 包的 init 会把 ast.NewValueExpr 替换为空实现（裁剪依赖体积），
-// 因此 DEFAULT/COMMENT 的表达式值无法从 AST 恢复（restore 恒为空）。这两个字段
-// 在实际同步流程中不消费——CREATE/ALTER 会回源库查完整结构，DROP 只用表名，
-// 这里保留提取逻辑以兼容未裁剪的解析环境。
+// DEFAULT/COMMENT 通过 canal 包注入的 valueExpr 实现（expr.go）从 AST 还原。
 func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 	c := ColumnInfo{
 		Name:   Column(col.Name.Name.String()),
@@ -166,14 +232,15 @@ func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 	return c
 }
 
-// splitFieldType 把 AST 字段类型拆成 Type（小写类型名）与 Args（参数部分）。
-// CompactStr 与 INFORMATION_SCHEMA.COLUMN_TYPE 对齐（如 "varchar(255)"、
-// "decimal(10,2)"、"enum('a','b')"、"bigint(20) unsigned"）；TypeToStr 使用与
-// CompactStr 内部相同的 charset，保证 Type 一定是 CompactStr 的前缀。
+// splitFieldType 把 AST 字段类型拆成 Type（小写类型名）与 Args（参数部分），
+// 与 INFORMATION_SCHEMA.COLUMNS 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如
+// "varchar" + "(255)"、"bigint" + "(20) unsigned"）。
+// 必须用 FieldType.String()（含 UNSIGNED/ZEROFILL 修饰），CompactStr() 不带
+// 修饰会丢失 unsigned/zerofill。
 func splitFieldType(tp *types.FieldType) (string, string) {
-	compact := tp.CompactStr()
+	s := strings.ToLower(tp.String())
 	typ := types.TypeToStr(tp.GetType(), tp.GetCharset())
-	return typ, strings.TrimPrefix(compact, typ)
+	return typ, strings.TrimPrefix(s, typ)
 }
 
 // restoreExpr 把 AST 表达式还原为 SQL 文本（用于 DEFAULT 值与 COMMENT）。

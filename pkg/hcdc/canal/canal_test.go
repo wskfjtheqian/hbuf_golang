@@ -60,10 +60,6 @@ func (s *canalTestSuite) SetupSuite() {
 	cfg.User = "root"
 	cfg.HeartbeatPeriod = 200 * time.Millisecond
 	cfg.ReadTimeout = 300 * time.Millisecond
-	cfg.Dump.ExecutionPath = "mysqldump"
-	cfg.Dump.TableDB = "test"
-	cfg.Dump.Tables = []string{"canal_test"}
-	cfg.Dump.Where = "id>0"
 
 	// include & exclude config
 	cfg.IncludeTableRegex = make([]string, 1)
@@ -130,7 +126,7 @@ type testEventHandler struct {
 
 func (h *testEventHandler) OnRow(e *RowsEvent) error {
 	h.T.Log("OnRow", e.Action, e.Rows)
-	umi, ok := e.Rows[0][4].(uint32) // 4th col is umi. mysqldump gives uint64 instead of uint32
+	umi, ok := e.Rows[0][4].(uint32) // 4th col is umi. binlog decode gives uint32
 	if ok && (umi != umiA && umi != umiB && umi != umiC) {
 		return fmt.Errorf("invalid unsigned medium int %d", umi)
 	}
@@ -142,8 +138,6 @@ func (h *testEventHandler) String() string {
 }
 
 func (s *canalTestSuite) TestCanal() {
-	<-s.c.WaitDumpDone()
-
 	for i := 1; i < 10; i++ {
 		s.execute("INSERT INTO test.canal_test (name) VALUES (?)", fmt.Sprintf("%d", i))
 	}
@@ -160,8 +154,6 @@ func (s *canalTestSuite) TestCanal() {
 }
 
 func (s *canalTestSuite) TestAnalyzeAdvancesSyncedPos() {
-	<-s.c.WaitDumpDone()
-
 	// We should not need to use FLUSH BINARY LOGS
 	// An ANALYZE TABLE statement should advance the saved position.
 	// There are still cases that don't advance, such as

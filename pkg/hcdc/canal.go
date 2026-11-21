@@ -262,7 +262,6 @@ func (c *Canal) newCanal() (*canal.Canal, error) {
 		cfg.Flavor = c.cfg.Flavor
 	}
 	cfg.TimestampStringLocation = time.UTC
-	cfg.Dump.ExecutionPath = ""
 	cfg.IncludeTableRegex = c.cfg.IncludeTables
 	cfg.ExcludeTableRegex = c.cfg.ExcludeTables
 
@@ -392,8 +391,7 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 				Name: binlogName,
 				Pos:  nextPos.Pos,
 			}, gtid)
-		}
-		if info.Action == Drop {
+		} else if info.Action == Drop {
 			// DROP 只需要表名即可：清理本地结构缓存，并通知 Doris 侧删表。
 			c.removeTableInfo(info.Schema, info.Table)
 			if c.onCreateTable == nil {
@@ -403,23 +401,34 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 				return err
 			}
 			continue
-		}
-		// CREATE/ALTER：回源库查最新完整表结构（ALTER 的 AST 只携带列变更，
-		// 不足以在 Doris 侧正确建表/改表）。
-		full, err := c.GetTableInfo(ctx, info.Schema, info.Table)
-		if err != nil {
-			return err
-		}
-		if full == nil {
-			continue
-		}
-		// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
-		c.cacheTableInfo(info.Schema, info.Table, *full)
-		if c.onCreateTable == nil {
-			continue
-		}
-		if err := c.onCreateTable(ctx, []TableInfo{*full}); err != nil {
-			return err
+		} else if info.Action == Alter {
+			// ALTER 的 AST 只携带列变更（extractAlterColumns），不足以在 Doris 侧
+			// 正确建表/改表，回源库查最新完整结构。
+			full, err := c.GetTableInfo(ctx, info.Schema, info.Table)
+			if err != nil {
+				return err
+			}
+			if full == nil {
+				continue
+			}
+			// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
+			c.cacheTableInfo(info.Schema, info.Table, *full)
+			if c.onCreateTable == nil {
+				continue
+			}
+			if err := c.onCreateTable(ctx, []TableInfo{*full}); err != nil {
+				return err
+			}
+		} else if info.Action == Create {
+			// CREATE 的 AST 已携带完整列定义，ParseDDLStmts 已提取 Columns/Keys/
+			// 分区字段，直接使用提取的结构，无需回源查询。
+			c.cacheTableInfo(info.Schema, info.Table, *info)
+			if c.onCreateTable == nil {
+				continue
+			}
+			if err := c.onCreateTable(ctx, []TableInfo{*info}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -927,112 +936,21 @@ func (c *Canal) FilterTable(name Table) bool {
 	return false
 }
 
-// GetKeys 获得指定表的主键。
-// KeyIndex 语义：>0 表示是主键列，值越大在复合主键中越靠前（第一列最大）。
-// 必须按 ORDINAL_POSITION ASC 读取，才能给复合主键（如 PRIMARY KEY(id, create_time)）
-// 赋予正确顺序：id 排最前、create_time 次之。若用 DESC 或统一赋 1，排序后会颠倒，
-// 导致 ReadData 全量分页误把 timestamp 列当分页主键（WHERE create_time <= 9223372036854775807 匹配 0 行）、
-// 以及 Doris UNIQUE KEY 顺序与源表主键不一致，最终复合主键表数据静默丢失。
-func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION ASC ", string(schema), string(table))
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	defer query.Close()
-
-	// 先按定义顺序收集主键列名，再逆序赋 KeyIndex（第一列最大），保证排序后顺序正确。
-	var pkOrder []string
-	for query.Next() {
-		var column, constraint *string
-		if err := query.Scan(&column, &constraint); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		if constraint == nil || column == nil {
-			continue
-		}
-		if *constraint == "PRIMARY" {
-			pkOrder = append(pkOrder, *column)
-		}
-	}
-	if err := query.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-
-	var keys = make(map[string]int, len(pkOrder))
-	for i, name := range pkOrder {
-		// 第 0 列（主键第一列）赋最大值 len(pkOrder)，最后一列赋 1。
-		keys[name] = len(pkOrder) - i
-	}
-	return keys, nil
-}
-
-// GetTableInfo 获得指定表的结构
+// GetTableInfo 获得指定表的结构。
+// 通过 SHOW CREATE TABLE 拿建表语句后用 tidb parser 的 AST 直接提取
+// （与 OnDDL 的 CREATE 分支共用 createTableToInfo），一次查询替代原来的
+// INFORMATION_SCHEMA 三次查询（COLUMNS/KEY_COLUMN_USAGE/PARTITIONS）。
 func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*TableInfo, error) {
+	var name, createSQL string
+	if err := c.sql.QueryRowContext(ctx, "SHOW CREATE TABLE `"+strings.ReplaceAll(string(schema), "`", "``")+"`.`"+strings.ReplaceAll(string(table), "`", "``")+"`").Scan(&name, &createSQL); err != nil {
+		return nil, herror.Wrap(err)
+	}
 	hlog.Info(ctx, "get table info: %s.%s", schema, table)
-	keys, err := c.GetKeys(ctx, schema, table)
-	if err != nil {
-		return nil, herror.Wrap(err)
+	info := ParseDDL(schema, createSQL)
+	if info == nil {
+		return nil, herror.NewError("parse create table failed: " + string(schema) + "." + string(table))
 	}
-
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	defer query.Close()
-	var ret = &TableInfo{
-		Schema:  schema,
-		Table:   table,
-		Columns: make([]ColumnInfo, 0),
-		Keys:    make([]Column, 0),
-	}
-	for query.Next() {
-		var column ColumnInfo
-		var args string
-		if err := query.Scan(&column.Name, &args, &column.Comment, &column.IsNull, &column.Default, &column.Type); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		column.Args = args[len(column.Type):]
-		column.KeyIndex = keys[string(column.Name)]
-		if column.Default != nil {
-			column.Default = hutl.ToPointer(strings.ToUpper(*column.Default))
-		}
-		ret.Columns = append(ret.Columns, column)
-	}
-	if err := query.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-
-	hutl.Sort(ret.Columns, func(i, j ColumnInfo) bool {
-		return i.KeyIndex > j.KeyIndex
-	})
-	ret.Index = hutl.SliceToMap(ret.Columns, func(i int, column ColumnInfo) (Column, int) {
-		return column.Name, i
-	})
-
-	for _, column := range ret.Columns {
-		if column.KeyIndex > 0 {
-			ret.Keys = append(ret.Keys, column.Name)
-		}
-	}
-
-	ret.PartitionType, err = c.GetPartitionType(ctx, schema, table)
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	if ret.PartitionType == "RANGE" {
-		for _, key := range ret.Keys {
-			column := ret.Columns[ret.Index[key]]
-			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
-				ret.PartitionField = column.Name
-				break
-			}
-		}
-		if ret.PartitionField == "" {
-			hlog.Error(ctx, "GetTableInfo: table %s.%s has RANGE partition but no datetime/timestamp partition field", schema, table)
-		}
-	}
-
-	return ret, nil
+	return info, nil
 }
 
 func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info TableInfo, start, end string) error {
@@ -1168,29 +1086,6 @@ func (c *Canal) loadData(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-// GetPartitionType 动态查询 MySQL 上游表的 RANGE 分区字段
-func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table) (string, error) {
-	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
-	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
-
-	rows, err := c.sql.QueryContext(ctx, query, string(schema), string(table))
-	if err != nil {
-		return "", herror.Wrap(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var partitionMethod *string
-		err := rows.Scan(&partitionMethod)
-		if err != nil {
-			return "", herror.Wrap(err)
-		}
-		if partitionMethod != nil {
-			return *partitionMethod, nil
-		}
-	}
-	return "", nil
 }
 
 func (c *Canal) GetWorker() *Worker {
