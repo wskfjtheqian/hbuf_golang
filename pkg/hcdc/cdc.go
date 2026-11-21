@@ -23,6 +23,7 @@ const (
 	Update
 	Delete
 	Create
+	Truncate
 )
 
 // SyncStatus 表示 svc -> Doris 数据同步的运行状态。
@@ -188,7 +189,6 @@ func (h *HCDC) SetConfig(ctx context.Context, cfg *Config) error {
 	}
 	h.canal.Store(&canals)
 
-	// 初始化（建库建表 + 全量拉取）完成，此后源表结构变化才会触发自动暂停。
 	doris.setInitialized()
 	return nil
 }
@@ -225,8 +225,7 @@ func (h *HCDC) setCanalCall(ctx context.Context, canal *Canal) {
 	canal.setMonitor(doris.monitor)
 }
 
-// Pause 暂停 svc -> Doris 的数据同步。MySQL -> svc 的采集不受影响，数据继续缓冲到本地文件。
-// 若 doris 尚未初始化（未 SetConfig），则为无操作。
+// Pause 暂停 svc -> Doris 的数据同步。MySQL -> svc 的采集不受影响，数据继续缓冲到本地文件。  若 doris 尚未初始化（未 SetConfig），则为无操作。
 func (h *HCDC) Pause(ctx context.Context, reason string) {
 	doris := h.doris.Load()
 	if doris == nil {
@@ -262,6 +261,7 @@ func (h *HCDC) GetMetrics() Snapshot {
 	return doris.monitor.Snapshot()
 }
 
+// GetColumnType 获取列类型，处理 bitmap 类型的特殊注释。
 func GetColumnType(col *ColumnInfo) string {
 	if col.Type == "binary" || col.Type == "varbinary" || col.Type == "blob" || col.Type == "longblob" || col.Type == "mediumblob" {
 		if strings.Contains(col.Comment, "CustomType=Bitmap64") {
@@ -269,7 +269,6 @@ func GetColumnType(col *ColumnInfo) string {
 		} else if strings.Contains(col.Comment, "CustomType=Bitmap32") {
 			return "bitmap32"
 		}
-
 	}
 	return col.Type
 }

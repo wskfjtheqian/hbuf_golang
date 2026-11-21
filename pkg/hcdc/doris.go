@@ -22,6 +22,7 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
+// DorisResponse Doris 响应。
 type DorisResponse struct {
 	TxnId                  int    `json:"TxnId"`
 	Label                  string `json:"Label"`
@@ -43,25 +44,18 @@ type DorisResponse struct {
 	CommitAndPublishTimeMs int    `json:"CommitAndPublishTimeMs"`
 }
 
-// defaultMaxBacklog 本地 CSV 缓冲积压的默认告警阈值（10GB）。超过仅告警不中断。
-const defaultMaxBacklog = int64(10 * 1024 * 1024 * 1024)
-
-// cdcRecordSchema 位点记录表的保留库名。该库由 hcdc 内部维护，不参与库名前缀映射。
-const cdcRecordSchema = Schema("cdc_record")
+const defaultMaxBacklog = int64(10 * 1024 * 1024 * 1024) // defaultMaxBacklog 本地 CSV 缓冲积压的默认告警阈值（10GB）。超过仅告警不中断。
+const cdcRecordSchema = Schema("cdc_record")             // cdcRecordSchema 位点记录表的保留库名。该库由 hcdc 内部维护，不参与库名前缀映射。
 
 type DorisConfig struct {
-	Host     string `yaml:"Host"`     // 数据库主机地址
-	Username string `yaml:"Username"` // 数据库用户名
-	Password string `yaml:"Password"` // 数据库密码
-	Schema   string `yaml:"Schema"`   // 数据库名称
-	LoadURL  string `yaml:"LoadURL"`
-	// SchemaPrefix 目标库名前缀。同步到 Doris 时，源 MySQL 库名会拼接该前缀作为目标库名，
-	// 例如源库 game、前缀 ods_，则落到 Doris 的 ods_game 库。为空表示不加前缀（与源库同名）。
-	// 注意：位点记录表 cdc_record 不受前缀影响，始终使用固定库名。
-	SchemaPrefix string `yaml:"SchemaPrefix"`
-	// MaxBacklogBytes 本地 CSV 缓冲积压的告警阈值（字节）。超过时仅告警不中断。
-	// 为 0 时使用默认值（见 Doris.defaultMaxBacklog）。
-	MaxBacklogBytes int64 `yaml:"MaxBacklogBytes"`
+	Host            string `yaml:"Host"`     // 数据库主机地址
+	Username        string `yaml:"Username"` // 数据库用户名
+	Password        string `yaml:"Password"` // 数据库密码
+	Schema          string `yaml:"Schema"`   // 数据库名称
+	LoadURL         string `yaml:"LoadURL"`
+	SchemaPrefix    string `yaml:"SchemaPrefix"`    // SchemaPrefix 目标库名前缀。同步到 Doris 时，源 MySQL 库名会拼接该前缀作为目标库名， 例如源库 game、前缀 ods_，则落到 Doris 的 ods_game 库。为空表示不加前缀（与源库同名）
+	MaxBacklogBytes int64  `yaml:"MaxBacklogBytes"` // MaxBacklogBytes 本地 CSV 缓冲积压的告警阈值（字节）。超过时仅告警不中断,为 0 时使用默认值（见 Doris.defaultMaxBacklog）。
+
 }
 
 func (c *DorisConfig) Validate(ctx context.Context) bool {
@@ -97,34 +91,22 @@ type ActionInfo struct {
 }
 
 type Doris struct {
-	cfg     *DorisConfig
-	workers map[InstanceId]*Worker
-	client  *http.Client
-	mu      sync.RWMutex
-	//conn    *client.Conn
-	sql    *sql.DB
-	change chan []TableInfo
-
-	// 同步状态：paused 为 true 时停止 svc -> Doris 的数据上传，但 MySQL -> svc 的采集继续。
-	paused  atomic.Bool
-	stateMu sync.RWMutex
-	state   SyncState
-
-	// initializing 表示是否处于初始化阶段（建库建表 + 全量拉取）。
-	// 初始化阶段源表结构变化（建表）不应触发自动暂停，待初始化完成后再启用。
-	initializing atomic.Bool
-
-	// monitor 监控器：采集/上传吞吐、延迟、错误、DDL、暂停事件等指标。
-	monitor *Monitor
-
-	// maxBacklog 本地 CSV 缓冲积压的告警阈值（字节），超过时仅告警不中断同步。
-	maxBacklog int64
-
-	// backlogWarned 是否已因积压超限告警过（避免每个周期重复告警刷屏），
-	// 积压回落到阈值以下后复位。
-	backlogWarned bool
+	cfg           *DorisConfig
+	workers       map[InstanceId]*Worker
+	client        *http.Client
+	mu            sync.RWMutex
+	sql           *sql.DB
+	change        chan []TableInfo
+	paused        atomic.Bool // 同步状态：paused 为 true 时停止 svc -> Doris 的数据上传，但 MySQL -> svc 的采集继续。
+	stateMu       sync.RWMutex
+	state         SyncState
+	initializing  atomic.Bool // initializing 表示是否处于初始化阶段（建库建表 + 全量拉取）。
+	monitor       *Monitor    // monitor 监控器：采集/上传吞吐、延迟、错误、DDL、暂停事件等指标。
+	maxBacklog    int64       // maxBacklog 本地 CSV 缓冲积压的告警阈值（字节），超过时仅告警不中断同步。
+	backlogWarned bool        // backlogWarned 是否已因积压超限告警过（避免每个周期重复告警刷屏），	积压回落到阈值以下后复位。
 }
 
+// NewDoris 创建 Doris 实例。
 func NewDoris(cfg *DorisConfig) *Doris {
 	d := &Doris{
 		cfg:     cfg,
@@ -143,7 +125,6 @@ func NewDoris(cfg *DorisConfig) *Doris {
 }
 
 // targetSchema 把源 MySQL 库名映射为 Doris 目标库名（拼接 SchemaPrefix 前缀）。
-// 位点表保留库 cdc_record 不参与映射；前缀为空时原样返回，保证无前缀配置下行为不变。
 func (d *Doris) targetSchema(src Schema) Schema {
 	if src == cdcRecordSchema {
 		return src
@@ -154,35 +135,19 @@ func (d *Doris) targetSchema(src Schema) Schema {
 	return Schema(d.cfg.SchemaPrefix + string(src))
 }
 
+// RegisterWorker 注册 worker
 func (d *Doris) RegisterWorker(ctx context.Context, worker *Worker) {
 	d.mu.Lock()
 	if _, exists := d.workers[worker.instanceId]; !exists {
 		d.workers[worker.instanceId] = worker
-		// worker 的 loop 在注册时启动，确保后续 AddData 有消费者。
-		// 注意：不能放在 Open 里启动，因为 Open 早于 RegisterWorker 被调用，
-		// 那时 workers 还为空，会导致 loadData 时 AddData 永久阻塞。
 		go worker.loop(ctx)
 	}
 	d.mu.Unlock()
 }
 
+// Open 打开 Doris 连接并初始化位点记录表。
 func (d *Doris) Open(ctx context.Context) error {
-	// worker 的 loop 已改为在 RegisterWorker 时启动，这里不再重复启动。
-	// 早期实现在这里启动 worker.loop，但 Open 早于 RegisterWorker，
-	// 导致 worker.loop 从未启动、AddData 阻塞。
-
-	//// 建立直连，用于执行查询和锁表操作
 	var err error
-	//d.conn, err = client.Connect(
-	//	d.cfg.Host,
-	//	d.cfg.Username,
-	//	d.cfg.Password,
-	//	d.cfg.Schema,
-	//)
-	//if err != nil {
-	//	return herror.Wrap(err)
-	//}
-	//
 	d.sql, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", d.cfg.Username, d.cfg.Password, d.cfg.Host, d.cfg.Schema))
 	if err != nil {
 		return herror.Wrap(err)
@@ -202,8 +167,8 @@ func (d *Doris) Open(ctx context.Context) error {
 
 func (d *Doris) loop(ctx context.Context) {
 	// 用 timer 实现动态重试间隔：上传失败时指数退避（Doris 故障时不高频打请求），
-	// 成功则回到基准间隔。
 	const baseInterval = 2 * time.Second
+	// 成功则回到基准间隔。
 	const maxBackoff = 30 * time.Second
 	interval := baseInterval
 	timer := time.NewTimer(interval)
@@ -226,8 +191,7 @@ func (d *Doris) loop(ctx context.Context) {
 			}
 			timer.Reset(interval)
 		case val := <-d.change:
-			// 源表结构发生变化：先自动暂停 svc -> Doris 的数据上传，
-			// 待 Doris 侧 DDL 同步完成并经人工确认后，再手动 Resume 恢复。
+			// 源表结构发生变化：先自动暂停 svc -> Doris 的数据上传，待 Doris 侧 DDL 同步完成并经人工确认后，再手动 Resume 恢复
 			for _, info := range val {
 				d.pauseForSchemaChange(ctx, info)
 				err := d.changeTable(ctx, &info)
@@ -326,8 +290,8 @@ func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
 	d.change <- infos
 }
 
+// StreamSave 执行 Doris Stream Load 上传 CSV 文件。
 func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {
-	// 库名前缀映射：源 MySQL 库名 -> Doris 目标库名（位点表 cdc_record 在 targetSchema 内豁免）。
 	schema = d.targetSchema(schema)
 	parse, err := url.Parse(d.cfg.LoadURL)
 	if err != nil {
@@ -390,8 +354,6 @@ func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, colu
 }
 
 // TruncateTable 对 Doris 目标表执行 TRUNCATE TABLE。
-// 库名遵循 SchemaPrefix 映射规则，与 StreamSave 保持一致。
-// SQL 里的库名与表名统一转义反引号，防止标识符注入。
 func (d *Doris) TruncateTable(ctx context.Context, schema Schema, table Table) error {
 	target := d.targetSchema(schema)
 	sqlText := "TRUNCATE TABLE `" + strings.ReplaceAll(string(target), "`", "``") + "`.`" + strings.ReplaceAll(string(table), "`", "``") + "`"
@@ -412,11 +374,11 @@ func (d *Doris) Close() error {
 	return nil
 }
 
+// CreateSchema 创建 Doris 目标库。
 func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
 	schema = d.targetSchema(schema)
 	var s strings.Builder
 	s.WriteString("CREATE DATABASE IF NOT EXISTS `")
-	// 库名若含反引号需转义，防止注入或语法错误。
 	s.WriteString(strings.ReplaceAll(string(schema), "`", "``"))
 	s.WriteString("`")
 
@@ -455,6 +417,8 @@ func (d *Doris) GetReplicationNum(ctx context.Context) int {
 	}
 	return count
 }
+
+// changeTable 执行 Doris DDL
 func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 	d.monitor.DDLCount.Add(1)
 	if info.IsDrop {
@@ -466,8 +430,6 @@ func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
 		return err
 	}
 	newInfo := d.ToDorisTable(info)
-	// 库名前缀映射：源库名 -> 目标库名。createTable/modifyTable 内部使用 newInfo.Schema 拼 SQL，
-	// 因此只需在此处统一改写一次。
 	newInfo.Schema = d.targetSchema(info.Schema)
 	oldInfo, err := d.GetTableInfo(ctx, newInfo.Schema, info.Table)
 	if err != nil {
@@ -505,11 +467,9 @@ func (d *Doris) dropTable(ctx context.Context, info *TableInfo) error {
 
 // createTable 增强版：支持动态主键、自适应副本及 Range 时间分区
 func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
-
 	var s strings.Builder
 	columns := info.Columns
 
-	// 2. 拼接字段定义
 	s.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` (\n", string(info.Schema), string(info.Table)))
 	for i, col := range columns {
 		s.WriteString(" `")
@@ -751,29 +711,6 @@ func (c *Doris) GetTableInfo(ctx context.Context, schema Schema, table Table) (*
 		return nil, herror.Wrap(err)
 	}
 
-	//query := "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
-	//result, err := c.conn.Execute(query, string(schema), string(table))
-	//if err != nil {
-	//	return nil, herror.Wrap(err)
-	//}
-	//defer result.Close()
-	//
-	//ret := &TableInfo{
-	//	Columns: make([]ColumnInfo, len(result.Values)),
-	//	Keys:    make([]Column, 0),
-	//}d
-	//for i, rows := range result.Values {
-	//	ret.Columns[i] = ColumnInfo{
-	//		Name:     Column(rows[0].AsString()),
-	//		Type:     strings.ToLower(string(rows[5].AsString())),
-	//		Comment:  string(rows[2].AsString()),
-	//		KeyIndex: keys[string(rows[0].AsString())],
-	//		IsNull:   string(rows[3].AsString()) == "YES",
-	//		Args:     string(rows[1].AsString()[len(rows[5].AsString()):]),
-	//		Default:  string(rows[4].AsString()),
-	//	}
-	//}
-
 	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
 	if err != nil {
 		return nil, herror.Wrap(err)
@@ -911,6 +848,7 @@ func (c *Doris) GetKeys(ctx context.Context, schema Schema, table Table) (map[st
 	return keys, nil
 }
 
+// modifyTable 修改 Doris 表结构。
 func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *TableInfo) error {
 	addList := make([]ColumnInfo, 0, len(newInfo.Columns))
 	modifyList := make([]ColumnInfo, 0, len(newInfo.Columns))
@@ -1006,6 +944,7 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 	return nil
 }
 
+// waitSchemaChangeComplete 等待 Schema Change 完成。
 func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, table Table) error {
 	query := fmt.Sprintf(
 		"SHOW ALTER TABLE COLUMN FROM `%s` WHERE TableName = '%s' ORDER BY CreateTime DESC LIMIT 1",
@@ -1087,6 +1026,7 @@ func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, tab
 	return fmt.Errorf("wait schema change timeout after %d seconds", maxRetries)
 }
 
+// scanFile 扫描并上传 CSV 文件。
 func (d *Doris) scanFile(ctx context.Context) error {
 	d.mu.RLock()
 	workers := make([]*Worker, 0, len(d.workers))
@@ -1107,12 +1047,10 @@ func (d *Doris) scanFile(ctx context.Context) error {
 	}
 	d.monitor.setBacklog(backlogFiles, backlogBytes)
 
-	// 磁盘水位检测：积压超过阈值时仅告警，不中断同步。采用「进入告警/解除告警」
-	// 的边沿触发，避免每个扫描周期重复刷屏。
+	// 磁盘水位检测：积压超过阈值时仅告警，不中断同步。采用「进入告警/解除告警」,的边沿触发，避免每个扫描周期重复刷屏。
 	d.checkBacklog(ctx, backlogBytes)
 
-	// 并发上传各 worker（每 worker 对应一个 MySQL 实例，彼此独立），提升吞吐、降低延迟。
-	// 位点结果用互斥锁保护汇总，供写入 cdc_record.log_position。
+	// 并发上传各 worker（每 worker 对应一个 MySQL 实例，彼此独立），提升吞吐、降低延迟。位点结果用互斥锁保护汇总，供写入 cdc_record.log_position。
 	var (
 		wg       sync.WaitGroup
 		mu       sync.Mutex
@@ -1127,8 +1065,8 @@ func (d *Doris) scanFile(ctx context.Context) error {
 		}
 		return err
 	}
-	// TRUNCATE 控制文件的处理回调：对目标库执行 TRUNCATE TABLE。
-	// 位点/GTID 由 scanFile 汇总进 cdc_record，保证崩溃后不会重复执行。
+
+	// TRUNCATE 控制文件的处理回调：对目标库执行 TRUNCATE TABLE。 位点/GTID 由 scanFile 汇总进 cdc_record，保证崩溃后不会重复执行。
 	truncate := func(ctx context.Context, schema Schema, table Table, pos mysql.Position, gtid string, capturedAt time.Time) error {
 		return d.TruncateTable(ctx, schema, table)
 	}
@@ -1192,6 +1130,7 @@ func (d *Doris) checkBacklog(ctx context.Context, backlogBytes int64) {
 	d.backlogWarned = false
 }
 
+// createCDCRecord 创建 CDC 记录表。
 func (d *Doris) createCDCRecord(ctx context.Context) error {
 	_, err := d.sql.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS cdc_record")
 	if err != nil {
@@ -1213,8 +1152,7 @@ func (d *Doris) createCDCRecord(ctx context.Context) error {
 		return herror.Wrap(err)
 	}
 
-	// 兼容旧版本已建的表：CREATE TABLE IF NOT EXISTS 不会为已存在的表补列，
-	// 这里检测 gtid 列是否存在，缺失时补齐（Doris 不支持 ADD COLUMN IF NOT EXISTS）。
+	// 兼容旧版本已建的表：CREATE TABLE IF NOT EXISTS 不会为已存在的表补列， 这里检测 gtid 列是否存在，缺失时补齐（Doris 不支持 ADD COLUMN IF NOT EXISTS）。
 	var cnt int
 	err = d.sql.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='cdc_record' AND TABLE_NAME='log_position' AND COLUMN_NAME='gtid'",
@@ -1233,9 +1171,6 @@ func (d *Doris) createCDCRecord(ctx context.Context) error {
 }
 
 // GetPosition 返回指定实例上次成功上传到 Doris 的 binlog 位点（含 GTID），用于进程重启后的断点续传。
-// 位点来源是 scanFile 上传成功后写入 cdc_record.log_position 的「已上传位点」，
-// 从该位点重放可保证「不丢」（崩溃期间未上传的数据仍在其后的 binlog 中）。
-// Gtid 为空表示源库未开启 GTID。无记录（首次启动或该实例从未成功上传）时返回 nil, nil。
 func (d *Doris) GetPosition(ctx context.Context, instanceId InstanceId) (*SyncPosition, error) {
 	query := "SELECT `file`, `position`, `gtid` FROM cdc_record.log_position WHERE instance_id = ? LIMIT 1"
 	row := d.sql.QueryRowContext(ctx, query, int64(instanceId))
