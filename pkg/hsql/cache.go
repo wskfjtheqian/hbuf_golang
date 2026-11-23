@@ -25,13 +25,21 @@ func SaveCache[T any](ctx context.Context, schema, table string, builder *Builde
 
 }
 
-func ClearCache(ctx context.Context, schema, table string) error {
+func ClearCache(ctx context.Context, schema, table string, exec func(ctx context.Context) (int64, int64, error)) (v1 int64, v2 int64, err error) {
 	db, ok := FromContext(ctx)
 	if !ok {
-		return herror.NewError("no db in context")
+		return 0, 0, herror.NewError("no db in context")
 	}
 	if db.GetCache() == nil {
-		return nil
+		return 0, 0, nil
 	}
-	return db.GetCache().Del(ctx, schema+"."+table)
+
+	err = db.GetCache().Del(ctx, schema+"."+table, func(ctx context.Context) (err error) {
+		v1, v2, err = exec(ctx)
+		return
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	return
 }
