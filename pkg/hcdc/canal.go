@@ -19,6 +19,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc/canal"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
@@ -261,7 +262,6 @@ func (c *Canal) newCanal() (*canal.Canal, error) {
 		cfg.Flavor = c.cfg.Flavor
 	}
 	cfg.TimestampStringLocation = time.UTC
-	cfg.Dump.ExecutionPath = ""
 	cfg.IncludeTableRegex = c.cfg.IncludeTables
 	cfg.ExcludeTableRegex = c.cfg.ExcludeTables
 
@@ -281,6 +281,10 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 	const maxBackoff = 30 * time.Second
 
 	pos := initial
+	// StartFromGTID 被服务端拒绝（或 GTID 集解析失败）后置位，本进程内一律改走 Position
+	// 续传。位点表可能持久化了源库未开启 GTID 时的匿名占位集（全零 SID），服务端会拒绝
+	// （ERROR 1773），不置位则重连后再次采纳同一坏 GTID 形成死循环。
+	gtidUnusable := false
 	for {
 		if ctx.Err() != nil {
 			return
@@ -288,12 +292,19 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 
 		cInst := c.canal
 		var runErr error
-		if pos.Gtid != "" {
+		if pos.Gtid != "" && !gtidUnusable {
 			if gtidSet, parseErr := mysql.ParseGTIDSet(c.canalCfgFlavor(), pos.Gtid); parseErr == nil {
 				hlog.Info(ctx, "start sync from persisted gtid: %s", pos.Gtid)
 				runErr = cInst.StartFromGTID(gtidSet)
+				if runErr != nil {
+					hlog.Error(ctx, "start sync from gtid failed (%v), fallback to position %s:%d",
+						runErr, pos.Position.Name, pos.Position.Pos)
+					gtidUnusable = true
+					runErr = cInst.RunFrom(pos.Position)
+				}
 			} else {
 				hlog.Error(ctx, "parse persisted gtid failed (%v), fallback to position", parseErr)
+				gtidUnusable = true
 				runErr = cInst.RunFrom(pos.Position)
 			}
 		} else {
@@ -331,6 +342,9 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 
 		// 重连前重新查询上次已上传位点（可能已被 scanFile 持续推进）。
 		if p := c.syncedPosition(ctx); p.Position.Name != "" || p.Gtid != "" {
+			if gtidUnusable {
+				p.Gtid = "" // GTID 已被证明不可用，仅采纳 Position
+			}
 			pos = p
 		}
 	}
@@ -358,85 +372,80 @@ func (c *Canal) canalCfgFlavor() string {
 	return mysql.MySQLFlavor
 }
 
-// OnTableChanged 当表结构被修改，或者是由于 DDL 导致 Canal 内部缓存的元数据失效时触发。
-func (c *Canal) OnTableChanged(header *replication.EventHeader, schema string, table string) error {
-	// 当上游加字段减字段时触发，你可以在这里重新调用 c.GetTableInfo 获取最新结构
-	// 并在 Doris 侧执行 "ALTER TABLE ... ADD COLUMN" 动态同步表结构变更
+// OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE、TRUNCATE 等 SQL 语句时触发。
+// stmt 是 fork 在 handleEvent 中已解析的 AST 语句（完整数据结构），直接用
+// ParseDDLStmts 展开受影响表，不再对同一 SQL 二次解析。
+//   - TRUNCATE：需要位点信息（nextPos），让 worker 落一个独立控制文件，先清理该表
+//     此前积压的全部 .temp/.active（TRUNCATE 前的数据本就要清空，无需上传），
+//     再由上传端识别控制文件、对 Doris 执行 TRUNCATE TABLE。与 OnRow 共用一个
+//     addData channel，保证 TRUNCATE 与前后 DML 严格串行。
+//   - DROP：只需要表名即可，清理本地结构缓存并通知 Doris 侧删表。
+//   - CREATE/ALTER：回源库查最新完整表结构（ALTER 的 AST 只携带列变更，
+//     不足以在 Doris 侧正确建表/改表），写回本地缓存后通知 Doris 侧建表/改表。
+func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent, stmt ast.StmtNode) error {
 	ctx := hlog.NewContext()
-	info, err := c.GetTableInfo(ctx, Schema(schema), Table(table))
-	if err != nil {
-		return err
-	}
-	if info == nil {
-		return nil
-	}
-	// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
-	c.cacheTableInfo(Schema(schema), Table(table), *info)
-	if c.onCreateTable == nil {
-		return nil
-	}
-	err = c.onCreateTable(ctx, []TableInfo{*info})
-	if err != nil {
-		return err
+	infos := ParseDDLStmts(Schema(queryEvent.Schema), stmt)
+	for _, info := range infos {
+		// 与全量拉取保持一致，只处理命中过滤规则的表。
+		if !c.FilterDatabase(info.Schema) || !c.FilterTable(info.Table) {
+			continue
+		}
+		if info.Action == Truncate {
+			binlogName := nextPos.Name
+			if binlogName == "" {
+				binlogName = c.canal.SyncedPosition().Name
+			}
+			gtid := ""
+			if c.gtidSet != nil {
+				gtid = normalizeGTID(c.gtidSet.String())
+			} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
+				gtid = normalizeGTID(gset.String())
+			}
+			return c.worker.Truncate(ctx, info.Schema, info.Table, mysql.Position{
+				Name: binlogName,
+				Pos:  nextPos.Pos,
+			}, gtid)
+		} else if info.Action == Drop {
+			// DROP 只需要表名即可：清理本地结构缓存，并通知 Doris 侧删表。
+			c.removeTableInfo(info.Schema, info.Table)
+			if c.onCreateTable == nil {
+				continue
+			}
+			if err := c.onCreateTable(ctx, []TableInfo{*info}); err != nil {
+				return err
+			}
+			continue
+		} else if info.Action == Alter {
+			// ALTER 的 AST 只携带列变更（extractAlterColumns），不足以在 Doris 侧
+			// 正确建表/改表，回源库查最新完整结构。
+			full, err := c.GetTableInfo(ctx, info.Schema, info.Table)
+			if err != nil {
+				return err
+			}
+			if full == nil {
+				continue
+			}
+			// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
+			c.cacheTableInfo(info.Schema, info.Table, *full)
+			if c.onCreateTable == nil {
+				continue
+			}
+			if err := c.onCreateTable(ctx, []TableInfo{*full}); err != nil {
+				return err
+			}
+		} else if info.Action == Create {
+			// CREATE 的 AST 已携带完整列定义，ParseDDLStmts 已提取 Columns/Keys/
+			// 分区字段，直接使用提取的结构，无需回源查询。
+			c.cacheTableInfo(info.Schema, info.Table, *info)
+			if c.onCreateTable == nil {
+				continue
+			}
+			if err := c.onCreateTable(ctx, []TableInfo{*info}); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
-}
-
-// OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE 等 SQL 语句时触发。
-func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent) error {
-	// 如果库不满足过滤条件，直接忽略
-	if !c.FilterDatabase(Schema(queryEvent.Schema)) {
-		return nil
-	}
-
-	ddl := ParseDDL(Schema(queryEvent.Schema), string(queryEvent.Query))
-	if ddl == nil || !c.FilterTable(ddl.Table) {
-		return nil
-	}
-
-	// TRUNCATE 不走 onCreateTable（建表/改表回调），而是让 worker 落一个独立控制文件：
-	// 先清理该表此前积压的全部 .temp/.active（TRUNCATE 前的数据本就要清空，无需上传），
-	// 再由上传端识别控制文件、对 Doris 执行 TRUNCATE TABLE。
-	// 与 OnRow 共用一个 addData channel，保证 TRUNCATE 与前后 DML 严格串行。
-	if ddl.IsTruncate {
-		ctx := hlog.NewContext()
-		binlogName := nextPos.Name
-		if binlogName == "" {
-			binlogName = c.canal.SyncedPosition().Name
-		}
-		gtid := ""
-		if c.gtidSet != nil {
-			gtid = c.gtidSet.String()
-		} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
-			gtid = gset.String()
-		}
-		return c.worker.Truncate(ctx, Schema(queryEvent.Schema), ddl.Table, mysql.Position{
-			Name: binlogName,
-			Pos:  nextPos.Pos,
-		}, gtid)
-	}
-
-	if c.onCreateTable == nil {
-		return nil
-	}
-
-	// DROP 只需要表名即可；CREATE/ALTER 需要带上游最新的完整表结构，
-	// 因为 ParseDDL 只解析出表名与列变更，不足以在 Doris 侧正确建表/改表。
-	if ddl.IsDrop {
-		return c.onCreateTable(hlog.NewContext(), []TableInfo{*ddl})
-	}
-
-	ctx := hlog.NewContext()
-	info, err := c.GetTableInfo(ctx, Schema(queryEvent.Schema), ddl.Table)
-	if err != nil {
-		return err
-	}
-	if info == nil {
-		return nil
-	}
-	// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射。
-	c.cacheTableInfo(Schema(queryEvent.Schema), ddl.Table, *info)
-	return c.onCreateTable(ctx, []TableInfo{*info})
 }
 
 // OnPosSynced 位点同步回调。当前位点（binlog 文件名 + offset）已由 OnRow 通过
@@ -457,6 +466,12 @@ func (c *Canal) OnGTID(header *replication.EventHeader, e mysql.BinlogGTIDEvent)
 	}
 	next, err := e.GTIDNext()
 	if err != nil || next == nil {
+		return nil
+	}
+	// 源库未开启 GTID 时事件流仍可能携带「SID 全零、GNO=0」的匿名占位事件（go-mysql
+	// 解码行为）。累积它会把匿名占位集持久化到位点表，重启续传时 StartFromGTID
+	// 被服务端拒绝（ERROR 1773）导致重连死循环，直接忽略。
+	if normalizeGTID(next.String()) == "" {
 		return nil
 	}
 	if c.gtidSet == nil {
@@ -514,9 +529,9 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	// MySQL 与 MariaDB），回退 SyncedGTIDSet（仅 MySQL XID 路径会更新 master gset）。
 	gtid := ""
 	if c.gtidSet != nil {
-		gtid = c.gtidSet.String()
+		gtid = normalizeGTID(c.gtidSet.String())
 	} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
-		gtid = gset.String()
+		gtid = normalizeGTID(gset.String())
 	}
 	// 关键：go-mysql 的一个 RowsEvent 可能携带多行数据（尤其批量 INSERT/多行 UPDATE/DELETE），
 	// e.Rows 是 [][]any：insert/delete 每行一条记录；update 是 [before, after, before, after, ...] 成对。
@@ -581,8 +596,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 //   - 清除 go-mysql canal 的表缓存，下一个事件触发 GetTable 重新从源库查询；
 //   - 重新查询源表结构并写回 hcdc 本地 c.schemas（OnRow 的列映射依赖它）。
 //
-// 与 OnRow/OnDDL 在 canal 同步 goroutine 内串行调用；OnTableChanged 可能来自
-// canal 内部 goroutine，写 c.schemas 时用 c.lock 保护。
+// 与 OnRow/OnDDL 在 canal 同步 goroutine 内串行调用；cacheTableInfo 内部加锁保护。
 func (c *Canal) refreshTableMeta(ctx context.Context, schemaName string, tableName string) {
 	if c.canal != nil {
 		c.canal.ClearTableCache([]byte(schemaName), []byte(tableName))
@@ -604,6 +618,15 @@ func (c *Canal) cacheTableInfo(schema Schema, table Table, info TableInfo) {
 	c.schemas[schema][table] = info
 }
 
+// removeTableInfo 从本地结构缓存移除已删除的表，避免 OnRow 用残留结构继续采集。
+func (c *Canal) removeTableInfo(schema Schema, table Table) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if tables, ok := c.schemas[schema]; ok {
+		delete(tables, table)
+	}
+}
+
 // recordCapture 记录采集端指标（行数与字节数，失败时计数错误）。
 func (c *Canal) recordCapture(ctx context.Context, err error, rows [][]RawBytes) {
 	if c.monitor == nil {
@@ -621,6 +644,17 @@ func (c *Canal) recordCapture(ctx context.Context, err error, rows [][]RawBytes)
 		}
 	}
 	c.monitor.CaptureBytes.Add(bytes)
+}
+
+// normalizeGTID 过滤「源库未开启 GTID」时的匿名占位 GTID 集（SID 全零、GNO=0）。
+// 占位集无断点续传意义，统一返回空字符串（与 cdc_record.log_position 表「gtid 为空
+// 表示未开启 GTID」的语义一致），避免重启续传时 StartFromGTID 被服务端拒绝
+// （ERROR 1773）导致重连死循环。
+func normalizeGTID(gtid string) string {
+	if strings.HasPrefix(gtid, "00000000-0000-0000-0000-000000000000:") {
+		return ""
+	}
+	return gtid
 }
 
 // noBinlogType 表示「无 binlog 类型信息」的哨兵值（全量 SELECT 路径）。
@@ -933,112 +967,21 @@ func (c *Canal) FilterTable(name Table) bool {
 	return false
 }
 
-// GetKeys 获得指定表的主键。
-// KeyIndex 语义：>0 表示是主键列，值越大在复合主键中越靠前（第一列最大）。
-// 必须按 ORDINAL_POSITION ASC 读取，才能给复合主键（如 PRIMARY KEY(id, create_time)）
-// 赋予正确顺序：id 排最前、create_time 次之。若用 DESC 或统一赋 1，排序后会颠倒，
-// 导致 ReadData 全量分页误把 timestamp 列当分页主键（WHERE create_time <= 9223372036854775807 匹配 0 行）、
-// 以及 Doris UNIQUE KEY 顺序与源表主键不一致，最终复合主键表数据静默丢失。
-func (c *Canal) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION ASC ", string(schema), string(table))
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	defer query.Close()
-
-	// 先按定义顺序收集主键列名，再逆序赋 KeyIndex（第一列最大），保证排序后顺序正确。
-	var pkOrder []string
-	for query.Next() {
-		var column, constraint *string
-		if err := query.Scan(&column, &constraint); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		if constraint == nil || column == nil {
-			continue
-		}
-		if *constraint == "PRIMARY" {
-			pkOrder = append(pkOrder, *column)
-		}
-	}
-	if err := query.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-
-	var keys = make(map[string]int, len(pkOrder))
-	for i, name := range pkOrder {
-		// 第 0 列（主键第一列）赋最大值 len(pkOrder)，最后一列赋 1。
-		keys[name] = len(pkOrder) - i
-	}
-	return keys, nil
-}
-
-// GetTableInfo 获得指定表的结构
+// GetTableInfo 获得指定表的结构。
+// 通过 SHOW CREATE TABLE 拿建表语句后用 tidb parser 的 AST 直接提取
+// （与 OnDDL 的 CREATE 分支共用 createTableToInfo），一次查询替代原来的
+// INFORMATION_SCHEMA 三次查询（COLUMNS/KEY_COLUMN_USAGE/PARTITIONS）。
 func (c *Canal) GetTableInfo(ctx context.Context, schema Schema, table Table) (*TableInfo, error) {
+	var name, createSQL string
+	if err := c.sql.QueryRowContext(ctx, "SHOW CREATE TABLE `"+strings.ReplaceAll(string(schema), "`", "``")+"`.`"+strings.ReplaceAll(string(table), "`", "``")+"`").Scan(&name, &createSQL); err != nil {
+		return nil, herror.Wrap(err)
+	}
 	hlog.Info(ctx, "get table info: %s.%s", schema, table)
-	keys, err := c.GetKeys(ctx, schema, table)
-	if err != nil {
-		return nil, herror.Wrap(err)
+	info := ParseDDL(schema, createSQL)
+	if info == nil {
+		return nil, herror.NewError("parse create table failed: " + string(schema) + "." + string(table))
 	}
-
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	defer query.Close()
-	var ret = &TableInfo{
-		Schema:  schema,
-		Table:   table,
-		Columns: make([]ColumnInfo, 0),
-		Keys:    make([]Column, 0),
-	}
-	for query.Next() {
-		var column ColumnInfo
-		var args string
-		if err := query.Scan(&column.Name, &args, &column.Comment, &column.IsNull, &column.Default, &column.Type); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		column.Args = args[len(column.Type):]
-		column.KeyIndex = keys[string(column.Name)]
-		if column.Default != nil {
-			column.Default = hutl.ToPointer(strings.ToUpper(*column.Default))
-		}
-		ret.Columns = append(ret.Columns, column)
-	}
-	if err := query.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-
-	hutl.Sort(ret.Columns, func(i, j ColumnInfo) bool {
-		return i.KeyIndex > j.KeyIndex
-	})
-	ret.Index = hutl.SliceToMap(ret.Columns, func(i int, column ColumnInfo) (Column, int) {
-		return column.Name, i
-	})
-
-	for _, column := range ret.Columns {
-		if column.KeyIndex > 0 {
-			ret.Keys = append(ret.Keys, column.Name)
-		}
-	}
-
-	ret.PartitionType, err = c.GetPartitionType(ctx, schema, table)
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	if ret.PartitionType == "RANGE" {
-		for _, key := range ret.Keys {
-			column := ret.Columns[ret.Index[key]]
-			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
-				ret.PartitionField = column.Name
-				break
-			}
-		}
-		if ret.PartitionField == "" {
-			hlog.Error(ctx, "GetTableInfo: table %s.%s has RANGE partition but no datetime/timestamp partition field", schema, table)
-		}
-	}
-
-	return ret, nil
+	return info, nil
 }
 
 func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info TableInfo, start, end string) error {
@@ -1174,29 +1117,6 @@ func (c *Canal) loadData(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-// GetPartitionType 动态查询 MySQL 上游表的 RANGE 分区字段
-func (c *Canal) GetPartitionType(ctx context.Context, schema Schema, table Table) (string, error) {
-	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
-	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
-
-	rows, err := c.sql.QueryContext(ctx, query, string(schema), string(table))
-	if err != nil {
-		return "", herror.Wrap(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var partitionMethod *string
-		err := rows.Scan(&partitionMethod)
-		if err != nil {
-			return "", herror.Wrap(err)
-		}
-		if partitionMethod != nil {
-			return *partitionMethod, nil
-		}
-	}
-	return "", nil
 }
 
 func (c *Canal) GetWorker() *Worker {

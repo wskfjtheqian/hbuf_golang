@@ -3,10 +3,8 @@ package canal
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/client"
-	"github.com/go-mysql-org/go-mysql/dump"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
@@ -31,12 +28,9 @@ type Canal struct {
 
 	cfg *Config
 
-	parser     *parser.Parser
-	master     *masterInfo
-	dumper     *dump.Dumper
-	dumped     bool
-	dumpDoneCh chan struct{}
-	syncer     *replication.BinlogSyncer
+	parser *parser.Parser
+	master *masterInfo
+	syncer *replication.BinlogSyncer
 
 	eventHandler EventHandler
 
@@ -76,7 +70,6 @@ func NewCanal(cfg *Config) (*Canal, error) {
 
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	c.dumpDoneCh = make(chan struct{})
 	c.eventHandler = &DummyEventHandler{}
 	c.parser = parser.New()
 	c.tables = make(map[string]*schema.Table)
@@ -86,10 +79,6 @@ func NewCanal(cfg *Config) (*Canal, error) {
 	c.master = &masterInfo{logger: c.cfg.Logger}
 
 	var err error
-
-	if err = c.prepareDumper(); err != nil {
-		return nil, errors.Trace(err)
-	}
 
 	if err = c.prepareSyncer(); err != nil {
 		return nil, errors.Trace(err)
@@ -135,75 +124,17 @@ func (c *Canal) initTableFilter() error {
 	return nil
 }
 
-func (c *Canal) prepareDumper() error {
-	var err error
-	dumpPath := c.cfg.Dump.ExecutionPath
-	if len(dumpPath) == 0 {
-		// ignore mysqldump, use binlog only
-		return nil
-	}
-
-	if c.dumper, err = dump.NewDumper(dumpPath,
-		c.cfg.Addr, c.cfg.User, c.cfg.Password); err != nil {
-		return errors.Trace(err)
-	}
-
-	if c.dumper == nil {
-		// no mysqldump, use binlog only
-		return nil
-	}
-
-	// use the same logger for the dumper
-	c.dumper.Logger = c.cfg.Logger
-
-	dbs := c.cfg.Dump.Databases
-	tables := c.cfg.Dump.Tables
-	tableDB := c.cfg.Dump.TableDB
-
-	if len(tables) == 0 {
-		c.dumper.AddDatabases(dbs...)
-	} else {
-		c.dumper.AddTables(tableDB, tables...)
-	}
-
-	charset := c.cfg.Charset
-	c.dumper.SetCharset(charset)
-
-	c.dumper.SetWhere(c.cfg.Dump.Where)
-	c.dumper.SkipMasterData(c.cfg.Dump.SkipMasterData)
-	c.dumper.SetMaxAllowedPacket(c.cfg.Dump.MaxAllowedPacketMB)
-	c.dumper.SetProtocol(c.cfg.Dump.Protocol)
-	c.dumper.SetExtraOptions(c.cfg.Dump.ExtraOptions)
-	// Use hex blob for mysqldump
-	c.dumper.SetHexBlob(true)
-
-	for _, ignoreTable := range c.cfg.Dump.IgnoreTables {
-		if seps := strings.Split(ignoreTable, ","); len(seps) == 2 {
-			c.dumper.AddIgnoreTables(seps[0], seps[1])
-		}
-	}
-
-	if c.cfg.Dump.DiscardErr {
-		c.dumper.SetErrOut(io.Discard)
-	} else {
-		c.dumper.SetErrOut(os.Stderr)
-	}
-
-	return nil
-}
-
 func (c *Canal) GetDelay() uint32 {
 	return c.delay.Load()
 }
 
-// Run will first try to dump all data from MySQL master `mysqldump`,
-// then sync from the binlog position in the dump data.
+// Run will sync from the current binlog position.
 // It will run forever until meeting an error or Canal closed.
 func (c *Canal) Run() error {
 	return c.run()
 }
 
-// RunFrom will sync from the binlog position directly, ignore mysqldump.
+// RunFrom will sync from the given binlog position directly.
 func (c *Canal) RunFrom(pos mysql.Position) error {
 	c.master.Update(pos)
 
@@ -216,34 +147,12 @@ func (c *Canal) StartFromGTID(set mysql.GTIDSet) error {
 	return c.Run()
 }
 
-// Dump all data from MySQL master `mysqldump`, ignore sync binlog.
-func (c *Canal) Dump() error {
-	if c.dumped {
-		return errors.New("the method Dump can't be called twice")
-	}
-	c.dumped = true
-	defer close(c.dumpDoneCh)
-	return c.dump()
-}
-
 func (c *Canal) run() error {
 	defer func() {
 		c.cancel()
 	}()
 
 	c.master.UpdateTimestamp(uint32(utils.Now().Unix()))
-
-	if !c.dumped {
-		c.dumped = true
-
-		err := c.tryDump()
-		close(c.dumpDoneCh)
-
-		if err != nil {
-			c.cfg.Logger.Error("canal dump mysql err", slog.Any("error", err))
-			return errors.Trace(err)
-		}
-	}
 
 	if err := c.runSyncBinlog(); err != nil {
 		if errors.Cause(err) != context.Canceled {
@@ -270,10 +179,6 @@ func (c *Canal) Close() {
 	c.connLock.Unlock()
 
 	_ = c.eventHandler.OnPosSynced(nil, c.master.Position(), c.master.GTIDSet(), true)
-}
-
-func (c *Canal) WaitDumpDone() <-chan struct{} {
-	return c.dumpDoneCh
 }
 
 func (c *Canal) Ctx() context.Context {

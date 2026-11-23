@@ -16,40 +16,6 @@ import (
 	"github.com/go-mysql-org/go-mysql/utils"
 )
 
-type DumpConfig struct {
-	// mysqldump execution path, like mysqldump or /usr/bin/mysqldump, etc...
-	// If not set, ignore using mysqldump.
-	ExecutionPath string `toml:"mysqldump"`
-
-	// Will override Databases, tables is in database table_db
-	Tables  []string `toml:"tables"`
-	TableDB string   `toml:"table_db"`
-
-	Databases []string `toml:"dbs"`
-
-	// Ignore table format is db.table
-	IgnoreTables []string `toml:"ignore_tables"`
-
-	// Dump only selected records. Quotes are mandatory
-	Where string `toml:"where"`
-
-	// If true, discard error msg, else, output to stderr
-	DiscardErr bool `toml:"discard_err"`
-
-	// Set true to skip --master-data if we have no privilege to do
-	// 'FLUSH TABLES WITH READ LOCK'
-	SkipMasterData bool `toml:"skip_master_data"`
-
-	// Set to change the default max_allowed_packet size
-	MaxAllowedPacketMB int `toml:"max_allowed_packet_mb"`
-
-	// Set to change the default protocol to connect with
-	Protocol string `toml:"protocol"`
-
-	// Set extra options
-	ExtraOptions []string `toml:"extra_options"`
-}
-
 type Config struct {
 	Addr     string `toml:"addr"`
 	User     string `toml:"user"`
@@ -73,8 +39,6 @@ type Config struct {
 
 	// discard row event without table meta
 	DiscardNoMetaRowEvent bool `toml:"discard_no_meta_row_event"`
-
-	Dump DumpConfig `toml:"dump"`
 
 	UseDecimal bool `toml:"use_decimal"`
 	ParseTime  bool `toml:"parse_time"`
@@ -151,10 +115,6 @@ func NewDefaultConfig() *Config {
 	c.Charset = mysql.DEFAULT_CHARSET
 	c.ServerID = uint32(rand.New(rand.NewSource(utils.Now().Unix())).Intn(1000)) + 1001
 	c.Flavor = mysql.DEFAULT_FLAVOR
-
-	c.Dump.ExecutionPath = mysql.DEFAULT_DUMP_EXECUTION_PATH
-	c.Dump.DiscardErr = true
-	c.Dump.SkipMasterData = false
 
 	c.Logger = slog.Default()
 

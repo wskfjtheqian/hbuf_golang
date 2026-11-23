@@ -21,9 +21,6 @@ type AddData struct {
 	rows     [][]RawBytes
 	position mysql.Position
 	gtid     string
-	// truncate 为 true 时，该条是 TRUNCATE 控制指令而非数据行：worker 会清理
-	// 该表的旧 CSV 缓冲并落一个独立控制文件，处理完成后通过 ack 回传结果。
-	truncate bool
 	ack      chan error
 }
 
@@ -130,7 +127,7 @@ func (t *Worker) Truncate(ctx context.Context, schema Schema, table Table, posit
 		table:    table,
 		position: position,
 		gtid:     gtid,
-		truncate: true,
+		action:   Truncate,
 		ack:      ack,
 	}
 	return <-ack
@@ -184,7 +181,7 @@ func (t *Worker) loop(ctx context.Context) {
 				if !ok {
 					return nil
 				}
-				if data.truncate {
+				if data.action == Truncate {
 					err := val.Truncate(ctx, data.position, data.gtid)
 					if data.ack != nil {
 						data.ack <- err

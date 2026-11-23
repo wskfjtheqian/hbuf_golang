@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	defaultMysqlHost  = "127.0.0.1:3306"
-	defaultDorisHost  = "127.0.0.1:9030"
-	defaultLoadURL    = "http://127.0.0.1:8040/"
-	defaultMysqlUser  = "root"
-	defaultMysqlPass  = "123456"
-	defaultDorisUser  = "admin"
-	defaultDorisPass  = ""
+	defaultMysqlHost = "127.0.0.1:3316"
+	defaultDorisHost = "127.0.0.1:9130"
+	defaultLoadURL   = "http://127.0.0.1:8140/"
+	defaultMysqlUser = "root"
+	defaultMysqlPass = "123456"
+	defaultDorisUser = "admin"
+	defaultDorisPass = ""
 )
 
 func envOr(key, def string) string {
@@ -231,5 +231,5 @@ func Test_HCDC(t *testing.T) {
 	if err != nil {
 		herror.PrintStack(t.Context(), err)
 	}
-	time.Sleep(time.Hour)
+	//time.Sleep(time.Hour)
 }
