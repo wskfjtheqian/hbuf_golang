@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 )
@@ -42,6 +44,18 @@ func WithH2IdleTimeout(timeout time.Duration) H2ServerOption {
 	}
 }
 
+// WithH2Middleware 设置响应中间件。
+func WithH2Middleware(middleware ...ResponseMiddleware) H2ServerOption {
+	return func(h *H2Server) {
+		h.middleware = func(next Response) Response {
+			for i := len(middleware) - 1; i >= 0; i-- {
+				next = middleware[i](next)
+			}
+			return next
+		}
+	}
+}
+
 // NewH2Server 创建一个基于 x/net/http2 公开 Framer 的服务端传输,处理 hrpc 请求。
 //
 // 与 HttpServer 不同,H2Server 不依赖 net/http 与 x/net http2.Server:
@@ -62,6 +76,9 @@ func NewH2Server(pathPrefix string, server *Server, options ...H2ServerOption) *
 		idleTimeout:          defaultServerIdleTimeout,
 		done:                 make(chan struct{}),
 		conns:                make(map[*h2ServerConn]struct{}),
+		middleware: func(next Response) Response {
+			return next
+		},
 	}
 	for _, option := range options {
 		option(ret)
@@ -75,11 +92,11 @@ type H2Server struct {
 	pathPrefix           string
 	maxConcurrentStreams uint32
 	idleTimeout          time.Duration
-
-	mu     sync.Mutex
-	conns  map[*h2ServerConn]struct{}
-	closed bool
-	done   chan struct{}
+	middleware           ResponseMiddleware
+	mu                   sync.Mutex
+	conns                map[*h2ServerConn]struct{}
+	closed               bool
+	done                 chan struct{}
 }
 
 // Serve 在监听器上循环接受连接,每个连接独立读写协程。
@@ -610,6 +627,13 @@ func (cc *h2ServerConn) runStream(st *serverStream) {
 	reader := &streamReader{st: st}
 	writer := &streamWriter{st: st}
 	err := cc.hs.srv.Response(ctx, path, writer, reader, st.header)
+	if err != nil {
+		if err.Error() == "context canceled" {
+			hlog.Warn(ctx, "%s", err.Error())
+		} else {
+			herror.PrintStack(ctx, err)
+		}
+	}
 	st.complete(err)
 }
 
