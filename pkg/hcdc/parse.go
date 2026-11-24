@@ -206,8 +206,9 @@ func extractAlterColumns(t *ast.AlterTableStmt) []ColumnInfo {
 }
 
 // columnToInfo 将 AST 列定义转换为 ColumnInfo。Type/Args 与
-// INFORMATION_SCHEMA 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如 varchar + "(255)"），
-// Charset 与 CHARACTER_SET_NAME 对齐（数值类型的 binary 归一化为空）。
+// INFORMATION_SCHEMA 的 DATA_TYPE/COLUMN_TYPE 语义对齐（如 varchar + "(255)"）；
+// Charset 仅显式声明 CHARACTER SET 时非空（未声明时 parser 不回填默认值，
+// 数值类型的 binary 归一化为空）。
 // DEFAULT/COMMENT 通过 canal 包注入的 valueExpr 实现（expr.go）从 AST 还原。
 func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 	c := ColumnInfo{

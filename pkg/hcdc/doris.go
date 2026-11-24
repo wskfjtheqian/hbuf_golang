@@ -470,6 +470,21 @@ func (d *Doris) dropTable(ctx context.Context, info *TableInfo) error {
 	return nil
 }
 
+// dorisNoDefaultTypes 是 Doris 不支持 DEFAULT 子句的类型集合：聚合类型
+// （BITMAP/HLL/QUANTILE_STATE/AGG_STATE）与半结构化类型（ARRAY/MAP/STRUCT/
+// VARIANT/JSON）。上游列的默认值无法映射到这些类型（如 bitmap32 的 '0'），
+// 建表/改表时跳过 Default，否则 Doris 报 "xxx type column default value ..."。
+var dorisNoDefaultTypes = map[string]bool{
+	"BITMAP": true, "HLL": true, "QUANTILE_STATE": true, "AGG_STATE": true,
+	"ARRAY": true, "MAP": true, "STRUCT": true, "VARIANT": true, "JSON": true,
+}
+
+// dorisColumnHasDefault 判断列定义是否可携带 DEFAULT 子句（默认值非空且类型
+// 支持默认值）。createTable/modifyTable 共用。
+func dorisColumnHasDefault(info ColumnInfo) bool {
+	return info.Default != nil && !dorisNoDefaultTypes[info.Type]
+}
+
 // createTable 增强版：支持动态主键、自适应副本及 Range 时间分区
 func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
 	// 运行时 DDL（上游新建库）不会触发初始化建库路径，建表前先确保目标库存在。
@@ -492,7 +507,7 @@ func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
 		} else {
 			s.WriteString("NOT NULL ")
 		}
-		if col.Default != nil {
+		if dorisColumnHasDefault(col) {
 			s.WriteString("Default ")
 			s.WriteString(*col.Default)
 			s.WriteString(" ")
@@ -896,7 +911,7 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 		if info.IsNull != "YES" {
 			s.WriteString(" NOT NULL")
 		}
-		if info.Default != nil {
+		if dorisColumnHasDefault(info) {
 			s.WriteString(" DEFAULT ")
 			s.WriteString(*info.Default)
 		}
@@ -934,7 +949,7 @@ func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *Ta
 		if info.IsNull != "YES" {
 			s.WriteString(" NOT NULL")
 		}
-		if info.Default != nil {
+		if dorisColumnHasDefault(info) {
 			s.WriteString(" DEFAULT ")
 			s.WriteString(*info.Default)
 		}

@@ -147,20 +147,19 @@ type Canal struct {
 	canal.DummyEventHandler // 嵌入空实现的事件处理器，按需覆盖
 	cfg                     *CanalConfig
 	canal                   *canal.Canal
-	//conn                    *client.Conn
-	excludeDBs     []*regexp.Regexp
-	includeDBs     []*regexp.Regexp
-	excludeTables  []*regexp.Regexp
-	includeTables  []*regexp.Regexp
-	onCreateTable  OnCreateTable
-	onCreateSchema OnCreateSchema
-	onGetPosition  OnGetPosition
-	schemas        map[Schema]map[Table]TableInfo
-	lock           sync.Mutex
-	sql            *sql.DB
-	worker         *Worker
-	monitor        *Monitor
-	gtidSet        mysql.GTIDSet // 已采集事务的 GTID 集合，仅在 RunFrom goroutine 内串行读写
+	excludeDBs              []*regexp.Regexp
+	includeDBs              []*regexp.Regexp
+	excludeTables           []*regexp.Regexp
+	includeTables           []*regexp.Regexp
+	onCreateTable           OnCreateTable
+	onCreateSchema          OnCreateSchema
+	onGetPosition           OnGetPosition
+	schemas                 map[Schema]map[Table]TableInfo
+	lock                    sync.Mutex
+	sql                     *sql.DB
+	worker                  *Worker
+	monitor                 *Monitor
+	gtidSet                 mysql.GTIDSet // 已采集事务的 GTID 集合，仅在 RunFrom goroutine 内串行读写
 
 	// 同步生命周期：cancel 用于在 Close 时终止后台同步 goroutine 与重连循环。
 	cancel context.CancelFunc
@@ -536,7 +535,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	// 关键：go-mysql 的一个 RowsEvent 可能携带多行数据（尤其批量 INSERT/多行 UPDATE/DELETE），
 	// e.Rows 是 [][]any：insert/delete 每行一条记录；update 是 [before, after, before, after, ...] 成对。
 	// 必须遍历全部行，否则批量 DML 会静默丢行（只同步首行）。
-	convertRow := func(vals []any) ([]RawBytes, error) {
+	convertRow := func(columns []schema.TableColumn, vals []any) ([]RawBytes, error) {
 		// 行值列数必须与 binlog 权威列数一致（full row image），不一致说明缓存滞后，
 		// 直接索引会越界，须中止同步触发缓存刷新与重放。
 		if len(vals) != columnCount {
@@ -544,13 +543,14 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 			return nil, fmt.Errorf("hcdc: table %s.%s: row has %d values but binlog declares %d columns (schema changed?), cache refreshed, resync pending",
 				e.Table.Schema, e.Table.Name, len(vals), columnCount)
 		}
-		row := make([]RawBytes, 0, len(vals))
+		count := min(len(columns), len(vals))
+		row := make([]RawBytes, 0, count)
 		for i, v := range vals {
 			var bt byte
 			if i < len(e.ColumnTypes) {
 				bt = e.ColumnTypes[i]
 			}
-			row = append(row, c.toRawBytes(ctx, &columnInfos[i], bt, v))
+			row = append(row, c.toRawBytes(ctx, Table(e.Table.Name), &columnInfos[i], bt, v))
 		}
 		return row, nil
 	}
@@ -559,7 +559,7 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 	if e.Action == "insert" || e.Action == "delete" {
 		rows := make([][]RawBytes, 0, len(e.Rows))
 		for _, r := range e.Rows {
-			row, convErr := convertRow(r)
+			row, convErr := convertRow(e.Table.Columns, r)
 			if convErr != nil {
 				c.recordCapture(ctx, convErr, nil)
 				return convErr
@@ -574,10 +574,9 @@ func (c *Canal) OnRow(e *canal.RowsEvent) error {
 		c.recordCapture(ctx, err, rows)
 		return err
 	} else if e.Action == "update" {
-		// update 的 Rows 成对：[before, after, before, after, ...]，取 after 行（索引 1,3,5...）。
 		rows := make([][]RawBytes, 0, len(e.Rows)/2)
 		for i := 1; i < len(e.Rows); i += 2 {
-			row, convErr := convertRow(e.Rows[i])
+			row, convErr := convertRow(e.Table.Columns, e.Rows[i])
 			if convErr != nil {
 				c.recordCapture(ctx, convErr, nil)
 				return convErr
@@ -698,7 +697,7 @@ func isPassthroughType(typ string) bool {
 	return false
 }
 
-func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, binlogType byte, v any) RawBytes {
+func (c *Canal) toRawBytes(ctx context.Context, table Table, col *ColumnInfo, binlogType byte, v any) RawBytes {
 	if v == nil {
 		return nil
 	}
@@ -746,7 +745,7 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, binlogType byte
 			// 否则会被错误 base64 成 "MjA=" 导致 Doris 端类型不匹配、行被过滤。
 			return val
 		} else if typ == "bitmap32" || typ == "bitmap64" {
-			val = c.bitmapToArrayString(ctx, val, strings.Contains(col.Comment, "CustomType=Bitmap32"))
+			val = c.bitmapToArrayString(ctx, table, col.Name, val, typ == "bitmap32")
 		}
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	case string:
@@ -760,7 +759,7 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, binlogType byte
 		} else if isPassthroughType(typ) {
 			return RawBytes(val)
 		} else if typ == "bitmap32" || typ == "bitmap64" {
-			val = string(c.bitmapToArrayString(ctx, []byte(val), strings.Contains(col.Comment, "CustomType=Bitmap32")))
+			val = string(c.bitmapToArrayString(ctx, table, col.Name, []byte(val), typ == "bitmap32"))
 		}
 		return RawBytes(base64.StdEncoding.EncodeToString([]byte(val)))
 	default:
@@ -769,13 +768,13 @@ func (c *Canal) toRawBytes(ctx context.Context, col *ColumnInfo, binlogType byte
 }
 
 // 转换 Bitmap
-func (c *Canal) bitmapToArrayString(ctx context.Context, val []byte, bitmap32 bool) RawBytes {
+func (c *Canal) bitmapToArrayString(ctx context.Context, table Table, name Column, val []byte, bitmap32 bool) RawBytes {
 	buffer := make([]byte, 0, 512)
 	if bitmap32 {
 		bitmap := roaring.NewBitmap()
 		_, err := bitmap.FromUnsafeBytes(val)
 		if err != nil {
-			hlog.Error(ctx, "bitmap from bytes error: %v", err)
+			hlog.Error(ctx, "bitmap from bytes error: %s.%s %v", table, name, err)
 			return nil
 		}
 		iterator := bitmap.Iterator()
@@ -787,7 +786,7 @@ func (c *Canal) bitmapToArrayString(ctx context.Context, val []byte, bitmap32 bo
 		bitmap := roaring64.NewBitmap()
 		_, err := bitmap.FromUnsafeBytes(val)
 		if err != nil {
-			hlog.Error(ctx, "bitmap from bytes error: %v", err)
+			hlog.Error(ctx, "bitmap from bytes error: %s.%s %v", table, name, err)
 			return nil
 		}
 		iterator := bitmap.Iterator()
@@ -1030,7 +1029,7 @@ func (c *Canal) ReadData(ctx context.Context, schema Schema, table Table, info T
 			return herror.Wrap(err)
 		}
 		if err := batch.AddData(hutl.Slice(values, func(i int, v any) RawBytes {
-			return c.toRawBytes(ctx, &info.Columns[info.Index[Column(columns[i])]], noBinlogType, v)
+			return c.toRawBytes(ctx, table, &info.Columns[info.Index[Column(columns[i])]], noBinlogType, v)
 		})); err != nil {
 			return herror.Wrap(err)
 		}
