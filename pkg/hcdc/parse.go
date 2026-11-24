@@ -6,6 +6,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/format"
+	pmysql "github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/parser/types"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
@@ -218,6 +219,8 @@ func columnToInfo(col *ast.ColumnDef, action string) ColumnInfo {
 	}
 	if col.Tp != nil {
 		c.Type, c.Args = splitFieldType(col.Tp)
+		// 重建 canal 表缓存时用它恢复 UnsignedColumns（否则无符号大值按有符号解码溢出）。
+		c.Unsigned = pmysql.HasUnsignedFlag(col.Tp.GetFlag())
 		// 字符集从 AST 单独提取存入 Charset（而非混进 Args）：Doris 建表不支持
 		// charset 子句但源信息值得保留。数值/二进制类型的 binary 无意义，置空。
 		if cs := col.Tp.GetCharset(); cs != "" && cs != "binary" {

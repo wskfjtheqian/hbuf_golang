@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
@@ -91,6 +92,7 @@ type ColumnInfo struct {
 	Action   string
 	OldName  Column
 	Charset  string // 源表列字符集（如 utf8mb4）。仅显式声明 CHARACTER SET 时非空：未声明或仅 COLLATE 时 parser 不回填，与 INFORMATION_SCHEMA.CHARACTER_SET_NAME（回填默认值）语义略有出入；数值类型/binary 归一化为空。Doris 原生 UTF-8 不消费，保留供审计与扩展（如转码）。
+	Unsigned bool   // 无符号整数列，用于重建 canal 表缓存时恢复 UnsignedColumns；Doris 建表不消费，仅随快照持久化。
 }
 
 func (i ColumnInfo) String() string {
@@ -106,6 +108,16 @@ type TableInfo struct {
 	PartitionField Column // 分区字段名
 	PartitionType  string // 分区类型，目前主流为 "RANGE"
 	Action         Action
+}
+
+// TableSchemaVersion 是 cdc_record.table_schema 表的一行：某表自 (DDLFile, DDLPos)
+// 位点起生效的结构快照。续传时按「生效位点 <= 恢复位点」选取最新版本还原表结构。
+type TableSchemaVersion struct {
+	Schema  Schema
+	Table   Table
+	DDLFile string    // 结构生效的 binlog 文件
+	DDLPos  uint32    // 结构生效的 binlog 位点
+	Info    TableInfo // 该位点起生效的完整列结构
 }
 
 type Config struct {
@@ -237,6 +249,22 @@ func (h *HCDC) setCanalCall(ctx context.Context, canal *Canal) {
 			return nil, nil
 		}
 		return doris.GetPosition(ctx, instanceId)
+	})
+
+	canal.setOnLoadSchemas(func(ctx context.Context, instanceId InstanceId) (map[Schema]map[Table][]TableSchemaVersion, error) {
+		doris := h.doris.Load()
+		if doris == nil {
+			return nil, nil
+		}
+		return doris.LoadTableSchemas(ctx, instanceId)
+	})
+
+	canal.setOnSaveTableSchema(func(ctx context.Context, instanceId InstanceId, info TableInfo, pos mysql.Position) error {
+		doris := h.doris.Load()
+		if doris == nil {
+			return nil
+		}
+		return doris.SaveTableSchema(ctx, instanceId, info, pos)
 	})
 
 	doris := h.doris.Load()

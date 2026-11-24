@@ -41,6 +41,15 @@ type SyncPosition struct {
 // 返回 nil 表示无记录（首次启动）。由 SetConfig 注入，内部委托 Doris.GetPosition。
 type OnGetPosition func(ctx context.Context, instanceId InstanceId) (*SyncPosition, error)
 
+// OnLoadSchemas 查询指定实例在 Doris 中持久化的全部表结构版本
+// （cdc_record.table_schema），用于断点续传时按位点还原表结构。
+// 由 SetConfig 注入，内部委托 Doris.LoadTableSchemas。
+type OnLoadSchemas func(ctx context.Context, instanceId InstanceId) (map[Schema]map[Table][]TableSchemaVersion, error)
+
+// OnSaveTableSchema 持久化一张表的结构快照及其生效位点：首次全量拉取完成后记录
+// 全量起始位点对应的结构版本。由 SetConfig 注入，内部委托 Doris.SaveTableSchema。
+type OnSaveTableSchema func(ctx context.Context, instanceId InstanceId, info TableInfo, pos mysql.Position) error
+
 type CanalConfig struct {
 	InstanceId    InstanceId `yaml:"InstanceId"`    //实例ID
 	Host          string     `yaml:"Host"`          //数据库主机地址
@@ -154,6 +163,8 @@ type Canal struct {
 	onCreateTable           OnCreateTable
 	onCreateSchema          OnCreateSchema
 	onGetPosition           OnGetPosition
+	onLoadSchemas           OnLoadSchemas
+	onSaveTableSchema       OnSaveTableSchema
 	schemas                 map[Schema]map[Table]TableInfo
 	lock                    sync.Mutex
 	sql                     *sql.DB
@@ -181,6 +192,14 @@ func (c *Canal) setOnGetPosition(fn OnGetPosition) {
 	c.onGetPosition = fn
 }
 
+func (c *Canal) setOnLoadSchemas(fn OnLoadSchemas) {
+	c.onLoadSchemas = fn
+}
+
+func (c *Canal) setOnSaveTableSchema(fn OnSaveTableSchema) {
+	c.onSaveTableSchema = fn
+}
+
 func (c *Canal) Open(ctx context.Context) error {
 	err := c.initFilter(ctx)
 	if err != nil {
@@ -203,17 +222,8 @@ func (c *Canal) Open(ctx context.Context) error {
 		return err
 	}
 
-	// 建立表元数据（OnRow 依赖 c.schemas 查找列结构），并在 Doris 侧建库建表。
-	// createSchemaTable 内部走 CREATE IF NOT EXISTS，幂等，断点续传时也可安全重跑。
-	err = c.createSchemaTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	// 决定同步起点：
-	//  1. 有上次已上传位点 → 从该位点断点续传，跳过全量拉取（避免重复全量）。
-	//  2. 无位点（首次启动）→ 先在全量拉取之前记录当前位点，全量拉取完成后从该位点开始，
-	//     这样全量拉取期间源库产生的新增 DML 会被随后的 binlog 重放，不会丢失。
+	// 决定同步起点：有已上传位点则断点续传（按位点从 Doris 还原结构版本）；
+	// 否则首次启动，记录全量起始位点后拉全量，全量期间的 DML 由 binlog 重放补齐。
 	last := (*SyncPosition)(nil)
 	if c.onGetPosition != nil {
 		if p, err := c.onGetPosition(ctx, c.cfg.InstanceId); err != nil {
@@ -224,7 +234,10 @@ func (c *Canal) Open(ctx context.Context) error {
 	}
 
 	if last == nil {
-		// 首次启动：先记录全量起始位点，再做全量拉取。
+		// 首次启动：建元数据与 Doris 表（幂等）。
+		if err = c.createSchemaTable(ctx); err != nil {
+			return err
+		}
 		pos, err := c.canal.GetMasterPos()
 		if err != nil {
 			return herror.Wrap(err)
@@ -232,10 +245,18 @@ func (c *Canal) Open(ctx context.Context) error {
 		if err = c.loadData(ctx); err != nil {
 			return err
 		}
+		// 全量成功后把各表结构 + 起始位点持久化为首个版本，全量期间的 DDL 由后续 barrier 追加新版本。
+		if err = c.saveInitialSchemas(ctx, pos); err != nil {
+			return err
+		}
 		last = &SyncPosition{Position: pos}
 		hlog.Info(ctx, "full load done, start incremental from: %s:%d", pos.Name, pos.Pos)
 	} else {
 		hlog.Info(ctx, "resume from persisted position: %s:%d gtid=%s", last.Position.Name, last.Position.Pos, last.Gtid)
+		// 按位点还原各表结构版本，避免用源库当前（可能超前）的结构解析老位点数据。
+		if err = c.restoreSchemasFromRecords(ctx, last.Position); err != nil {
+			return err
+		}
 	}
 
 	// 后台启动同步循环（含断线重连）。使用独立 context，Close 时通过 cancel 终止。
@@ -243,6 +264,107 @@ func (c *Canal) Open(ctx context.Context) error {
 	c.cancel = cancel
 	go c.runSync(syncCtx, *last)
 	return nil
+}
+
+// saveInitialSchemas 首次全量完成后，把各表结构 + 全量起始位点写入 table_schema 作为首个版本。
+func (c *Canal) saveInitialSchemas(ctx context.Context, pos mysql.Position) error {
+	if c.onSaveTableSchema == nil {
+		return nil
+	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for _, tables := range c.schemas {
+		for _, info := range tables {
+			if err := c.onSaveTableSchema(ctx, c.cfg.InstanceId, info, pos); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// restoreSchemasFromRecords 断点续传时按「生效位点 <= 恢复位点」选取各表最新版本还原结构与 canal 表缓存。
+// 无匹配版本的表回源库兑底并告警；位点之后新建的表无需处理（重放时会先遇到 CREATE DDL）。
+func (c *Canal) restoreSchemasFromRecords(ctx context.Context, pos mysql.Position) error {
+	if c.onLoadSchemas == nil {
+		return nil
+	}
+	all, err := c.onLoadSchemas(ctx, c.cfg.InstanceId)
+	if err != nil {
+		return err
+	}
+	for db, tables := range all {
+		if !c.FilterDatabase(db) {
+			continue
+		}
+		for tbl, versions := range tables {
+			if !c.FilterTable(tbl) {
+				continue
+			}
+			if v := selectSchemaVersion(versions, pos); v != nil {
+				c.cacheTableInfo(db, tbl, v.Info)
+				hlog.Info(ctx, "restore table schema from record: %s.%s @ %s:%d", db, tbl, v.DDLFile, v.DDLPos)
+				continue
+			}
+			// 无匹配版本（位点早于该表最早记录，正常流程不应发生）：回源库兑底。
+			hlog.Warn(ctx, "no schema version before resume pos for %s.%s, fallback to source schema", db, tbl)
+			info, err := c.GetTableInfo(ctx, db, tbl)
+			if err != nil || info == nil {
+				hlog.Error(ctx, "fallback get table info failed: %s.%s %v", db, tbl, err)
+				continue
+			}
+			c.cacheTableInfo(db, tbl, *info)
+		}
+	}
+	// 同步 canal 表缓存（RowsEvent 解码依赖 UnsignedColumns），防止回源库拿到「未来」结构。
+	c.restoreCanalTableCache()
+	return nil
+}
+
+// selectSchemaVersion 选「生效位点 <= 恢复位点」中最新版本；位点早于全部版本时返回 nil。
+func selectSchemaVersion(versions []TableSchemaVersion, pos mysql.Position) *TableSchemaVersion {
+	var best *TableSchemaVersion
+	for i := range versions {
+		v := &versions[i]
+		vp := mysql.Position{Name: v.DDLFile, Pos: v.DDLPos}
+		if vp.Compare(pos) <= 0 && (best == nil || vp.Compare(mysql.Position{Name: best.DDLFile, Pos: best.DDLPos}) > 0) {
+			best = v
+		}
+	}
+	return best
+}
+
+// restoreCanalTableCache 把 c.schemas 同步进 canal 表缓存（断点续传启动与 runSync 重连后调用）。
+func (c *Canal) restoreCanalTableCache() {
+	if c.canal == nil {
+		return
+	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for db, tables := range c.schemas {
+		for tbl, info := range tables {
+			c.canal.SetTableCache([]byte(db), []byte(tbl), tableInfoToCanalTable(string(db), string(tbl), info))
+		}
+	}
+}
+
+// tableInfoToCanalTable 把 TableInfo 转成 schema.Table；unsigned 列追加 " unsigned"
+// 以恢复 UnsignedColumns（否则无符号大值按有符号解码溢出为负数）。
+func tableInfoToCanalTable(db, table string, info TableInfo) *schema.Table {
+	t := &schema.Table{
+		Schema:  db,
+		Name:    table,
+		Columns: make([]schema.TableColumn, 0, len(info.Columns)),
+		Indexes: make([]*schema.Index, 0),
+	}
+	for _, col := range info.Columns {
+		typ := string(col.Type) + col.Args
+		if col.Unsigned {
+			typ += " unsigned"
+		}
+		t.AddColumn(string(col.Name), typ, "", "")
+	}
+	return t
 }
 
 // newCanal 创建 go-mysql canal 实例并注册事件处理器。
@@ -328,6 +450,9 @@ func (c *Canal) runSync(ctx context.Context, initial SyncPosition) {
 				c.canal.Close()
 			}
 			c.canal = nc
+			// 新实例表缓存为空，回源库 GetTable 会拿到「未来」结构；把按位点
+			// 还原的 c.schemas 重新同步进缓存。
+			c.restoreCanalTableCache()
 		}
 
 		select {
@@ -371,18 +496,18 @@ func (c *Canal) canalCfgFlavor() string {
 	return mysql.MySQLFlavor
 }
 
-// OnDDL 当上游执行了 CREATE TABLE、ALTER TABLE、DROP TABLE、TRUNCATE 等 SQL 语句时触发。
-// stmt 是 fork 在 handleEvent 中已解析的 AST 语句（完整数据结构），直接用
-// ParseDDLStmts 展开受影响表，不再对同一 SQL 二次解析。
-//   - TRUNCATE：需要位点信息（nextPos），让 worker 落一个独立控制文件，先清理该表
-//     此前积压的全部 .temp/.active（TRUNCATE 前的数据本就要清空，无需上传），
-//     再由上传端识别控制文件、对 Doris 执行 TRUNCATE TABLE。与 OnRow 共用一个
-//     addData channel，保证 TRUNCATE 与前后 DML 严格串行。
-//   - DROP：只需要表名即可，清理本地结构缓存并通知 Doris 侧删表。
-//   - CREATE/ALTER：回源库查最新完整表结构（ALTER 的 AST 只携带列变更，
-//     不足以在 Doris 侧正确建表/改表），写回本地缓存后通知 Doris 侧建表/改表。
+// OnDDL 上游 DDL 事件：stmt 为 handleEvent 已解析的 AST，用 ParseDDLStmts 展开受影响表。
+// TRUNCATE 写独立控制文件（清理积压后由上传端 TRUNCATE Doris 表）；DROP 清本地缓存并删 Doris 表；
+// CREATE/ALTER 回源库查最新完整结构（ALTER 的 AST 只带列变更）后写 barrier，由上传端建/改表。
 func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, queryEvent *replication.QueryEvent, stmt ast.StmtNode) error {
 	ctx := hlog.NewContext()
+	// DDL barrier 携带的 GTID：优先 OnGTID 累积集（覆盖 MySQL 与 MariaDB），回退 SyncedGTIDSet。
+	gtid := ""
+	if c.gtidSet != nil {
+		gtid = normalizeGTID(c.gtidSet.String())
+	} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
+		gtid = normalizeGTID(gset.String())
+	}
 	infos := ParseDDLStmts(Schema(queryEvent.Schema), stmt)
 	for _, info := range infos {
 		// 与全量拉取保持一致，只处理命中过滤规则的表。
@@ -394,29 +519,19 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 			if binlogName == "" {
 				binlogName = c.canal.SyncedPosition().Name
 			}
-			gtid := ""
-			if c.gtidSet != nil {
-				gtid = normalizeGTID(c.gtidSet.String())
-			} else if gset := c.canal.SyncedGTIDSet(); gset != nil {
-				gtid = normalizeGTID(gset.String())
-			}
 			return c.worker.Truncate(ctx, info.Schema, info.Table, mysql.Position{
 				Name: binlogName,
 				Pos:  nextPos.Pos,
 			}, gtid)
 		} else if info.Action == Drop {
-			// DROP 只需要表名即可：清理本地结构缓存，并通知 Doris 侧删表。
+			// 清本地结构缓存，写 barrier 通知上传端删 Doris 表与快照记录。
 			c.removeTableInfo(info.Schema, info.Table)
-			if c.onCreateTable == nil {
-				continue
-			}
-			if err := c.onCreateTable(ctx, []TableInfo{*info}); err != nil {
+			if err := c.applyDDLBarrier(ctx, *info, nextPos, gtid); err != nil {
 				return err
 			}
 			continue
 		} else if info.Action == Alter {
-			// ALTER 的 AST 只携带列变更（extractAlterColumns），不足以在 Doris 侧
-			// 正确建表/改表，回源库查最新完整结构。
+			// ALTER 的 AST 只带列变更，回源库查最新完整结构。
 			full, err := c.GetTableInfo(ctx, info.Schema, info.Table)
 			if err != nil {
 				return err
@@ -424,27 +539,35 @@ func (c *Canal) OnDDL(header *replication.EventHeader, nextPos mysql.Position, q
 			if full == nil {
 				continue
 			}
-			// 将最新表结构写回本地缓存，避免 OnRow 用旧结构做列映射（DDL 后缓存滞后）。
+			// GetTableInfo 不携带动作类型，显式标记 Alter，保证 barrier/快照中 Action 语义正确。
+			full.Action = Alter
+			// 最新结构写回本地缓存，避免 OnRow 用旧结构做列映射。
 			c.cacheTableInfo(info.Schema, info.Table, *full)
-			if c.onCreateTable == nil {
-				continue
-			}
-			if err := c.onCreateTable(ctx, []TableInfo{*full}); err != nil {
+			if err := c.applyDDLBarrier(ctx, *full, nextPos, gtid); err != nil {
 				return err
 			}
 		} else if info.Action == Create {
-			// CREATE 的 AST 已携带完整列定义，ParseDDLStmts 已提取 Columns/Keys/
-			// 分区字段，直接使用提取的结构，无需回源查询。
+			// CREATE 的 AST 已含完整列定义，直接使用。
 			c.cacheTableInfo(info.Schema, info.Table, *info)
-			if c.onCreateTable == nil {
-				continue
-			}
-			if err := c.onCreateTable(ctx, []TableInfo{*info}); err != nil {
+			if err := c.applyDDLBarrier(ctx, *info, nextPos, gtid); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// applyDDLBarrier 写 DDL barrier 控制文件：结构快照随文件落盘，上传端按位点排序后
+// 应用 Doris 侧 DDL 并持久化结构版本；与 DML 共用 worker 串行通道，保证 barrier 前 DML 已落盘。
+func (c *Canal) applyDDLBarrier(ctx context.Context, info TableInfo, nextPos mysql.Position, gtid string) error {
+	binlogName := nextPos.Name
+	if binlogName == "" {
+		binlogName = c.canal.SyncedPosition().Name
+	}
+	return c.worker.ApplyDDL(ctx, info.Schema, info.Table, info, mysql.Position{
+		Name: binlogName,
+		Pos:  nextPos.Pos,
+	}, gtid)
 }
 
 // OnPosSynced 位点同步回调。当前位点（binlog 文件名 + offset）已由 OnRow 通过

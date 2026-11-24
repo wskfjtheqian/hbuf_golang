@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,6 +26,13 @@ type ScanFileCall func(ctx context.Context, schema Schema, table Table, columns 
 // ScanTruncateCall 是 TRUNCATE 控制文件的处理回调。由 Doris 侧执行目标表的
 // TRUNCATE TABLE SQL。position / gtid 随控制文件一起传入，用于位点汇总。
 type ScanTruncateCall func(ctx context.Context, schema Schema, table Table, position mysql.Position, gtid string, capturedAt time.Time) error
+
+// ScanDDLCall 是 DDL barrier 控制文件的处理回调：应用 Doris 侧 DDL 并持久化结构快照；
+// 返回 errDDLBarrier 表示屏障已应用且同步已自动暂停，本表本轮扫描中断，剩余文件待 Resume 后处理。
+type ScanDDLCall func(ctx context.Context, schema Schema, table Table, info TableInfo, position mysql.Position, gtid string, capturedAt time.Time) error
+
+// errDDLBarrier 不是错误而是「屏障已应用但已暂停」的哨兵：控制文件照常删除、位点照常汇总，不向上传播为失败。
+var errDDLBarrier = errors.New("ddl barrier applied, scan paused for manual resume")
 
 type FileOption func(w *File)
 
@@ -81,6 +90,9 @@ func (t *File) CheckAndRotate(ctx context.Context, force bool) error {
 // 该后缀：命中则对目标表执行 TRUNCATE TABLE，成功后删除控制文件并推进位点。
 const truncateFileSuffix = ".csv.truncate"
 
+// ddlFileSuffix 是 DDL barrier 控制文件的扩展名，内容为该表 DDL 后的完整结构快照（TableInfo JSON）。
+const ddlFileSuffix = ".csv.ddl"
+
 // Truncate 处理上游 TRUNCATE 事件：
 //  1. 关闭并删除当前 .temp 句柄（TRUNCATE 之前采集的数据全部作废，不再上传）；
 //  2. 删除该表目录下此前积压的全部 .temp / .active / .truncate 文件；
@@ -129,6 +141,37 @@ func (t *File) Truncate(ctx context.Context, position mysql.Position, gtid strin
 	}
 
 	// 同步更新内存位点：TRUNCATE 之后的新 DML 会落在更新的位点之后。
+	t.position = position
+	t.gtid = gtid
+	t.captureTime = captureTime
+	return nil
+}
+
+// ApplyDDL 处理上游 DDL（CREATE/ALTER/DROP）事件：关闭当前 .temp（旧结构数据转为 .active
+// 先于 barrier 上传），再写 .ddl 控制文件（文件名携带 DDL 位点，内容为 DDL 后的完整结构快照）。
+func (t *File) ApplyDDL(ctx context.Context, info TableInfo, position mysql.Position, gtid string) error {
+	// 关闭当前写入句柄（旧结构数据转为 .active，等待先于 barrier 上传）。
+	if err := t.CloseFileUnderLock(ctx); err != nil {
+		return err
+	}
+
+	payload, err := json.Marshal(info)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	captureTime := time.Now()
+	gtidB64 := base64.RawURLEncoding.EncodeToString([]byte(gtid))
+	name := filepath.Base(position.Name) + "_" + strconv.FormatUint(uint64(position.Pos), 10) + "_" + gtidB64 + "_" + strconv.FormatInt(captureTime.UnixNano(), 10) + ddlFileSuffix
+	dir := filepath.Join(t.logDir, string(t.schema), string(t.table))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return herror.Wrap(err)
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, append(payload, '\n'), 0644); err != nil {
+		return herror.Wrap(err)
+	}
+
+	// 同步更新内存位点：DDL 之后的新 DML 会落在更新的位点之后。
 	t.position = position
 	t.gtid = gtid
 	t.captureTime = captureTime
@@ -268,75 +311,126 @@ func (t *File) save(ctx context.Context, action Action, columns []ColumnInfo, ro
 	return nil
 }
 
-func (t *File) ScanFile(ctx context.Context, fn ScanFileCall, truncateFn ScanTruncateCall) (*mysql.Position, string, error) {
+func (t *File) ScanFile(ctx context.Context, fn ScanFileCall, truncateFn ScanTruncateCall, ddlFn ScanDDLCall) (*mysql.Position, string, error) {
 	dir := filepath.Join(t.logDir, string(t.schema), string(t.table))
 
 	var position *mysql.Position
 	var gtid string
 
-	// 1. 优先处理 TRUNCATE 控制文件：必须先清表，再上传该表后续的数据文件。
-	// 控制文件在执行成功后才删除，失败则保留，下个扫描周期重试（TRUNCATE 幂等）。
-	truncates, err := filepath.Glob(filepath.Join(dir, "*"+truncateFileSuffix))
-	if err != nil {
-		return nil, "", herror.Wrap(err)
+	// 统一收集三种文件（数据 .active / TRUNCATE 控制 / DDL 控制）按位点排序处理，
+	// 保证 DDL barrier 语义：屏障前旧结构数据先上传；全量文件（SELECT_ 前缀）字典序自然排最前。
+	type pendingFile struct {
+		path string
+		pos  mysql.Position
+		g    string
+		at   time.Time
+		kind byte // 't' truncate 控制 / 'd' ddl 控制 / 'a' 数据文件
 	}
-	for _, path := range truncates {
-		pos, g, capturedAt, err := parseTruncateFileName(path)
+	var pendings []pendingFile
+	for _, pat := range []struct {
+		suffix string
+		kind   byte
+	}{
+		{truncateFileSuffix, 't'},
+		{ddlFileSuffix, 'd'},
+		{".csv.active", 'a'},
+	} {
+		paths, err := filepath.Glob(filepath.Join(dir, "*"+pat.suffix))
 		if err != nil {
-			return nil, "", err
-		}
-		if truncateFn != nil {
-			if err := truncateFn(ctx, t.schema, t.table, *pos, g, capturedAt); err != nil {
-				return nil, "", err
-			}
-		}
-		if err := os.Remove(path); err != nil {
 			return nil, "", herror.Wrap(err)
 		}
-		if position == nil || pos.Compare(*position) < 0 {
-			position = pos
-		}
-		if g != "" {
-			gtid = g
+		for _, path := range paths {
+			pos, g, capturedAt, err := parseControlFileName(path)
+			if err != nil {
+				return nil, "", err
+			}
+			pendings = append(pendings, pendingFile{path: path, pos: *pos, g: g, at: capturedAt, kind: pat.kind})
 		}
 	}
-
-	// 2. 处理常规 .active 数据文件。
-	pattern := filepath.Join(dir, "*.active")
-	paths, err := filepath.Glob(pattern)
-	if err != nil {
-		return nil, "", herror.Wrap(err)
-	}
-
-	for _, path := range paths {
-		pos, g, err := t.ReadFile(ctx, path, fn)
-		if err != nil {
-			return nil, "", err // 失败则保留文件，等下个周期重试
+	hutl.Sort(pendings, func(a, b pendingFile) bool {
+		if a.pos.Name != b.pos.Name {
+			return a.pos.Name < b.pos.Name
 		}
+		if a.pos.Pos != b.pos.Pos {
+			return a.pos.Pos < b.pos.Pos
+		}
+		// 同一位点（正常不会发生）：控制文件先于数据文件。
+		return a.kind < b.kind
+	})
 
+	for _, p := range pendings {
+		pos := &p.pos
+		switch p.kind {
+		case 't':
+			// TRUNCATE 控制文件：执行成功后删除（失败保留，下个周期重试，TRUNCATE 幂等）。
+			if truncateFn != nil {
+				if err := truncateFn(ctx, t.schema, t.table, *pos, p.g, p.at); err != nil {
+					return nil, "", err
+				}
+			}
+		case 'd':
+			// DDL barrier：应用 Doris 侧 DDL 并持久化结构快照（屏障前数据已由排序保证上传完成）。
+			if ddlFn != nil {
+				info, err := parseDDLControlFile(p.path)
+				if err != nil {
+					return nil, "", err
+				}
+				if err := ddlFn(ctx, t.schema, t.table, info, *pos, p.g, p.at); err != nil {
+					if errors.Is(err, errDDLBarrier) {
+						// 屏障已应用但同步已暂停：删控制文件、汇总位点后中断本轮扫描，
+						// DDL 后的数据待人工 Resume 后下轮上传。
+						if err := os.Remove(p.path); err != nil {
+							return nil, "", herror.Wrap(err)
+						}
+						if position == nil || pos.Compare(*position) < 0 {
+							position = pos
+						}
+						if p.g != "" {
+							gtid = p.g
+						}
+						goto scanDone
+					}
+					return nil, "", err
+				}
+			}
+		case 'a':
+			// 数据文件：上传成功后物理清理；全量文件（SELECT_ 前缀）返回 nil 位点，不参与汇总。
+			rpos, g, err := t.ReadFile(ctx, p.path, fn)
+			if err != nil {
+				return nil, "", err
+			}
+			pos = rpos
+			if g != "" {
+				p.g = g
+			}
+		}
+		if err := os.Remove(p.path); err != nil {
+			return nil, "", herror.Wrap(err)
+		}
 		if pos != nil && (position == nil || pos.Compare(*position) < 0) {
 			position = pos
 		}
-		if g != "" {
-			gtid = g
-		}
-
-		// 成功上传后物理清理
-		if err := os.Remove(path); err != nil {
-			return nil, "", herror.Wrap(err)
+		if p.g != "" {
+			gtid = p.g
 		}
 	}
+
+scanDone:
 	return position, gtid, nil
 }
 
-// parseTruncateFileName 从 TRUNCATE 控制文件名解析位点、GTID 与采集时间戳。
-// 文件名格式：{binlogName}_{pos}_{gtidB64}_{captureNano}.csv.truncate
-func parseTruncateFileName(path string) (*mysql.Position, string, time.Time, error) {
+// parseControlFileName 从控制文件/数据文件名解析位点、GTID 与采集时间戳。
+// 格式：{binlogName}_{pos}_{gtidB64}_{captureNano}{suffix}
+func parseControlFileName(path string) (*mysql.Position, string, time.Time, error) {
 	_, name := filepath.Split(path)
-	name = strings.TrimSuffix(name, truncateFileSuffix)
+	// 剥离后缀：.csv.truncate / .csv.ddl / .csv.active
+	name = strings.TrimSuffix(name, ".truncate")
+	name = strings.TrimSuffix(name, ".ddl")
+	name = strings.TrimSuffix(name, ".active")
+	name = strings.TrimSuffix(name, ".csv")
 	parts := strings.SplitN(name, "_", 4)
 	if len(parts) != 4 {
-		return nil, "", time.Time{}, herror.NewError("invalid truncate control file name: " + name)
+		return nil, "", time.Time{}, herror.NewError("invalid control file name: " + name)
 	}
 	pos, err := strconv.ParseUint(parts[1], 10, 32)
 	if err != nil {
@@ -353,6 +447,19 @@ func parseTruncateFileName(path string) (*mysql.Position, string, time.Time, err
 		return nil, "", time.Time{}, herror.Wrap(err)
 	}
 	return &mysql.Position{Name: parts[0], Pos: uint32(pos)}, gtid, time.Unix(0, nano), nil
+}
+
+// parseDDLControlFile 读取 DDL barrier 控制文件内容（TableInfo JSON）。
+func parseDDLControlFile(path string) (TableInfo, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return TableInfo{}, herror.Wrap(err)
+	}
+	var info TableInfo
+	if err := json.Unmarshal(raw, &info); err != nil {
+		return TableInfo{}, herror.Wrap(err)
+	}
+	return info, nil
 }
 
 func (t *File) ReadFile(ctx context.Context, path string, fn ScanFileCall) (*mysql.Position, string, error) {

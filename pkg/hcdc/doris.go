@@ -1099,7 +1099,26 @@ func (d *Doris) scanFile(ctx context.Context) error {
 		wg.Add(1)
 		go func(w *Worker) {
 			defer wg.Done()
-			id, pos, gtid, err := w.ScanFile(ctx, upload, truncate)
+			// DDL barrier 回调。顺序不可反：先应用 Doris DDL，再写 table_schema，否则崩溃恢复后
+			// 快照新而 Doris 表旧；自动暂停必须放最后，否则 DDL 失败时暂停后 barrier 无法重试。
+			applyDDL := func(ctx context.Context, schema Schema, table Table, info TableInfo, pos mysql.Position, gtid string, capturedAt time.Time) error {
+				// 1. 应用 Doris 侧 DDL（CREATE/ALTER → 建/改表，DROP → 删表）。
+				if err := d.changeTable(ctx, &info); err != nil {
+					return err
+				}
+				// 2. 持久化/清理结构快照版本。
+				if info.Action == Drop {
+					if err := d.DeleteTableSchemas(ctx, w.instanceId, schema, table); err != nil {
+						return err
+					}
+				} else if err := d.SaveTableSchema(ctx, w.instanceId, info, pos); err != nil {
+					return err
+				}
+				// 3. 自动暂停（等待人工 Resume 后上传 DDL 后的数据）。
+				d.pauseForSchemaChange(ctx, info)
+				return errDDLBarrier
+			}
+			id, pos, gtid, err := w.ScanFile(ctx, upload, truncate, applyDDL)
 			if err != nil {
 				d.monitor.UploadErrors.Add(1)
 				hlog.Error(ctx, "scan file error: %v", err)
@@ -1192,7 +1211,92 @@ func (d *Doris) createCDCRecord(ctx context.Context) error {
 			return herror.Wrap(err)
 		}
 	}
+	return d.createTableSchemaRecord(ctx)
+}
+
+// createTableSchemaRecord 创建结构快照表 cdc_record.table_schema：每行是某表自 (ddl_file, ddl_pos)
+// 起生效的一个结构版本（多版本追加），续传时按位点选「生效位点 <= 恢复位点」的最新版本。
+func (d *Doris) createTableSchemaRecord(ctx context.Context) error {
+	_, err := d.sql.QueryContext(ctx, `
+		CREATE TABLE IF NOT EXISTS cdc_record.table_schema (
+			instance_id BIGINT NOT NULL COMMENT '实例ID',
+			db_name VARCHAR(128) NOT NULL COMMENT '源库名',
+			table_name VARCHAR(128) NOT NULL COMMENT '源表名',
+			ddl_file VARCHAR(255) NOT NULL COMMENT '结构生效的 binlog 文件',
+			ddl_pos BIGINT NOT NULL COMMENT '结构生效的 binlog 位点',
+			schema_json JSON NOT NULL COMMENT '列结构快照（TableInfo JSON）',
+			updated_at DATETIME NOT NULL COMMENT '更新时间'
+		) UNIQUE KEY(instance_id, db_name, table_name, ddl_file, ddl_pos)
+		DISTRIBUTED BY HASH(instance_id) BUCKETS 10
+		PROPERTIES (
+			"replication_num" = "1",
+			"enable_unique_key_merge_on_write" = "true"
+		)
+       `)
+	if err != nil {
+		return herror.Wrap(err)
+	}
 	return nil
+}
+
+// SaveTableSchema 持久化结构快照及其生效位点（同一位点重复写入由 UNIQUE KEY 幂等合并）。
+func (d *Doris) SaveTableSchema(ctx context.Context, instanceId InstanceId, info TableInfo, pos mysql.Position) error {
+	payload, err := json.Marshal(info)
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	query := "INSERT INTO cdc_record.table_schema (instance_id, db_name, table_name, ddl_file, ddl_pos, schema_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+	if _, err = d.sql.ExecContext(ctx, query, int64(instanceId), string(info.Schema), string(info.Table), pos.Name, uint64(pos.Pos), string(payload)); err != nil {
+		return herror.Wrap(err)
+	}
+	hlog.Info(ctx, "save table schema version: instance=%d %s.%s @ %s:%d", instanceId, info.Schema, info.Table, pos.Name, pos.Pos)
+	return nil
+}
+
+// DeleteTableSchemas 删除指定表全部结构版本（上游 DROP 后调用，避免残留快照被同名重建的表误用）。
+func (d *Doris) DeleteTableSchemas(ctx context.Context, instanceId InstanceId, schema Schema, table Table) error {
+	query := "DELETE FROM cdc_record.table_schema WHERE instance_id = ? AND db_name = ? AND table_name = ?"
+	if _, err := d.sql.ExecContext(ctx, query, int64(instanceId), string(schema), string(table)); err != nil {
+		return herror.Wrap(err)
+	}
+	return nil
+}
+
+// LoadTableSchemas 返回指定实例全部表的结构版本（按生效位点升序），供续传时按位点选取。
+func (d *Doris) LoadTableSchemas(ctx context.Context, instanceId InstanceId) (map[Schema]map[Table][]TableSchemaVersion, error) {
+	query := "SELECT db_name, table_name, ddl_file, ddl_pos, schema_json FROM cdc_record.table_schema WHERE instance_id = ? ORDER BY db_name, table_name, ddl_file, ddl_pos"
+	rows, err := d.sql.QueryContext(ctx, query, int64(instanceId))
+	if err != nil {
+		return nil, herror.Wrap(err)
+	}
+	defer rows.Close()
+
+	ret := make(map[Schema]map[Table][]TableSchemaVersion)
+	for rows.Next() {
+		var db, tbl, file, payload string
+		var pos uint64
+		if err := rows.Scan(&db, &tbl, &file, &pos, &payload); err != nil {
+			return nil, herror.Wrap(err)
+		}
+		var info TableInfo
+		if err := json.Unmarshal([]byte(payload), &info); err != nil {
+			return nil, herror.Wrap(err)
+		}
+		if _, ok := ret[Schema(db)]; !ok {
+			ret[Schema(db)] = make(map[Table][]TableSchemaVersion)
+		}
+		ret[Schema(db)][Table(tbl)] = append(ret[Schema(db)][Table(tbl)], TableSchemaVersion{
+			Schema:  Schema(db),
+			Table:   Table(tbl),
+			DDLFile: file,
+			DDLPos:  uint32(pos),
+			Info:    info,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, herror.Wrap(err)
+	}
+	return ret, nil
 }
 
 // GetPosition 返回指定实例上次成功上传到 Doris 的 binlog 位点（含 GTID），用于进程重启后的断点续传。
