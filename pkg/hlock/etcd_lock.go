@@ -190,7 +190,7 @@ func etcdContext(ctx context.Context, key string) (context.Context, Locker, erro
 	key = "etcd_lock_" + key
 	value := ctx.Value(key)
 	if value != nil {
-		return ctx, value.(*etcdLock), nil
+		return ctx, &EmptyLocker{}, nil
 	}
 
 	lock, err := NewEtcdLock(ctx, key)
