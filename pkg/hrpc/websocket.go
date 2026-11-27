@@ -165,7 +165,7 @@ func (s *webSocket) run() {
 		for {
 			err := s.conn.SetReadDeadline(htime.NowTime().Add(s.pongWait))
 			if err != nil {
-				herror.PrintStack(ctx, err)
+				hlog.Warn(ctx, "set read deadline :%v", err)
 				break
 			}
 
@@ -229,7 +229,7 @@ func (s *webSocket) run() {
 				}
 				err = ws.WriteFrame(s.conn, frame)
 				if err != nil {
-					herror.PrintStack(ctx, err)
+					hlog.Warn(ctx, "write frame :%v", err)
 					return
 				}
 			}

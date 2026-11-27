@@ -9,7 +9,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcache"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hgo"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
@@ -55,7 +54,7 @@ func (d *DBCache) Get(ctx context.Context, key string, table string, out any, ex
 
 	err = json.Unmarshal([]byte(cmd.Val()), out)
 	if err != nil {
-		d.Del(ctx, table)
+		_ = d.Del(ctx, table, nil)
 		hlog.Error(ctx, "Unmarshal Json Error %s , val %s", err.Error(), cmd.Val())
 		return false, nil
 	}
@@ -85,17 +84,31 @@ func (d *DBCache) Set(ctx context.Context, key string, table string, sql string,
 	return nil
 }
 
-func (d *DBCache) Del(ctx context.Context, table string) error {
+func (d *DBCache) Del(ctx context.Context, table string, exec hcache.ExecHandler) error {
 	r, ok := FromContext(ctx)
 	if !ok {
 		return herror.NewError("redis not found in context")
 	}
 
-	hgo.Go(ctx, func(ctx context.Context) error {
-		time.Sleep(time.Second * 1)
-		return d.del(context.Background(), table, r.Get())
-	})
-	return d.del(ctx, table, r.Get())
+	err := d.del(ctx, table, r.Get())
+	if err != nil {
+		return err
+	}
+
+	if exec == nil {
+		return nil
+	}
+
+	err = exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = d.del(ctx, table, r.Get())
+	if err != nil {
+		herror.PrintStack(ctx, err)
+	}
+	return nil
 }
 
 func (d *DBCache) del(ctx context.Context, table string, c *redis.Client) error {

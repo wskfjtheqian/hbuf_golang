@@ -300,7 +300,7 @@ func redisContext(ctx context.Context, key string, options ...RedisLockOption) (
 	key = "locker:" + key
 	value := ctx.Value(key)
 	if value != nil {
-		return ctx, value.(Locker), nil
+		return ctx, &EmptyLocker{}, nil
 	}
 
 	lock, err := NewRedisLock(ctx, key, options...)

@@ -9,12 +9,14 @@ import (
 var NotFound = errors.New("key not found")
 var ExpireAt = errors.New("key expire at")
 
+type ExecHandler func(ctx context.Context) error
+
 type Cache interface {
 	Lock(ctx context.Context, key string) error
 	Unlock(ctx context.Context, key string) error
 	Get(ctx context.Context, key string, group string, out any, expiration time.Duration) (bool, error)
 	Set(ctx context.Context, key string, group string, text string, in any, expiration time.Duration) error
-	Del(ctx context.Context, group string) error
+	Del(ctx context.Context, group string, exec ExecHandler) error
 }
 
 func SaveCache[T any](ctx context.Context, cache Cache, group string, key string, expiration time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
@@ -61,18 +63,10 @@ func DelCache[T any](ctx context.Context, cache Cache, group string, fu func(ctx
 	if cache == nil {
 		return fu(ctx)
 	}
-
 	var ret T
-	err := cache.Del(ctx, group)
-	if err != nil {
-		return ret, err
-	}
-
-	ret, err = fu(ctx)
-	if err != nil {
-		return ret, err
-	}
-
-	_ = cache.Del(ctx, group)
+	_ = cache.Del(ctx, group, func(ctx context.Context) (err error) {
+		ret, err = fu(ctx)
+		return
+	})
 	return ret, nil
 }
