@@ -257,41 +257,45 @@ SQL
 
 ## 5. 每源监控与放行条件
 
-应用可用 `Pipeline.Status()` 查询单次快照，或用 `Pipeline.WatchStatus` 接收状态回调。监控按 `SourceID`、`Generation` 分组，并单独采集消费者实际路由、Doris 查询、文件系统及源 Binlog 指标。确认延迟从源 `COMMIT` 成功到对应事务进入已确认检查点。生产可用已知事务或探针采样计算 p95，仅在具备相应写入负载的窗口核对吞吐。 [状态结构](pipeline_control.go) · [进度结构](delivery_types.go)
+宿主应用用 `monitor.New(serviceCtx)` 建立空的监控控制器，首次调用 `Reload(ctx, cfg)` 加载配置。以 `Snapshot()` 查询全部已配置源、`Status(sourceID)` 查询单源，或用 `WatchStatus` 接收状态回调。宿主负责操作权限、审计和状态传输。监控按 `SourceID`、`Generation` 分组，并单独采集消费者实际路由、Doris 查询、文件系统及源 Binlog 指标。确认延迟从源 `COMMIT` 成功到对应事务进入已确认检查点。生产可用已知事务或探针采样计算 p95，仅在具备相应写入负载的窗口核对吞吐。 [监控 SDK 接入](monitor/README.md)
 
-在获得流水线句柄 `p` 后，可以由应用启动监听。注册后立即收到当前快照，之后每个监听串行接收。回调慢时中间变化会合并到最新快照。`stopped` 或 `failed` 快照送达后监听退出，失败原因在 `s.Err`。取消监听上下文只停止监听。如果 `Manager.SetConfig` 更换了流水线句柄，从 `Manager.Pipeline(sourceID)` 取得新句柄重新监听。
+配置加载成功后，按源调用 `Start(ctx, sourceID)`。监听先收到当前快照，之后为本次取得的句柄串行接收状态。回调慢时中间变化会合并到最新快照。未启动的源发送一次当前快照即返回。`stopped` 或 `failed` 快照送达后监听退出，失败原因在 `s.Error`。取消监听上下文只停止监听。重启或重载换了流水线句柄时，重新调用 `WatchStatus`。
 
 ```go
+controller, err := monitor.New(serviceCtx)
+if err != nil {
+	return err
+}
+if err := controller.Reload(ctx, cfg); err != nil {
+	return err
+}
+if err := controller.Start(ctx, sourceID); err != nil {
+	return err
+}
+
 go func() {
-	err := p.WatchStatus(ctx, func(callbackCtx context.Context, s cdc.PipelineStatus) {
+	err := controller.WatchStatus(serviceCtx, sourceID, func(callbackCtx context.Context, s monitor.SourceStatus) {
 		hlog.Debug(callbackCtx, "CDC source=%s state=%s durable=%d delivered=%d pending_bytes=%d",
-			s.Identity.SourceID, s.State, s.Progress.Durable.Sequence,
-			s.Progress.Delivered.Sequence, s.Progress.PendingBytes)
+			s.ID, s.State, s.Durable.Sequence, s.Delivered.Sequence, s.PendingBytes)
 	})
-	if err != nil && ctx.Err() == nil {
-		hlog.Warn(ctx, "CDC status watch stopped: %v", err)
+	if err != nil && serviceCtx.Err() == nil {
+		hlog.Warn(serviceCtx, "CDC status watch stopped: %v", err)
 	}
 }()
 ```
 
 | 指标或状态 | 观察与处置 |
 | --- | --- |
-| `State`、`Since`、`Reason`、`Err`、`PendingDDL` | 记录状态及持续时间。`failed`、计划外暂停、未处理审批或身份错误时立即停止该源发布。`Since` 表示状态切换时间。 |
-| `ReadCursor`、`Progress.Durable`、`Progress.Delivered`、`InFlight` | 对比采集、持久和已确认的边界。有源事务写入时，已确认位点长期不前进即查交付。没有新写入时结合探针判断。序号差以有序记录计量，业务行数从事务或批次另采。跨文件或跨成员按身份、文件序列或 GTID 核对位点。 |
-| `Progress.PendingBytes`、`Backpressured`、卷可用块及 inode | 建议以逻辑预算的 80% 为告警起点。持续背压、可用空间接近总预留或估算 binlog 即将清除所需位置时停止新发布并升级。剩余空间放不下一整笔时，未到 32 MiB 也可能背压。 |
+| `State`、`Since`、`Reason`、`Error`、`PendingDDL` | 记录状态及持续时间。`failed`、计划外暂停、未处理审批或身份错误时立即停止该源发布。`Since` 表示状态切换时间。 |
+| `ReadCursor`、`Durable`、`Delivered`、`InFlight` | 对比采集、持久和已确认的边界。有源事务写入时，已确认位点长期不前进即查交付。没有新写入时结合探针判断。序号差以有序记录计量，业务行数从事务或批次另采。跨文件或跨成员按身份、文件序列或 GTID 核对位点。 |
+| `PendingBytes`、`Backpressured`、卷可用块及 inode | 建议以逻辑预算的 80% 为告警起点。持续背压、可用空间接近总预留或估算 binlog 即将清除所需位置时停止新发布并升级。剩余空间放不下一整笔时，未到 32 MiB 也可能背压。 |
 | 源日志最早可续订水位和预计保留时长 | 源实例、备选主库分别核对。预计可用时间内无法追平时，立即进入事故处置。最老积压事务年龄需由应用或监控系统补采。 |
 | `DeliveryError`、Doris 实际业务查询、Stream Load 审计及收据 | 目标短暂不可达时观察重试及积压。过滤行、目标不匹配、标签冲突或审计无法确认时保留现场，禁止快进位点。 |
 | `CaptureError` | 源端瞬时传输错误触发退避并从已落盘位点续订。字段清空后确认新事务已交付。持续故障时核对源身份和日志保留，记录重连时长。 |
 | 源到已确认吞吐、p95、重启追平 | 使用第 1 节门槛及正式窗口。Doris 计时从启动命令发出开始，CDC 计时从新进程启动开始，都以追到计划水位且积压清空为通过。 |
 | 消费者 `Database`、`Revision`、`Watermark`、读错误率和样本 | 每次变更后核对目标和修订，检查真实查询结果和其他源的路由。重启后应读回相同修订。所有数据差异按故障处理。 |
 
-独立控制台设置 `CDC_MONITOR_RELOAD_TOKEN` 后可用 `POST /api/cdc/reload` 重读启动时指定的 YAML。令牌至少 32 字节，使用 `Authorization: Bearer`。在本机权限受限的 curl 配置文件中保存请求头。重载通过 `Manager.SetConfig` 交接运行源，新增源保持待启动。同代次候选配置失败时，读回原源状态和检查点复核恢复。
-
-```bash
-curl --fail-with-body --config "$CDC_RELOAD_CURL_CONFIG" \
-  --request POST http://127.0.0.1:8095/api/cdc/reload
-curl --fail http://127.0.0.1:8095/api/cdc/sources
-```
+宿主收到已授权的重载请求后，加载并校验新 YAML，再调用 `controller.Reload(ctx, cfg)` 交接运行中的源。用 `controller.Snapshot()` 核对源清单，再逐源读取 `controller.Status(sourceID)`。新增源在通过上线前检查后单独启动。同代次候选配置失败时，读回原源状态和检查点，确认原配置续传后再提交更正的配置。处理待审批 DDL 时，从当前 `PendingDDL` 取 ID，调用 `controller.ApproveDDL(ctx, sourceID, id)`，然后核对屏障后检查点。
 
 ## 6. 回退消费者路由与恢复 CDC
 
