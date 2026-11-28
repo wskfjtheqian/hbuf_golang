@@ -36,7 +36,7 @@ type tableLayout struct {
 }
 
 // buildTableLayouts 为所选源表建立 Doris 列类型和行编码布局。
-func buildTableLayouts(config PipelineConfig, tables []mysqlsource.Table) ([]tableLayout, error) {
+func buildTableLayouts(config pipelineConfig, tables []mysqlsource.Table) ([]tableLayout, error) {
 	layouts := make([]tableLayout, 0, len(tables))
 	for _, table := range tables {
 		layout, err := newTableLayout(config.TargetDatabase, table)

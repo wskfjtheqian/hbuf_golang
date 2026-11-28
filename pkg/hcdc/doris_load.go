@@ -23,6 +23,8 @@ import (
 // 原请求意图会保留，供后续核对。
 var ErrDorisLoadOutcomeUnknown = herror.NewError("Doris load outcome is unknown")
 
+var errSnapshotReplayAllowed = herror.NewError("Doris permits retry of the original sealed snapshot batch")
+
 const (
 	dorisDeleteColumn          = "__cdc_delete"
 	dorisLoadRecheckTimeout    = 15 * time.Second
@@ -190,6 +192,28 @@ func dorisConfirmed(batch LoadBatch) LoadConfirmation {
 // ConfirmLoad 根据持久化回执确认对应的导入。
 // 先前的 PUT 结果不明时，查询 FE 事务状态和 BE 导入审计。
 func (d *DorisTarget) ConfirmLoad(ctx context.Context, batch LoadBatch) (LoadConfirmation, error) {
+	return d.confirmLoad(ctx, batch, false)
+}
+
+// recoverableSnapshotTarget 只用于已密封、增量尚未开始的快照。
+type recoverableSnapshotTarget struct{ *DorisTarget }
+
+// ConfirmLoad 核对旧回执和 Doris 审计。需要补发时沿用已登记的原批次和 Label。
+func (d recoverableSnapshotTarget) ConfirmLoad(ctx context.Context, batch LoadBatch) (LoadConfirmation, error) {
+	confirmation, err := d.confirmLoad(ctx, batch, true)
+	if errors.Is(err, errSnapshotReplayAllowed) {
+		return d.SubmitLoad(ctx, batch)
+	}
+	return confirmation, err
+}
+
+// SubmitLoad 允许重发已密封快照的原批次，不修改已登记的请求意图。
+func (d recoverableSnapshotTarget) SubmitLoad(ctx context.Context, batch LoadBatch) (LoadConfirmation, error) {
+	return d.submitLoad(ctx, batch, true)
+}
+
+// confirmLoad 核对持久回执；只有密封快照可以得到内部补发许可。
+func (d *DorisTarget) confirmLoad(ctx context.Context, batch LoadBatch, recoverableSnapshot bool) (LoadConfirmation, error) {
 	if err := validateDorisBatch(batch); err != nil {
 		return LoadConfirmation{}, err
 	}
@@ -204,12 +228,17 @@ func (d *DorisTarget) ConfirmLoad(ctx context.Context, batch LoadBatch) (LoadCon
 	if receipt.Verified {
 		return dorisConfirmed(batch), nil
 	}
-	return d.resolveDorisLoad(ctx, batch)
+	return d.resolveDorisLoad(ctx, batch, recoverableSnapshot)
 }
 
 // SubmitLoad 在发起 Stream Load 之前登记不可变的导入意图。
 // 已登记意图的结果不明时，先确认原请求结果再决定后续处理。
 func (d *DorisTarget) SubmitLoad(ctx context.Context, batch LoadBatch) (LoadConfirmation, error) {
+	return d.submitLoad(ctx, batch, false)
+}
+
+// submitLoad 在发送前核对持久回执和当前导入证据。
+func (d *DorisTarget) submitLoad(ctx context.Context, batch LoadBatch, recoverableSnapshot bool) (LoadConfirmation, error) {
 	if err := validateDorisBatch(batch); err != nil {
 		return LoadConfirmation{}, err
 	}
@@ -221,7 +250,10 @@ func (d *DorisTarget) SubmitLoad(ctx context.Context, batch LoadBatch) (LoadConf
 		if existing.Verified {
 			return dorisConfirmed(batch), nil
 		}
-		return d.resolveDorisLoad(ctx, batch)
+		confirmation, err := d.resolveDorisLoad(ctx, batch, recoverableSnapshot)
+		if !errors.Is(err, errSnapshotReplayAllowed) {
+			return confirmation, err
+		}
 	}
 
 	database, table, _ := splitDorisTable(batch.TargetTable)
@@ -249,11 +281,13 @@ func (d *DorisTarget) SubmitLoad(ctx context.Context, batch LoadBatch) (LoadConf
 	request.Header.Set("strict_mode", "true")
 	request.Header.Set("max_filter_ratio", "0")
 	request.Header.Set("group_commit", "off_mode")
-	if err := d.trackLoadReceipt(ctx, batch.Label); err != nil {
-		return LoadConfirmation{}, err
-	}
-	if err := d.persistReceipt(ctx, batch, false); err != nil {
-		return LoadConfirmation{}, err
+	if existing == nil {
+		if err := d.trackLoadReceipt(ctx, batch.Label); err != nil {
+			return LoadConfirmation{}, err
+		}
+		if err := d.persistReceipt(ctx, batch, false); err != nil {
+			return LoadConfirmation{}, err
+		}
 	}
 
 	hlog.Debug(ctx, "Doris Stream Load table=%s load_label=%s expected_rows=%d", batch.TargetTable, batch.Label, batch.RowCount)
@@ -296,7 +330,11 @@ func (d *DorisTarget) SubmitLoad(ctx context.Context, batch LoadBatch) (LoadConf
 		}
 		return dorisConfirmed(batch), nil
 	case "Publish Timeout", "Label Already Exists":
-		return d.resolveDorisLoad(ctx, batch)
+		confirmation, err := d.resolveDorisLoad(ctx, batch, recoverableSnapshot)
+		if errors.Is(err, errSnapshotReplayAllowed) {
+			return LoadConfirmation{}, ErrLoadPending
+		}
+		return confirmation, err
 	case "":
 		return LoadConfirmation{}, errors.Join(ErrLoadPending, ErrDorisLoadOutcomeUnknown, herror.NewError("Doris Stream Load response omitted its status"))
 	default:
@@ -357,7 +395,7 @@ func (d *DorisTarget) verifyHTTPAccess(ctx context.Context, database string) err
 }
 
 // resolveDorisLoad 在原 Label 的持久截止时间内重查导入证据。截止后每次显式恢复只核对一次。
-func (d *DorisTarget) resolveDorisLoad(ctx context.Context, batch LoadBatch) (LoadConfirmation, error) {
+func (d *DorisTarget) resolveDorisLoad(ctx context.Context, batch LoadBatch, recoverableSnapshot bool) (LoadConfirmation, error) {
 	database, table, _ := splitDorisTable(batch.TargetTable)
 	lookupCtx, cancelLookup := context.WithTimeout(ctx, dorisLoadRecheckTimeout)
 	deadline, err := d.dorisLoadRecheckDeadline(lookupCtx, batch.Label)
@@ -372,7 +410,7 @@ func (d *DorisTarget) resolveDorisLoad(ctx context.Context, batch LoadBatch) (Lo
 	probeCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	for {
-		confirmation, unresolved, err := d.probeDorisLoad(probeCtx, database, table, batch)
+		confirmation, unresolved, err := d.probeDorisLoad(probeCtx, database, table, batch, recoverableSnapshot)
 		if err != nil && probeCtx.Err() != nil && errors.Is(err, probeCtx.Err()) {
 			return LoadConfirmation{}, dorisLoadRecheckError(ctx, batch.Label)
 		}
@@ -433,7 +471,7 @@ func (d *DorisTarget) dorisLoadRecheckDeadline(ctx context.Context, label string
 }
 
 // probeDorisLoad 核对一次原 Label。只有 FE 状态未知或审计尚未出现时继续等待。
-func (d *DorisTarget) probeDorisLoad(ctx context.Context, database, table string, batch LoadBatch) (LoadConfirmation, bool, error) {
+func (d *DorisTarget) probeDorisLoad(ctx context.Context, database, table string, batch LoadBatch, recoverableSnapshot bool) (LoadConfirmation, bool, error) {
 	state, err := d.loadState(ctx, database, batch.Label)
 	if err != nil {
 		return LoadConfirmation{}, false, err
@@ -442,7 +480,7 @@ func (d *DorisTarget) probeDorisLoad(ctx context.Context, database, table string
 	case "PREPARE", "PRECOMMITTED", "COMMITTED":
 		return LoadConfirmation{State: LoadPending, Label: batch.Label, Checksum: batch.Checksum}, false, nil
 	case "VISIBLE":
-		found, err := d.auditDorisLoad(ctx, database, table, batch)
+		found, err := d.auditDorisLoad(ctx, database, table, batch, recoverableSnapshot)
 		if err != nil || !found {
 			return LoadConfirmation{}, !found && err == nil, err
 		}
@@ -453,11 +491,19 @@ func (d *DorisTarget) probeDorisLoad(ctx context.Context, database, table string
 			return LoadConfirmation{}, false, err
 		}
 		return dorisConfirmed(batch), false, nil
-	case "ABORTED":
-		return LoadConfirmation{}, false, herror.NewError("Doris load was aborted; inspect its audit before recovery")
-	case "UNKNOWN":
-		// UNKNOWN 可能表示事务从未发起，也可能表示事务 Label 已过期。
-		_, err := d.auditDorisLoad(ctx, database, table, batch)
+	case "UNKNOWN", "ABORTED":
+		if state == "ABORTED" && !recoverableSnapshot {
+			return LoadConfirmation{}, false, herror.NewError("Doris load was aborted; inspect its audit before recovery")
+		}
+		found, err := d.auditDorisLoad(ctx, database, table, batch, recoverableSnapshot)
+		if err == nil && recoverableSnapshot && !found {
+			// UNKNOWN 也可能表示 Label 已过期。密封快照使用同一个 UNIQUE KEY 原始行集，
+			// 全量确认之前没有增量写入；即使 Doris 已回收原 Label，补发也不会覆盖更新后的值。
+			return LoadConfirmation{}, false, errSnapshotReplayAllowed
+		}
+		if err == nil && state == "ABORTED" {
+			return LoadConfirmation{}, false, herror.NewError("Doris aborted load conflicts with its success audit")
+		}
 		return LoadConfirmation{}, err == nil, err
 	default:
 		return LoadConfirmation{}, false, herror.Wrap(fmt.Errorf("unexpected Doris load state %q: %w", state, error(ErrDorisLoadOutcomeUnknown)))
@@ -521,7 +567,7 @@ func (d *DorisTarget) requestJSON(request *http.Request, result any) error {
 }
 
 // auditDorisLoad 在 BE 导入审计中查找并校验与原批次匹配的记录。
-func (d *DorisTarget) auditDorisLoad(ctx context.Context, database, table string, batch LoadBatch) (bool, error) {
+func (d *DorisTarget) auditDorisLoad(ctx context.Context, database, table string, batch LoadBatch, allowFailedAttempts bool) (bool, error) {
 	query := "SHOW STREAM LOAD FROM " + quoteDoris(database) + " WHERE LABEL = '" + batch.Label + "'"
 	rows, err := d.db.QueryContext(ctx, query)
 	if err != nil {
@@ -548,9 +594,14 @@ func (d *DorisTarget) auditDorisLoad(ctx context.Context, database, table string
 		}
 		status := fields["status"]
 		expected := strconv.FormatUint(batch.RowCount, 10)
-		if fields["label"] != batch.Label || !strings.EqualFold(fields["table"], table) ||
+		matches := fields["label"] == batch.Label && strings.EqualFold(fields["table"], table) && fields["comment"] == batch.Checksum
+		if matches && allowFailedAttempts && strings.EqualFold(status, "Fail") {
+			// 同一 Label 的失败尝试不证明批次已写入；后续成功尝试仍须严格核对行数。
+			continue
+		}
+		if !matches ||
 			(!strings.EqualFold(status, "Success") && !strings.EqualFold(status, "Publish Timeout")) ||
-			fields["comment"] != batch.Checksum || fields["loadedrows"] != expected || fields["totalrows"] != expected ||
+			fields["loadedrows"] != expected || fields["totalrows"] != expected ||
 			fields["filteredrows"] != "0" || fields["unselectedrows"] != "0" {
 			return false, herror.NewError(fmt.Sprintf("Doris Stream Load audit did not match load_label=%s table=%q status=%q expected_rows=%d total_rows=%q loaded_rows=%q filtered_rows=%q unselected_rows=%q",
 				batch.Label, fields["table"], status, batch.RowCount, fields["totalrows"], fields["loadedrows"], fields["filteredrows"], fields["unselectedrows"]))

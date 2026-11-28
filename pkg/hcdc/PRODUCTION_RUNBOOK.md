@@ -1,43 +1,42 @@
 # CDC 生产上线与回退操作手册
 
-适用于以 Go SDK 部署的 `pkg/cdc`，源为 MySQL 或 MariaDB，目标为 Doris。按 `SourceID` 逐个发布消费者读路由。每次变更由一名发布负责人执行，数据库值班负责写入围栏和主库隔离，应用值班负责消费验证。开始前登记源、代次、两个读目标、当前路由修订、各位点、停写期限、观察窗口及回退负责人。2026-11-27 最终验收使用 MySQL 8.4.13、MariaDB 10.6.28 和单节点 Doris 3.0.8。 [最终验收](REFACTOR_DESIGN.md#612-最终发布验收)
+适用于以 Go SDK 部署的 `pkg/hcdc`，源为 MySQL 或 MariaDB，目标为 Doris。按 `SourceID` 逐个发布消费者读路由。每次变更由一名发布负责人执行，数据库值班负责写入围栏和主库隔离，应用值班负责消费验证。开始前登记源、代次、两个读目标、当前路由修订、各位点、停写期限、观察窗口及回退负责人。2026-11-27 最终验收使用 MySQL 8.4.13、MariaDB 10.6.28 和单节点 Doris 3.0.8。 [最终验收](REFACTOR_DESIGN.md#612-最终发布验收)
 
 ## 1. 每源配置与容量预算
 
+SDK 宿主的 YAML 在 `CDC.Doris` 配置共享目标集群，在 `CDC.Canals` 列出 MySQL 或 MariaDB 源实例及选库选表规则。每个源库使用 `SchemaPrefix` 与源库名拼接得到 Doris 目标库，首次启动自动创建目标库和选中的表。上线前登记发现后的 `SourceID`、目标库和持久目录，并核对同一 Doris 集群上的目标库名唯一。 [多源 YAML 和启动步骤](monitor/README.md#配置-doris-和-canals)
+
 | 配置 | MySQL 示例 | MariaDB 示例 | 核对规则 |
 | --- | --- | --- | --- |
-| `Identity` 的 `PipelineID / SourceID / Generation` | `orders_cdc / orders_mysql / g20261127_01` | `payments_cdc / payments_maria / g20261127_01` | 全部登记。同一代次重启或 GTID 切主保持原值。 |
-| `Source.Flavor / SourceIdentity` | `mysql / orders_primary_group` | `mariadb / payments_primary_group` | `SourceIdentity` 是稳定的复制拓扑名。初始化时用 `Cursor.SourceIdentity` 作为 `ShadowRoute.SourceIdentity`。注册表迁移后保留这个初始配置，当前物理成员从已发布水位读取。 |
-| `Source.Address / ServerID` | `orders-db.internal:3306 / 72001` | `payments-db.internal:3306 / 72002` | 使用已核验物理节点的地址，复制客户端 ID 在拓扑内唯一，并与数据库成员 `server_id` 区分。 |
-| `Source.Database / Tables` | `orders / events` | `payments / events` | 显式列出所有同步表。要求 InnoDB 和稳定主键，记录键列顺序、投影及类型。 |
-| `Directory` | `/var/lib/cdc/orders_mysql/g20261127_01` | `/var/lib/cdc/payments_maria/g20261127_01` | 持久卷，运行账号可读写。Doris 写入权与原卷、绝对路径和代次绑定。按第 2.1 节交接。 |
-| `TargetDatabase / Doris.ControlDatabase` | `orders_shadow_g01 / orders_cdc_g01` | `payments_shadow_g01 / payments_cdc_g01` | 旧库、影子库与 CDC 控制库隔离。重建使用新代次、空影子库、独立控制库与新目录。 |
-| `Doris.SQLDSN / FrontendURL / StreamLoadURL` | 专用 SQL、FE HTTP 和可直达的 BE HTTP | 同左 | 三个地址必须属于同一实际集群。将凭据注入应用，`Doris.Username`、`Password` 可单独设置。SDK 禁止 HTTP 跳转。 |
-| `Source.GTIDAutoPosition` | 首次快照前确定 | 首次快照前确定 | 默认物理续订。启用需要该代次从快照起具备完整 GTID 基线。物理模式保留同一物理成员及地址，MariaDB 的物理身份含地址。 |
-| `SnapshotBatchRows / MaxPendingBytes / Doris.HTTPTimeout` | `500 / 32*1024*1024 / 60*time.Second` | 同左 | 显式配置复现验收预算。若将 `MaxPendingBytes` 留零，SDK 默认使用 256 MiB。 |
-| `MaxTransactionBytes` | `32*1024*1024` | 同左 | 单笔事务的准备预算，默认沿用 `MaxPendingBytes`。按最大真实事务和暂存空间校准。 |
-| `Doris.ControlRetentionRecords` | `4096` | `4096` | 每个流保留的最近已确认记录数。按证据保留窗口和源峰值记录率配置。 |
-| `Doris.LoadRecheckTimeout` | `15s` | `15s` | 导入结果未明时核对原 Label 的预算。按实际审计延迟配置，最大 `10m`。首次核对时持久化截止时间。 |
-| `Doris.DDLJobTimeout` | `1h` | `1h` | 已识别异步 DDL 作业的跟踪预算，首次绑定作业时持久化。单次 SQL 核对期限为 30 秒。 |
-| `ZeroDatePolicy` | `reject` | `reject` | 默认拒绝零日期。开启 `epoch` 前核对时间主键中无真实的 `1970-01-01` 值，切换策略时新建代次、缓冲目录和目标库。 [零日期配置与统计](REFACTOR_DESIGN.md#配置动态更新) |
+| `Canals[].InstanceId / Generation` | `20001 / g20261127_01` | `20002 / g20261127_01` | 分别生成 `canal-20001-orders`、`canal-20002-payments`。重启或 GTID 切主保持原值。 |
+| `Canals[].Flavor / Host / ServerID` | `mysql / orders-db.internal:3306 / 72001` | `mariadb / payments-db.internal:3306 / 72002` | 使用已核验物理节点的地址，确保复制客户端 ID 在拓扑内唯一。 |
+| `Canals[].Schema / IncludeDBs / IncludeTables` | `orders / ['^orders$'] / ['^events$']` | `payments / ['^payments$'] / ['^events$']` | `Schema` 为发现连接的默认库，规则决定实际同步范围。选表须使用 InnoDB 并有稳定主键。 |
+| `Canals[].LogDir` | `/var/lib/cdc` | 同左 | 持久目录按 `LogDir/<SourceID>/<Generation>` 派生。写入权与原卷、绝对路径和代次绑定。 |
+| `Canals[].GTIDAutoPosition` | `true` | `true` | 从首次快照建立完整 GTID 基线，逻辑身份使用生成的 `SourceID`。默认按物理位置续订。 |
+| `Canals[].ZeroDatePolicy` | `reject` | `reject` | 默认拒绝零日期。开启 `epoch` 前核对时间主键的 `1970-01-01` 值。切换策略使用新代次和新目标库。 |
+| `Doris.Host / FrontendURL / LoadURL` | SQL、FE HTTP 和可直达的 BE HTTP | 全部源共享 | 三个地址属于同一集群，从应用注入 Doris 凭据。 |
+| `Doris.SchemaPrefix` | `shadow_g01_` | 全部源共享 | 目标库为 `shadow_g01_orders` 和 `shadow_g01_payments`。跨实例的同名源库可用 `shadow_g01_{InstanceId}_` 分配独立目标库。检查点按流存放于共享控制库 `cdc_control`。 |
+| `CDC.AutoDiscoverInterval` | `30s` | 全部源共享 | 监控按此间隔发现新库，已启动的库按同一间隔发现新表。省略或填 `0s` 时使用 30 秒。上线前核对选库选表规则覆盖预期自动接入范围。 |
 
-路由元数据库由独立的权威 MySQL 或 MariaDB 主库提供。初始化账号可建表和插入，发布账号需要 `SELECT`、`UPDATE`，消费者账号仅需 `SELECT`。源端快照会短暂取得全局读锁，初次快照期间冻结选表 DDL。源适配器的 `MySQLConfig` 没有 TLS 配置字段。部署要求加密时，先验证加密传输方案能同时覆盖 SQL 和 binlog 订阅，且保持物理节点绑定。 [源配置](pipeline.go) · [Doris 配置](doris.go) · [路由存储](shadow_route_store.go)
+路由元数据库由独立的权威 MySQL 或 MariaDB 主库提供。初始化账号可建表和插入，发布账号需要 `SELECT`、`UPDATE`，消费者账号仅需 `SELECT`。初始化路由时，从影子已确认检查点的 `Cursor.SourceIdentity` 读取物理成员标识。源端快照会短暂取得全局读锁，初次快照期间冻结选表 DDL。部署要求加密时，先验证加密传输能覆盖 SQL 和 binlog 订阅，且保持物理节点绑定。 [路由存储](shadow_route_store.go)
 
 | 每源指标 | 上线门槛 | MySQL 最终实测 | MariaDB 最终实测 |
 | --- | --- | --- | --- |
 | 常规行，约 480 B | ≥ 350 次行操作/s，p95 ≤ 500 ms | 400.1/s，165 ms | 400.1/s，198 ms |
 | 宽行，4–8 KiB | ≥ 200 次行操作/s，p95 ≤ 1 s | 250.6/s，258 ms | 250.8/s，388 ms |
-| 逻辑积压和缓冲盘 | 32 MiB 逻辑限额，盘空间按下述暂存预算 | 历史目录文件长 34,423,581 B | 历史目录文件长 34,421,291 B |
+| 逻辑积压和缓冲盘 | 每条流水线 256 MiB 逻辑上限，盘空间按下述暂存预算 | 历史目录文件长 34,423,581 B | 历史目录文件长 34,421,291 B |
 | Doris 启动至追平 | ≤ 90 s | 48.810 s | 48.705 s |
 | CDC 异常退出后重新启动至追平 | ≤ 30 s | 5.140 s | 5.205 s |
 
-以上吞吐按行操作计数，更新、插入、删除各计一次。历史停机验收使用 32 MiB 逻辑预算时，每源落盘 31 笔，另 44 笔留在源 Binlog。宽行样本约 2.54 MiB/s，每源 30 秒全留本地约需 76 MiB 逻辑空间。新版按 `P = MaxPendingBytes`、`T = MaxTransactionBytes` 为每源预留 `2P + max(2T, T+P, 2P)`，再另计目录元数据、结构历史和文件系统分配余量。两项均为 32 MiB 时基础预留是 128 MiB/源。旧 `hcdc`、临时代次、日志、源 Binlog 和 Doris 存储另算。用实际峰值、最大事务和并行全量测出磁盘与堆峰值后再调节生产预留。
+以上吞吐按行操作计数，更新、插入、删除各计一次。历史停机验收使用 32 MiB 逻辑预算时，每源落盘 31 笔，另 44 笔留在源 Binlog。宽行样本约 2.54 MiB/s，每源 30 秒全留本地约需 76 MiB 逻辑空间。以 `P` 表示积压上限、`T` 表示单笔事务准备上限，按每条流水线 `2P + max(2T, T+P, 2P)` 预留容量，再另计目录元数据、结构历史和文件系统分配余量。当前两项均为 256 MiB，基础预留为每条流水线 1 GiB。按库流水线和自动接入的单表子流总数合计，每条子流使用独立的复制连接。旧 `hcdc`、临时代次、日志、源 Binlog 和 Doris 存储另算。用实际峰值、最大事务和并行全量测出磁盘与堆峰值后再调节生产预留。
 
 为生产记录实际峰值编码字节率、最大事务和源实例全量 binlog 字节率。按峰值乘以目标缓冲秒数估算本地容量，另计最大单笔及文件系统余量。binlog 保留目标至少覆盖从最早可能未落盘位点起算的最长快照或暂停时长、故障检测、隔离处置、目标恢复和追平。验收中的 30 秒停机加 90 秒追平预算只为该场景提供 120 秒下界，另计停止耗时及人工处置。用生产负载验证时间和空间两种保留限制，包含备选主库。 [负载模型与预算](REFACTOR_DESIGN.md#68-生产模拟负载doris-停机与进程恢复)
 
+在增量缓冲预算之外，为所有并行初始化的库和单表子流预留完整编码快照的磁盘空间，包括首次加载配置时已存在的库。按实测编码大小合计 `snapshot-batches` 的峰值，再计文件系统余量。`MaxPendingBytes` 约束增量队列。每条流完成序号 `0` 基线校验及本地完成标记后回收封存批次。Binlog 保留窗口需要覆盖扫描、导入、故障恢复及追平。 [快照设计](REFACTOR_DESIGN.md#41-首次全量和切换增量)
+
 ## 2. 上线前检查
 
-以下 Bash 命令使用 `mysql` 或 `mariadb` 客户端。`${SRC_CNF}`、`${DORIS_CNF}`、`${ROUTE_CNF}` 指向权限受限的客户端选项文件，例如 `~/.config/cdc/orders-source.cnf`，在 `[client]` 中配置对应的 host、port、user、password 和要求的 TLS 参数。`${SPOOL}` 指向该源的持久目录。SQL 示例用第一节的库名与表名，改成变更单中登记的值后逐源执行。
+以下 Bash 命令使用 `mysql` 或 `mariadb` 客户端。`${SRC_CNF}`、`${DORIS_CNF}`、`${ROUTE_CNF}` 指向权限受限的客户端选项文件，例如 `~/.config/cdc/orders-source.cnf`，在 `[client]` 中配置对应的 host、port、user、password 和要求的 TLS 参数。`${SPOOL}` 指向该源的持久目录。SQL 示例使用第一节的库名与表名，改成变更单中登记的值后逐源执行。
 
 ```bash
 mysql --defaults-extra-file="$SRC_CNF" --protocol=TCP <<'SQL'
@@ -69,11 +68,11 @@ du -sm "$SPOOL"
 mysql --defaults-extra-file="$DORIS_CNF" --protocol=TCP <<'SQL'
 SHOW BACKENDS;
 SHOW FRONTEND CONFIG LIKE 'fetch_stream_load_record_interval_second';
-SHOW CREATE TABLE orders_shadow_g01.events;
+SHOW CREATE TABLE shadow_g01_orders.events;
 SQL
 ```
 
-首次建表前先执行 `SHOW BACKENDS` 和 FE 检查，`SHOW CREATE TABLE` 在建表后执行。确认目标 `UNIQUE KEY`、Merge-on-Write、列定义、主键和期望的副本策略。SDK 自动建表使用单副本，包含业务表与控制表，配置中没有副本数选项。需要多副本时，由 DBA 落实实际建表和升级策略，并在预发核对所有自动创建路径所用副本数，包括按需创建的 DDL 收据表。写入账号须能创建、读取和写入业务与控制表、应用批准的 DDL，以及查询导入事务和审计。BE 开启 `enable_stream_load_record=true`。FE 的审计采集延时应满足 `Doris.LoadRecheckTimeout`，默认 15 秒，验收用采集间隔为 5 秒。标签及审计保留覆盖最长故障和人工处置窗口。 [Doris 导入审计](https://doris.apache.org/docs/3.x/sql-manual/sql-statements/data-modification/load-and-export/SHOW-STREAM-LOAD/) · [验收配置](docker-compose.yml)
+首次建表前先执行 `SHOW BACKENDS` 和 FE 检查，`SHOW CREATE TABLE` 在建表后执行。确认目标 `UNIQUE KEY`、Merge-on-Write、列定义、主键和期望的副本策略。SDK 自动建表使用单副本，包含业务表与控制表，配置中没有副本数选项。需要多副本时，由 DBA 落实实际建表和升级策略，并在预发核对所有自动创建路径所用副本数，包括按需创建的 DDL 收据表。写入账号须能创建业务库和控制库，创建、读取和写入其中的表、应用批准的 DDL，以及查询导入事务和审计。BE 开启 `enable_stream_load_record=true`。FE 的审计采集延时应在 15 秒导入核对期限内，验收用采集间隔为 5 秒。标签及审计保留覆盖最长故障和人工处置窗口。 [Doris 导入审计](https://doris.apache.org/docs/3.x/sql-manual/sql-statements/data-modification/load-and-export/SHOW-STREAM-LOAD/) · [验收配置](docker-compose.yml)
 
 用同一集群上的隔离演练库确认首条实际 Stream Load，记录返回的 label。随后用该 label 验证 FE 状态与 SQL 一致。`DORIS_FE` 是 FE HTTP(S) 基址，`DORIS_NETRC` 指向权限受限的 curl 凭据文件。只查询可信的已确认 label。
 
@@ -89,94 +88,95 @@ mysql --defaults-extra-file="$DORIS_CNF" --protocol=TCP -e \
    SHOW STREAM LOAD FROM $DORIS_DB WHERE LABEL = '$LABEL';"
 ```
 
-预期 FE 返回 `code=0`、`data=VISIBLE`，SQL 事务为相同 label 且可见。审计中的库、表、批次校验和及行数与提交记录一致，`FilteredRows` 和 `UnselectedRows` 均为 0。`UNKNOWN`、审计缺失或收据冲突时停在原检查点，保留原 label 与凭据之外的证据，由值班核对。 [恢复实现](doris_load.go)
+预期 FE 返回 `code=0`、`data=VISIBLE`，SQL 事务为相同 label 且可见。审计中的库、表、批次校验和及行数与提交记录一致，`FilteredRows` 和 `UnselectedRows` 均为 0。增量导入遇到 `UNKNOWN`、审计缺失或收据冲突时停在原检查点，保留原 label 与凭据之外的证据，由值班核对。已封存的首次快照按第 2.1 节恢复。 [恢复实现](doris_load.go)
 
 ### 2.1 写入所有权、容量和恢复检查
 
 - **Doris 写入所有权**。SDK 在 `cdc_writer_registry` 登记目标库和控制流的归属，读回原卷凭证后才允许流水线初始化或写入。生产账号需能创建并读取本注册库的所有权视图，运维账号管理注销权限。升级前停止同目标的旧版本写者。相同代次重启复用原卷和绝对路径。其他卷、代次或连接别名启动时仍会在同一 Doris 集群争用目标库声明。确需迁走原卷或注销时，先停止并隔离原写者，确认已接纳的 Stream Load、DDL 和控制写入都已有终态，再由发布负责人处置原声明。原缓冲的在线备份及副本不得作为第二份可写卷启动。 [所有权实现](doris_ownership.go)
-- **启动快照恢复**。全量批次全部确认后，SDK 写入绑定原 Doris 的快照证据，再发布本地准备记录、Doris 序号 `0` 基线和本地完成记录。晚期崩溃可用原卷补确认，无需重扫。扫描中断且缺少准备证据，或者原目标和保存的证据不匹配时，保留原目录，按新代次使用空影子库。 [快照提交](pipeline.go)
-- **事务和控制库容量**。上线前测单笔事务的暂存文件及待交付编码大小，两者分别受 `MaxTransactionBytes` 和 `MaxPendingBytes` 约束。为事务暂存、排序和交付文件共存预留物理空间。超过单笔预算时记录错误和原游标，调整预算后用原代次恢复。Doris 周期性清理老检查点及可核验归属的已确认回执，保留快照基线、最近检查点和恢复引用的结构版本。旧版本缺少归属的回执保留供人工核对。需要长期审计时应在保留窗口内归档。 [交付](delivery.go) · [控制表保留](doris_retention.go)
+- **库流水线的首次快照恢复**。首次加载时已存在的库、随后自动发现的库及 `Manager.SetConfig` 启动的库，建立新基线时均使用封存快照。恢复时使用原卷、原配置、同一代次、原 Doris SQL、FE 和 BE 地址，宿主沿用 `Reload`、`Start` 或 `Manager.SetConfig` 的启动策略。SDK 读取首次启动时的持久标志和表清单。封存前退出会重新扫描该清单，封存后按原 Label 核对或补发批次，无需清库或清表。所有表共用一个一致性视图和 Binlog 位点，逐表核对行数后发布该库共享的序号 `0` 基线，空表同样参加核对。检查该库 `State`、`Error`、`Delivered`，并分别向该库和其他库写入探针验证各自水位。 [快照封存与恢复](staged_bootstrap.go) · [监控接入](monitor/README.md#首次全量与恢复)
+- **旧版快照兼容**。旧版已完成的基线按原检查点续传。有有效准备证据的旧版快照可用原卷补确认。旧版全量已部分导入且缺少快照恢复证据时，保留原库表、回执和缓冲卷，使用新代次、空影子库和新缓冲目录重建。 [快照提交](pipeline.go)
+- **自动接入表快照恢复**。重启时使用原卷、同一代次及原 Doris SQL、FE 和 BE 地址。若崩溃发生在封存前，SDK 回收待发送的本地批次并重新扫描。若已封存，SDK 核对目标表、原 Label、回执和事务状态。已确认批次直接沿用回执，缺失或已中止且无证据冲突的批次按原内容补发，无需手动清表。核对目标行数后确认序号 `0` 基线，回收批次，再从原封存位点订阅增量。用 `DiscoveredTables` 核对对应表的 `State`、`Error`、`Delivered`，并向原有表写探针确认旧流继续推进。旧版本已有导入且缺少封存证据、目标证据冲突或所需 Binlog 已清理时，保留该表的现场及错误。 [快照封存与恢复](staged_bootstrap.go)
+- **事务和控制库容量**。上线前测单笔事务的暂存文件及待交付编码大小，两项分别受 256 MiB 的准备与积压上限约束。为事务暂存、排序和交付文件共存预留物理空间。超过单笔预算时保留错误、原游标与源日志，评估按较小事务提交的写入策略或用新代次重建。Doris 周期性清理老检查点及可核验归属的已确认回执，保留快照基线、最近检查点和恢复引用的结构版本。旧版本缺少归属的回执保留供人工核对。需要长期审计时应在保留窗口内归档。 [交付](delivery.go) · [控制表保留](doris_retention.go)
 - **Binlog 事件上限**。单个原始事件解析上限为 64 MiB，压缩事件展开上限为 8 MiB。升级前核对已有 Binlog 的压缩策略和事件大小分布。遇到超限事件保留原游标，按源日志和数据对账结果调整源端策略或重建。复制协议先收包再校验大小，单个事件上限不能直接当成进程内存峰值。 [原始事件校验](internal/mysqlsource/binlog_decode.go)
 
-用只读 SQL 检查注册对象和示例控制库的历史规模。控制库名按第 1 节配置替换。持续出现 `CDC control history cleanup failed` 时，核对控制库写入账号的清理权限及 Doris 状态。
+新表首次全量的实库演练覆盖了 `SIGKILL` 时请求未到 Doris 和响应未到 CDC 两种情况。两源重启后保留原目标表，从封存位点追平，分别在 4.479 秒和 4.676 秒核对完成。原表在新表全量受阻期间继续交付，停机窗口的写入在重启后补齐。 [历史验收数据](REFACTOR_DESIGN.md#617-新表首次全量异常退出恢复验收)
+
+自动发现新库的多表演练在首表已完整导入、第二表仅部分可见时强杀进程。MySQL、MariaDB 使用原卷重启后各核对 244 行，Doris 库表保留，已提交批次未重新发送。原有库在新库受阻期间继续交付，停机窗口内的写入在重启后补齐。 [历史验收数据](REFACTOR_DESIGN.md#618-自动发现新库的多表全量异常退出恢复验收)
+
+首次加载时已存在的库遇到全量进程异常退出，按以下顺序恢复。
+
+1. 保留 Doris 库表、控制记录和挂载的原卷。记下源 ID、代次、原始表清单和 Doris SQL、FE、BE 地址。确认源仍保有所需 Binlog，缓冲盘能容纳快照和增量。
+2. 用支持封存格式的 SDK 和原配置启动。宿主使用监控时先 `Reload`，再按原策略调用 `Start`。直接使用管理器的宿主调用 `Manager.SetConfig`。该库从最后可确认的原批次继续，封存前退出则重取快照。
+3. 等待该库进入 `running`。按主键对比每张表的行数和数据内容，再用第 3 节的 SQL 核对封存快照的序号 `0` 基线。向恢复库和已有库各写一笔探针，确认 Doris 目标值和两条流水线的 `Delivered` 都已推进。遇到原始表缺失、目标绑定变化、回执冲突或 Binlog 缺失时记录 `Error` 并保留现场。 [封存与恢复设计](REFACTOR_DESIGN.md#41-首次全量和切换增量)
+
+首次加载已有库的实测在宽表第二批导入时强杀 CDC。MySQL 在 Doris 已提交但 CDC 未收到响应时退出，MariaDB 在请求尚未到达 Doris 时退出。保留原卷和库表重启后，分别在 1.780 秒和 2.060 秒对账一致，各核对 5 个快照批次和 244 行最终数据。其他库在全量受阻时继续交付，停机期间的写入在重启后补齐。 [实测数据与复跑命令](REFACTOR_DESIGN.md#619-首次加载已有库的多表全量异常退出恢复验收)
+
+首次全量异常退出后，可在停机状态下按原卷和 Doris 证据确认恢复窗口。
+
+| 现场证据 | 原卷重启后的核对项 |
+| --- | --- |
+| 有 `snapshot-batches/*.record`，尚无 `snapshot-batches/identity`，Doris 无导入意图或序号 `0`。 | SDK 回收未封存文件，再按原始表清单取一致性快照。核对停机期间已提交的写入也进入新快照，等 `running` 后提交增量探针。 |
+| Doris 已有序号 `0`，本地已有 `bootstrap/00000000000000000001.record`，尚无 `bootstrap/00000000000000000002.record`。 | 保存原检查点 JSON。重启后核对检查点内容一致、完成记录已写入且快照批次已回收。核对停机期间的增量已从原位点交付。 |
+
+两种窗口均在原卷和原库表上完成实测。封存前强杀后，MySQL、MariaDB 分别用 4.136 秒和 4.219 秒完成本地标记及数据对账。序号 `0` 提交后强杀分别用 0.888 秒和 0.975 秒完成核对。后者保留原基线，确认基线和已经完成的快照批次均各提交一次。 [实测数据与复跑命令](REFACTOR_DESIGN.md#620-首次全量封存前和基线提交后的强杀验收)
+
+用只读 SQL 检查注册对象和共享控制库的历史规模。持续出现 `CDC control history cleanup failed` 时，核对控制库写入账号的清理权限及 Doris 状态。
 
 ```bash
 mysql --defaults-extra-file="$DORIS_CNF" --protocol=TCP <<'SQL'
 SHOW FULL TABLES FROM cdc_writer_registry;
 SELECT stream_key, COUNT(*) AS retained, MAX(sequence_no) AS latest
-FROM orders_cdc_g01.checkpoints GROUP BY stream_key;
-SELECT COUNT(*) AS receipts FROM orders_cdc_g01.load_receipts;
+FROM cdc_control.checkpoints GROUP BY stream_key;
+SELECT COUNT(*) AS receipts FROM cdc_control.load_receipts;
 SQL
 ```
 
 ## 3. 启动影子并核对两套链路
 
-仓库以 SDK 提供生产控制。应用启动入口接收第 1 节的 `cdc.PipelineConfig`，调用 `cdc.StartPipeline(serviceCtx, config)`。`serviceCtx` 覆盖服务生命周期。启动成功返回句柄后，持续检查 `p.Status()`，确认 `starting` 进入 `running`，并通过 `p.Done()`、`p.Wait()` 记录异步退出原因。全量从空影子库开始。若全量中断且一致性视图失效，换新代次、空库和目录重建。正常增量重启复用原配置和持久目录。关闭使用单独限定期限的 `p.Close(ctx)`，确认 `Done()` 后再交接写入所有权。若必须清空积压，先围栏并等待共同位点和 `PendingBytes=0`，再关闭。`p.Pause(ctx, reason)` 只暂停新交付，源采集仍会运行到容量阈值。 [流水线入口](pipeline_control.go)
+应用解码第 1 节的共享 YAML，使用 `monitor.New(serviceCtx)` 创建控制器并调用 `Reload(ctx, &cfg.CDC)`。按 `Snapshot()` 返回的初始源 ID 逐源启动，使用 `Status(sourceID)` 或 `WatchStatus` 确认状态从 `starting` 到 `running`。首次启动自动创建目标库和选中的表。正常增量重启沿用原配置与持久目录，服务退出使用具有独立超时的 `Close(ctx)`，单源停止使用 `Stop(ctx, sourceID)`。若须清空积压，先建立写入围栏，再逐流确认对应水位和 `PendingBytes=0`。手动暂停交付使用 `Pause(ctx, sourceID, reason)`，暂停涵盖库流水线及其单表子流，采集会继续运行至各自容量上限。 [接入代码](monitor/README.md#在-go-宿主中启动)
 
-下面的 MySQL 示例在新代次中使用 GTID。应用通过部署配置和密钥管理注入地址、账号和凭据。MariaDB 按第一节逐项替换源配置与目录。
+配置加载后，在源端创建匹配的新库及基础表。监控自动启动该库的流水线。用 `Snapshot()` 核对新源和 `TargetDatabase`，读取状态和错误，再查询 Doris 样本行并核对 `Delivered` 继续推进。 [自动发现新库](monitor/README.md#自动发现新库)
 
-```go
-package rollout
+在已运行源库创建一张符合原规则的新表并写入基线数据，等待 `Status(sourceID).DiscoveredTables` 出现该表。核对目标库内同名表的快照样本，再向新表和原有表写入探针，分别确认数据和交付位点。消费者发布涉及新表时，按新表各自的检查点完成对账，并将该表纳入发布范围。原有表的路由证据只覆盖原已验证范围。 [自动发现已有库的新表](monitor/README.md#自动发现已有库的新表)
 
-import (
-	"context"
-	"os"
-	"time"
+需要按新代次重建单个已运行源时，先停止待重建的流水线，保留原卷、目标库与检查点，并从原监控配置移除该库。在另一份宿主配置中只声明受影响的 Canal 和选库规则，用独立监控实例加载。保持原 `InstanceId`，使用新的 `Doris.SchemaPrefix` 和 `Generation`，校验生成的新目标库为空或尚未创建。原监控配置继续管理其余源，所用前缀保持原值。已发布读路由涉及新影子库时，先按第 6 节核对路由配置迁移，再为新目标重新对账和发布。
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/cdc"
-)
-
-func startOrders(serviceCtx context.Context) (*cdc.Pipeline, error) {
-	return cdc.StartPipeline(serviceCtx, cdc.PipelineConfig{
-		Identity: cdc.StreamIdentity{
-			PipelineID: "orders_cdc", SourceID: "orders_mysql", Generation: "g20261127_01",
-		},
-		Directory: "/var/lib/cdc/orders_mysql/g20261127_01",
-		Source: cdc.MySQLConfig{
-			Address: os.Getenv("ORDERS_CDC_SOURCE_ADDRESS"),
-			User:    os.Getenv("ORDERS_CDC_SOURCE_USER"), Password: os.Getenv("ORDERS_CDC_SOURCE_PASSWORD"),
-			Flavor: "mysql", SourceIdentity: "orders_primary_group", ServerID: 72001,
-			Database: "orders", Tables: []string{"events"}, GTIDAutoPosition: true,
-		},
-		TargetDatabase:    "orders_shadow_g01",
-		SnapshotBatchRows: 500,
-		MaxPendingBytes:   32 * 1024 * 1024,
-		Doris: cdc.DorisConfig{
-			SQLDSN:          os.Getenv("ORDERS_CDC_DORIS_SQL_DSN"),
-			FrontendURL:     os.Getenv("ORDERS_CDC_DORIS_FE_URL"),
-			StreamLoadURL:   os.Getenv("ORDERS_CDC_DORIS_BE_URL"),
-			ControlDatabase: "orders_cdc_g01",
-			HTTPTimeout:     60 * time.Second,
-		},
-	})
-}
-```
-
-保留旧 `hcdc` 正常写旧库，影子完成全量后记录两套检查点并比对样本。经批准，在本源选表提交一笔可识别的增删改事务，等两套链路确认并核对对应 Doris 行和删行。旧 `hcdc` 检查点按已登记的旧实例 ID 查询。新代次查询示例假定控制库只含该代次。
+保留旧 `hcdc` 正常写旧库，影子完成全量后记录两套检查点并比对样本。经批准，在本源选表提交一笔可识别的增删改事务，等两套链路确认并核对对应 Doris 行和删行。旧 `hcdc` 检查点按已登记的旧实例 ID 查询。在共享控制库中使用当前流的存储键定位新代次。以下 Bash 命令以第 1 节的 MySQL 源为例。
 
 ```bash
-mysql --defaults-extra-file="$DORIS_CNF" --protocol=TCP <<'SQL'
+FLOW=hcdc-canal
+SOURCE_ID=canal-20001-orders
+GENERATION=g20261127_01
+STREAM_KEY=$(printf '%d:%s%d:%s%d:%s' \
+  "${#FLOW}" "$FLOW" "${#SOURCE_ID}" "$SOURCE_ID" "${#GENERATION}" "$GENERATION" |
+  sha256sum | cut -d ' ' -f 1)
+
+mysql --defaults-extra-file="$DORIS_CNF" --protocol=TCP <<SQL
 SELECT file, position, gtid FROM cdc_record.log_position WHERE instance_id = 123;
-SELECT stream_key, sequence_no, checkpoint_json FROM orders_cdc_g01.checkpoints
-ORDER BY sequence_no DESC LIMIT 5;
-SELECT stream_key, COUNT(CASE WHEN sequence_no > 0 THEN 1 END) AS incremental_count,
+SELECT stream_key, sequence_no, checkpoint_json FROM cdc_control.checkpoints
+WHERE stream_key = '$STREAM_KEY' AND sequence_no = 0;
+SELECT stream_key, sequence_no, checkpoint_json FROM cdc_control.checkpoints
+WHERE stream_key = '$STREAM_KEY' ORDER BY sequence_no DESC LIMIT 5;
+SELECT COUNT(CASE WHEN sequence_no > 0 THEN 1 END) AS incremental_count,
        MIN(CASE WHEN sequence_no > 0 THEN sequence_no END) AS first_retained_seq,
        MAX(sequence_no) AS last_seq
-FROM orders_cdc_g01.checkpoints GROUP BY stream_key;
-SELECT stream_key, sequence_no, structure_revision FROM orders_cdc_g01.schema_versions
-ORDER BY sequence_no DESC LIMIT 5;
-SELECT load_label, target_table, expected_rows FROM orders_cdc_g01.load_receipts
-WHERE verified = FALSE LIMIT 20;
+FROM cdc_control.checkpoints WHERE stream_key = '$STREAM_KEY';
+SELECT stream_key, sequence_no, structure_revision FROM cdc_control.schema_versions
+WHERE stream_key = '$STREAM_KEY' ORDER BY sequence_no DESC LIMIT 5;
+SELECT receipt.load_label, receipt.target_table, receipt.expected_rows
+FROM cdc_control.load_receipts receipt JOIN cdc_control.cdc_load_history history
+  ON receipt.load_label = history.load_label
+WHERE history.stream_key = '$STREAM_KEY' AND receipt.verified = FALSE LIMIT 20;
 SQL
 ```
 
-将 `123` 换成旧实例实际 ID。如果控制库已有多条流，按登记的 `stream_key` 查询。检查点保留序号 `0` 和连续的最近增量历史。有增量时核对 `incremental_count = last_seq - first_retained_seq + 1`。未确认收据结合 `InFlight` 和是否已追平判断。全量、稳定负载、宽行和故障恢复达到第 1 节门槛后，才给该源安排灰度窗口。审计、对账及客户端日志保留源 ID、代次、位点、路由修订、label 和结果，差异样本按业务数据权限处理。
+将 `123` 换成旧实例实际 ID。检查点保留序号 `0` 和连续的最近增量历史。有增量时核对 `incremental_count = last_seq - first_retained_seq + 1`。未确认收据结合 `InFlight` 和是否已追平判断。全量、稳定负载、宽行和故障恢复达到第 1 节门槛后，才给该源安排灰度窗口。审计、对账及客户端日志保留源 ID、代次、位点、路由修订、label 和结果，差异样本按业务数据权限处理。
 
 ## 4. 写入围栏与逐源灰度
 
 1. **接通持久路由。** 应用使用 `cdc.NewSQLShadowRouteStore(db, database)` 连接预建的权威元数据库。首次由初始化账号对整组 `[]cdc.ShadowRoute` 调用 `store.Initialize(ctx, configs)`，确认各源修订 1 指向各自旧库。正常启动用 `cdc.OpenPersistentShadowRouter(ctx, store, configs)` 打开发布器，消费者用 `cdc.NewShadowRouteReader(store, configs)`。每次查询或读事务先调用 `reader.Route(ctx, sourceID)`，在该次操作内固定返回的数据库。元数据不可读、行缺失或绑定不符时返回错误。先验证消费者重启仍读旧库，并记录其他源的路由作为对照。
 2. **建立单源写入围栏。** 发布负责人锁定该源的发布操作。按部署平台入口阻断该源的 API、异步任务、定时任务、直接 SQL 写入及 DDL，确认在途事务已提交或回滚。保持 DBA 会话和业务围栏至发布读回。元数据主库应独立于被锁业务源。在批准的维护窗口，可用下方真实验收方式辅助锁定。在隔离演练中，从独立连接用测试行验证写入在锁内被拒绝，解锁后能够更新并回滚。MySQL 表读锁只覆盖清单表，仍需控制会使共同事务位点漂移的其他写入或 binlog 轮转。会话断开会释放 SQL 锁，围栏失效或到达停写期限时，丢弃未发布证据并记录结果。
-3. **等待精确共同位点并做三方对账。** 围栏前按批准的写路径提交可识别的选表事务作为锚点。围栏下读回最终提交水位。旧库已确认位点和影子 `p.Status().Progress.Delivered.Cursor` 必须属于同一物理成员，精确到达锚点所在 binlog 文件和事务结束偏移。有完整 GTID 时核对完整集合。旧 `hcdc` 若保存末条行事件的偏移，只在下方 `SHOW BINLOG EVENTS` 证明其下一事件是对应 `Xid`、结束偏移等于共同位点时，为本次校验折算。只有物理证据时可对校验水位留空 `GTIDSet`，原持久位点照旧保留。截止时间内等不到精确水位或发现别的提交越过锚点，停止本次发布并重新安排围栏。对账为每张选表提供同一投影、完整主键和覆盖全键域的连续区间，核对源、旧 Doris、影子 Doris 三方行数、逐行值和摘要。文本键要先验证三端排序一致。
+3. **等待精确共同位点并做三方对账。** 围栏前按批准的写路径提交可识别的选表事务作为锚点。围栏下读回最终提交水位。旧库已确认位点和影子 Doris 检查点的 `Cursor` 必须属于同一物理成员，精确到达锚点所在 binlog 文件和事务结束偏移。有完整 GTID 时核对完整集合。旧 `hcdc` 若保存末条行事件的偏移，只在下方 `SHOW BINLOG EVENTS` 证明其下一事件是对应 `Xid`、结束偏移等于共同位点时，为本次校验折算。只有物理证据时可对校验水位留空 `GTIDSet`，原持久位点照旧保留。截止时间内等不到精确水位或发现别的提交越过锚点，停止本次发布并重新安排围栏。对账为每张选表提供同一投影、完整主键和覆盖全键域的连续区间，核对源、旧 Doris、影子 Doris 三方行数、逐行值和摘要。文本键要先验证三端排序一致。
 4. **发布并读回。** 同一个发布器实例在围栏内调用 `Verify`，逐表报告须全部 `Equal=true`，再调用 `Cutover`。权威元数据库读回当前源修订增加 1、指向影子库且水位正确。消费者用新请求读已知业务样本，核对实际 Doris 目标。已有读事务允许使用原路由完成。对照其他源的目标、修订、水位和业务读结果。读回完成后解除围栏，确认正常写入恢复并保留两套 CDC 写链。
 5. **观察后再切下一源。** 灰度单元是完整 `SourceID`。先选一条低风险源。同源读路由一次提交即生效。建议初始观察窗口至少 15 分钟并覆盖一个代表性峰值段，实际值在变更单中登记。观察读错误、源到目标确认延迟、持续积压及业务抽样，启动独立消费者实例或按批准流程重启验证路由恢复。当前源达到阈值才切下一源，旧链保留至约定回退窗口结束。
 
@@ -220,7 +220,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/wskfjtheqian/hbuf_golang/pkg/cdc"
+	cdc "github.com/wskfjtheqian/hbuf_golang/pkg/hcdc"
 )
 
 func publishFencedRoute(ctx context.Context, router *cdc.ShadowRouter, sourceID string,
@@ -257,15 +257,12 @@ SQL
 
 ## 5. 每源监控与放行条件
 
-宿主应用用 `monitor.New(serviceCtx)` 建立空的监控控制器，首次调用 `Reload(ctx, cfg)` 加载配置。以 `Snapshot()` 查询全部已配置源、`Status(sourceID)` 查询单源，或用 `WatchStatus` 接收状态回调。宿主负责操作权限、审计和状态传输。监控按 `SourceID`、`Generation` 分组，并单独采集消费者实际路由、Doris 查询、文件系统及源 Binlog 指标。确认延迟从源 `COMMIT` 成功到对应事务进入已确认检查点。生产可用已知事务或探针采样计算 p95，仅在具备相应写入负载的窗口核对吞吐。 [监控 SDK 接入](monitor/README.md)
+宿主应用用 `monitor.New(serviceCtx)` 建立空的监控控制器，调用 `Reload(ctx, cfg)` 加载 `CDC.Doris` 和 `CDC.Canals`，发现各源实例的匹配库表。以 `Snapshot()` 查询全部已配置源、`Status(sourceID)` 查询单源，或用 `WatchStatus` 接收状态回调。宿主负责操作权限、审计和状态传输。监控按 `SourceID`、`Generation` 分组，并单独采集消费者实际路由、Doris 查询、文件系统及源 Binlog 指标。确认延迟从源 `COMMIT` 成功到对应事务进入已确认检查点。生产可用已知事务或探针采样计算 p95，仅在具备相应写入负载的窗口核对吞吐。 [监控 SDK 接入](monitor/README.md)
 
 配置加载成功后，按源调用 `Start(ctx, sourceID)`。监听先收到当前快照，之后为本次取得的句柄串行接收状态。回调慢时中间变化会合并到最新快照。未启动的源发送一次当前快照即返回。`stopped` 或 `failed` 快照送达后监听退出，失败原因在 `s.Error`。取消监听上下文只停止监听。重启或重载换了流水线句柄时，重新调用 `WatchStatus`。
 
 ```go
-controller, err := monitor.New(serviceCtx)
-if err != nil {
-	return err
-}
+controller := monitor.New(serviceCtx)
 if err := controller.Reload(ctx, cfg); err != nil {
 	return err
 }
@@ -286,16 +283,17 @@ go func() {
 
 | 指标或状态 | 观察与处置 |
 | --- | --- |
-| `State`、`Since`、`Reason`、`Error`、`PendingDDL` | 记录状态及持续时间。`failed`、计划外暂停、未处理审批或身份错误时立即停止该源发布。`Since` 表示状态切换时间。 |
+| `TargetDatabase`、`State`、`Since`、`Reason`、`Error`、`PendingDDL` | 核对实际映射的目标库，记录状态及持续时间。`failed`、计划外暂停、未处理审批或身份错误时立即停止该源发布。`Since` 表示状态切换时间。 |
 | `ReadCursor`、`Durable`、`Delivered`、`InFlight` | 对比采集、持久和已确认的边界。有源事务写入时，已确认位点长期不前进即查交付。没有新写入时结合探针判断。序号差以有序记录计量，业务行数从事务或批次另采。跨文件或跨成员按身份、文件序列或 GTID 核对位点。 |
-| `PendingBytes`、`Backpressured`、卷可用块及 inode | 建议以逻辑预算的 80% 为告警起点。持续背压、可用空间接近总预留或估算 binlog 即将清除所需位置时停止新发布并升级。剩余空间放不下一整笔时，未到 32 MiB 也可能背压。 |
+| `DiscoveredTables`、`TableDiscoveryError` | 按表监测单表子流状态、积压、交付位点及 DDL。发现失败时核对目录和源元数据读取权限。单表快照失败时保留现场，核对目标表和快照恢复证据。 |
+| `PendingBytes`、`Backpressured`、卷可用块及 inode | 建议以逻辑预算的 80% 为告警起点。持续背压、可用空间接近总预留或估算 binlog 即将清除所需位置时停止新发布并升级。待落盘的整笔事务超过剩余预算时也会触发背压。 |
 | 源日志最早可续订水位和预计保留时长 | 源实例、备选主库分别核对。预计可用时间内无法追平时，立即进入事故处置。最老积压事务年龄需由应用或监控系统补采。 |
 | `DeliveryError`、Doris 实际业务查询、Stream Load 审计及收据 | 目标短暂不可达时观察重试及积压。过滤行、目标不匹配、标签冲突或审计无法确认时保留现场，禁止快进位点。 |
 | `CaptureError` | 源端瞬时传输错误触发退避并从已落盘位点续订。字段清空后确认新事务已交付。持续故障时核对源身份和日志保留，记录重连时长。 |
 | 源到已确认吞吐、p95、重启追平 | 使用第 1 节门槛及正式窗口。Doris 计时从启动命令发出开始，CDC 计时从新进程启动开始，都以追到计划水位且积压清空为通过。 |
 | 消费者 `Database`、`Revision`、`Watermark`、读错误率和样本 | 每次变更后核对目标和修订，检查真实查询结果和其他源的路由。重启后应读回相同修订。所有数据差异按故障处理。 |
 
-宿主收到已授权的重载请求后，加载并校验新 YAML，再调用 `controller.Reload(ctx, cfg)` 交接运行中的源。用 `controller.Snapshot()` 核对源清单，再逐源读取 `controller.Status(sourceID)`。新增源在通过上线前检查后单独启动。同代次候选配置失败时，读回原源状态和检查点，确认原配置续传后再提交更正的配置。处理待审批 DDL 时，从当前 `PendingDDL` 取 ID，调用 `controller.ApproveDDL(ctx, sourceID, id)`，然后核对屏障后检查点。
+宿主收到已授权的重载请求后，加载并校验新 YAML，再调用 `controller.Reload(ctx, cfg)` 交接运行中的源。用 `controller.Snapshot()` 核对源清单，再逐源读取 `controller.Status(sourceID)`。重载清单中新纳入的源通过上线前检查后单独启动。后台发现的库或表在快照后按本节核对状态、检查点与样本。查询元数据失败或目标库名冲突时查看发现日志及源账号权限、库名映射。同代次候选配置失败时，读回原源状态和检查点，确认原配置续传后再提交更正的配置。处理待审批 DDL 时，从源或对应单表的 `PendingDDL` 取 ID，调用 `controller.ApproveDDL(ctx, sourceID, id)`，然后核对该流屏障后的检查点。
 
 ## 6. 回退消费者路由与恢复 CDC
 
@@ -308,19 +306,19 @@ go func() {
 
 **执行读路由回退。** 先通过第 4 节 SQL 或 `RouteContext` 确认该源正读影子，旧目标写链仍在运行。在该源重建写入围栏，取得新的事务共同位点，等待旧库和影子确认，并用当前修订调用 `Verify`。全部对账报告相等后，调用 `Rollback`，在围栏内确认修订加 1、目标回到旧库、消费者读到预期行、其他源保持原路由。解除围栏后复验新写入，并重启消费者实例确认路由仍指向旧库。旧目标落后或任一方存在真实差异时，普通回退流程暂停，先修复、补齐并重新对账。每次回退使用新证据，按受影响源依次处理。
 
-**恢复 CDC 进程或版本。** 如需停新链路，限定运行账号与范围后调用 `p.Close(ctx)` 并等待 `Done()`，保留原卷、控制库和故障证据。恢复增量使用相同流身份、同一代次、原目录、原目标，并确认新进程是唯一写入者。回滚应用版本前须验证它能识别当前缓冲格式、结构版本及目标表结构。无法验证兼容性时保留旧代次供对账，开新代次恢复。读路由回退不会修改已确认 CDC 位点。
+**恢复 CDC 进程或版本。** 如需停新链路，限定运行账号与范围后调用 `controller.Stop(ctx, sourceID)` 并确认进入 `stopped`，保留原卷、控制库和故障证据。恢复增量使用相同流身份、同一代次、原目录、原目标，并确认新进程是唯一写入者。回滚应用版本前须验证它能识别当前缓冲格式、结构版本及目标表结构。无法验证兼容性时保留旧代次供对账，开新代次恢复。读路由回退不会修改已确认 CDC 位点。
 
-**处置 DDL 屏障。** 读取 `PendingDDL` 的表、计划、ID 和原因，核对目标当前结构与作业记录。单表清空、单个非键非 Bitmap 删列或改名、满足约束的无损整数扩宽，核准其数据影响后调用 `p.ApproveDDL(ctx, id)`。手动暂停另用 `p.Resume(ctx)` 清除。确认先写结构版本、再推进屏障检查点和其后的 DML。`Kind=unsupported`、主键或类型投影变化等走新代次重建。目标只显示旧结构且原 DDL 提交结果不明时，核对原作业与收据。提交证明未恢复前保持阻塞。新影子数据库或改变投影会改变路由配置摘要，需先演练发布和消费者的注册表迁移。 [破坏性 DDL 决策表](REFACTOR_DESIGN.md#610-破坏性-ddl-的审批与重建)
+**处置 DDL 屏障。** 读取 `PendingDDL` 的表、操作类型、ID 和原因，核对目标当前结构与作业记录。单表清空、单个非键非 Bitmap 删列或改名、满足约束的无损整数扩宽，核准其数据影响后调用 `controller.ApproveDDL(ctx, sourceID, id)`。手动暂停另用 `controller.Resume(ctx, sourceID)` 解除。确认先写结构版本、再推进屏障检查点和其后的 DML。`Kind=unsupported`、主键或类型投影变化等走新代次重建。目标只显示旧结构且原 DDL 提交结果不明时，核对原作业与收据。提交证明未恢复前保持阻塞。新影子数据库或改变投影会改变路由配置摘要，需先演练发布和消费者的注册表迁移。 [破坏性 DDL 决策表](REFACTOR_DESIGN.md#610-破坏性-ddl-的审批与重建)
 
 **处置导入与慢 DDL。** 导入结果不明时，SDK 在持久化的截止期限内核对原 Label。窗口耗尽后停止流水线并保留原收据和批次。用第 2 节命令核对原 Label，证据齐备后用原卷启动。已识别的 Doris DDL 作业在异步运行期间，检查点留在屏障之前，SDK 按原作业标识继续查询。确认目标结构后才放行后续 DML。 [导入核对](doris_load.go) · [DDL 回执](doris_ddl.go)
 
 ## 7. GTID 切主、旧主隔离与验证
 
-本节处理源数据库写主切换。先确认当前代次从快照起使用 `GTIDAutoPosition=true`。记录正常或故障前最后可用的 `Progress.Delivered.Cursor`、`Progress.Durable.Cursor` 和候选拓扑。对已接入持久路由的源，按第 7.1 节准备迁移并冻结发布。若原进程失联，保留卷，由重启恢复和 SDK 实际订阅确认持久恢复点。物理模式只可从原成员的已验证文件和偏移恢复。改用 GTID 需新代次快照。
+本节处理源数据库写主切换。先确认当前代次从快照起在对应 Canal 使用 `GTIDAutoPosition: true`。记录正常或故障前最后可用的 `Delivered.Cursor`、`Durable.Cursor` 和候选拓扑。对已接入持久路由的源，按第 7.1 节准备迁移并冻结发布。若原进程失联，保留卷，由重启恢复和 SDK 实际订阅确认持久恢复点。物理模式只可从原成员的已验证文件和偏移恢复。改用 GTID 需新代次快照。
 
 1. **冻结业务写入，隔离旧主。** 用部署平台的故障切换入口撤下旧主写端点，阻断应用和高权限旁路，清理现存写连接，确认旧主实例已关停或其写网络和权限均被隔离。由数据库值班从独立路径核验。旧主可达时，使用下方 SQL 加一道只读检查。MariaDB `READ ONLY ADMIN` 账号仍可写。旧主不可达且无法证明隔离时，保持停写并升级，直到完成隔离。计划切换应记录停写后的旧主最后提交 GTID。异步复制事故若该水位不可得，将 RPO 标为未知并由事故负责人决策。 [MySQL 只读变量](https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html#sysvar_super_read_only) · [MariaDB 只读与权限](https://mariadb.com/docs/server/ha-and-performance/standard-replication/read-only-replicas)
 2. **核验候选。** 在候选执行以下只读 SQL，核对预期成员、复制谱系、接收和应用状态、最后错误及日志保留。等候选应用完计划切换要求的旧主最终提交和已接收事务。MySQL 用两个 `GTID_SUBSET` 条件核对候选覆盖已落盘集合，且清理边界在已落盘集合中。MariaDB 以 `gtid_binlog_pos` 和最早文件的 `BINLOG_GTID_POS(file, 4)` 核对保留范围、domain、server ID 和序号。由 SDK 复核精确边界。候选落后、历史不完整或谱系不符时暂停切换，换可证明的候选或评估新代次重建。 [MySQL GTID 函数](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-functions.html) · [MariaDB 日志下界](https://mariadb.com/docs/server/reference/sql-functions/secondary-functions/information-functions/binlog_gtid_pos)
-3. **提升并验证续订。** 通过部署平台已演练的选主操作提升候选，确认复制拓扑及候选可写。仍保持业务写入围栏。停止或隔离旧 CDC 写者，以新物理 `Source.Address` 和对应凭据启动同一代次，保留流身份、逻辑拓扑标识、表清单、Doris 地址和目录。启动期间监测是否出现 `failed`。之前的手动暂停如仍存在，经确认后显式 `Resume`。取回 Doris 检查点，核对已落盘前缀按序确认、续订水位、连续序号和原批次 label。经审批向新主提交探针事务，确认目标行值、删除结果及检查点，再开放新主对业务的写入口。旧主继续隔离，直到按流程接入新谱系并验证。
+3. **提升并验证续订。** 通过部署平台已演练的选主操作提升候选，确认复制拓扑及候选可写。仍保持业务写入围栏。停止或隔离旧 CDC 写者，在对应 Canal 更新 `Host` 和凭据，保持原实例 ID、代次、选表、Doris 配置和目录，调用 `Reload` 后按原 `SourceID` 调用 `Start`。启动期间监测是否出现 `failed`。之前的手动暂停如仍存在，经确认后显式 `Resume`。取回 Doris 检查点，核对已落盘前缀按序确认、续订水位、连续序号和原批次 label。经审批向新主提交探针事务，确认目标行值、删除结果及检查点，再开放新主对业务的写入口。旧主继续隔离，直到按流程接入新谱系并验证。
 4. **迁移已发布读路由。** 准备期间消费者继续读原 Doris 目标。旧、新两条写入链在新主追平后，重新建立同一写入围栏，按第 7.1 节提交该源的新物理绑定。后续切换和回退各自需要新证据。
 
 下列 SQL 按角色连接实例。旧主只读命令会修改实例状态，仅在数据库值班确认目标身份且进入维护窗口后执行。部署平台执行写端点控制、旧主隔离和候选提升。示例通过客户端参数文件指定物理节点。
@@ -385,7 +383,7 @@ SELECT revision,
        JSON_EXTRACT(CONVERT(route_json USING utf8mb4), '$.LastCanceledRevision') AS last_canceled_revision,
        JSON_UNQUOTE(JSON_EXTRACT(CONVERT(route_json USING utf8mb4), '$.ReboundSourceIdentity')) AS member,
        JSON_EXTRACT(CONVERT(route_json USING utf8mb4), '$.Watermark') AS watermark
-FROM cdc_read_routes WHERE source_key = UNHEX(SHA2('orders_mysql', 256));
+FROM cdc_read_routes WHERE source_key = UNHEX(SHA2('canal-20001-orders', 256));
 SQL
 ```
 
@@ -449,7 +447,7 @@ mysql --defaults-extra-file="$ROUTE_CNF" --protocol=TCP --database=cdc_route_reg
 SELECT revision, HEX(config_digest) AS config_digest,
        CONVERT(route_json USING utf8mb4) AS route,
        HEX(publication_token) AS publication_token
-FROM cdc_read_routes WHERE source_key = UNHEX(SHA2('orders_mysql', 256));
+FROM cdc_read_routes WHERE source_key = UNHEX(SHA2('canal-20001-orders', 256));
 SQL
 ```
 
@@ -458,11 +456,11 @@ SQL
 从仓库根目录执行配置检查和本地测试。真实数据库验证按设计文档第 6.4 节配置五项连接变量，在隔离 MySQL、MariaDB 和 Doris 上运行核心集成测试。 [核心集成测试](REFACTOR_DESIGN.md#64-验证真实链路和-ddl-恢复)
 
 ```bash
-docker compose -f pkg/cdc/docker-compose.yml config --quiet
-go vet ./pkg/cdc/...
+docker compose -f pkg/hcdc/docker-compose.yml config --quiet
+go vet ./pkg/hcdc/...
 CDC_TEST_REQUIRE_INTEGRATION=1 CDC_TEST_DORIS_AUDIT=1 \
 CDC_TEST_DESTRUCTIVE_DDL=1 CDC_TEST_PERSISTENT_ROUTES=1 \
-  go test -race -p 1 ./pkg/cdc/... -count=1 -v -timeout 9m
+  go test -race -p 1 ./pkg/hcdc/... -count=1 -v -timeout 9m
 ```
 
 发布前按第 4 至 7 节在隔离环境演练灰度、回退和适用的故障切换场景。独立演练各用一组跟随原主的新候选，涉及停机或提升时只使用可丢弃的测试实例。 [GTID 演练拓扑](REFACTOR_DESIGN.md#69-跨主切换与-gtid-自动续订)
@@ -521,7 +519,7 @@ Doris 从停机完成到发出启动命令间隔 29.659 秒。每源 32 MiB 逻�
 
 首轮并行接入发现 GTID 查询的字符串仍引用驱动回收的结果缓冲。已在释放结果前复制查询值，并用确定性单测确认复用缓冲不会改写已读取值。真实容器重新运行双 GTID 捕获通过。测试读取 MySQL 多 SID 状态后先归一化 GTID 集合，再比较精确的文件和偏移。 [GTID 查询回归](internal/mysqlsource/source_test.go)
 
-原有持久路由、并发发布和 40 ms 慢目标压力复测均通过，合计 43.057 秒。额外验证了发布器已取得旧修订和提交令牌时，准备迁移仍能拦截其在途发布。`go test -race ./pkg/cdc/... -count=1` 和 `go vet ./pkg/cdc/...` 均通过。
+原有持久路由、并发发布和 40 ms 慢目标压力复测均通过，合计 43.057 秒。额外验证了发布器已取得旧修订和提交令牌时，准备迁移仍能拦截其在途发布。`go test -race ./pkg/cdc/... -count=1` 和 `go vet ./pkg/hcdc/...` 均通过。
 
 原 GTID 续传专项用新建候选回归通过，耗时 16.48 秒。一次性 MySQL 候选在加载基线前去除了镜像初始化产生的本地 GTID，使该用例能按预期检查连续序号。MySQL 和 MariaDB 从新主启动后分别在 281 ms 和 276 ms 追平，均拒绝落后候选及缺少所需 binlog 的候选。原三个容器已恢复，临时复制账号和从库已清理。
 

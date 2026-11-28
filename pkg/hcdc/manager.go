@@ -26,7 +26,7 @@ type Manager struct {
 }
 
 type managedConfig struct {
-	config   PipelineConfig
+	config   pipelineConfig
 	manifest bootstrapManifest
 	owner    pipelineOwnership
 }
@@ -52,11 +52,65 @@ func (m *Manager) Pipeline(sourceID string) (*Pipeline, bool) {
 	return source.pipeline, ok
 }
 
-// SetConfig 应用完整的期望配置。传入 nil 或空配置会移除全部源。
+// SetConfig 发现 Canals 选中的源库和表，并应用完整的期望配置。
+// 传入 nil 或显式空的 Canals 会移除全部源。
 // 配置等价且受管源均处于活动状态时直接返回。
 // 已完成快照的同代次更新先验证候选，失败时恢复原配置。超时后恢复可在后台完成。
-// 新增源和新代次沿用 StartPipeline 的异步启动方式。
-func (m *Manager) SetConfig(ctx context.Context, config *Config) (resultErr error) {
+// 新增源和新代次异步启动。
+func (m *Manager) SetConfig(ctx context.Context, config *Config) error {
+	return m.setConfig(ctx, config, nil)
+}
+
+// ApplySources 应用 Config.Resolve 得到的源子集，供逐源启停使用。
+func (m *Manager) ApplySources(ctx context.Context, sources []ResolvedSource) error {
+	pipelines := make([]pipelineConfig, len(sources))
+	for i, source := range sources {
+		if i > 0 && source.config.Doris != pipelines[0].Doris {
+			return herror.NewError("CDC 启动的源必须共用同一个 Doris 配置")
+		}
+		pipelines[i] = source.config
+	}
+	return m.setConfig(ctx, nil, pipelines)
+}
+
+// StartDiscoveredSource 启动一个新发现的源，其他受管流水线继续运行。
+func (m *Manager) StartDiscoveredSource(ctx context.Context, source ResolvedSource) (*Pipeline, error) {
+	select {
+	case m.updates <- struct{}{}:
+	case <-ctx.Done():
+		return nil, herror.Wrap(ctx.Err())
+	}
+	defer func() { <-m.updates }()
+	if err := ctx.Err(); err != nil {
+		return nil, herror.Wrap(err)
+	}
+	next, err := prepareManagedConfig(source.config)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, active := range m.sources {
+		if active.config.config.Doris != next.config.Doris {
+			return nil, herror.NewError("CDC 启动的源必须共用同一个 Doris 配置")
+		}
+		if err := next.owner.conflict(active.config.owner); err != nil {
+			return nil, err
+		}
+		if next.config.Directory == active.config.config.Directory {
+			return nil, herror.NewError("CDC 新发现的源与已有源共用持久缓冲目录")
+		}
+	}
+	pipeline, err := startPipeline(m.ctx, next.config)
+	if err != nil {
+		return nil, err
+	}
+	m.sources[source.Identity().SourceID] = managedSource{config: next, pipeline: pipeline}
+	return pipeline, nil
+}
+
+// setConfig 串行应用完整的期望源清单，失败时恢复已交接的同代次源。
+func (m *Manager) setConfig(ctx context.Context, config *Config, pipelines []pipelineConfig) (resultErr error) {
 	select {
 	case m.updates <- struct{}{}:
 	case <-ctx.Done():
@@ -74,7 +128,17 @@ func (m *Manager) SetConfig(ctx context.Context, config *Config) (resultErr erro
 	if err := ctx.Err(); err != nil {
 		return herror.Wrap(err)
 	}
-	if config != nil && len(config.Pipelines) != 0 {
+	if config != nil {
+		if err := m.ctx.Err(); err != nil {
+			return herror.Wrap(err)
+		}
+		resolved, err := config.resolvePipelines(ctx)
+		if err != nil {
+			return err
+		}
+		pipelines = resolved
+	}
+	if len(pipelines) != 0 {
 		if err := m.ctx.Err(); err != nil {
 			return herror.Wrap(err)
 		}
@@ -82,10 +146,10 @@ func (m *Manager) SetConfig(ctx context.Context, config *Config) (resultErr erro
 	m.mu.RLock()
 	current := maps.Clone(m.sources)
 	m.mu.RUnlock()
-	if matchesAppliedConfig(config, current) {
+	if matchesAppliedConfig(pipelines, current) {
 		return nil
 	}
-	desired, err := prepareManagerConfig(config, current)
+	desired, err := prepareManagerConfig(pipelines, current)
 	if err != nil {
 		return err
 	}
@@ -149,7 +213,7 @@ func (m *Manager) SetConfig(ctx context.Context, config *Config) (resultErr erro
 			return herror.Wrap(err)
 		}
 		next := desired[id]
-		pipeline, err := startPipeline(m.ctx, next.config, pipelineStartOptions{resumeOnly: true, activate: activate})
+		pipeline, err := startPipelineWithOptions(m.ctx, next.config, pipelineStartOptions{resumeOnly: true, activate: activate})
 		if err != nil {
 			return herror.Wrap(fmt.Errorf("start CDC config candidate for source %q: %w", id, err))
 		}
@@ -182,7 +246,7 @@ func (m *Manager) SetConfig(ctx context.Context, config *Config) (resultErr erro
 			return herror.Wrap(err)
 		}
 		next := desired[id]
-		pipeline, err := StartPipeline(m.ctx, next.config)
+		pipeline, err := startPipeline(m.ctx, next.config)
 		if err != nil {
 			return herror.Wrap(fmt.Errorf("start CDC source %q: %w", id, err))
 		}
@@ -195,21 +259,21 @@ func (m *Manager) SetConfig(ctx context.Context, config *Config) (resultErr erro
 }
 
 // matchesAppliedConfig 比较期望配置与当前实际应用的配置，并检查受管源仍处于活动状态。
-func matchesAppliedConfig(config *Config, current map[string]managedSource) bool {
-	if config == nil {
-		return len(current) == 0
-	}
-	if len(config.Pipelines) != len(current) {
+func matchesAppliedConfig(pipelines []pipelineConfig, current map[string]managedSource) bool {
+	if len(pipelines) != len(current) {
 		return false
 	}
-	applied := Config{Pipelines: make([]PipelineConfig, 0, len(current))}
-	for _, source := range current {
-		if configRestartRequired(source.pipeline.Status().State) {
+	seen := make(map[string]struct{}, len(pipelines))
+	for _, desired := range pipelines {
+		id := desired.Identity.SourceID
+		source, ok := current[id]
+		_, duplicate := seen[id]
+		if !ok || duplicate || configRestartRequired(source.pipeline.Status().State) || !equalPipelineConfig(source.config.config, desired) {
 			return false
 		}
-		applied.Pipelines = append(applied.Pipelines, source.config.config)
+		seen[id] = struct{}{}
 	}
-	return config.Equal(&applied)
+	return true
 }
 
 // configRestartRequired 判断流水线的状态是否需要重新启动以应用期望配置。
@@ -250,7 +314,7 @@ func (m *Manager) restorePreviousConfigs(recovery map[string]managedSource) (res
 			break
 		}
 		previous := recovery[id]
-		pipeline, err := startPipeline(m.ctx, previous.config.config, pipelineStartOptions{resumeOnly: true})
+		pipeline, err := startPipelineWithOptions(m.ctx, previous.config.config, pipelineStartOptions{resumeOnly: true})
 		if err != nil {
 			resultErr = errors.Join(resultErr, herror.Wrap(fmt.Errorf("restore previous CDC config for source %q: %w", id, err)))
 			continue
@@ -264,8 +328,8 @@ func (m *Manager) restorePreviousConfigs(recovery map[string]managedSource) (res
 }
 
 // prepareManagerConfig 在交接前校验整份期望配置及其与当前所有者的资源冲突。
-func prepareManagerConfig(config *Config, current map[string]managedSource) (map[string]managedConfig, error) {
-	desired, err := prepareDesiredConfig(config)
+func prepareManagerConfig(pipelines []pipelineConfig, current map[string]managedSource) (map[string]managedConfig, error) {
+	desired, err := prepareDesiredConfig(pipelines)
 	if err != nil || len(desired) == 0 {
 		return desired, err
 	}
@@ -305,7 +369,7 @@ func prepareManagerConfig(config *Config, current map[string]managedSource) (map
 }
 
 // prepareManagedConfig 校验单源配置，归一化目录、表顺序与默认值并记录资源所有权。
-func prepareManagedConfig(config PipelineConfig) (managedConfig, error) {
+func prepareManagedConfig(config pipelineConfig) (managedConfig, error) {
 	manifest, _, err := validatePipelineConfig(config)
 	if err != nil {
 		return managedConfig{}, err
@@ -331,7 +395,9 @@ func prepareManagedConfig(config PipelineConfig) (managedConfig, error) {
 
 // validateManagedRestart 核对同代次续传所需的流映射、目录、Doris 绑定及物理源地址。
 func validateManagedRestart(old, next managedConfig) error {
-	if !reflect.DeepEqual(old.manifest, next.manifest) ||
+	original, candidate := old.manifest, next.manifest
+	original.SourceTables, candidate.SourceTables = nil, nil
+	if !reflect.DeepEqual(original, candidate) || !compatibleTableSelection(old.config, next.config) ||
 		old.config.Directory != next.config.Directory || old.owner.targetEndpoint != next.owner.targetEndpoint ||
 		old.config.Doris.ControlDatabase != next.config.Doris.ControlDatabase ||
 		old.config.Doris.FrontendURL != next.config.Doris.FrontendURL || old.config.Doris.StreamLoadURL != next.config.Doris.StreamLoadURL {

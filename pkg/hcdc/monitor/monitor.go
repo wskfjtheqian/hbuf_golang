@@ -3,13 +3,10 @@ package monitor
 
 import (
 	"context"
-	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
 )
@@ -20,16 +17,16 @@ type Monitor struct {
 	manager *hcdc.Manager
 	updates chan struct{}
 
-	mu        sync.RWMutex
-	order     []*source
-	byID      map[string]*source
-	reloading bool
-	closed    bool
+	mu            sync.RWMutex
+	order         []*source
+	byID          map[string]*source
+	stopDiscovery context.CancelFunc
+	reloading     bool
+	closed        bool
 }
 
 type source struct {
-	config   hcdc.PipelineConfig
-	redactor *strings.Replacer
+	resolved hcdc.ResolvedSource
 	pipeline atomic.Pointer[hcdc.Pipeline]
 	control  chan struct{}
 }
@@ -41,33 +38,16 @@ func New(ctx context.Context) *Monitor {
 	}
 }
 
-// monitorSources 创建不共享调用方切片的监控配置快照。
-func monitorSources(config *hcdc.Config) ([]*source, map[string]*source) {
-	order := make([]*source, 0, len(config.Pipelines))
-	byID := make(map[string]*source, len(config.Pipelines))
-	for _, config := range config.Pipelines {
-		config.Source.Tables = slices.Clone(config.Source.Tables)
-		s := &source{config: config, redactor: credentialRedactor(config), control: make(chan struct{}, 1)}
+// monitorSources 为已发现的源创建监控目录。
+func monitorSources(sources []hcdc.ResolvedSource) ([]*source, map[string]*source) {
+	order := make([]*source, 0, len(sources))
+	byID := make(map[string]*source, len(sources))
+	for _, resolved := range sources {
+		s := &source{resolved: resolved, control: make(chan struct{}, 1)}
 		order = append(order, s)
-		byID[config.Identity.SourceID] = s
+		byID[resolved.Identity().SourceID] = s
 	}
 	return order, byID
-}
-
-// credentialRedactor 过滤同步错误中可能出现的配置凭据。
-func credentialRedactor(config hcdc.PipelineConfig) *strings.Replacer {
-	secrets := []string{config.Source.Password, config.Doris.Password, config.Doris.SQLDSN}
-	if parsed, err := mysql.ParseDSN(config.Doris.SQLDSN); err == nil {
-		secrets = append(secrets, parsed.Passwd)
-	}
-	slices.SortStableFunc(secrets, func(a, b string) int { return len(b) - len(a) })
-	pairs := make([]string, 0, 2*len(secrets))
-	for _, value := range secrets {
-		if value != "" {
-			pairs = append(pairs, value, "[redacted]")
-		}
-	}
-	return strings.NewReplacer(pairs...)
 }
 
 // Snapshot 返回配置顺序下的全部源状态。各源独立采样，快照不读取数据库。
@@ -135,6 +115,10 @@ func (m *Monitor) WatchStatus(ctx context.Context, sourceID string, callback fun
 func (m *Monitor) Close(ctx context.Context) error {
 	m.mu.Lock()
 	m.closed = true
+	if m.stopDiscovery != nil {
+		m.stopDiscovery()
+		m.stopDiscovery = nil
+	}
 	m.mu.Unlock()
 	if err := acquire(ctx, m.updates); err != nil {
 		return err
@@ -158,7 +142,8 @@ func (m *Monitor) currentPipelineLocked(s *source) *hcdc.Pipeline {
 
 // refreshPipeline 保存管理器安装的句柄，移除源后仍能读取最后一份状态。
 func (m *Monitor) refreshPipeline(s *source) *hcdc.Pipeline {
-	if p, ok := m.manager.Pipeline(s.config.Identity.SourceID); ok && p.Status().Identity == s.config.Identity {
+	identity := s.resolved.Identity()
+	if p, ok := m.manager.Pipeline(identity.SourceID); ok && p.Status().Identity == identity {
 		s.pipeline.Store(p)
 		return p
 	}
@@ -167,53 +152,64 @@ func (m *Monitor) refreshPipeline(s *source) *hcdc.Pipeline {
 
 // changeSource 应用手动启动或停止后的运行源清单。调用方持有 updates。
 func (m *Monitor) changeSource(ctx context.Context, chosen *source, start bool) error {
-	var desired hcdc.Config
+	var desired []hcdc.ResolvedSource
 	m.mu.RLock()
 	for _, s := range m.order {
 		if s == chosen {
 			if start {
-				desired.Pipelines = append(desired.Pipelines, s.config)
+				desired = append(desired, s.resolved)
 			}
 			continue
 		}
 		if p := m.currentPipelineLocked(s); p != nil && !pipelineDone(p) {
-			desired.Pipelines = append(desired.Pipelines, s.config)
+			desired = append(desired, s.resolved)
 		}
 	}
 	m.mu.RUnlock()
-	err := m.manager.SetConfig(ctx, &desired)
+	err := m.manager.ApplySources(ctx, desired)
 	m.refreshPipeline(chosen)
 	return err
 }
 
-// Reload 更新源目录。已经运行的源通过 Manager.SetConfig 交接配置。
-// 新增源保持空闲。应用失败时保留原目录，管理器负责同代次配置恢复。
+// Reload 发现 Canal 选中的源库和表，并更新源目录。
+// 已经运行的源通过管理器交接配置。
+// 显式加载发现的新增源保持空闲。随后后台自动发现并启动新库。
+// 应用失败时保留原目录，管理器负责同代次配置恢复。
 func (m *Monitor) Reload(ctx context.Context, config *hcdc.Config) error {
 	if err := acquire(ctx, m.updates); err != nil {
 		return err
 	}
 	defer func() { <-m.updates }()
-	if !config.Validate(ctx) {
-		return herror.NewError("CDC monitor configuration is invalid")
+	m.mu.RLock()
+	closed := m.closedLocked()
+	m.mu.RUnlock()
+	if closed {
+		return ErrClosed
 	}
-	order, byID := monitorSources(config)
-	var desired hcdc.Config
+	config = copyDiscoveryConfig(config)
+	resolved, err := config.DiscoverSchemas(ctx, nil)
+	if err != nil {
+		return err
+	}
+	order, byID := monitorSources(resolved)
+	var desired []hcdc.ResolvedSource
 	m.mu.Lock()
 	if m.closedLocked() {
 		m.mu.Unlock()
 		return ErrClosed
 	}
 	for _, s := range order {
-		old := m.byID[s.config.Identity.SourceID]
+		identity := s.resolved.Identity()
+		old := m.byID[identity.SourceID]
 		if old == nil {
 			continue
 		}
 		if p := m.currentPipelineLocked(old); p != nil {
-			if old.config.Identity == s.config.Identity {
+			if old.resolved.Identity() == identity {
 				s.pipeline.Store(p)
 			}
 			if !pipelineDone(p) {
-				desired.Pipelines = append(desired.Pipelines, s.config)
+				desired = append(desired, s.resolved)
 			}
 		}
 	}
@@ -224,7 +220,7 @@ func (m *Monitor) Reload(ctx context.Context, config *hcdc.Config) error {
 		m.reloading = false
 		m.mu.Unlock()
 	}()
-	if err := m.manager.SetConfig(ctx, &desired); err != nil {
+	if err := m.manager.ApplySources(ctx, desired); err != nil {
 		return err
 	}
 	for _, s := range order {
@@ -232,6 +228,7 @@ func (m *Monitor) Reload(ctx context.Context, config *hcdc.Config) error {
 	}
 	m.mu.Lock()
 	m.order, m.byID = order, byID
+	m.restartDiscoveryLocked(config)
 	m.mu.Unlock()
 	return nil
 }

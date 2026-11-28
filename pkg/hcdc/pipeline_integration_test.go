@@ -184,9 +184,9 @@ func TestManagerIntegration(t *testing.T) {
 		require.True(t, ok, "source %s is not installed", sourceID)
 		return pipeline
 	}
-	setConfig := func(configs ...PipelineConfig) {
+	setConfig := func(configs ...pipelineConfig) {
 		t.Helper()
-		require.NoError(t, manager.SetConfig(ctx, &Config{Pipelines: configs}))
+		require.NoError(t, manager.setConfig(ctx, nil, configs))
 	}
 	assertStopped := func(pipeline *Pipeline) {
 		t.Helper()
@@ -198,7 +198,7 @@ func TestManagerIntegration(t *testing.T) {
 	}
 
 	requestCtx, cancelRequest := context.WithCancel(ctx)
-	err := manager.SetConfig(requestCtx, &Config{Pipelines: []PipelineConfig{primary.config}})
+	err := manager.setConfig(requestCtx, nil, []pipelineConfig{primary.config})
 	cancelRequest()
 	require.NoError(t, err)
 	first := installed(primaryID)
@@ -218,7 +218,7 @@ func TestManagerIntegration(t *testing.T) {
 	invalid.Source.Tables = []string{"ledger", "extra"}
 	changedSibling := sibling.config
 	changedSibling.MaxPendingBytes = 8 << 20
-	require.Error(t, manager.SetConfig(ctx, &Config{Pipelines: []PipelineConfig{changedSibling, invalid}}))
+	require.Error(t, manager.setConfig(ctx, nil, []pipelineConfig{changedSibling, invalid}))
 	require.Same(t, first, installed(primaryID))
 	require.Same(t, second, installed(siblingID))
 
@@ -336,8 +336,8 @@ func TestManagerRecoveryIntegration(t *testing.T) {
 		defer stop()
 		require.NoError(t, manager.SetConfig(stopCtx, nil))
 	})
-	apply := func(ctx context.Context, primaryConfig, siblingConfig PipelineConfig) error {
-		return manager.SetConfig(ctx, &Config{Pipelines: []PipelineConfig{primaryConfig, siblingConfig}})
+	apply := func(ctx context.Context, primaryConfig, siblingConfig pipelineConfig) error {
+		return manager.setConfig(ctx, nil, []pipelineConfig{primaryConfig, siblingConfig})
 	}
 	running := func(t *testing.T, sourceID string) *Pipeline {
 		t.Helper()
@@ -382,7 +382,7 @@ func TestManagerRecoveryIntegration(t *testing.T) {
 	badDorisHTTP.Doris.Username, badDorisHTTP.Doris.Password = invalidUser, "invalid"
 	for _, rejection := range []struct {
 		name             string
-		primary, sibling PipelineConfig
+		primary, sibling pipelineConfig
 		unaffectedID     string
 	}{
 		{"mysql_credentials", badMySQL, sibling.config, siblingID},
@@ -541,10 +541,10 @@ func testRealPipeline(t *testing.T, flavor, sourceDSN string, dorisConfig DorisC
 	execSQL("INSERT INTO "+qualified+" VALUES ('seed', 1, 100, 18446744073709551615, ?, ?, '-36:02:03.125000', ?, ?), (NULL, 2, 200, 2, ?, ?, NULL, NULL, NULL)",
 		flags, members, []byte{0, 255, 10}, `{"v":"seed"}`, flags, emptyMembers)
 
-	config := PipelineConfig{
+	config := pipelineConfig{
 		Identity:  identity,
 		Directory: t.TempDir(),
-		Source: MySQLConfig{
+		Source: mysqlConfig{
 			Address: sourceConfig.Addr, User: sourceConfig.User, Password: sourceConfig.Passwd,
 			Flavor: flavor, SourceIdentity: suffix, ServerID: uint32(12000 + time.Now().UnixNano()%40000),
 			Database: sourceDB, Tables: []string{"accounts"},
@@ -600,7 +600,14 @@ func testRealPipeline(t *testing.T, flavor, sourceDSN string, dorisConfig DorisC
 	start := func() (<-chan error, context.CancelFunc) {
 		runCtx, stop := context.WithCancel(ctx)
 		done := make(chan error, 1)
-		go func() { done <- RunPipeline(runCtx, config); close(done) }()
+		go func() {
+			defer close(done)
+			pipeline, err := startPipeline(runCtx, config)
+			if err == nil {
+				err = pipeline.Wait()
+			}
+			done <- err
+		}()
 		return done, stop
 	}
 	stopAndWait := func(done <-chan error, stop context.CancelFunc) {
@@ -725,7 +732,7 @@ func equalObservedRows[T comparable](got, want []T) bool {
 }
 
 type ddlIntegrationFixture struct {
-	config PipelineConfig
+	config pipelineConfig
 	source *sql.DB
 	doris  *sql.DB
 }
@@ -786,10 +793,10 @@ func newDDLIntegrationFixture(t *testing.T, ctx context.Context, flavor, sourceD
 	sourceDatabase := "cdc_ddl_src_" + suffix
 	targetDatabase := "cdc_ddl_dst_" + suffix
 	dorisConfig.ControlDatabase = "cdc_ddl_ctl_" + suffix
-	config := PipelineConfig{
+	config := pipelineConfig{
 		Identity:  StreamIdentity{PipelineID: "ddl_integration", SourceID: flavor, Generation: suffix},
 		Directory: t.TempDir(),
-		Source: MySQLConfig{
+		Source: mysqlConfig{
 			Address:        sourceConnection.Addr,
 			User:           sourceConnection.User,
 			Password:       sourceConnection.Passwd,
@@ -942,7 +949,7 @@ func testRealPipelineDDL(t *testing.T, ctx context.Context, fixture ddlIntegrati
 	t.Helper()
 	start := func(state PipelineState) *Pipeline {
 		t.Helper()
-		pipeline, err := StartPipeline(ctx, fixture.config)
+		pipeline, err := startPipeline(ctx, fixture.config)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			stop, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1311,9 +1318,9 @@ func testNarrowingRequiresRebuild(t *testing.T, ctx context.Context, fixture ddl
 }
 
 // startDestructivePipeline 启动破坏性 DDL 测试流水线并等待指定状态。
-func startDestructivePipeline(t *testing.T, ctx context.Context, config PipelineConfig, state PipelineState) *Pipeline {
+func startDestructivePipeline(t *testing.T, ctx context.Context, config pipelineConfig, state PipelineState) *Pipeline {
 	t.Helper()
-	pipeline, err := StartPipeline(ctx, config)
+	pipeline, err := startPipeline(ctx, config)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1599,7 +1606,7 @@ func TestTransactionRecoveryIntegration(t *testing.T) {
 			proxyAddress, configSwitch := newTestSourceProxy(t, config.Source.Address)
 			config.Source.Address = proxyAddress
 			config.MaxPendingBytes, config.MaxTransactionBytes = 64<<20, 768
-			pipeline, err := StartPipeline(ctx, config)
+			pipeline, err := startPipeline(ctx, config)
 			require.NoError(t, err)
 			require.NoError(t, pipeline.waitReady(ctx))
 			fixture.waitRows(t, ctx, pipeline, false, ddlIntegrationRow{id: 1, amount: 100})
@@ -1639,7 +1646,7 @@ func TestTransactionRecoveryIntegration(t *testing.T) {
 			require.Zero(t, count)
 
 			config.MaxTransactionBytes = 32 << 20
-			restarted, err := StartPipeline(ctx, config)
+			restarted, err := startPipeline(ctx, config)
 			require.NoError(t, err)
 			defer restarted.Close(ctx)
 			require.NoError(t, restarted.waitReady(ctx))

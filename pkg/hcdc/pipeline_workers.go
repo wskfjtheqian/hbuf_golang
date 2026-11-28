@@ -61,7 +61,7 @@ func (p *Pipeline) restoreControl(ctx context.Context, store *spool.Store, ident
 }
 
 // runWorkers 协调采集与交付，等订阅校验和配置启用完成后开放新记录处理。
-func (p *Pipeline) runWorkers(ctx, captureCtx context.Context, source *mysqlsource.Source, delivery *Delivery, history *spool.Store, version schemaVersion, revision string, config PipelineConfig, activate <-chan struct{}) error {
+func (p *Pipeline) runWorkers(ctx, captureCtx context.Context, source *mysqlsource.Source, delivery *Delivery, history *spool.Store, version schemaVersion, revision string, config pipelineConfig, activate <-chan struct{}) error {
 	delivery.ddlApproved = p.isApproved
 	progress := delivery.Status()
 	p.mu.Lock()
@@ -75,6 +75,9 @@ func (p *Pipeline) runWorkers(ctx, captureCtx context.Context, source *mysqlsour
 		p.signalLocked()
 		p.mu.Unlock()
 	}()
+	if config.BacklogWarningBytes > 0 && progress.PendingBytes > config.BacklogWarningBytes {
+		warnPendingBacklog(ctx, config.Identity.SourceID, progress.PendingBytes, config.BacklogWarningBytes)
+	}
 
 	verified := make(chan struct{})
 	markReady := func() {
@@ -103,7 +106,7 @@ func (p *Pipeline) runWorkers(ctx, captureCtx context.Context, source *mysqlsour
 	go func() {
 		select {
 		case <-verified:
-			delivered <- p.deliver(deliverCtx, delivery, history)
+			delivered <- p.deliver(deliverCtx, captureCtx, delivery, history, config.BacklogWarningBytes)
 		case <-captureCtx.Done():
 			delivered <- nil
 		case <-deliverCtx.Done():
@@ -135,7 +138,7 @@ func (p *Pipeline) runWorkers(ctx, captureCtx context.Context, source *mysqlsour
 }
 
 // capture 从已落盘位点续订，将提交事务或 DDL 屏障依次写入有容量限制的缓冲。
-func (p *Pipeline) capture(ctx context.Context, source *mysqlsource.Source, delivery *Delivery, history *spool.Store, version schemaVersion, revision string, config PipelineConfig, ready func()) error {
+func (p *Pipeline) capture(ctx context.Context, source *mysqlsource.Source, delivery *Delivery, history *spool.Store, version schemaVersion, revision string, config pipelineConfig, ready func()) error {
 	cursor := mysqlsource.Cursor(delivery.Status().Durable.Cursor)
 	if version.Blocked {
 		return source.StreamWithReady(ctx, cursor, version.Tables, func() {
@@ -238,10 +241,13 @@ func (p *Pipeline) capture(ctx context.Context, source *mysqlsource.Source, deli
 		}
 		progress := delivery.Status()
 		p.mu.Lock()
-		p.updateProgressLocked(progress)
+		warnBacklog := p.updateProgressLocked(progress, config.BacklogWarningBytes)
 		p.status.Backpressured = false
 		p.signalLocked()
 		p.mu.Unlock()
+		if warnBacklog {
+			warnPendingBacklog(ctx, config.Identity.SourceID, progress.PendingBytes, config.BacklogWarningBytes)
+		}
 		if version.Blocked {
 			<-ctx.Done()
 			return herror.Wrap(ctx.Err())
@@ -302,7 +308,7 @@ func (p *Pipeline) setCaptureError(message string) bool {
 }
 
 // deliver 顺序交付队首记录，处理暂停、审批、暂时失联及停止信号。
-func (p *Pipeline) deliver(ctx context.Context, delivery *Delivery, history *spool.Store) error {
+func (p *Pipeline) deliver(ctx, captureCtx context.Context, delivery *Delivery, history *spool.Store, warningBytes int64) error {
 	var inspectedHead bool
 	for {
 		p.mu.Lock()
@@ -324,6 +330,13 @@ func (p *Pipeline) deliver(ctx context.Context, delivery *Delivery, history *spo
 
 		var started bool
 		var schemaBarrier bool
+		release, err := p.tableParent.beginTableWrite(captureCtx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return err
+		}
 		progress, err := delivery.deliverNext(ctx, func(record *OrderedRecord) bool {
 			p.mu.Lock()
 			defer p.mu.Unlock()
@@ -345,12 +358,15 @@ func (p *Pipeline) deliver(ctx context.Context, delivery *Delivery, history *spo
 			}
 			return started
 		})
+		if release != nil {
+			release()
+		}
 		retry := errors.Is(err, ErrLoadPending) || errors.Is(err, errDorisTargetUnavailable)
 		if started {
 			cursorProgress := delivery.Status()
 			p.mu.Lock()
 			p.status.InFlight = false
-			p.updateProgressLocked(cursorProgress)
+			warnBacklog := p.updateProgressLocked(cursorProgress, warningBytes)
 			previousError := p.status.DeliveryError
 			p.status.DeliveryError = ""
 			if retry {
@@ -364,6 +380,9 @@ func (p *Pipeline) deliver(ctx context.Context, delivery *Delivery, history *spo
 			p.signalLocked()
 			status := p.status
 			p.mu.Unlock()
+			if warnBacklog {
+				warnPendingBacklog(ctx, status.Identity.SourceID, cursorProgress.PendingBytes, warningBytes)
+			}
 			if progress && schemaBarrier {
 				if cleanupErr := reclaimSchemaHistory(history, cursorProgress.Delivered); cleanupErr != nil {
 					hlog.Warn(ctx, "CDC schema history cleanup deferred source_id=%s error=%v", status.Identity.SourceID, cleanupErr)
@@ -396,12 +415,20 @@ func (p *Pipeline) deliver(ctx context.Context, delivery *Delivery, history *spo
 	}
 }
 
-// updateProgressLocked 丢弃被采集或交付并发发布的更新所超过的旧快照。
-func (p *Pipeline) updateProgressLocked(progress DeliveryStatus) {
+// updateProgressLocked 接受最新进度并报告积压是否刚超过告警阈值。
+func (p *Pipeline) updateProgressLocked(progress DeliveryStatus, warningBytes int64) bool {
 	if progress.Durable.Sequence >= p.status.Progress.Durable.Sequence &&
 		progress.Delivered.Sequence >= p.status.Progress.Delivered.Sequence {
+		previousBytes := p.status.Progress.PendingBytes
 		p.status.Progress = progress
+		return warningBytes > 0 && previousBytes <= warningBytes && progress.PendingBytes > warningBytes
 	}
+	return false
+}
+
+// warnPendingBacklog 记录未确认缓冲容量告警。
+func warnPendingBacklog(ctx context.Context, sourceID string, pendingBytes, warningBytes int64) {
+	hlog.Warn(ctx, "CDC 本地缓冲积压超过告警阈值 source_id=%s pending_bytes=%d warning_bytes=%d", sourceID, pendingBytes, warningBytes)
 }
 
 // deliveryBlockedLocked 在持锁时判断当前控制状态或 DDL 屏障是否阻塞交付。

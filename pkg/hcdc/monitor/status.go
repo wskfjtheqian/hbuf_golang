@@ -30,6 +30,7 @@ type Snapshot struct {
 type SourceStatus struct {
 	ID                   string             `json:"id"`
 	Generation           string             `json:"generation"`
+	TargetDatabase       string             `json:"targetDatabase"`
 	State                hcdc.PipelineState `json:"state"`
 	Since                *time.Time         `json:"since,omitempty"`
 	Reason               string             `json:"reason,omitempty"`
@@ -45,6 +46,23 @@ type SourceStatus struct {
 	SnapshotZeroDateRows uint64             `json:"snapshotZeroDateRows,string"`
 	PendingDDL           *DDLStatus         `json:"pendingDDL,omitempty"`
 	Actions              []Action           `json:"actions"`
+	DiscoveredTables     []TableStatus      `json:"discoveredTables,omitempty"`
+	TableDiscoveryError  string             `json:"tableDiscoveryError,omitempty"`
+}
+
+// TableStatus 报告自动接入表的独立快照、增量位点和待审批结构变更。
+type TableStatus struct {
+	Name                 string             `json:"name"`
+	State                hcdc.PipelineState `json:"state"`
+	Error                string             `json:"error,omitempty"`
+	CaptureError         string             `json:"captureError,omitempty"`
+	DeliveryError        string             `json:"deliveryError,omitempty"`
+	Durable              Checkpoint         `json:"durable"`
+	Delivered            Checkpoint         `json:"delivered"`
+	PendingBytes         int64              `json:"pendingBytes"`
+	Backpressured        bool               `json:"backpressured"`
+	SnapshotZeroDateRows uint64             `json:"snapshotZeroDateRows,string"`
+	PendingDDL           *DDLStatus         `json:"pendingDDL,omitempty"`
 }
 
 // Cursor 描述物理 Binlog 位置及其 GTID 集合。
@@ -91,29 +109,51 @@ func (s *source) status(p *hcdc.Pipeline, closed bool) SourceStatus {
 
 // snapshot 投影同步进度，遮盖配置中已知的凭据。
 func (s *source) snapshot(state hcdc.PipelineStatus, done, closed bool) SourceStatus {
+	identity := s.resolved.Identity()
 	output := SourceStatus{
-		ID: s.config.Identity.SourceID, Generation: s.config.Identity.Generation, State: state.State,
-		Reason: s.redactor.Replace(state.Reason), DeliveryError: s.redactor.Replace(state.DeliveryError),
-		CaptureError: s.redactor.Replace(state.CaptureError),
+		ID: identity.SourceID, Generation: identity.Generation, TargetDatabase: s.resolved.TargetDatabase(), State: state.State,
+		Reason: s.resolved.RedactMessage(state.Reason), DeliveryError: s.resolved.RedactMessage(state.DeliveryError),
+		CaptureError: s.resolved.RedactMessage(state.CaptureError),
 		PendingBytes: state.Progress.PendingBytes, Backpressured: state.Backpressured, InFlight: state.InFlight,
 		ReadCursor: snapshotCursor(state.ReadCursor), Durable: snapshotCheckpoint(state.Progress.Durable),
 		Delivered: snapshotCheckpoint(state.Progress.Delivered), SnapshotZeroDateRows: state.SnapshotZeroDateRows,
-		Actions: availableActions(state.State, done, closed),
+		Actions:             availableActions(state.State, done, closed),
+		TableDiscoveryError: s.resolved.RedactMessage(state.TableDiscoveryError),
 	}
 	if !state.Since.IsZero() {
 		since := state.Since.UTC()
 		output.Since = &since
 	}
 	if state.Err != nil {
-		output.Error = s.redactor.Replace(state.Err.Error())
+		output.Error = s.resolved.RedactMessage(state.Err.Error())
 	}
-	if plan := state.PendingDDL; plan != nil {
-		output.PendingDDL = &DDLStatus{
-			ID: plan.ID, Kind: plan.Kind, Table: plan.Before.Database + "." + plan.Before.Name,
-			Reason: s.redactor.Replace(plan.Reason), RequiresApproval: plan.RequiresApproval,
+	output.PendingDDL = s.ddlStatus(state.PendingDDL)
+	for _, table := range state.DiscoveredTables {
+		status := table.Status
+		item := TableStatus{
+			Name: table.Name, State: status.State,
+			CaptureError: s.resolved.RedactMessage(status.CaptureError), DeliveryError: s.resolved.RedactMessage(status.DeliveryError),
+			Durable: snapshotCheckpoint(status.Progress.Durable), Delivered: snapshotCheckpoint(status.Progress.Delivered),
+			PendingBytes: status.Progress.PendingBytes, Backpressured: status.Backpressured,
+			SnapshotZeroDateRows: status.SnapshotZeroDateRows, PendingDDL: s.ddlStatus(status.PendingDDL),
 		}
+		if status.Err != nil {
+			item.Error = s.resolved.RedactMessage(status.Err.Error())
+		}
+		output.DiscoveredTables = append(output.DiscoveredTables, item)
 	}
 	return output
+}
+
+// ddlStatus 将待审批计划转成监控状态并过滤连接凭据。
+func (s *source) ddlStatus(plan *hcdc.DDLPlan) *DDLStatus {
+	if plan == nil {
+		return nil
+	}
+	return &DDLStatus{
+		ID: plan.ID, Kind: plan.Kind, Table: plan.Before.Database + "." + plan.Before.Name,
+		Reason: s.resolved.RedactMessage(plan.Reason), RequiresApproval: plan.RequiresApproval,
+	}
 }
 
 // availableActions 按状态和资源释放情况列出可执行操作。

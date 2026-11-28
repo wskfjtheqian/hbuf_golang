@@ -17,8 +17,78 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	driver "github.com/go-sql-driver/mysql"
 	"github.com/klauspost/compress/zstd"
+	sqlparser "github.com/pingcap/tidb/pkg/parser"
 	"github.com/stretchr/testify/require"
 )
+
+// TestMySQLAtomicCreateWaitsForCommit 验证忽略未订阅库的原子 CTAS 时仍按事务提交位点。
+func TestMySQLAtomicCreateWaitsForCommit(t *testing.T) {
+	const sourceUUID = "901a7bbd-ea05-11f1-abe7-16caeccb45c6"
+	selected := TableRef{Schema: "current", Name: "ledger"}
+	for _, test := range []struct {
+		name     string
+		target   string
+		rowTable TableRef
+		queryErr string
+		rowErr   string
+	}{
+		{name: "new database", target: "`newdb`.`ledger`", rowTable: TableRef{Schema: "newdb", Name: "ledger"}},
+		{name: "subscribed table", target: "`current`.`LEDGER`", queryErr: "selected or unidentified table"},
+		{name: "unexpected row target", target: "`newdb`.`ledger`", rowTable: selected, rowErr: "targets another table"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			committed, err := mysql.ParseGTIDSet(mysql.MySQLFlavor, sourceUUID+":1")
+			require.NoError(t, err)
+			var delivered []Transaction
+			initial := Cursor{Flavor: mysql.MySQLFlavor, File: "mysql-bin.000001", Position: 4, GTIDSet: committed.String()}
+			reader := transactionReader{
+				file: initial.File, cursor: initial, committed: committed, requireGTID: true,
+				pendingGTID: sourceUUID + ":2", parser: sqlparser.New(),
+				tables:  map[TableRef]Table{selected: {Ref: selected}},
+				consume: func(tx Transaction) error { delivered = append(delivered, tx); return nil },
+			}
+			query := func(position uint32, sql string) error {
+				return reader.accept(&replication.BinlogEvent{
+					Header: &replication.EventHeader{EventType: replication.QUERY_EVENT, LogPos: position},
+					Event:  &replication.QueryEvent{Schema: []byte("current"), Query: []byte(sql)},
+				})
+			}
+			require.NoError(t, query(10, "BEGIN"))
+			err = query(20, "CREATE TABLE "+test.target+" (\n  `id` bigint NOT NULL,\n  PRIMARY KEY (`id`)\n) START TRANSACTION ENGINE=InnoDB")
+			require.Equal(t, initial, reader.cursor)
+			require.Empty(t, delivered)
+			if test.queryErr != "" {
+				require.ErrorContains(t, err, test.queryErr)
+				return
+			}
+			require.NoError(t, err)
+			err = reader.accept(&replication.BinlogEvent{
+				Header: &replication.EventHeader{EventType: replication.WRITE_ROWS_EVENTv2, LogPos: 30},
+				Event: &replication.RowsEvent{Flags: replication.STMT_END_F, Table: &replication.TableMapEvent{
+					Schema: []byte(test.rowTable.Schema), Table: []byte(test.rowTable.Name),
+				}},
+			})
+			require.Equal(t, initial, reader.cursor)
+			require.Empty(t, delivered)
+			if test.rowErr != "" {
+				require.ErrorContains(t, err, test.rowErr)
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, reader.accept(&replication.BinlogEvent{
+				Header: &replication.EventHeader{EventType: replication.XID_EVENT, LogPos: 40},
+				Event:  &replication.XIDEvent{},
+			}))
+			require.Len(t, delivered, 1)
+			require.Equal(t, sourceUUID+":2", delivered[0].ID)
+			require.Equal(t, sourceUUID+":1-2", delivered[0].Cursor.GTIDSet)
+			require.EqualValues(t, 40, delivered[0].Cursor.Position)
+			require.Empty(t, delivered[0].Changes)
+			require.Nil(t, delivered[0].DDL)
+			require.Nil(t, reader.atomicCreateTable)
+		})
+	}
+}
 
 // TestCompressedBinlogBounds 验证有限展开的事务与行事件可通过，超限或声明不实会阻塞。
 func TestCompressedBinlogBounds(t *testing.T) {

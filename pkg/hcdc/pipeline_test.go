@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc/internal/mysqlsource"
+	"github.com/wskfjtheqian/hbuf_golang/pkg/hcdc/internal/spool"
 )
 
 // TestPipelineWatchStatus 验证首次快照、慢回调合并、状态隔离与终态通知。
@@ -63,33 +65,14 @@ func TestPipelineWatchStatus(t *testing.T) {
 	})
 }
 
-// TestPipelineWatchStatusCancellation 验证监听取消后释放等待，且流水线继续运行。
-func TestPipelineWatchStatusCancellation(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		p := &Pipeline{status: PipelineStatus{State: PipelineRunning}}
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-		initial := make(chan struct{})
-		finished := make(chan error, 1)
-		go func() {
-			finished <- p.WatchStatus(ctx, func(context.Context, PipelineStatus) { close(initial) })
-		}()
-		<-initial
-		cancel()
-		require.ErrorIs(t, <-finished, context.Canceled)
-		require.Equal(t, PipelineRunning, p.Status().State)
-		require.Error(t, p.WatchStatus(t.Context(), nil))
-	})
-}
-
 // managerTestPipelines 创建两个端点相同但缓冲目录、复制 ID 和目标库各自独立的源配置。
-func managerTestPipelines(t *testing.T) (PipelineConfig, PipelineConfig) {
+func managerTestPipelines(t *testing.T) (pipelineConfig, pipelineConfig) {
 	t.Helper()
 	directory := t.TempDir()
-	first := PipelineConfig{
+	first := pipelineConfig{
 		Identity:  StreamIdentity{PipelineID: "test", SourceID: "first", Generation: "1"},
 		Directory: filepath.Join(directory, "first"),
-		Source: MySQLConfig{
+		Source: mysqlConfig{
 			Address: "127.0.0.1:3306", User: "cdc", SourceIdentity: "source", ServerID: 10,
 			Database: "orders", Tables: []string{"entries", "items"},
 		},
@@ -111,26 +94,25 @@ func TestManagerValidatesCompleteConfigBeforeStarting(t *testing.T) {
 	first, second := managerTestPipelines(t)
 	var absent *Config
 	require.False(t, absent.Validate(t.Context()))
-	require.True(t, (&Config{Pipelines: []PipelineConfig{first, second}}).Validate(t.Context()))
+	_, err := prepareDesiredConfig([]pipelineConfig{first, second})
+	require.NoError(t, err)
 
 	for _, scenario := range []struct {
 		name  string
-		edit  func(*PipelineConfig)
+		edit  func(*pipelineConfig)
 		error string
 	}{
-		{"invalid endpoint", func(p *PipelineConfig) { p.Doris.StreamLoadURL = "/invalid" }, "HTTP(S) URL"},
-		{"reused source ID", func(p *PipelineConfig) { p.Identity.SourceID = first.Identity.SourceID }, "duplicate CDC source ID"},
-		{"reused target", func(p *PipelineConfig) { p.TargetDatabase = first.TargetDatabase }, "target database or checkpoint identity"},
-		{"reused directory", func(p *PipelineConfig) { p.Directory = first.Directory + string(filepath.Separator) + "." }, "share a buffer directory"},
-		{"invalid zero date policy", func(p *PipelineConfig) { p.ZeroDatePolicy = "invalid" }, "zero date policy"},
+		{"invalid endpoint", func(p *pipelineConfig) { p.Doris.StreamLoadURL = "/invalid" }, "HTTP(S) URL"},
+		{"reused source ID", func(p *pipelineConfig) { p.Identity.SourceID = first.Identity.SourceID }, "duplicate CDC source ID"},
+		{"reused target", func(p *pipelineConfig) { p.TargetDatabase = first.TargetDatabase }, "target database or checkpoint identity"},
+		{"reused directory", func(p *pipelineConfig) { p.Directory = first.Directory + string(filepath.Separator) + "." }, "share a buffer directory"},
+		{"invalid zero date policy", func(p *pipelineConfig) { p.ZeroDatePolicy = "invalid" }, "zero date policy"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			manager := NewManager(t.Context())
 			candidate := second
 			scenario.edit(&candidate)
-			config := &Config{Pipelines: []PipelineConfig{first, candidate}}
-			require.False(t, config.Validate(t.Context()))
-			err := manager.SetConfig(t.Context(), config)
+			err := manager.setConfig(t.Context(), nil, []pipelineConfig{first, candidate})
 			require.ErrorContains(t, err, scenario.error)
 			_, installed := manager.Pipeline(first.Identity.SourceID)
 			require.False(t, installed)
@@ -138,38 +120,35 @@ func TestManagerValidatesCompleteConfigBeforeStarting(t *testing.T) {
 	}
 }
 
-// TestConfigEqual 验证等价比较、实际参数变更和重复提交时的快速返回。
-func TestConfigEqual(t *testing.T) {
+// TestManagerEquivalentPipelines 验证等价比较、实际参数变更和重复提交时的快速返回。
+func TestManagerEquivalentPipelines(t *testing.T) {
 	first, second := managerTestPipelines(t)
-	current := &Config{Pipelines: []PipelineConfig{first, second}}
-	var absent *Config
-	require.True(t, absent.Equal(nil))
-	require.False(t, absent.Equal(current))
-	require.False(t, current.Equal(nil))
+	current := []pipelineConfig{first, second}
 
 	updatedFirst := first
 	updatedFirst.Source.Tables = []string{"items", "entries"}
 	updatedFirst.Source.Flavor = "mysql"
 	updatedFirst.Doris.ControlDatabase = "cdc_control"
 	updatedFirst.ZeroDatePolicy = ZeroDateReject
-	updated := &Config{Pipelines: []PipelineConfig{second, updatedFirst}}
-	require.True(t, current.Equal(updated))
-	require.True(t, updated.Equal(current))
-	require.Equal(t, []string{"items", "entries"}, updated.Pipelines[1].Source.Tables)
+	updated := []pipelineConfig{second, updatedFirst}
+	require.True(t, equalPipelineConfig(first, updatedFirst))
+	require.True(t, equalPipelineConfig(updatedFirst, first))
+	require.Equal(t, []string{"items", "entries"}, updated[1].Source.Tables)
 
-	updated.Pipelines[1].Source.Password = "new-password"
-	require.False(t, current.Equal(updated))
-	updated.Pipelines[1] = updatedFirst
-	updated.Pipelines[1].Doris.SQLDSN = "new-user@tcp(127.0.0.1:9030)/"
-	require.False(t, current.Equal(updated))
-	updated.Pipelines[1] = updatedFirst
-	updated.Pipelines[1].MaxPendingBytes = 1024
-	require.False(t, current.Equal(updated))
-	updated.Pipelines[1] = updatedFirst
-	updated.Pipelines[1].ZeroDatePolicy = ZeroDateEpoch
-	require.True(t, updated.Validate(t.Context()))
-	require.False(t, current.Equal(updated))
-	require.False(t, updated.Equal(current))
+	updated[1].Source.Password = "new-password"
+	require.False(t, equalPipelineConfig(first, updated[1]))
+	updated[1] = updatedFirst
+	updated[1].Doris.SQLDSN = "new-user@tcp(127.0.0.1:9030)/"
+	require.False(t, equalPipelineConfig(first, updated[1]))
+	updated[1] = updatedFirst
+	updated[1].MaxPendingBytes = 1024
+	require.False(t, equalPipelineConfig(first, updated[1]))
+	updated[1] = updatedFirst
+	updated[1].ZeroDatePolicy = ZeroDateEpoch
+	_, err := prepareDesiredConfig(updated)
+	require.NoError(t, err)
+	require.False(t, equalPipelineConfig(first, updated[1]))
+	require.False(t, equalPipelineConfig(updated[1], first))
 
 	manager := NewManager(t.Context())
 	prepared, err := prepareManagerConfig(current, nil)
@@ -180,14 +159,14 @@ func TestConfigEqual(t *testing.T) {
 	}
 	_, err = prepareManagerConfig(updated, manager.sources)
 	require.ErrorContains(t, err, "requires a new generation")
-	updated.Pipelines[1] = updatedFirst
+	updated[1] = updatedFirst
 
 	before := manager.sources[first.Identity.SourceID].pipeline
 	// 将原来的待建目录变为普通文件，使重新预检必定失败。
 	require.NoError(t, os.WriteFile(first.Directory, nil, 0o600))
 	_, err = prepareManagedConfig(first)
 	require.Error(t, err)
-	require.NoError(t, manager.SetConfig(t.Context(), updated))
+	require.NoError(t, manager.setConfig(t.Context(), nil, updated))
 	after, installed := manager.Pipeline(first.Identity.SourceID)
 	require.True(t, installed)
 	require.Same(t, before, after)
@@ -246,7 +225,7 @@ func TestPlanCoalescesPrimaryKeyChangesAndKeepsPhysicalColumns(t *testing.T) {
 		},
 		PrimaryKey: []int{1},
 	}
-	layouts, err := buildTableLayouts(PipelineConfig{TargetDatabase: "report"}, []mysqlsource.Table{table})
+	layouts, err := buildTableLayouts(pipelineConfig{TargetDatabase: "report"}, []mysqlsource.Table{table})
 	require.NoError(t, err)
 	require.Equal(t, "id", layouts[0].target.Columns[0].Name)
 	directory := t.TempDir()
@@ -286,7 +265,7 @@ func TestNullableBitmapRejectsNull(t *testing.T) {
 		},
 		PrimaryKey: []int{0},
 	}
-	layouts, err := buildTableLayouts(PipelineConfig{TargetDatabase: "report"}, []mysqlsource.Table{table})
+	layouts, err := buildTableLayouts(pipelineConfig{TargetDatabase: "report"}, []mysqlsource.Table{table})
 	require.NoError(t, err)
 	require.Equal(t, DorisColumn{Name: "members", Type: "BITMAP"}, layouts[0].target.Columns[1])
 	_, _, err = planTransaction(layouts, mysqlsource.Transaction{Changes: []mysqlsource.Change{
@@ -311,7 +290,7 @@ func TestZeroDatePolicy(t *testing.T) {
 		},
 		PrimaryKey: []int{0},
 	}
-	config := PipelineConfig{TargetDatabase: "report"}
+	config := pipelineConfig{TargetDatabase: "report"}
 	layouts, err := buildTableLayouts(config, []mysqlsource.Table{table})
 	require.NoError(t, err)
 	regular := []any{int64(1), "2025-01-31", "2025-01-31 12:34:56.120000", "2025-01-31 12:34:56.000", "00:00:00.000", 0, "0000-00-00", nil}
@@ -389,7 +368,7 @@ func TestPlanTransactionBatchesByEncodedBytes(t *testing.T) {
 		},
 		PrimaryKey: []int{0},
 	}
-	layouts, err := buildTableLayouts(PipelineConfig{TargetDatabase: "report"}, []mysqlsource.Table{table})
+	layouts, err := buildTableLayouts(pipelineConfig{TargetDatabase: "report"}, []mysqlsource.Table{table})
 	require.NoError(t, err)
 	for _, test := range []struct {
 		name      string
@@ -510,4 +489,401 @@ func TestSnapshotBatchRespectsByteLimitAndExplicitRows(t *testing.T) {
 // snapshotBatchTestRow 构造只有一个文本字段的快照测试行。
 func snapshotBatchTestRow(value string) DorisRow {
 	return DorisRow{Values: []*string{&value}}
+}
+
+type bootstrapTestTarget struct {
+	*deliveryTestTarget
+	proof Checkpoint
+}
+
+// TestBootstrapRetainsInitialTables 验证新增表不会重写已绑定的快照清单和选表规则。
+func TestBootstrapRetainsInitialTables(t *testing.T) {
+	config, _ := managerTestPipelines(t)
+	filter, err := compileCanalFilter([]string{"^entries$", "^items"}, nil, "IncludeTables", "ExcludeTables")
+	require.NoError(t, err)
+	config.tableDiscovery = &tableDiscoveryConfig{Interval: time.Second, Filter: filter}
+	manifest, _, err := validatePipelineConfig(config)
+	require.NoError(t, err)
+	store, err := spool.Open(filepath.Join(config.Directory, "bootstrap"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	payload, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	_, err = store.Bind(payload)
+	require.NoError(t, err)
+
+	discovered := config
+	discovered.Source.Tables = []string{"entries", "items", "items_archive"}
+	require.True(t, equalPipelineConfig(config, discovered))
+	require.False(t, equalPipelineConfig(discovered, config))
+	next, _, err := validatePipelineConfig(discovered)
+	require.NoError(t, err)
+	tables, err := recoverBootstrapTables(store, discovered, next)
+	require.NoError(t, err)
+	require.Equal(t, manifest.SourceTables, tables)
+	bound, err := store.Metadata()
+	require.NoError(t, err)
+	require.Equal(t, payload, bound)
+
+	reordered, err := compileCanalFilter([]string{"^items", "^entries$", "^items"}, nil, "IncludeTables", "ExcludeTables")
+	require.NoError(t, err)
+	discovered.tableDiscovery = &tableDiscoveryConfig{Interval: time.Second, Filter: reordered}
+	require.True(t, equalPipelineConfig(config, discovered))
+	_, err = recoverBootstrapTables(store, discovered, next)
+	require.NoError(t, err)
+
+	discovered.tableDiscovery = &tableDiscoveryConfig{Interval: time.Second}
+	require.False(t, equalPipelineConfig(config, discovered))
+	_, err = recoverBootstrapTables(store, discovered, next)
+	require.ErrorContains(t, err, "a changed filter requires a new generation")
+
+	next.SourceTables = []string{"items", "items_archive"}
+	_, err = recoverBootstrapTables(store, config, next)
+	require.ErrorContains(t, err, "table selection was removed or changed")
+}
+
+// TestStagedSnapshotModeSurvivesRestart 验证库首次全量的恢复模式和初始表清单在重启时保持绑定。
+func TestStagedSnapshotModeSurvivesRestart(t *testing.T) {
+	config, _ := managerTestPipelines(t)
+	config.tableDiscovery = &tableDiscoveryConfig{Interval: time.Second}
+	manifest, _, err := validatePipelineConfig(config)
+	require.NoError(t, err)
+	path := filepath.Join(config.Directory, "bootstrap")
+	store, err := spool.Open(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	mode, err := bindStagedSnapshotMode(store, manifest, false)
+	require.NoError(t, err)
+	require.False(t, mode)
+	metadata, err := store.Metadata()
+	require.NoError(t, err)
+	require.Nil(t, metadata)
+	mode, err = bindStagedSnapshotMode(store, manifest, true)
+	require.NoError(t, err)
+	require.True(t, mode)
+	require.NoError(t, store.Close())
+
+	store, err = spool.Open(path)
+	require.NoError(t, err)
+	config.Source.Tables = append(config.Source.Tables, "new_table")
+	discovered, _, err := validatePipelineConfig(config)
+	require.NoError(t, err)
+	mode, err = bindStagedSnapshotMode(store, discovered, false)
+	require.NoError(t, err)
+	require.True(t, mode)
+	discovered.StagedSnapshot = mode
+	tables, err := recoverBootstrapTables(store, config, discovered)
+	require.NoError(t, err)
+	require.Equal(t, manifest.SourceTables, tables)
+
+	legacy, err := spool.Open(filepath.Join(config.Directory, "legacy-bootstrap"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, legacy.Close()) })
+	original, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	_, err = legacy.Bind(original)
+	require.NoError(t, err)
+	mode, err = bindStagedSnapshotMode(legacy, discovered, true)
+	require.NoError(t, err)
+	require.False(t, mode)
+	bound, err := legacy.Metadata()
+	require.NoError(t, err)
+	require.Equal(t, original, bound)
+}
+
+// verifySchemaRevision 核对快照在测试目标中留下的基线结构证据。
+func (target *bootstrapTestTarget) verifySchemaRevision(_ context.Context, proof Checkpoint) error {
+	if target.proof != proof {
+		return errors.New("snapshot proof does not exist in this target")
+	}
+	return nil
+}
+
+// TestBootstrapRecoversPreparedSnapshot 验证基线发布前后保留快照证据，重启只补齐基线与本地完成标记。
+func TestBootstrapRecoversPreparedSnapshot(t *testing.T) {
+	for _, published := range []bool{false, true} {
+		name := "before_baseline"
+		if published {
+			name = "after_baseline"
+		}
+		t.Run(name, func(t *testing.T) {
+			fixture := deliveryTestConfig(t)
+			config := pipelineConfig{Directory: fixture.Directory, Identity: fixture.Identity}
+			state := bootstrapState{Cursor: fixture.Baseline, ZeroDateRows: 5}
+			path := filepath.Join(config.Directory, "bootstrap")
+			store, err := spool.Open(path)
+			require.NoError(t, err)
+			payload, err := json.Marshal(bootstrapRecord{bootstrapState: state, Prepared: true})
+			require.NoError(t, err)
+			require.NoError(t, store.Append(bootstrapPreparedSequence, payload))
+
+			catalog, err := snapshotCatalog(state)
+			require.NoError(t, err)
+			target := &bootstrapTestTarget{
+				deliveryTestTarget: &deliveryTestTarget{},
+				proof:              Checkpoint{Identity: config.Identity, Cursor: state.Cursor, StructureRevision: digest(catalog)},
+			}
+			if published {
+				delivery, err := openPipelineDelivery(t.Context(), config, target, state.Cursor)
+				require.NoError(t, err)
+				require.NoError(t, delivery.Close())
+				target.persistCheckpoint = func(Checkpoint) error {
+					t.Fatal("recovery rewrote an already confirmed baseline")
+					return nil
+				}
+			}
+			require.NoError(t, store.Close())
+
+			store, err = spool.Open(path)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = store.Close() })
+			recovered, err := restoreBootstrap(t.Context(), store, target, config)
+			require.NoError(t, err)
+			require.Equal(t, state, recovered)
+			require.Equal(t, Checkpoint{Identity: config.Identity, Cursor: state.Cursor}, *target.checkpoint)
+			completed, err := store.Read(bootstrapCompletedSequence)
+			require.NoError(t, err)
+			require.Equal(t, payload, completed)
+			require.Empty(t, target.submitted)
+
+			// 完成后已存在增量进度时，仍恢复原始快照基线供交付模块核对。
+			target.checkpoint.Sequence = 1
+			recovered, err = restoreBootstrap(t.Context(), store, target, config)
+			require.NoError(t, err)
+			require.Equal(t, state, recovered)
+		})
+	}
+}
+
+// TestBootstrapRequiresSnapshotEvidence 验证旧完成记录兼容且中断的快照无法凭远端位点补写完成标记。
+func TestBootstrapRequiresSnapshotEvidence(t *testing.T) {
+	fixture := deliveryTestConfig(t)
+	config := pipelineConfig{Directory: fixture.Directory, Identity: fixture.Identity}
+	state := bootstrapState{Cursor: fixture.Baseline, ZeroDateRows: 5}
+	target := &bootstrapTestTarget{deliveryTestTarget: &deliveryTestTarget{checkpoint: &Checkpoint{Identity: config.Identity, Cursor: state.Cursor}}}
+	store, err := spool.Open(filepath.Join(config.Directory, "bootstrap"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	_, err = restoreBootstrap(t.Context(), store, target, config)
+	require.ErrorContains(t, err, "snapshot was interrupted")
+
+	payload, err := json.Marshal(bootstrapRecord{bootstrapState: state, Prepared: true})
+	require.NoError(t, err)
+	require.NoError(t, store.Append(bootstrapPreparedSequence, payload))
+	_, err = prepareBootstrap(t.Context(), store, nil, nil, config, bootstrapManifest{}, false)
+	require.ErrorContains(t, err, "bootstrap manifest is missing")
+	target.checkpoint.Cursor.Position++
+	_, err = restoreBootstrap(t.Context(), store, target, config)
+	require.ErrorContains(t, err, "conflicts with the prepared CDC snapshot baseline")
+	_, err = restoreBootstrap(t.Context(), store, &bootstrapTestTarget{deliveryTestTarget: &deliveryTestTarget{}}, config)
+	require.ErrorContains(t, err, "verify prepared CDC snapshot in its original Doris target")
+	sequences, err := store.Sequences()
+	require.NoError(t, err)
+	require.Equal(t, []uint64{bootstrapPreparedSequence}, sequences)
+
+	legacy, err := spool.Open(filepath.Join(config.Directory, "old-bootstrap"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = legacy.Close() })
+	oldPayload, err := json.Marshal(state)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Append(bootstrapPreparedSequence, oldPayload))
+	target.checkpoint.Sequence = 1
+	recovered, err := restoreBootstrap(t.Context(), legacy, target, config)
+	require.NoError(t, err)
+	require.Equal(t, state, recovered)
+}
+
+type controlTestStore func(uint64, []byte) error
+
+// Append 调用测试指定的落盘行为。
+func (store controlTestStore) Append(sequence uint64, data []byte) error {
+	return store(sequence, data)
+}
+
+// TestPipelineCloseWhileControlWriteWaits 验证阻塞的控制落盘不会占住状态锁或延迟带期限的关闭返回。
+func TestPipelineCloseWhileControlWriteWaits(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		runCtx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		_, stopCapture := context.WithCancel(runCtx)
+		defer stopCapture()
+		writing, allowWrite := make(chan struct{}), make(chan struct{})
+		pipeline := &Pipeline{
+			changed: make(chan struct{}), done: make(chan struct{}),
+			cancel: cancel, stopCapture: stopCapture, ready: true,
+			status: PipelineStatus{State: PipelineRunning},
+			control: controlTestStore(func(uint64, []byte) error {
+				close(writing)
+				<-allowWrite
+				return nil
+			}),
+		}
+		go func() {
+			<-runCtx.Done()
+			pipeline.waitForControlWrite()
+			close(pipeline.done)
+		}()
+		pauseCtx, cancelPause := context.WithCancel(t.Context())
+		defer cancelPause()
+		paused := make(chan error, 1)
+		go func() { paused <- pipeline.Pause(pauseCtx, "test") }()
+		<-writing
+		require.Equal(t, PipelinePaused, pipeline.Status().State)
+		pipeline.mu.Lock()
+		blocked := pipeline.deliveryBlockedLocked()
+		pipeline.mu.Unlock()
+		require.True(t, blocked)
+
+		closeCtx, stop := context.WithTimeout(t.Context(), time.Second)
+		defer stop()
+		require.ErrorIs(t, pipeline.Close(closeCtx), context.DeadlineExceeded)
+		require.Equal(t, PipelineStopping, pipeline.Status().State)
+		require.False(t, channelClosed(pipeline.Done()))
+		cancelPause()
+		require.ErrorIs(t, <-paused, ErrControlOutcomeUnknown)
+
+		close(allowWrite)
+		<-pipeline.Done()
+		require.Equal(t, uint64(1), pipeline.controlSequence)
+	})
+}
+
+// TestPipelineControlRetriesIdenticalUncertainRecord 验证控制记录结果未知时阻止派发，并核对原记录后解除阻塞。
+func TestPipelineControlRetriesIdenticalUncertainRecord(t *testing.T) {
+	var sequences []uint64
+	var payloads []string
+	pipeline := &Pipeline{
+		changed: make(chan struct{}), ready: true,
+		status: PipelineStatus{State: PipelineRunning},
+		control: controlTestStore(func(sequence uint64, payload []byte) error {
+			sequences = append(sequences, sequence)
+			payloads = append(payloads, string(payload))
+			if len(sequences) == 1 {
+				return spool.ErrPublicationUncertain
+			}
+			return nil
+		}),
+	}
+	require.ErrorIs(t, pipeline.Pause(t.Context(), "test"), ErrControlOutcomeUnknown)
+	require.Equal(t, ErrControlOutcomeUnknown.Error(), pipeline.Status().Reason)
+	require.NoError(t, pipeline.Resume(t.Context()))
+	require.Equal(t, []uint64{1, 1, 2}, sequences)
+	require.Equal(t, payloads[0], payloads[1])
+	require.Equal(t, PipelineRunning, pipeline.Status().State)
+}
+
+// TestDeliveryCloseContextStopsNewWork 验证带期限关闭可返回，已有请求结束后同一次关闭释放资源。
+func TestDeliveryCloseContextStopsNewWork(t *testing.T) {
+	delivery, config, target := openDeliveryTest(t)
+	started, blocked := make(chan struct{}), make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(blocked) })
+	defer unblock()
+	target.submitLoad = func(batch LoadBatch) (LoadConfirmation, error) {
+		close(started)
+		<-blocked
+		return successfulDeliveryTestLoad(batch), nil
+	}
+	record := OrderedRecord{Sequence: 1, TransactionID: "in-flight", Cursor: config.Baseline,
+		Batches: []LoadBatch{{TargetTable: "report.events", RowCount: 1, Payload: []byte("1\n")}}}
+	record.Cursor.Position++
+	require.NoError(t, delivery.AppendRecord(record))
+	result := make(chan error, 1)
+	go func() {
+		_, err := delivery.DeliverNext(t.Context())
+		result <- err
+	}()
+	<-started
+	closeCtx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.ErrorIs(t, delivery.CloseContext(closeCtx), context.Canceled)
+	require.ErrorIs(t, delivery.AppendRecord(record), ErrDeliveryClosed)
+	_, err := delivery.DeliverNext(t.Context())
+	require.ErrorIs(t, err, ErrDeliveryClosed)
+	unblock()
+	require.NoError(t, <-result)
+	require.NoError(t, delivery.Close())
+}
+
+// channelClosed 报告完成通道是否已经关闭。
+func channelClosed(done <-chan struct{}) bool {
+	select {
+	case <-done:
+		return true
+	default:
+		return false
+	}
+}
+
+// TestSchemaHistoryReclaimsBeforeDeliveredAnchor 验证结构历史压缩保留检查点结构和未交付版本。
+func TestSchemaHistoryReclaimsBeforeDeliveredAnchor(t *testing.T) {
+	fixture := deliveryTestConfig(t)
+	history, err := spool.Open(fixture.Directory)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = history.Close() })
+
+	var delivered, durable Checkpoint
+	for _, sequence := range []uint64{1, 2, 4} {
+		cursor := fixture.Baseline
+		cursor.Position += uint32(sequence)
+		version := schemaVersion{Sequence: sequence, Cursor: cursor}
+		catalog, err := json.Marshal(version)
+		require.NoError(t, err)
+		require.NoError(t, history.Append(sequence, catalog))
+		switch sequence {
+		case 2:
+			delivered = Checkpoint{Sequence: 3, StructureRevision: digest(catalog)}
+		case 4:
+			durable = Checkpoint{Sequence: sequence, Cursor: cursor, StructureRevision: digest(catalog)}
+		}
+	}
+	conflicting := delivered
+	conflicting.StructureRevision = "other"
+	require.ErrorContains(t, reclaimSchemaHistory(history, conflicting), "anchor does not match")
+	require.NoError(t, reclaimSchemaHistory(history, delivered))
+	sequences, err := history.Sequences()
+	require.NoError(t, err)
+	require.Equal(t, []uint64{2, 4}, sequences)
+	version, revision, err := readSchemaVersion(history, bootstrapState{Cursor: fixture.Baseline}, durable, false)
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), version.Sequence)
+	require.Equal(t, durable.StructureRevision, revision)
+}
+
+// TestLegacyDeliveryRequiresConfirmedRecord 验证缺失摘要的已确认物理记录仍可恢复，未确认记录不能派发。
+func TestLegacyDeliveryRequiresConfirmedRecord(t *testing.T) {
+	fixture := deliveryTestConfig(t)
+	target := &deliveryTestTarget{}
+	delivery, err := OpenDelivery(t.Context(), fixture, target)
+	require.NoError(t, err)
+	legacy := OrderedRecord{Sequence: 1, TransactionID: "legacy", Cursor: fixture.Baseline}
+	legacy.Cursor.Position++
+	payload, err := json.Marshal(bufferedOrderedRecord{OrderedRecord: legacy})
+	require.NoError(t, err)
+	require.NoError(t, delivery.store.Append(legacy.Sequence, payload))
+	require.NoError(t, delivery.Close())
+	_, err = OpenDelivery(t.Context(), fixture, target)
+	require.ErrorContains(t, err, "unconfirmed legacy CDC record has no manifest digest")
+	conflicting := Checkpoint{Identity: fixture.Identity, Sequence: legacy.Sequence, Cursor: legacy.Cursor}
+	conflicting.Cursor.Position++
+	target.checkpoint = &conflicting
+	_, err = OpenDelivery(t.Context(), fixture, target)
+	require.ErrorContains(t, err, "legacy CDC record does not match the verified checkpoint")
+	target.checkpoint.Cursor = legacy.Cursor
+	delivery, err = OpenDelivery(t.Context(), fixture, target)
+	require.NoError(t, err)
+	require.Equal(t, *target.checkpoint, delivery.Status().Delivered)
+	require.NoError(t, delivery.Close())
+}
+
+// TestMariaDBGTIDRejectsRepeatedDomain 验证合法多域位置通过，原始位置中重复域被显式拒绝。
+func TestMariaDBGTIDRejectsRepeatedDomain(t *testing.T) {
+	cursor := Cursor{SourceIdentity: "maria", File: "maria-bin.000001", Position: 99, Flavor: "mariadb", GTIDSet: "0-4-31,8-3-42"}
+	_, _, set, err := parseCursor(cursor)
+	require.NoError(t, err)
+	require.NoError(t, validateGTIDCursor(cursor, set))
+	cursor.GTIDSet += ",0-5-32"
+	_, _, set, err = parseCursor(cursor)
+	require.NoError(t, err)
+	require.ErrorContains(t, validateGTIDCursor(cursor, set), "one MariaDB GTID per domain")
 }

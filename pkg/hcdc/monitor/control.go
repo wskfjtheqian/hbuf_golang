@@ -91,6 +91,14 @@ func (m *Monitor) control(ctx context.Context, sourceID string, action Action, v
 	state, done := pipelineStatus(p)
 	if action == actionApproveDDL {
 		plan := state.PendingDDL
+		if plan == nil || plan.ID != value {
+			for _, table := range state.DiscoveredTables {
+				if child := table.Status.PendingDDL; child != nil && child.ID == value {
+					plan = child
+					break
+				}
+			}
+		}
 		if done || plan == nil || !plan.RequiresApproval || plan.Kind == hcdc.DDLUnsupported || plan.ID != value {
 			return sourceError(sourceID, ErrInvalidState)
 		}

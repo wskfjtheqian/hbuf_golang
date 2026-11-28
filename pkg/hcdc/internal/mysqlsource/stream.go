@@ -329,15 +329,16 @@ type transactionReader struct {
 	committed   mysql.GTIDSet
 	requireGTID bool
 
-	active      bool
-	standalone  bool
-	pendingGTID string
-	changes     []Change
-	staged      bool
-	tables      map[TableRef]Table
-	parser      *sqlparser.Parser
-	stage       func(Change) error
-	consume     func(Transaction) error
+	active            bool
+	standalone        bool
+	pendingGTID       string
+	atomicCreateTable *TableRef
+	changes           []Change
+	staged            bool
+	tables            map[TableRef]Table
+	parser            *sqlparser.Parser
+	stage             func(Change) error
+	consume           func(Transaction) error
 }
 
 // accept 将 binlog 事件分派给对应解析流程，并在事务提交边界发布记录。
@@ -436,6 +437,17 @@ func (r *transactionReader) acceptRows(event *replication.BinlogEvent, rows *rep
 		return r.unsupported(event, "binlog row event has no table map")
 	}
 	ref := TableRef{Schema: string(rows.Table.Schema), Name: string(rows.Table.Table)}
+	if r.atomicCreateTable != nil {
+		if ref != *r.atomicCreateTable {
+			return r.unsupported(event, "atomic CREATE TABLE row event targets another table")
+		}
+		switch event.Header.EventType {
+		case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
+			return nil
+		default:
+			return r.unsupported(event, "atomic CREATE TABLE contains a non-insert row event")
+		}
+	}
 	table, selected := r.tables[ref]
 	if !selected {
 		if r.standalone && rows.Flags&replication.STMT_END_F != 0 {
@@ -565,6 +577,9 @@ func (r *transactionReader) acceptQuery(event *replication.BinlogEvent, query *r
 		}
 		return r.unsupported(event, reason)
 	}
+	if handled, err := r.acceptAtomicCreate(event, query, statementText); handled {
+		return err
+	}
 	statements, _, err := r.parser.Parse(statementText, "", "")
 	if err != nil || len(statements) != 1 || query.ErrorCode != 0 {
 		return r.unsupported(event, "unrecognized or failed source SQL event")
@@ -602,6 +617,41 @@ func (r *transactionReader) acceptQuery(event *replication.BinlogEvent, query *r
 		}
 	}
 	return r.unsupported(event, "source SQL requires an unsupported DDL or statement barrier")
+}
+
+// acceptAtomicCreate 识别 MySQL 原子建表的 Binlog 语法，等待行事件后的提交边界。
+func (r *transactionReader) acceptAtomicCreate(event *replication.BinlogEvent, query *replication.QueryEvent, statementText string) (bool, error) {
+	if r.cursor.Flavor != mysql.MySQLFlavor || !strings.HasPrefix(statementText, "CREATE TABLE ") {
+		return false, nil
+	}
+	// MySQL 在生成的列定义结束处插入 START TRANSACTION，SELECT 则写成后续行事件。
+	const columnEnd = "\n)"
+	definition, options, found := strings.Cut(statementText, columnEnd+" START TRANSACTION")
+	if !found || (options != "" && options[0] != ' ') {
+		return false, nil
+	}
+	definition += columnEnd
+	// 单独校验列定义，确保截取位置在引号和注释外。
+	if prefix, err := r.parser.ParseOneStmt(definition, "", ""); err != nil {
+		return false, nil
+	} else if _, ok := prefix.(*ast.CreateTableStmt); !ok {
+		return false, nil
+	}
+	statement, err := r.parser.ParseOneStmt(definition+options, "", "")
+	create, ok := statement.(*ast.CreateTableStmt)
+	if err != nil || !ok || create.Select != nil || create.ReferTable != nil {
+		return false, nil
+	}
+	if query.ErrorCode != 0 || !r.active || r.standalone || r.staged || len(r.changes) != 0 || r.atomicCreateTable != nil {
+		return true, r.unsupported(event, "atomic CREATE TABLE has an unsupported transaction boundary")
+	}
+	schema := string(query.Schema)
+	if !r.ignorableDDL(schema, create) {
+		return true, r.unsupported(event, "atomic CREATE TABLE targets a selected or unidentified table")
+	}
+	ref := ddlTableRef(schema, create.Table)
+	r.atomicCreateTable = &ref
+	return true, nil
 }
 
 // ignorableDDL 仅在已知受影响表均不属于订阅范围时允许跳过 DDL。对无法判定范围的语句暂停采集。
@@ -713,6 +763,7 @@ func (r *transactionReader) publish(position uint32, rollback bool, ddl *DDLChan
 		r.tables[ddl.After.Ref] = ddl.After
 	}
 	r.active, r.standalone, r.staged, r.pendingGTID, r.changes = false, false, false, "", nil
+	r.atomicCreateTable = nil
 	return nil
 }
 

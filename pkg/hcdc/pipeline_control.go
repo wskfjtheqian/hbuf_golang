@@ -45,6 +45,15 @@ type PipelineStatus struct {
 	CaptureError         string // 采集重连前的源端传输错误。
 	DeliveryError        string // 当前队首记录触发重试的原因。
 	Err                  error
+	// DiscoveredTables 独立报告自动接入表的进度，不并入父流位点。
+	DiscoveredTables    []TableSyncStatus
+	TableDiscoveryError string
+}
+
+// TableSyncStatus 保存自动接入表的同步状态。
+type TableSyncStatus struct {
+	Name   string
+	Status PipelineStatus
 }
 
 // Pipeline 管理单个源的同步任务及其连接生命周期。
@@ -66,6 +75,10 @@ type Pipeline struct {
 	pausedReason    string
 	approved        map[string]bool
 	result          error
+	tableParent     *Pipeline
+	tableStreams    map[string]tableStream
+	tableWrites     int
+	tableWritesDone chan struct{}
 }
 
 type controlAction string
@@ -88,25 +101,35 @@ type controlWrite struct {
 }
 
 type pipelineStartOptions struct {
-	resumeOnly bool
-	activate   <-chan struct{}
+	resumeOnly          bool
+	activate            <-chan struct{}
+	tableOwner          *dorisWriterIdentity
+	tableParent         *Pipeline
+	tableSourceIdentity string
 }
 
-// StartPipeline 校验配置并在后台启动全量快照或断点恢复。
+// startPipeline 校验配置并在后台启动全量快照或断点恢复。
 // 可通过 Status 或 Wait 查看异步错误。
-func StartPipeline(ctx context.Context, config PipelineConfig) (*Pipeline, error) {
-	return startPipeline(ctx, config, pipelineStartOptions{})
+func startPipeline(ctx context.Context, config pipelineConfig) (*Pipeline, error) {
+	return startPipelineWithOptions(ctx, config, pipelineStartOptions{})
 }
 
-// startPipeline 获取单源所有权，按启动选项运行任务并发布终止结果。
-func startPipeline(ctx context.Context, config PipelineConfig, options pipelineStartOptions) (*Pipeline, error) {
+// startTablePipeline 使用库流水线的 Doris 写入凭证启动单表同步。
+func startTablePipeline(ctx context.Context, config pipelineConfig, parentOwner dorisWriterIdentity, parent *Pipeline, sourceIdentity string) (*Pipeline, error) {
+	return startPipelineWithOptions(ctx, config, pipelineStartOptions{
+		tableOwner: &parentOwner, tableParent: parent, tableSourceIdentity: sourceIdentity,
+	})
+}
+
+// startPipelineWithOptions 获取单源所有权，按启动选项运行任务并发布终止结果。
+func startPipelineWithOptions(ctx context.Context, config pipelineConfig, options pipelineStartOptions) (*Pipeline, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, herror.Wrap(err)
 	}
 	if _, _, err := validatePipelineConfig(config); err != nil {
 		return nil, err
 	}
-	release, err := acquirePipelineOwnership(config)
+	release, err := acquirePipelineOwnership(config, options.tableOwner)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +142,8 @@ func startPipeline(ctx context.Context, config PipelineConfig, options pipelineS
 	pipeline := &Pipeline{
 		changed: make(chan struct{}), done: make(chan struct{}),
 		cancel: cancel, stopCapture: stopCapture, approved: make(map[string]bool),
-		status: PipelineStatus{Identity: config.Identity, State: PipelineStarting, Since: time.Now()},
+		status:      PipelineStatus{Identity: config.Identity, State: PipelineStarting, Since: time.Now()},
+		tableParent: options.tableParent,
 	}
 	go func() {
 		err := pipeline.run(runCtx, captureCtx, config, options)
@@ -157,6 +181,7 @@ func (p *Pipeline) Status() PipelineStatus {
 // statusLocked 在持锁时复制快照，隔离调用方对待审批计划的修改。
 func (p *Pipeline) statusLocked() PipelineStatus {
 	status := p.status
+	status.DiscoveredTables = p.tableStatusesLocked()
 	if status.PendingDDL != nil {
 		plan := *status.PendingDDL
 		plan.Before.Columns = append([]DorisColumn(nil), plan.Before.Columns...)
@@ -252,11 +277,15 @@ func (p *Pipeline) Pause(ctx context.Context, reason string) error {
 		return err
 	}
 	p.mu.Lock()
-	for p.status.InFlight {
-		changed := p.changed
+	for p.status.InFlight || p.tableWrites != 0 {
+		if p.tableWrites != 0 && p.tableWritesDone == nil {
+			p.tableWritesDone = make(chan struct{})
+		}
+		changed, tableWritesDone := p.changed, p.tableWritesDone
 		p.mu.Unlock()
 		select {
 		case <-changed:
+		case <-tableWritesDone:
 		case <-ctx.Done():
 			return herror.Wrap(ctx.Err())
 		}
@@ -273,6 +302,9 @@ func (p *Pipeline) Resume(ctx context.Context) error {
 
 // ApproveDDL 持久化对队首可执行 DDL 屏障的审批。手动暂停仍由 Resume 控制。
 func (p *Pipeline) ApproveDDL(ctx context.Context, id string) error {
+	if handled, err := p.approveTableDDL(ctx, id); handled {
+		return err
+	}
 	return p.updateControl(ctx, controlRecord{Action: controlApprove, DDLID: id})
 }
 

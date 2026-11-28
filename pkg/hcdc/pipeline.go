@@ -17,36 +17,44 @@ import (
 	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
 )
 
-// MySQLConfig 指定一个 MySQL 或 MariaDB 源库及其同步表。
-type MySQLConfig struct {
-	Address        string   `yaml:"Address"`        // 源库的 TCP 地址，格式为主机:端口。
-	User           string   `yaml:"User"`           // 源库用户名。
-	Password       string   `yaml:"Password"`       // 源库密码。
-	Flavor         string   `yaml:"Flavor"`         // 源库类型，默认为 mysql。
-	SourceIdentity string   `yaml:"SourceIdentity"` // 跨主切换时保持稳定的逻辑源标识。
-	ServerID       uint32   `yaml:"ServerID"`       // 复制客户端的唯一服务器 ID。
-	Database       string   `yaml:"Database"`       // 源数据库名。
-	Tables         []string `yaml:"Tables"`         // 源库中显式选定的表名。
+// mysqlConfig 指定一个 MySQL 或 MariaDB 源库及其同步表。
+type mysqlConfig struct {
+	Address        string   // 源库的 TCP 地址，格式为主机:端口。
+	User           string   // 源库用户名。
+	Password       string   // 源库密码。
+	Flavor         string   // 源库类型，默认为 mysql。
+	SourceIdentity string   // 跨主切换时保持稳定的逻辑源标识。
+	ServerID       uint32   // 复制客户端的唯一服务器 ID。
+	Database       string   // 源数据库名。
+	Tables         []string // 源库中显式选定的表名。
 	// GTIDAutoPosition 将代次绑定到 GTID 谱系。隔离旧主后可用新主地址恢复同一代次。
-	GTIDAutoPosition bool `yaml:"GTIDAutoPosition"`
+	GTIDAutoPosition bool
 }
 
-// PipelineConfig 将单个源、持久缓冲目录和独立的 Doris 目标库绑定到同一代次。
+// pipelineConfig 将单个源、持久缓冲目录和独立的 Doris 目标库绑定到同一代次。
 // 新代次从一致性全量快照开始。
-type PipelineConfig struct {
-	Identity       StreamIdentity `yaml:"Identity"`       // 流水线、源和代次标识。
-	Directory      string         `yaml:"Directory"`      // 快照、缓冲和控制记录的本地持久目录。
-	Source         MySQLConfig    `yaml:"Source"`         // 源库连接及同步表。
-	Doris          DorisConfig    `yaml:"Doris"`          // Doris 连接及控制库配置。
-	TargetDatabase string         `yaml:"TargetDatabase"` // 承接同步业务数据的 Doris 库。
+type pipelineConfig struct {
+	Identity       StreamIdentity // 流水线、源和代次标识。
+	Directory      string         // 快照、缓冲和控制记录的本地持久目录。
+	Source         mysqlConfig    // 源库连接及同步表。
+	Doris          DorisConfig    // Doris 连接及控制库配置。
+	TargetDatabase string         // 承接同步业务数据的 Doris 库。
 	// ZeroDatePolicy 默认拒绝零日期，配置为 epoch 时按 hcdc 规则转换。
-	ZeroDatePolicy ZeroDatePolicy `yaml:"ZeroDatePolicy"`
+	ZeroDatePolicy ZeroDatePolicy
 	// SnapshotBatchRows 指定每次快照导入的行数上限。为零时按 10 MiB 或 5 秒分批。
-	SnapshotBatchRows int `yaml:"SnapshotBatchRows"`
+	SnapshotBatchRows int
 	// MaxPendingBytes 限制未确认记录的编码字节数。为零时使用 256 MiB。
-	MaxPendingBytes int64 `yaml:"MaxPendingBytes"`
+	MaxPendingBytes int64
+	// BacklogWarningBytes 为未确认记录设置告警阈值。为零时关闭告警。
+	BacklogWarningBytes int64
 	// MaxTransactionBytes 限制单笔事务归并前选表变更的暂存编码量。为零时沿用 MaxPendingBytes。
-	MaxTransactionBytes int64 `yaml:"MaxTransactionBytes"`
+	MaxTransactionBytes int64
+	tableDiscovery      *tableDiscoveryConfig
+}
+
+type tableDiscoveryConfig struct {
+	Interval time.Duration
+	Filter   canalNameFilter
 }
 
 type bootstrapManifest struct {
@@ -58,6 +66,7 @@ type bootstrapManifest struct {
 	TargetDatabase   string
 	MappingVersion   string
 	GTIDAutoPosition bool `json:",omitempty"`
+	StagedSnapshot   bool `json:",omitempty"`
 }
 
 type bootstrapState struct {
@@ -84,25 +93,15 @@ const (
 )
 
 // mappingVersion 返回与零日期转换规则绑定的持久映射版本。
-func (c PipelineConfig) mappingVersion() string {
+func (c pipelineConfig) mappingVersion() string {
 	if c.ZeroDatePolicy == ZeroDateEpoch {
 		return pipelineMappingVersion + "-zero-date-epoch"
 	}
 	return pipelineMappingVersion
 }
 
-// RunPipeline 运行一个源的同步代次，直到上下文取消或发生需要恢复的错误。
-// 重启后按已落盘记录和恢复游标继续处理。初始快照期间应冻结所选表的 DDL。
-func RunPipeline(ctx context.Context, config PipelineConfig) error {
-	pipeline, err := StartPipeline(ctx, config)
-	if err != nil {
-		return err
-	}
-	return pipeline.Wait()
-}
-
 // run 打开源库、Doris 和持久缓冲，恢复快照与结构状态后运行采集和交付。
-func (p *Pipeline) run(ctx, captureCtx context.Context, config PipelineConfig, options pipelineStartOptions) (resultErr error) {
+func (p *Pipeline) run(ctx, captureCtx context.Context, config pipelineConfig, options pipelineStartOptions) (resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return herror.Wrap(err)
 	}
@@ -118,6 +117,22 @@ func (p *Pipeline) run(ctx, captureCtx context.Context, config PipelineConfig, o
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, bootstrap.Close()) }()
+	stagedSchema, err := bindStagedSnapshotMode(bootstrap, manifest, config.tableDiscovery != nil && !options.resumeOnly)
+	if err != nil {
+		return err
+	}
+	manifest.StagedSnapshot = stagedSchema
+	if config.tableDiscovery != nil {
+		config.Source.Tables, err = recoverBootstrapTables(bootstrap, config, manifest)
+		if err != nil {
+			return err
+		}
+		manifest, tables, err = validatePipelineConfig(config)
+		if err != nil {
+			return err
+		}
+		manifest.StagedSnapshot = stagedSchema
+	}
 
 	source, err := mysqlsource.Open(ctx, mysqlsource.Config{
 		Address: config.Source.Address, User: config.Source.User, Password: config.Source.Password,
@@ -128,10 +143,19 @@ func (p *Pipeline) run(ctx, captureCtx context.Context, config PipelineConfig, o
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, source.Close()) }()
+	if options.tableSourceIdentity != "" && source.Identity() != options.tableSourceIdentity {
+		return herror.NewError("CDC discovered table resolved to another source member")
+	}
 
-	owner, err := loadDorisWriterIdentity(config.Directory, config.TargetDatabase, config.Identity)
-	if err != nil {
-		return err
+	var owner dorisWriterIdentity
+	if options.tableOwner != nil {
+		owner = *options.tableOwner
+		owner.Stream = config.Identity
+	} else {
+		owner, err = loadDorisWriterIdentity(config.Directory, config.TargetDatabase, config.Identity)
+		if err != nil {
+			return err
+		}
 	}
 	target, err := openDorisTarget(ctx, config.Doris, &owner)
 	if err != nil {
@@ -139,7 +163,19 @@ func (p *Pipeline) run(ctx, captureCtx context.Context, config PipelineConfig, o
 	}
 	defer func() { resultErr = errors.Join(resultErr, target.Close()) }()
 
-	state, err := prepareBootstrap(ctx, bootstrap, source, target, config, manifest, options.resumeOnly)
+	release, err := p.tableParent.beginTableWrite(ctx)
+	if err != nil {
+		return err
+	}
+	var state bootstrapState
+	if options.tableOwner != nil || (stagedSchema && !options.resumeOnly) {
+		state, err = prepareStagedBootstrap(ctx, bootstrap, source, target, config, manifest)
+	} else {
+		state, err = prepareBootstrap(ctx, bootstrap, source, target, config, manifest, options.resumeOnly)
+	}
+	if release != nil {
+		release()
+	}
 	if err != nil {
 		return err
 	}
@@ -193,6 +229,18 @@ func (p *Pipeline) run(ctx, captureCtx context.Context, config PipelineConfig, o
 	if err := p.restoreControl(ctx, control, config.Identity); err != nil {
 		return err
 	}
+	if config.tableDiscovery != nil {
+		scanCtx, cancelScan := context.WithCancel(captureCtx)
+		tablesDone := make(chan struct{})
+		go func() {
+			defer close(tablesDone)
+			p.superviseTables(ctx, scanCtx, source, config, owner, options.activate)
+		}()
+		defer func() {
+			cancelScan()
+			<-tablesDone
+		}()
+	}
 	return p.runWorkers(ctx, captureCtx, source, delivery, history, version, revision, config, options.activate)
 }
 
@@ -236,13 +284,13 @@ func snapshotCatalog(state bootstrapState) ([]byte, error) {
 }
 
 // validatePipelineConfig 校验单源配置并生成稳定的快照清单及源表引用。
-func validatePipelineConfig(config PipelineConfig) (bootstrapManifest, []mysqlsource.TableRef, error) {
+func validatePipelineConfig(config pipelineConfig) (bootstrapManifest, []mysqlsource.TableRef, error) {
 	if strings.TrimSpace(config.Directory) == "" || config.Identity.PipelineID == "" ||
 		config.Identity.SourceID == "" || config.Identity.Generation == "" ||
 		config.Source.SourceIdentity == "" || config.Source.Address == "" ||
 		config.Source.User == "" || config.Source.ServerID == 0 || !validPipelineIdentifier(config.Source.Database) ||
 		!validPipelineIdentifier(config.TargetDatabase) || len(config.Source.Tables) == 0 ||
-		config.SnapshotBatchRows < 0 || config.MaxPendingBytes < 0 || config.MaxTransactionBytes < 0 {
+		config.SnapshotBatchRows < 0 || config.MaxPendingBytes < 0 || config.BacklogWarningBytes < 0 || config.MaxTransactionBytes < 0 {
 		return bootstrapManifest{}, nil, herror.NewError("CDC pipeline requires stream identity, directory, source configuration, target database and explicit source tables")
 	}
 	config = withPipelineConfigDefaults(config)
@@ -284,15 +332,91 @@ func validPipelineIdentifier(name string) bool {
 }
 
 // openPipelineDelivery 按当前代次和快照基线打开持久交付队列。
-func openPipelineDelivery(ctx context.Context, config PipelineConfig, target Target, baseline Cursor) (*Delivery, error) {
+func openPipelineDelivery(ctx context.Context, config pipelineConfig, target Target, baseline Cursor) (*Delivery, error) {
 	return OpenDelivery(ctx, DeliveryConfig{
 		Directory: filepath.Join(config.Directory, "delivery"), Identity: config.Identity,
 		Baseline: baseline, MappingVersion: config.mappingVersion(), GTIDAutoPosition: config.Source.GTIDAutoPosition,
 	}, target)
 }
 
+// bindStagedSnapshotMode 为首次建立基线的库持久化恢复协议和初始表清单。
+// 调用方持有快照目录锁。已存在的代次按卷内的协议恢复。
+func bindStagedSnapshotMode(store *spool.Store, manifest bootstrapManifest, initialize bool) (bool, error) {
+	stored, err := store.Metadata()
+	if err != nil {
+		return false, err
+	}
+	if stored != nil {
+		var saved bootstrapManifest
+		if err := json.Unmarshal(stored, &saved); err != nil {
+			return false, herror.WrapMsg(err, "decode CDC bootstrap manifest")
+		}
+		return saved.StagedSnapshot, nil
+	}
+	if !initialize {
+		return false, nil
+	}
+	sequences, err := store.Sequences()
+	if err != nil {
+		return false, err
+	}
+	if len(sequences) != 0 {
+		return false, herror.NewError("CDC bootstrap manifest is missing for an existing snapshot record")
+	}
+	manifest.StagedSnapshot = true
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return false, herror.Wrap(err)
+	}
+	if _, err := store.Bind(encoded); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// recoverBootstrapTables 固定原始快照的订阅表，之后发现的表由独立的流水线同步。
+// 调用方持有 bootstrap 目录锁，选表规则在该代次内只能绑定一次。
+func recoverBootstrapTables(store *spool.Store, config pipelineConfig, discovered bootstrapManifest) (_ []string, resultErr error) {
+	stored, err := store.Metadata()
+	if err != nil {
+		return nil, err
+	}
+	tables := discovered.SourceTables
+	if stored != nil {
+		var saved bootstrapManifest
+		if err := json.Unmarshal(stored, &saved); err != nil {
+			return nil, herror.WrapMsg(err, "decode CDC bootstrap manifest")
+		}
+		if len(saved.SourceTables) == 0 || !containsSourceTables(discovered.SourceTables, saved.SourceTables) {
+			return nil, herror.NewError("CDC bootstrap table selection was removed or changed; a new generation is required")
+		}
+		discovered.SourceTables = saved.SourceTables
+		expected, err := json.Marshal(discovered)
+		if err != nil {
+			return nil, herror.Wrap(err)
+		}
+		if !bytes.Equal(stored, expected) {
+			return nil, herror.NewError("CDC bootstrap belongs to a different stream or table mapping")
+		}
+		tables = saved.SourceTables
+	}
+	rules, err := json.Marshal(config.tableDiscovery.Filter.rules())
+	if err != nil {
+		return nil, herror.Wrap(err)
+	}
+	ruleStore, err := spool.Open(filepath.Join(config.Directory, "table-rules"))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, ruleStore.Close()) }()
+	if _, err := ruleStore.Bind(rules); err != nil {
+		return nil, herror.Wrap(fmt.Errorf("bind CDC table discovery rules; a changed filter requires a new generation: %w", err))
+	}
+	return tables, nil
+}
+
 // prepareBootstrap 核对已完成的快照，或在允许初始化时建立新的全量基线。
-func prepareBootstrap(ctx context.Context, store *spool.Store, source *mysqlsource.Source, target *DorisTarget, config PipelineConfig, manifest bootstrapManifest, resumeOnly bool) (bootstrapState, error) {
+func prepareBootstrap(ctx context.Context, store *spool.Store, source *mysqlsource.Source, target *DorisTarget, config pipelineConfig, manifest bootstrapManifest, resumeOnly bool) (bootstrapState, error) {
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
 		return bootstrapState{}, herror.Wrap(err)
@@ -333,32 +457,37 @@ func prepareBootstrap(ctx context.Context, store *spool.Store, source *mysqlsour
 	if err != nil {
 		return bootstrapState{}, err
 	}
-	// 全量导入已全部确认。将原读视图的证据绑定到这份 Doris 目标和本地目录。
-	catalog, err := snapshotCatalog(state)
-	if err != nil {
-		return bootstrapState{}, err
-	}
-	if err := target.ensureSchemaHistory(ctx); err != nil {
-		return bootstrapState{}, err
-	}
-	if err := target.persistSchemaVersion(ctx, config.Identity, 0, digest(catalog), catalog); err != nil {
-		return bootstrapState{}, err
-	}
-	payload, err := json.Marshal(bootstrapRecord{bootstrapState: state, Prepared: true})
-	if err != nil {
-		return bootstrapState{}, herror.Wrap(err)
-	}
-	if err := store.Append(bootstrapPreparedSequence, payload); err != nil {
-		return bootstrapState{}, err
-	}
-	if err := completeBootstrap(ctx, store, target, config, state, payload); err != nil {
+	if err := publishBootstrap(ctx, store, target, config, state); err != nil {
 		return bootstrapState{}, err
 	}
 	return state, nil
 }
 
+// publishBootstrap 持久化已确认的快照与结构证据，再发布序号零检查点。
+func publishBootstrap(ctx context.Context, store *spool.Store, target *DorisTarget, config pipelineConfig, state bootstrapState) error {
+	// 全量导入已全部确认。将原读视图的证据绑定到这份 Doris 目标和本地目录。
+	catalog, err := snapshotCatalog(state)
+	if err != nil {
+		return err
+	}
+	if err := target.ensureSchemaHistory(ctx); err != nil {
+		return err
+	}
+	if err := target.persistSchemaVersion(ctx, config.Identity, 0, digest(catalog), catalog); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(bootstrapRecord{bootstrapState: state, Prepared: true})
+	if err != nil {
+		return herror.Wrap(err)
+	}
+	if err := store.Append(bootstrapPreparedSequence, payload); err != nil {
+		return err
+	}
+	return completeBootstrap(ctx, store, target, config, state, payload)
+}
+
 // restoreBootstrap 读取已完成的记录，或在隔离校验后补齐仅待发布基线的快照。
-func restoreBootstrap(ctx context.Context, store *spool.Store, target bootstrapTarget, config PipelineConfig) (bootstrapState, error) {
+func restoreBootstrap(ctx context.Context, store *spool.Store, target bootstrapTarget, config pipelineConfig) (bootstrapState, error) {
 	sequences, err := store.Sequences()
 	if err != nil {
 		return bootstrapState{}, err
@@ -401,7 +530,7 @@ func restoreBootstrap(ctx context.Context, store *spool.Store, target bootstrapT
 }
 
 // completeBootstrap 仅接受未发布基线，或属于原快照的精确序号零检查点。
-func completeBootstrap(ctx context.Context, store *spool.Store, target bootstrapTarget, config PipelineConfig, state bootstrapState, payload []byte) error {
+func completeBootstrap(ctx context.Context, store *spool.Store, target bootstrapTarget, config pipelineConfig, state bootstrapState, payload []byte) error {
 	expected := Checkpoint{Identity: config.Identity, Cursor: state.Cursor}
 	checkpoint, err := target.LoadCheckpoint(ctx, config.Identity)
 	if err != nil {
@@ -439,7 +568,7 @@ func completeBootstrap(ctx context.Context, store *spool.Store, target bootstrap
 }
 
 // runSnapshot 取得一致性读视图，检查目标为空后依次导入所选表。
-func runSnapshot(ctx context.Context, source *mysqlsource.Source, target *DorisTarget, config PipelineConfig) (_ bootstrapState, resultErr error) {
+func runSnapshot(ctx context.Context, source *mysqlsource.Source, target *DorisTarget, config pipelineConfig) (_ bootstrapState, resultErr error) {
 	ctx = withDorisLoadHistory(ctx, config.Identity, 0)
 	snapshot, err := source.BeginSnapshot(ctx)
 	if err != nil {
@@ -472,7 +601,14 @@ func runSnapshot(ctx context.Context, source *mysqlsource.Source, target *DorisT
 }
 
 // snapshotTable 按序确认源表的全部导入，返回成功快照中映射了零日期的行数。
-func snapshotTable(ctx context.Context, snapshot *mysqlsource.Snapshot, target *DorisTarget, config PipelineConfig, layout tableLayout) (uint64, error) {
+func snapshotTable(ctx context.Context, snapshot *mysqlsource.Snapshot, target *DorisTarget, config pipelineConfig, layout tableLayout) (uint64, error) {
+	return scanSnapshotTable(ctx, snapshot, config, layout, func(batch LoadBatch) error {
+		return deliverSnapshotBatch(ctx, target, batch)
+	})
+}
+
+// scanSnapshotTable 按一致性视图顺序编码快照，调用方决定交付或持久暂存批次。
+func scanSnapshotTable(ctx context.Context, snapshot *mysqlsource.Snapshot, config pipelineConfig, layout tableLayout, submit func(LoadBatch) error) (uint64, error) {
 	var ordinal uint64
 	var zeroDateRows uint64
 	scan := func(scanCtx context.Context, consume func(DorisRow) error) error {
@@ -492,13 +628,12 @@ func snapshotTable(ctx context.Context, snapshot *mysqlsource.Snapshot, target *
 		if err != nil {
 			return err
 		}
-		labelSeed, err := json.Marshal([]any{config.Identity, config.mappingVersion(), "snapshot", batch.TargetTable, ordinal})
+		batch.Label, err = snapshotBatchLabel(config, batch.TargetTable, ordinal)
 		if err != nil {
-			return herror.Wrap(err)
+			return err
 		}
 		batch.Checksum = digest(batch.Payload)
-		batch.Label = "cdc_snapshot_" + digest(labelSeed)
-		if err := deliverSnapshotBatch(ctx, target, batch); err != nil {
+		if err := submit(batch); err != nil {
 			return herror.WrapMsg(err, fmt.Sprintf("snapshot target %s batch %d", batch.TargetTable, ordinal))
 		}
 		ordinal++
