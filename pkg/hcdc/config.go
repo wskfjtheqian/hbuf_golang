@@ -45,19 +45,21 @@ const (
 
 // CanalConfig 描述一个兼容旧版 YAML 的源实例。在同一实例上按源库划分流水线。
 type CanalConfig struct {
-	InstanceId     int64          `yaml:"InstanceId"`     // 实例 ID，在所有 Canal 中唯一且稳定。
-	Host           string         `yaml:"Host"`           // 源数据库 TCP 地址，格式为主机:端口。
-	Username       string         `yaml:"Username"`       // 源数据库用户名。
-	Password       string         `yaml:"Password"`       // 源数据库密码。
-	Schema         string         `yaml:"Schema"`         // 表发现连接的默认数据库。
-	IncludeDBs     []string       `yaml:"IncludeDBs"`     // 源数据库名的允许正则列表。
-	ExcludeDBs     []string       `yaml:"ExcludeDBs"`     // 源数据库名的排除正则列表，优先于允许列表。
-	IncludeTables  []string       `yaml:"IncludeTables"`  // 裸表名的允许正则列表。
-	ExcludeTables  []string       `yaml:"ExcludeTables"`  // 裸表名的排除正则列表，优先于允许列表。
-	ServerID       *uint32        `yaml:"ServerID"`       // 默认数据库使用的复制客户端 ID，也是其他库派生 ID 的种子。
-	Charset        string         `yaml:"Charset"`        // 表发现连接的字符集，默认 utf8mb4。
-	Flavor         string         `yaml:"Flavor"`         // mysql 或 mariadb，默认 mysql。
-	LogDir         string         `yaml:"LogDir"`         // 持久缓冲的根目录，默认 hcdc-data。
+	InstanceId    int64    `yaml:"InstanceId"`    // 实例 ID，在所有 Canal 中唯一且稳定。
+	Host          string   `yaml:"Host"`          // 源数据库 TCP 地址，格式为主机:端口。
+	Username      string   `yaml:"Username"`      // 源数据库用户名。
+	Password      string   `yaml:"Password"`      // 源数据库密码。
+	Schema        string   `yaml:"Schema"`        // 表发现连接的默认数据库。
+	IncludeDBs    []string `yaml:"IncludeDBs"`    // 源数据库名的允许正则列表。
+	ExcludeDBs    []string `yaml:"ExcludeDBs"`    // 源数据库名的排除正则列表，优先于允许列表。
+	IncludeTables []string `yaml:"IncludeTables"` // 裸表名的允许正则列表。
+	ExcludeTables []string `yaml:"ExcludeTables"` // 裸表名的排除正则列表，优先于允许列表。
+	ServerID      *uint32  `yaml:"ServerID"`      // 默认数据库使用的复制客户端 ID，也是其他库派生 ID 的种子。
+	Charset       string   `yaml:"Charset"`       // 表发现连接的字符集，默认 utf8mb4。
+	Flavor        string   `yaml:"Flavor"`        // mysql 或 mariadb，默认 mysql。
+	LogDir        string   `yaml:"LogDir"`        // 持久缓冲的根目录，默认 hcdc-data。
+	// SchemaPrefix 覆盖当前 Canal 的 Doris 库名前缀；留空时沿用共享前缀。
+	SchemaPrefix   string         `yaml:"SchemaPrefix"`
 	Generation     string         `yaml:"Generation"`     // 生成的流水线代次，默认 1。
 	ZeroDatePolicy ZeroDatePolicy `yaml:"ZeroDatePolicy"` // 零日期处理规则，默认 reject。
 	// GTIDAutoPosition 启用 GTID 续传，切主时保持 InstanceId 和代次不变。
@@ -288,6 +290,9 @@ func prepareCanalSelection(config CanalConfig) (canalSelection, error) {
 	if config.ZeroDatePolicy != "" && config.ZeroDatePolicy != ZeroDateReject && config.ZeroDatePolicy != ZeroDateEpoch {
 		return canalSelection{}, herror.NewError("Canal ZeroDatePolicy 必须是 reject 或 epoch")
 	}
+	if config.SchemaPrefix != "" && !validPipelineIdentifier(expandCanalPrefix(config.SchemaPrefix, config.InstanceId)+"a") {
+		return canalSelection{}, herror.NewError("Canal SchemaPrefix 必须生成合法的目标库名前缀")
+	}
 	databases, err := compileCanalFilter(config.IncludeDBs, config.ExcludeDBs, "IncludeDBs", "ExcludeDBs")
 	if err != nil {
 		return canalSelection{}, err
@@ -390,6 +395,10 @@ func (selection canalSelection) discover(ctx context.Context) (map[string][]stri
 	dsn.Net, dsn.Addr, dsn.User, dsn.Passwd, dsn.DBName = "tcp", source.Host, source.Username, source.Password, source.Schema
 	dsn.Params = map[string]string{"charset": source.Charset}
 	dsn.Timeout = 10 * time.Second
+	dsn, err := mysql.ParseDSN(dsn.FormatDSN())
+	if err != nil {
+		return nil, canalDiscoveryError(ctx, source.InstanceId, err)
+	}
 	connector, err := mysql.NewConnector(dsn)
 	if err != nil {
 		return nil, canalDiscoveryError(ctx, source.InstanceId, err)
@@ -477,6 +486,9 @@ func (selection canalSelection) schemaSourceID(schema string) string {
 // schemaPipeline 为一个库生成带固定表清单的流水线配置。
 func (selection canalSelection) schemaPipeline(schema string, catalogTables []string, doris DorisConfig, prefix string) pipelineConfig {
 	source := selection.config
+	if source.SchemaPrefix != "" {
+		prefix = expandCanalPrefix(source.SchemaPrefix, source.InstanceId)
+	}
 	id := selection.schemaSourceID(schema)
 	tables := slices.Clone(catalogTables)
 	slices.Sort(tables)
