@@ -1,4 +1,4 @@
-package cdc
+package hcdc
 
 import (
 	"bufio"

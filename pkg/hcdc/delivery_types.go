@@ -1,5 +1,5 @@
 // Package cdc 提供按序交付和故障恢复的变更数据捕获能力。
-package cdc
+package hcdc
 
 import "context"
 
