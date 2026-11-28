@@ -26,6 +26,10 @@ services:
     entrypoint: >-
       bash -c "
         sed -i 's/-Xmx8192m/-Xmx2048m/g; s/-Xms8192m/-Xms2048m/g' /opt/apache-doris/fe/conf/fe.conf &&
+        sed -i '/^[[:space:]]*enable_stream_load_record[[:space:]]*=/d' /opt/apache-doris/be/conf/be.conf &&
+        echo 'enable_stream_load_record = true' >> /opt/apache-doris/be/conf/be.conf &&
+        sed -i '/^[[:space:]]*fetch_stream_load_record_interval_second[[:space:]]*=/d' /opt/apache-doris/fe/conf/fe.conf &&
+        echo 'fetch_stream_load_record_interval_second = 5' >> /opt/apache-doris/fe/conf/fe.conf &&
         exec bash /usr/local/bin/entry_point.sh
       "
     # 💡 关键：不要用 privileged: true。特权容器内执行的 swapoff/sysctl 等命令会直接作用于宿主机，
@@ -40,3 +44,13 @@ services:
       nofile:
         soft: 655350
         hard: 655350
+    networks:
+      default:
+        ipv4_address: ${CDC_DORIS_CONTAINER_IP:-172.19.0.2}
+
+# 💡 所有服务使用静态 IP，避免容器重建后 IP 漂移。
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${CDC_DORIS_SUBNET:-172.19.0.0/16}

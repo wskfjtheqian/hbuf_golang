@@ -1,1320 +1,408 @@
-package hcdc
+package cdc
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json/v2"
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"net"
 	"net/http"
 	"net/url"
-	"strconv"
+	"regexp"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/wskfjtheqian/hbuf_golang/pkg/herror"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hlog"
-	"github.com/wskfjtheqian/hbuf_golang/pkg/hutl"
 )
 
-// DorisResponse Doris 响应。
-type DorisResponse struct {
-	TxnId                  int    `json:"TxnId"`
-	Label                  string `json:"Label"`
-	Comment                string `json:"Comment"`
-	TwoPhaseCommit         string `json:"TwoPhaseCommit"`
-	Status                 string `json:"Status"`
-	Message                string `json:"Message"`
-	NumberTotalRows        int    `json:"NumberTotalRows"`
-	NumberLoadedRows       int    `json:"NumberLoadedRows"`
-	NumberFilteredRows     int    `json:"NumberFilteredRows"`
-	NumberUnselectedRows   int    `json:"NumberUnselectedRows"`
-	LoadBytes              int    `json:"LoadBytes"`
-	LoadTimeMs             int    `json:"LoadTimeMs"`
-	BeginTxnTimeMs         int    `json:"BeginTxnTimeMs"`
-	StreamLoadPutTimeMs    int    `json:"StreamLoadPutTimeMs"`
-	ReadDataTimeMs         int    `json:"ReadDataTimeMs"`
-	WriteDataTimeMs        int    `json:"WriteDataTimeMs"`
-	ReceiveDataTimeMs      int    `json:"ReceiveDataTimeMs"`
-	CommitAndPublishTimeMs int    `json:"CommitAndPublishTimeMs"`
-}
+const defaultDorisControlDatabase = "cdc_control"
 
-const defaultMaxBacklog = int64(10 * 1024 * 1024 * 1024) // defaultMaxBacklog 本地 CSV 缓冲积压的默认告警阈值（10GB）。超过仅告警不中断。
-const cdcRecordSchema = Schema("cdc_record")             // cdcRecordSchema 位点记录表的保留库名。该库由 hcdc 内部维护，不参与库名前缀映射。
-
+// DorisConfig 配置 Doris 的 SQL 和 HTTP 连接。StreamLoadURL 指向可访问的 BE，
+// FrontendURL 指向用于查询 Label 状态的 FE，ControlDatabase 专供 CDC 元数据使用。
 type DorisConfig struct {
-	Host            string `yaml:"Host"`     // 数据库主机地址
-	Username        string `yaml:"Username"` // 数据库用户名
-	Password        string `yaml:"Password"` // 数据库密码
-	Schema          string `yaml:"Schema"`   // 数据库名称
-	LoadURL         string `yaml:"LoadURL"`
-	SchemaPrefix    string `yaml:"SchemaPrefix"`    // SchemaPrefix 目标库名前缀。同步到 Doris 时，源 MySQL 库名会拼接该前缀作为目标库名， 例如源库 game、前缀 ods_，则落到 Doris 的 ods_game 库。为空表示不加前缀（与源库同名）
-	MaxBacklogBytes int64  `yaml:"MaxBacklogBytes"` // MaxBacklogBytes 本地 CSV 缓冲积压的告警阈值（字节）。超过时仅告警不中断,为 0 时使用默认值（见 Doris.defaultMaxBacklog）。
-
+	SQLDSN                  string        `yaml:"SQLDSN"`                  // Doris SQL 连接串。
+	StreamLoadURL           string        `yaml:"StreamLoadURL"`           // 提供 Stream Load 的 Doris BE 地址。
+	FrontendURL             string        `yaml:"FrontendURL"`             // 提供导入状态查询的 Doris FE 地址。
+	Username                string        `yaml:"Username"`                // HTTP 用户名，留空时沿用 SQL 凭据。
+	Password                string        `yaml:"Password"`                // HTTP 密码。
+	ControlDatabase         string        `yaml:"ControlDatabase"`         // CDC 检查点、回执与结构历史所在库。
+	HTTPTimeout             time.Duration `yaml:"HTTPTimeout"`             // HTTP 请求超时，默认 60 秒。
+	LoadRecheckTimeout      time.Duration `yaml:"LoadRecheckTimeout"`      // 导入结果未明时，仅核对原 Label 的总期限，默认 15 秒。
+	DDLJobTimeout           time.Duration `yaml:"DDLJobTimeout"`           // 已识别的异步 DDL 作业跟踪期限，默认 1 小时。
+	ControlRetentionRecords uint64        `yaml:"ControlRetentionRecords"` // 保留最近的已确认记录数，默认 4096。
 }
 
-func (c *DorisConfig) Validate(ctx context.Context) bool {
-	if c == nil {
-		hlog.Error(ctx, "doris config is nil")
-		return false
-	}
-	if strings.TrimSpace(c.Host) == "" {
-		hlog.Error(ctx, "doris config host is empty")
-		return false
-	}
-	if strings.TrimSpace(c.Username) == "" {
-		hlog.Error(ctx, "doris config username is empty")
-		return false
-	}
-	if strings.TrimSpace(c.LoadURL) == "" {
-		hlog.Error(ctx, "doris config loadURL is empty")
-		return false
-	}
-	return true
+// DorisTarget 向 Doris UNIQUE KEY 表交付变更，并按流独立维护单调推进的检查点。
+type DorisTarget struct {
+	db             *sql.DB
+	backend        *url.URL
+	frontend       *url.URL
+	client         *http.Client
+	ownedTransport *http.Transport
+	config         DorisConfig
 }
 
-func (c *DorisConfig) Equal(other *DorisConfig) bool {
-	return c.Host == other.Host &&
-		c.Username == other.Username &&
-		c.Password == other.Password &&
-		c.Schema == other.Schema &&
-		c.LoadURL == other.LoadURL &&
-		c.SchemaPrefix == other.SchemaPrefix
-}
+var (
+	errDorisTargetUnavailable = herror.NewError("Doris target temporarily unavailable")
+	dorisIdentifier           = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,63}$`)
+	dorisLabel                = regexp.MustCompile(`^[a-zA-Z0-9_]{1,128}$`)
+	dorisType                 = regexp.MustCompile(`^(BOOLEAN|TINYINT|SMALLINT|INT|BIGINT|LARGEINT|FLOAT|DOUBLE|DATE|DATEV2|DATETIME|DATETIMEV2|STRING|TEXT|JSON|JSONB|BITMAP|CHAR|VARCHAR|DECIMAL|DECIMALV3)(\([0-9]+(,[0-9]+)?\))?$`)
+	dorisReplicaUnavailable   = regexp.MustCompile(`^errCode = 2, detailMessage = tablet [0-9]+ has no queryable replicas\. err: replica [0-9]+'s backend [0-9]+ does not exist or not alive$`)
+)
 
-type ActionInfo struct {
-}
+var _ Target = (*DorisTarget)(nil)
 
-type Doris struct {
-	cfg           *DorisConfig
-	workers       map[InstanceId]*Worker
-	client        *http.Client
-	mu            sync.RWMutex
-	sql           *sql.DB
-	change        chan []TableInfo
-	paused        atomic.Bool // 同步状态：paused 为 true 时停止 svc -> Doris 的数据上传，但 MySQL -> svc 的采集继续。
-	stateMu       sync.RWMutex
-	state         SyncState
-	initializing  atomic.Bool // initializing 表示是否处于初始化阶段（建库建表 + 全量拉取）。
-	monitor       *Monitor    // monitor 监控器：采集/上传吞吐、延迟、错误、DDL、暂停事件等指标。
-	maxBacklog    int64       // maxBacklog 本地 CSV 缓冲积压的告警阈值（字节），超过时仅告警不中断同步。
-	backlogWarned bool        // backlogWarned 是否已因积压超限告警过（避免每个周期重复告警刷屏），	积压回落到阈值以下后复位。
-}
-
-// NewDoris 创建 Doris 实例。
-func NewDoris(cfg *DorisConfig) *Doris {
-	d := &Doris{
-		cfg:     cfg,
-		workers: make(map[InstanceId]*Worker),
-		client:  &http.Client{Timeout: 60 * time.Second},
-		change:  make(chan []TableInfo),
-		monitor: NewMonitor(),
+// wrapDorisRequestError 将连接异常和 BE 启动故障标记为暂时不可用。
+// 重试发送前须重新读取检查点和已登记的请求意图。
+func wrapDorisRequestError(err error, message string) error {
+	var operation *net.OpError
+	var network net.Error
+	var serverError *mysql.MySQLError
+	replicaUnavailable := errors.As(err, &serverError) && serverError.Number == 1105 && dorisReplicaUnavailable.MatchString(serverError.Message)
+	if errors.As(err, &operation) || (errors.As(err, &network) && network.Timeout()) ||
+		errors.Is(err, driver.ErrBadConn) || errors.Is(err, mysql.ErrInvalidConn) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || replicaUnavailable {
+		err = errors.Join(errDorisTargetUnavailable, err)
 	}
-	if cfg != nil && cfg.MaxBacklogBytes > 0 {
-		d.maxBacklog = cfg.MaxBacklogBytes
-	} else {
-		d.maxBacklog = defaultMaxBacklog
-	}
-	d.initializing.Store(true)
-	return d
+	return herror.WrapMsg(err, message)
 }
 
-// targetSchema 把源 MySQL 库名映射为 Doris 目标库名（拼接 SchemaPrefix 前缀）。
-func (d *Doris) targetSchema(src Schema) Schema {
-	if src == cdcRecordSchema {
-		return src
-	}
-	if d.cfg == nil || d.cfg.SchemaPrefix == "" {
-		return src
-	}
-	return Schema(d.cfg.SchemaPrefix + string(src))
+// OpenDorisTarget 连接 Doris 并创建 CDC 控制表。
+func OpenDorisTarget(ctx context.Context, config DorisConfig) (*DorisTarget, error) {
+	return openDorisTarget(ctx, config, nil)
 }
 
-// RegisterWorker 注册 worker
-func (d *Doris) RegisterWorker(ctx context.Context, worker *Worker) {
-	d.mu.Lock()
-	if _, exists := d.workers[worker.instanceId]; !exists {
-		d.workers[worker.instanceId] = worker
-		go worker.loop(ctx)
-	}
-	d.mu.Unlock()
-}
-
-// Open 打开 Doris 连接并初始化位点记录表。
-func (d *Doris) Open(ctx context.Context) error {
-	var err error
-	d.sql, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", d.cfg.Username, d.cfg.Password, d.cfg.Host, d.cfg.Schema))
+// openDorisTarget 在初始化控制表之前验证流水线是否拥有目标写入权。
+func openDorisTarget(ctx context.Context, config DorisConfig, owner *dorisWriterIdentity) (*DorisTarget, error) {
+	backend, frontend, dsn, err := parseDorisConfig(config)
 	if err != nil {
-		return herror.Wrap(err)
+		return nil, err
 	}
-	// 连接池参数：限制并发连接数、空闲连接数与连接生命周期，避免连接泄漏。
-	d.sql.SetMaxOpenConns(8)
-	d.sql.SetMaxIdleConns(4)
-	d.sql.SetConnMaxLifetime(5 * time.Minute)
-	err = d.createCDCRecord(ctx)
+	if config.ControlDatabase == "" {
+		config.ControlDatabase = defaultDorisControlDatabase
+	}
+	if config.Username == "" {
+		config.Username, config.Password = dsn.User, dsn.Passwd
+	}
+	dsn.InterpolateParams = true
+	dsn.DBName = ""
+	connector, err := mysql.NewConnector(dsn)
 	if err != nil {
-		return err
+		return nil, herror.NewError("invalid Doris SQL connector settings")
 	}
-	go d.loop(ctx)
-
-	return nil
-}
-
-func (d *Doris) loop(ctx context.Context) {
-	// 用 timer 实现动态重试间隔：上传失败时指数退避（Doris 故障时不高频打请求），
-	const baseInterval = 2 * time.Second
-	// 成功则回到基准间隔。
-	const maxBackoff = 30 * time.Second
-	interval := baseInterval
-	timer := time.NewTimer(interval)
-	defer timer.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			if d.IsPaused() {
-				interval = baseInterval
-			} else if err := d.scanFile(ctx); err != nil {
-				herror.PrintStack(ctx, err)
-				if interval < maxBackoff {
-					interval *= 2
-				}
-			} else {
-				interval = baseInterval
-			}
-			timer.Reset(interval)
-		case val := <-d.change:
-			// 源表结构发生变化：先自动暂停 svc -> Doris 的数据上传，待 Doris 侧 DDL 同步完成并经人工确认后，再手动 Resume 恢复
-			for _, info := range val {
-				d.pauseForSchemaChange(ctx, info)
-				err := d.changeTable(ctx, &info)
-				if err != nil {
-					herror.PrintStack(ctx, err)
-				}
-			}
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(4)
+	if config.HTTPTimeout <= 0 {
+		config.HTTPTimeout = 60 * time.Second
+	}
+	target := &DorisTarget{
+		db: db, backend: backend, frontend: frontend, config: config,
+	}
+	if owner != nil {
+		if err := target.claimWriter(ctx, *owner); err != nil {
+			_ = db.Close()
+			return nil, err
 		}
 	}
-}
-
-// Pause 手动暂停 svc -> Doris 的数据同步。MySQL -> svc 的采集不受影响，数据会继续缓冲到本地文件。
-func (d *Doris) Pause(ctx context.Context, reason string) {
-	d.stateMu.Lock()
-	if !d.paused.Load() {
-		d.state = SyncState{
-			Status:   SyncPaused,
-			Reason:   reason,
-			PausedAt: time.Now(),
-		}
-	} else {
-		// 已暂停时仅补充原因，保留首次暂停时间与触发源。
-		if reason != "" {
-			d.state.Reason = reason
-		}
+	if err := target.initialize(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
-	d.paused.Store(true)
-	d.stateMu.Unlock()
-	d.monitor.PauseCount.Add(1)
-	hlog.Warn(ctx, "svc -> doris sync paused: %s", reason)
+	target.client, target.ownedTransport = newDorisHTTPClient(config.HTTPTimeout, http.DefaultTransport)
+	return target, nil
 }
 
-// pauseForSchemaChange 在源表结构变化时自动暂停同步。
-// 仅由 loop 的 change 分支调用（运行时 DDL）；初始化建表走 ChangeTables 的同步路径，不会经过这里。
-func (d *Doris) pauseForSchemaChange(ctx context.Context, info TableInfo) {
-	reason := fmt.Sprintf("source table schema changed: %s.%s (action=%s)", info.Schema, info.Table, info.Action)
-	d.stateMu.Lock()
-	if !d.paused.Load() {
-		d.state = SyncState{
-			Status:   SyncPaused,
-			Reason:   reason,
-			PausedAt: time.Now(),
-			Schema:   info.Schema,
-			Table:    info.Table,
-		}
-	} else {
-		// 已暂停时仅补充原因，保留首次暂停时间与触发源。
-		d.state.Reason = reason
+// parseDorisConfig 校验控制库、FE 和 BE 地址，并解析 Doris SQL DSN。
+func parseDorisConfig(config DorisConfig) (backend, frontend *url.URL, dsn *mysql.Config, err error) {
+	if config.LoadRecheckTimeout < 0 || config.LoadRecheckTimeout > maxDorisLoadRecheckTimeout {
+		return nil, nil, nil, herror.NewError("Doris load recheck timeout must be between zero and ten minutes")
 	}
-	d.paused.Store(true)
-	d.stateMu.Unlock()
-	d.monitor.PauseCount.Add(1)
-	d.monitor.autoPause.Add(1)
-	hlog.Warn(ctx, "svc -> doris sync auto paused: %s", reason)
-}
-
-// setInitialized 标记初始化阶段结束，此后源表结构变化才会触发自动暂停。
-func (d *Doris) setInitialized() {
-	d.initializing.Store(false)
-}
-
-// Resume 手动恢复 svc -> Doris 的数据同步。
-func (d *Doris) Resume(ctx context.Context) {
-	d.stateMu.Lock()
-	d.state = SyncState{Status: SyncRunning}
-	d.paused.Store(false)
-	d.stateMu.Unlock()
-	d.monitor.ResumeCount.Add(1)
-	hlog.Info(ctx, "svc -> doris sync resumed")
-}
-
-// IsPaused 返回当前是否处于暂停状态。
-func (d *Doris) IsPaused() bool {
-	return d.paused.Load()
-}
-
-// GetSyncState 返回当前同步状态快照。
-func (d *Doris) GetSyncState() SyncState {
-	d.stateMu.RLock()
-	defer d.stateMu.RUnlock()
-	return d.state
-}
-
-func (d *Doris) ChangeTables(ctx context.Context, infos []TableInfo) {
-	// 初始化阶段（建库建表 + 全量拉取）：同步执行建表，不走异步 change channel，
-	// 从而避免把初始化建表误判为“源表结构变化”触发自动暂停。
-	if d.initializing.Load() {
-		for i := range infos {
-			if err := d.changeTable(ctx, &infos[i]); err != nil {
-				herror.PrintStack(ctx, err)
-			}
-		}
-		return
+	if config.DDLJobTimeout < 0 {
+		return nil, nil, nil, herror.NewError("Doris DDL job timeout cannot be negative")
 	}
-	// 运行时（binlog 捕获到的 DDL）：走异步 channel，由 loop 处理并触发自动暂停。
-	d.change <- infos
-}
-
-// StreamSave 执行 Doris Stream Load 上传 CSV 文件。
-func (d *Doris) StreamSave(ctx context.Context, schema Schema, table Table, columns string, value io.Reader) error {
-	schema = d.targetSchema(schema)
-	parse, err := url.Parse(d.cfg.LoadURL)
+	if config.ControlRetentionRecords > math.MaxInt64 {
+		return nil, nil, nil, herror.NewError("Doris control retention exceeds the checkpoint sequence range")
+	}
+	if strings.TrimSpace(config.SQLDSN) == "" {
+		return nil, nil, nil, herror.NewError("Doris SQL DSN is required")
+	}
+	if config.ControlDatabase == "" {
+		config.ControlDatabase = defaultDorisControlDatabase
+	}
+	if !dorisIdentifier.MatchString(config.ControlDatabase) || strings.EqualFold(config.ControlDatabase, dorisWriterRegistry) {
+		return nil, nil, nil, herror.NewError("invalid Doris control database name")
+	}
+	backend, err = parseDorisEndpoint(config.StreamLoadURL)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
-	parse.Path = fmt.Sprintf("/api/%s/%s/_stream_load", schema, table)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, parse.String(), value)
+	frontend, err = parseDorisEndpoint(config.FrontendURL)
 	if err != nil {
-		return herror.Wrap(err)
+		return nil, nil, nil, err
 	}
-
-	hlog.Info(ctx, "doris stream save: %s.%s columns: %s", schema, table, columns)
-	req.SetBasicAuth(d.cfg.Username, d.cfg.Password)
-	req.Header.Set("Expect", "100-continue")
-	req.Header.Set("column_separator", ",")
-
-	// ✨ 核心映射：动态把从文件首行解析出来的 columns 传给 Doris
-	req.Header.Set("columns", columns)
-	req.Header.Set("merge_type", "MERGE")
-	req.Header.Set("delete", "__op=2")
-	req.Header.Set("strict_mode", "false")
-
-	start := time.Now()
-	resp, err := d.client.Do(req)
+	dsn, err = mysql.ParseDSN(config.SQLDSN)
 	if err != nil {
-		return herror.Wrap(err)
+		return nil, nil, nil, herror.NewError("invalid Doris SQL DSN")
 	}
-	defer resp.Body.Close()
+	return backend, frontend, dsn, nil
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return herror.NewError("doris stream load failed: " + resp.Status)
+// newDorisHTTPClient 创建带超时的 Doris HTTP 客户端，并记录自身持有的连接池。
+func newDorisHTTPClient(timeout time.Duration, transport http.RoundTripper) (*http.Client, *http.Transport) {
+	var ownedTransport *http.Transport
+	if standard, ok := transport.(*http.Transport); ok && standard != nil {
+		ownedTransport = standard.Clone()
+		transport = ownedTransport
 	}
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		// 禁止重定向，以免将 Doris 凭据转发到其他地址。
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}, ownedTransport
+}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return herror.Wrap(err)
+// parseDorisEndpoint 校验并解析用于访问 Doris 的 HTTP 或 HTTPS 地址。
+func parseDorisEndpoint(address string) (*url.URL, error) {
+	endpoint, err := url.Parse(address)
+	if err != nil || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" ||
+		endpoint.Fragment != "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return nil, herror.NewError("Doris endpoint must be an HTTP(S) URL without credentials, query or fragment")
 	}
+	return endpoint, nil
+}
 
-	var dorisResp DorisResponse
-	if err = json.Unmarshal(body, &dorisResp); err != nil {
-		return herror.Wrap(err)
+// initialize 创建保存检查点和导入回执所需的 Doris 控制库与控制表。
+func (d *DorisTarget) initialize(ctx context.Context) error {
+	control := quoteDoris(d.config.ControlDatabase)
+	if _, err := d.db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+control); err != nil {
+		return herror.WrapMsg(err, "create Doris CDC control database")
 	}
-	if dorisResp.Status != "Success" {
-		return herror.NewError("doris stream load failed: " + string(body))
+	statements := []string{
+		"CREATE TABLE IF NOT EXISTS " + control + ".`checkpoints` (" +
+			"stream_key CHAR(64) NOT NULL, sequence_no BIGINT NOT NULL, checkpoint_json STRING NOT NULL) " +
+			"ENGINE=OLAP UNIQUE KEY(stream_key, sequence_no) DISTRIBUTED BY HASH(stream_key) BUCKETS 1",
+		"CREATE TABLE IF NOT EXISTS " + control + ".`load_receipts` (" +
+			"load_label VARCHAR(128) NOT NULL, target_table VARCHAR(129) NOT NULL, payload_checksum CHAR(64) NOT NULL, " +
+			"expected_rows BIGINT NOT NULL, verified BOOLEAN NOT NULL) " +
+			"ENGINE=OLAP UNIQUE KEY(load_label) DISTRIBUTED BY HASH(load_label) BUCKETS 1",
+		"CREATE TABLE IF NOT EXISTS " + control + ".`cdc_load_history` (" +
+			"stream_key CHAR(64) NOT NULL, sequence_no BIGINT NOT NULL, load_label VARCHAR(128) NOT NULL) " +
+			"ENGINE=OLAP UNIQUE KEY(stream_key, sequence_no, load_label) DISTRIBUTED BY HASH(stream_key) BUCKETS 1",
+		"CREATE TABLE IF NOT EXISTS " + control + ".`load_recheck_deadlines` (" +
+			"load_label VARCHAR(128) NOT NULL, deadline_ms BIGINT NOT NULL) " +
+			"ENGINE=OLAP UNIQUE KEY(load_label) DISTRIBUTED BY HASH(load_label) BUCKETS 1",
 	}
-
-	// 记录上传指标（业务表与 cdc_record 位点表共用同一上传通道，这里统一统计字节/行数与耗时）
-	elapsedMs := time.Since(start).Milliseconds()
-	d.monitor.UploadFiles.Add(1)
-	d.monitor.UploadBytes.Add(int64(dorisResp.LoadBytes))
-	d.monitor.UploadRows.Add(int64(dorisResp.NumberLoadedRows))
-	d.monitor.UploadTotalMs.Add(elapsedMs)
-	for {
-		max := d.monitor.uploadMaxMs.Load()
-		if elapsedMs <= max || d.monitor.uploadMaxMs.CompareAndSwap(max, elapsedMs) {
-			break
+	for _, statement := range statements {
+		if _, err := d.db.ExecContext(ctx, statement+dorisUniqueProperties); err != nil {
+			return herror.WrapMsg(err, "create Doris CDC control table")
 		}
 	}
 	return nil
 }
 
-// TruncateTable 对 Doris 目标表执行 TRUNCATE TABLE。
-func (d *Doris) TruncateTable(ctx context.Context, schema Schema, table Table) error {
-	target := d.targetSchema(schema)
-	sqlText := "TRUNCATE TABLE `" + strings.ReplaceAll(string(target), "`", "``") + "`.`" + strings.ReplaceAll(string(table), "`", "``") + "`"
-	hlog.Info(ctx, "doris truncate table: %s", sqlText)
-	if _, err := d.sql.ExecContext(ctx, sqlText); err != nil {
-		d.monitor.DDLErrors.Add(1)
-		return herror.Wrap(err)
-	}
-	d.monitor.DDLCount.Add(1)
-	return nil
+const dorisUniqueProperties = ` PROPERTIES ("replication_num" = "1", "enable_unique_key_merge_on_write" = "true")`
+
+// quoteDoris 用反引号安全引用 Doris SQL 标识符。
+func quoteDoris(identifier string) string {
+	return "`" + strings.ReplaceAll(identifier, "`", "``") + "`"
 }
 
-// Close 关闭 Doris 连接
-func (d *Doris) Close() error {
-	if d.sql != nil {
-		return d.sql.Close()
+// splitDorisTable 拆分并校验包含库名与表名的 Doris 目标名称。
+func splitDorisTable(name string) (string, string, error) {
+	database, table, ok := strings.Cut(name, ".")
+	if !ok || !dorisIdentifier.MatchString(database) || !dorisIdentifier.MatchString(table) {
+		return "", "", herror.NewError("Doris load requires a qualified database.table identifier")
 	}
-	return nil
+	return database, table, nil
 }
 
-// CreateSchema 创建 Doris 目标库（源库名拼接 SchemaPrefix 前缀）。
-func (d *Doris) CreateSchema(ctx context.Context, schema Schema) error {
-	return d.ensureSchema(ctx, d.targetSchema(schema))
+// controlTable 返回 Doris 控制库下指定控制表的完整引用。
+func (d *DorisTarget) controlTable(table string) string {
+	return quoteDoris(d.config.ControlDatabase) + "." + quoteDoris(table)
 }
 
-// ensureSchema 确保指定库存在（库名不再拼接前缀，幂等）。
-// 运行时 DDL 场景（上游新建库）不会走初始化建库路径，建表前必须依赖此方法兜底建库。
-func (d *Doris) ensureSchema(ctx context.Context, schema Schema) error {
-	var s strings.Builder
-	s.WriteString("CREATE DATABASE IF NOT EXISTS `")
-	s.WriteString(strings.ReplaceAll(string(schema), "`", "``"))
-	s.WriteString("`")
-
-	hlog.Info(ctx, "doris change schema: %s", s.String())
-	_, err := d.sql.ExecContext(ctx, s.String())
-	if err != nil {
-		return err
-	}
-	return nil
+// dorisStreamKey 对流的流水线标识、源标识和代次生成稳定的存储键。
+func dorisStreamKey(identity StreamIdentity) string {
+	key := fmt.Sprintf("%d:%s%d:%s%d:%s",
+		len(identity.PipelineID), identity.PipelineID, len(identity.SourceID), identity.SourceID,
+		len(identity.Generation), identity.Generation)
+	return digest([]byte(key))
 }
 
-// GetReplicationNum 动态探测并计算最安全的副本数
-func (d *Doris) GetReplicationNum(ctx context.Context) int {
-	// 1. 默认降级策略为 1
-	query, err := d.sql.QueryContext(ctx, "SELECT COUNT(*) AS available_be_count FROM BACKENDS() WHERE `Alive` = true;")
-	if err != nil {
-		return 1
+// Close 释放目标持有的 SQL 连接池和空闲 HTTP 连接。
+func (d *DorisTarget) Close() error {
+	if d.ownedTransport != nil {
+		d.ownedTransport.CloseIdleConnections()
 	}
-	defer query.Close()
-
-	var count int
-	for query.Next() {
-		if err := query.Scan(&count); err != nil {
-			return 1
-		}
-	}
-	if err := query.Err(); err != nil {
-		return 1
-	}
-
-	if count > 3 {
-		return 3
-	}
-	if count <= 0 {
-		return 1
-	}
-	return count
-}
-
-// changeTable 执行 Doris DDL
-func (d *Doris) changeTable(ctx context.Context, info *TableInfo) error {
-	d.monitor.DDLCount.Add(1)
-	if info.Action == Drop {
-		d.monitor.DropTable.Add(1)
-		err := d.dropTable(ctx, info)
-		if err != nil {
-			d.monitor.DDLErrors.Add(1)
-		}
-		return err
-	}
-	newInfo := d.ToDorisTable(info)
-	newInfo.Schema = d.targetSchema(info.Schema)
-	oldInfo, err := d.GetTableInfo(ctx, newInfo.Schema, info.Table)
-	if err != nil {
-		d.monitor.DDLErrors.Add(1)
-		return err
-	}
-	if oldInfo == nil {
-		d.monitor.CreateTable.Add(1)
-		err := d.createTable(ctx, newInfo)
-		if err != nil {
-			d.monitor.DDLErrors.Add(1)
-		}
-		return err
-	}
-
-	d.monitor.AlterTable.Add(1)
-	err = d.modifyTable(ctx, oldInfo, newInfo)
-	if err != nil {
-		d.monitor.DDLErrors.Add(1)
-	}
-	return err
-}
-
-// dropTable 删除 Doris 侧的对应表
-func (d *Doris) dropTable(ctx context.Context, info *TableInfo) error {
-	schema := d.targetSchema(info.Schema)
-	query := fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", schema, info.Table)
-	hlog.Info(ctx, "doris drop table: %s", query)
-	_, err := d.sql.ExecContext(ctx, query)
-	if err != nil {
+	if err := d.db.Close(); err != nil {
 		return herror.Wrap(err)
 	}
 	return nil
 }
 
-// dorisNoDefaultTypes 是 Doris 不支持 DEFAULT 子句的类型集合：聚合类型
-// （BITMAP/HLL/QUANTILE_STATE/AGG_STATE）与半结构化类型（ARRAY/MAP/STRUCT/
-// VARIANT/JSON）。上游列的默认值无法映射到这些类型（如 bitmap32 的 '0'），
-// 建表/改表时跳过 Default，否则 Doris 报 "xxx type column default value ..."。
-var dorisNoDefaultTypes = map[string]bool{
-	"BITMAP": true, "HLL": true, "QUANTILE_STATE": true, "AGG_STATE": true,
-	"ARRAY": true, "MAP": true, "STRUCT": true, "VARIANT": true, "JSON": true,
-}
-
-// dorisColumnHasDefault 判断列定义是否可携带 DEFAULT 子句（默认值非空且类型
-// 支持默认值）。createTable/modifyTable 共用。
-func dorisColumnHasDefault(info ColumnInfo) bool {
-	return info.Default != nil && !dorisNoDefaultTypes[info.Type]
-}
-
-// createTable 增强版：支持动态主键、自适应副本及 Range 时间分区
-func (d *Doris) createTable(ctx context.Context, info *TableInfo) error {
-	// 运行时 DDL（上游新建库）不会触发初始化建库路径，建表前先确保目标库存在。
-	if err := d.ensureSchema(ctx, info.Schema); err != nil {
-		return herror.Wrap(err)
-	}
-	var s strings.Builder
-	columns := info.Columns
-
-	s.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` (\n", string(info.Schema), string(info.Table)))
-	for i, col := range columns {
-		s.WriteString(" `")
-		s.WriteString(string(col.Name))
-		s.WriteString("` ")
-		s.WriteString(col.Type)
-		s.WriteString(col.Args)
-		s.WriteString(" ")
-		if col.IsNull == "YES" {
-			s.WriteString("NULL ")
-		} else {
-			s.WriteString("NOT NULL ")
-		}
-		if dorisColumnHasDefault(col) {
-			s.WriteString("Default ")
-			s.WriteString(*col.Default)
-			s.WriteString(" ")
-		}
-
-		s.WriteString("COMMENT ")
-		s.WriteString("'")
-		s.WriteString(strings.ReplaceAll(col.Comment, "'", "\\'"))
-		s.WriteString("'")
-
-		if i < len(info.Columns)-1 {
-			s.WriteString(",\n")
-		}
-	}
-	s.WriteString("\n) ENGINE=OLAP\n")
-
-	// 3. 拼接 UNIQUE KEY (确保聚合/唯一键列排在前面)
-	if len(info.Keys) > 0 {
-		keysStr := strings.Join(hutl.Slice(info.Keys, func(i int, v Column) string {
-			return "`" + string(v) + "`"
-		}), ", ")
-		s.WriteString(fmt.Sprintf("UNIQUE KEY(%s)\n", keysStr))
-		// 5. 拼接 DISTRIBUTED BY
-		// 分布式 Hash 键建议直接选择主键
-		s.WriteString(fmt.Sprintf("DISTRIBUTED BY HASH(%s) BUCKETS 8\n", keysStr))
-	}
-
-	// 4. 动态拼接 PARTITION BY RANGE 逻辑
-	if info.PartitionType == "RANGE" {
-		if info.PartitionField == "" {
-			hlog.Error(ctx, "createTable: PartitionType is RANGE but PartitionField is empty for table %s.%s", info.Schema, info.Table)
-		} else {
-			s.WriteString(fmt.Sprintf("AUTO PARTITION BY RANGE (DATE_TRUNC(`%s`, 'DAY')) ()\n", info.PartitionField))
-		}
-	}
-	// 6. 动态获取系统推荐的副本数并组装 PROPERTIES
-	repNum := d.GetReplicationNum(ctx)
-	if repNum > 3 {
-		repNum = 3
-	}
-	s.WriteString("PROPERTIES (\n")
-	if len(info.Keys) > 0 {
-		s.WriteString(fmt.Sprintf("  \"replication_num\" = \"%d\",\n", repNum))
-		s.WriteString("  \"enable_unique_key_merge_on_write\" = \"true\"\n")
-	} else {
-		s.WriteString(fmt.Sprintf("  \"replication_num\" = \"%d\"\n", repNum))
-	}
-	s.WriteString(");")
-
-	// 7. 执行 SQL
-	hlog.Info(ctx, "doris change table: %s", s.String())
-	_, err := d.sql.ExecContext(ctx, s.String())
-	if err != nil {
-		return fmt.Errorf("failed to execute partitioning DDL: %w. SQL: %s", err, s.String())
-	}
-	return nil
-}
-
-// ToDorisType 将上游原始类型转换为合法的 Doris 字段类型
-func (d *Doris) ToDorisType(info ColumnInfo) (string, string) {
-	// 1. 统一转换为小写，去掉首尾空格
-	rt := strings.TrimSpace(GetColumnType(&info))
-	if rt == "" {
-		return "VARIANT", ""
-	}
-
-	var args = info.Args
-	// 3. 核心类型映射匹配
-	switch rt {
-	// --- 字符串与文本类型 ---
-	case "varchar":
-		return "VARCHAR", args
-	case "char":
-		// Doris 中建议优先使用 VARCHAR，CHAR 适用于固定长度短字符串
-		return "VARCHAR", args
-	case "text", "string", "longtext", "mediumtext", "tinytext":
-		return "STRING", ""
-	case "bitmap64", "bitmap32":
-		return "BITMAP", ""
-	case "binary", "varbinary", "blob", "longblob", "mediumblob":
-		return "VARIANT", ""
-
-	// --- 整数类型 ---
-	case "tinyint":
-		return "TINYINT", "(4)"
-	case "smallint":
-		if args == "" {
-			return "SMALLINT", "(5)"
-		}
-		return "SMALLINT", args
-	case "int", "integer", "mediumint":
-		return "INT", "(11)"
-	case "bigint":
-		return "BIGINT", "(20)"
-	case "largeint":
-		if args == "" {
-			return "LARGEINT", "(20)"
-		}
-		return "LARGEINT", args
-
-	// --- 浮点与高精度定点数类型 ---
-	case "float":
-		return "FLOAT", args
-	case "double", "real":
-		return "DOUBLE", args
-	case "decimal", "numeric":
-		// 强烈推荐全面拥抱第三代高精度定点数 DECIMALV3
-		if args == "" {
-			return "DECIMALV3", "(9, 0)" // Doris DECIMALV3 默认精度
-		}
-		return "DECIMALV3", args
-
-	// --- 日期与时间类型 ---
-	case "date":
-		// 推荐使用性能更好的 DATEV2
-		if args == "" {
-			return "DATEV2", ""
-		}
-		return "DATEV2", args
-	case "datetime", "timestamp":
-		// 推荐使用支持微秒精度的 DATETIMEV2
-		if args == "" {
-			return "DATETIMEV2", "" // 默认到秒
-		}
-		return "DATETIMEV2", args
-	case "time":
-		if args == "" {
-			return "TIME", ""
-		}
-		return "TIME", args
-
-	// --- 半结构化与复杂类型 ---
-	case "json", "jsonb":
-		return "JSON", ""
-	case "variant":
-		return "VARIANT", ""
-	case "array":
-		return "ARRAY", args
-	case "map":
-		return "MAP", args
-	case "struct":
-		return "STRUCT", args
-
-	// --- 网络与特殊高级类型 ---
-	case "ipv4":
-		return "IPV4", ""
-	case "ipv6":
-		return "IPV6", ""
-	case "bitmap":
-		return "BITMAP", ""
-	case "hll":
-		return "HLL", ""
-	case "quantile_state":
-		return "QUANTILE_STATE", ""
-	case "agg_state":
-		return "AGG_STATE", ""
-
-	// --- 布尔类型 ---
-	case "boolean", "bool":
-		return "BOOLEAN", ""
-
-	// --- 枚举/集合类型（Doris 无原生对应，退化为字符串） ---
-	case "enum":
-		// MySQL enum 的 args 形如 ('a','b','c')，Doris 无法直接复用，退化为 VARCHAR。
-		return "VARCHAR", "(255)"
-	case "set":
-		return "VARCHAR", "(255)"
-
-	// --- 年份类型 ---
-	case "year":
-		return "SMALLINT", ""
-
-	// --- 几何/空间类型（Doris 无原生 GIS，存 WKT/WKB 文本） ---
-	case "geometry", "point", "linestring", "polygon",
-		"multipoint", "multilinestring", "multipolygon", "geometrycollection":
-		return "STRING", ""
-
-	// --- 兜底策略 ---
-	default:
-		return "VARIANT", ""
-	}
-}
-
-// ToDorisTable 将上游表结构转换为 Doris 兼容的表结构
-func (d *Doris) ToDorisTable(info *TableInfo) *TableInfo {
-	ret := TableInfo{
-		Schema:         info.Schema,
-		Table:          info.Table,
-		Columns:        make([]ColumnInfo, len(info.Columns)),
-		Index:          info.Index,
-		Keys:           info.Keys,
-		PartitionField: info.PartitionField,
-	}
-	for i, col := range info.Columns {
-		column := &ret.Columns[i]
-		column.Type, column.Args = d.ToDorisType(col)
-		column.Name = col.Name
-		column.Comment = col.Comment
-		if column.Type == "BITMAP" {
-			column.Comment += "数据已在，只是BITMAP类型的数据在工具不能正常显示"
-		}
-		column.KeyIndex = col.KeyIndex
-		if column.Type == "BITMAP" {
-			column.IsNull = "NO"
-		} else {
-			column.IsNull = col.IsNull
-		}
-
-		if col.Default != nil && *col.Default != "NULL" && column.Type != "VARIANT" {
-			if column.Type == "DATEV2" || column.Type == "DATETIMEV2" {
-				column.Default = hutl.ToPointer(strings.ReplaceAll(*col.Default, "0000-00-00", "1970-01-01"))
-			} else {
-				column.Default = hutl.ToPointer(*col.Default)
-			}
-		}
-	}
-
-	return &ret
-}
-
-// GetTableInfo 获得指定表的结构
-func (c *Doris) GetTableInfo(ctx context.Context, schema Schema, table Table) (*TableInfo, error) {
-	keys, err := c.GetKeys(ctx, schema, table)
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT,IS_NULLABLE, COLUMN_DEFAULT,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", string(schema), string(table))
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	defer query.Close()
-	var ret = &TableInfo{
-		Schema:  schema,
-		Table:   table,
-		Columns: make([]ColumnInfo, 0),
-		Keys:    make([]Column, 0),
-	}
-	for query.Next() {
-		var column ColumnInfo
-		var args string
-		if err := query.Scan(&column.Name, &args, &column.Comment, &column.IsNull, &column.Default, &column.Type); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		if args == "string" {
-			column.Args = ""
-			column.Type = args
-		} else {
-			column.Args = args[len(column.Type):]
-		}
-		column.Type = strings.ToUpper(column.Type)
-		if column.Type == "DATETIME" {
-			column.Type = "DATETIMEV2"
-		} else if column.Type == "DATE" {
-			column.Type = "DATEV2"
-		} else if column.Type == "DECIMAL" {
-			column.Type = "DECIMALV3"
-			column.Args = args[len(column.Type):]
-		}
-		if column.Default != nil {
-			column.Default = hutl.ToPointer(strings.ToUpper(*column.Default))
-		}
-
-		column.Args = strings.ReplaceAll(column.Args, " ", "")
-		column.KeyIndex = keys[string(column.Name)]
-		ret.Columns = append(ret.Columns, column)
-	}
-	if err := query.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-	if len(ret.Columns) == 0 {
+// LoadCheckpoint 读取指定流的最新已提交检查点。
+func (d *DorisTarget) LoadCheckpoint(ctx context.Context, identity StreamIdentity) (*Checkpoint, error) {
+	var sequence uint64
+	var stored string
+	query := "SELECT sequence_no, checkpoint_json FROM " + d.controlTable("checkpoints") +
+		" WHERE stream_key = ? ORDER BY sequence_no DESC LIMIT 1"
+	err := d.db.QueryRowContext(ctx, query, dorisStreamKey(identity)).Scan(&sequence, &stored)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
-
-	hutl.Sort(ret.Columns, func(i, j ColumnInfo) bool {
-		return i.KeyIndex > j.KeyIndex
-	})
-	ret.Index = hutl.SliceToMap(ret.Columns, func(i int, column ColumnInfo) (Column, int) {
-		return column.Name, i
-	})
-
-	for _, column := range ret.Columns {
-		if column.KeyIndex > 0 {
-			ret.Keys = append(ret.Keys, column.Name)
-		}
-	}
-
-	ret.PartitionType, err = c.GetPartitionType(ctx, schema, table)
 	if err != nil {
-		return nil, herror.Wrap(err)
+		return nil, wrapDorisRequestError(err, "load Doris checkpoint")
 	}
-	if ret.PartitionType == "RANGE" {
-		for _, key := range ret.Keys {
-			column := ret.Columns[ret.Index[key]]
-			if strings.HasPrefix(column.Type, "datetime") || strings.HasPrefix(column.Type, "timestamp") {
-				ret.PartitionField = column.Name
-				break
-			}
-		}
-		if ret.PartitionField == "" {
-			hlog.Error(ctx, "GetTableInfo: table %s.%s has RANGE partition but no datetime/timestamp partition field", schema, table)
-		}
+	var checkpoint Checkpoint
+	if err := json.Unmarshal([]byte(stored), &checkpoint); err != nil {
+		return nil, herror.WrapMsg(err, "decode Doris checkpoint")
 	}
-
-	return ret, nil
+	if checkpoint.Identity != identity || checkpoint.Sequence != sequence {
+		return nil, herror.NewError("Doris checkpoint identity or sequence mismatch")
+	}
+	return &checkpoint, nil
 }
 
-// GetPartitionType 动态查询 MySQL 上游表的 RANGE 分区字段
-func (c *Doris) GetPartitionType(ctx context.Context, schema Schema, table Table) (string, error) {
-	// 查询该表是否拥有 RANGE 类型的分区，并找出分区键 (COLUMN_NAME)
-	query := `SELECT PARTITION_METHOD FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1;`
-
-	rows, err := c.sql.QueryContext(ctx, query, string(schema), string(table))
+// PersistCheckpoint 校验检查点的推进顺序后写入新检查点。
+func (d *DorisTarget) PersistCheckpoint(ctx context.Context, checkpoint Checkpoint) error {
+	latest, err := d.LoadCheckpoint(ctx, checkpoint.Identity)
 	if err != nil {
-		return "", herror.Wrap(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var partitionMethod *string
-		err := rows.Scan(&partitionMethod)
-		if err != nil {
-			return "", herror.Wrap(err)
-		}
-		if partitionMethod != nil {
-			return *partitionMethod, nil
-		}
-	}
-	return "", nil
-}
-
-// GetKeys 获得指定表的主键。
-// KeyIndex 语义同 Canal.GetKeys：>0 为主键列，值越大越靠前（第一列最大）。
-// 必须按 ORDINAL_POSITION ASC 读取并逆序赋 KeyIndex，保证复合主键顺序正确。
-func (c *Doris) GetKeys(ctx context.Context, schema Schema, table Table) (map[string]int, error) {
-	query, err := c.sql.QueryContext(ctx, "SELECT COLUMN_NAME,CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION ASC ", string(schema), string(table))
-	if err != nil {
-		return nil, herror.Wrap(err)
-	}
-	defer query.Close()
-
-	var pkOrder []string
-	for query.Next() {
-		var column, constraint *string
-		if err := query.Scan(&column, &constraint); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		if constraint == nil || column == nil {
-			continue
-		}
-		if *constraint == "PRIMARY" {
-			pkOrder = append(pkOrder, *column)
-		}
-	}
-	if err := query.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-
-	var keys = make(map[string]int, len(pkOrder))
-	for i, name := range pkOrder {
-		keys[name] = len(pkOrder) - i
-	}
-	return keys, nil
-}
-
-// modifyTable 修改 Doris 表结构。
-func (c *Doris) modifyTable(ctx context.Context, oldInfo *TableInfo, newInfo *TableInfo) error {
-	addList := make([]ColumnInfo, 0, len(newInfo.Columns))
-	modifyList := make([]ColumnInfo, 0, len(newInfo.Columns))
-	for _, newColumn := range newInfo.Columns {
-		if val, ok := oldInfo.Index[newColumn.Name]; ok {
-			oldColumn := oldInfo.Columns[val]
-			if oldColumn.Type != newColumn.Type ||
-				oldColumn.Args != newColumn.Args ||
-				oldColumn.Comment != newColumn.Comment ||
-				oldColumn.IsNull != newColumn.IsNull {
-				modifyList = append(modifyList, newColumn)
-			}
-		} else {
-			addList = append(addList, newColumn)
-		}
-	}
-	var s strings.Builder
-	for _, info := range addList {
-		err := c.waitSchemaChangeComplete(ctx, newInfo.Schema, newInfo.Table)
-		if err != nil {
-			return err
-		}
-
-		s.Reset()
-		s.WriteString("ALTER TABLE `")
-		s.WriteString(string(newInfo.Schema))
-		s.WriteString("`.`")
-		s.WriteString(string(newInfo.Table))
-		s.WriteString("` ADD COLUMN ")
-		s.WriteString(string(info.Name))
-		s.WriteString(" ")
-		s.WriteString(info.Type)
-		if info.Args != "" {
-			s.WriteString(info.Args)
-		}
-		if info.IsNull != "YES" {
-			s.WriteString(" NOT NULL")
-		}
-		if dorisColumnHasDefault(info) {
-			s.WriteString(" DEFAULT ")
-			s.WriteString(*info.Default)
-		}
-		if info.Comment != "" {
-			s.WriteString(" COMMENT ")
-			s.WriteString("'")
-			s.WriteString(info.Comment)
-			s.WriteString("'")
-		}
-		hlog.Info(ctx, "modifyTable: %s", s.String())
-		_, err = c.sql.ExecContext(ctx, s.String())
-		if err != nil {
-			return herror.Wrap(err)
-		}
-	}
-
-	for _, info := range modifyList {
-		err := c.waitSchemaChangeComplete(ctx, newInfo.Schema, newInfo.Table)
-		if err != nil {
-			return err
-		}
-
-		s.Reset()
-		s.WriteString("ALTER TABLE `")
-		s.WriteString(string(newInfo.Schema))
-		s.WriteString("`.`")
-		s.WriteString(string(newInfo.Table))
-		s.WriteString("` MODIFY COLUMN ")
-		s.WriteString(string(info.Name))
-		s.WriteString(" ")
-		s.WriteString(info.Type)
-		if info.Args != "" {
-			s.WriteString(info.Args)
-		}
-		if info.IsNull != "YES" {
-			s.WriteString(" NOT NULL")
-		}
-		if dorisColumnHasDefault(info) {
-			s.WriteString(" DEFAULT ")
-			s.WriteString(*info.Default)
-		}
-		if info.Comment != "" {
-			s.WriteString(" COMMENT ")
-			s.WriteString("'")
-			s.WriteString(info.Comment)
-			s.WriteString("'")
-		}
-		hlog.Info(ctx, "modifyTable %s", s.String())
-		_, err = c.sql.ExecContext(ctx, s.String())
-		if err != nil {
-			return herror.Wrap(err)
-		}
-	}
-	return nil
-}
-
-// waitSchemaChangeComplete 等待 Schema Change 完成。
-func (c *Doris) waitSchemaChangeComplete(ctx context.Context, schema Schema, table Table) error {
-	query := fmt.Sprintf(
-		"SHOW ALTER TABLE COLUMN FROM `%s` WHERE TableName = '%s' ORDER BY CreateTime DESC LIMIT 1",
-		schema, table,
-	)
-
-	hlog.Info(ctx, "waitSchemaChangeComplete: %s", query)
-	maxRetries := 300 // 最多等 5 分钟（每次 1 秒）
-	for i := 0; i < maxRetries; i++ {
-		rows, err := c.sql.QueryContext(ctx, query)
-		if err != nil {
-			return herror.Wrap(err)
-		}
-
-		columns, err := rows.Columns()
-		if err != nil {
-			rows.Close()
-			return err
-		}
-		maps := make(map[string]int, len(columns))
-		values := make([]any, len(columns))
-		for i := range values {
-			values[i] = new(any)
-			maps[strings.ToLower(columns[i])] = i
-		}
-		if !rows.Next() {
-			rows.Close()
-			return nil
-		}
-
-		err = rows.Scan(values...)
-		if err != nil {
-			rows.Close()
-			return herror.Wrap(err)
-		}
-		rows.Close()
-
-		stateIdx, ok := maps["state"]
-		if !ok {
-			return fmt.Errorf("SHOW ALTER TABLE COLUMN result missing 'state' column")
-		}
-		state := values[stateIdx]
-		if state != nil {
-			state = *state.(*any)
-		}
-		var stateStr string
-		if state != nil {
-			switch v := state.(type) {
-			case []byte:
-				stateStr = string(v)
-			case string:
-				stateStr = v
-			default:
-				stateStr = fmt.Sprintf("%v", state)
-			}
-		}
-
-		var progressStr string
-		if idx, ok := maps["progress"]; ok {
-			progress := values[idx]
-			if progress != nil {
-				progress = *progress.(*any)
-			}
-			if progress != nil {
-				progressStr = fmt.Sprintf("%v", progress)
-			}
-		}
-
-		switch stateStr {
-		case "FINISHED", "CANCELLED":
-			return nil
-		case "RUNNING", "PENDING", "WAITING_TXN":
-			hlog.Info(ctx, "Schema Change %s, progress: %s, waiting...", stateStr, progressStr)
-			time.Sleep(1 * time.Second)
-		default:
-			return fmt.Errorf("unknown state: %s", stateStr)
-		}
-	}
-	return fmt.Errorf("wait schema change timeout after %d seconds", maxRetries)
-}
-
-// scanFile 扫描并上传 CSV 文件。
-func (d *Doris) scanFile(ctx context.Context) error {
-	d.mu.RLock()
-	workers := make([]*Worker, 0, len(d.workers))
-	for _, worker := range d.workers {
-		workers = append(workers, worker)
-	}
-	d.mu.RUnlock()
-	if len(workers) == 0 {
-		return nil
-	}
-
-	// 统计当前积压（待上传的 .active 文件数与字节数），用于监控。
-	var backlogFiles, backlogBytes int64
-	for _, worker := range workers {
-		f, b := worker.Backlog()
-		backlogFiles += f
-		backlogBytes += b
-	}
-	d.monitor.setBacklog(backlogFiles, backlogBytes)
-
-	// 磁盘水位检测：积压超过阈值时仅告警，不中断同步。采用「进入告警/解除告警」,的边沿触发，避免每个扫描周期重复刷屏。
-	d.checkBacklog(ctx, backlogBytes)
-
-	// 并发上传各 worker（每 worker 对应一个 MySQL 实例，彼此独立），提升吞吐、降低延迟。位点结果用互斥锁保护汇总，供写入 cdc_record.log_position。
-	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		reader   bytes.Buffer
-		firstErr error
-	)
-	upload := func(ctx context.Context, schema Schema, table Table, columns string, capturedAt time.Time, r io.Reader) error {
-		err := d.StreamSave(ctx, schema, table, columns, r)
-		if err == nil && !capturedAt.IsZero() {
-			// 记录端到端延迟：从数据被采集到上传完成。
-			d.monitor.recordDelay(time.Since(capturedAt).Milliseconds())
-		}
 		return err
 	}
-
-	// TRUNCATE 控制文件的处理回调：对目标库执行 TRUNCATE TABLE。 位点/GTID 由 scanFile 汇总进 cdc_record，保证崩溃后不会重复执行。
-	truncate := func(ctx context.Context, schema Schema, table Table, pos mysql.Position, gtid string, capturedAt time.Time) error {
-		return d.TruncateTable(ctx, schema, table)
-	}
-
-	for _, worker := range workers {
-		wg.Add(1)
-		go func(w *Worker) {
-			defer wg.Done()
-			// DDL barrier 回调。顺序不可反：先应用 Doris DDL，再写 table_schema，否则崩溃恢复后
-			// 快照新而 Doris 表旧；自动暂停必须放最后，否则 DDL 失败时暂停后 barrier 无法重试。
-			applyDDL := func(ctx context.Context, schema Schema, table Table, info TableInfo, pos mysql.Position, gtid string, capturedAt time.Time) error {
-				// 1. 应用 Doris 侧 DDL（CREATE/ALTER → 建/改表，DROP → 删表）。
-				if err := d.changeTable(ctx, &info); err != nil {
-					return err
-				}
-				// 2. 持久化/清理结构快照版本。
-				if info.Action == Drop {
-					if err := d.DeleteTableSchemas(ctx, w.instanceId, schema, table); err != nil {
-						return err
-					}
-				} else if err := d.SaveTableSchema(ctx, w.instanceId, info, pos); err != nil {
-					return err
-				}
-				// 3. 自动暂停（等待人工 Resume 后上传 DDL 后的数据）。
-				d.pauseForSchemaChange(ctx, info)
-				return errDDLBarrier
-			}
-			id, pos, gtid, err := w.ScanFile(ctx, upload, truncate, applyDDL)
-			if err != nil {
-				d.monitor.UploadErrors.Add(1)
-				hlog.Error(ctx, "scan file error: %v", err)
-				mu.Lock()
-				if firstErr == nil {
-					firstErr = err
-				}
-				mu.Unlock()
-				return
-			}
-			if pos != nil {
-				mu.Lock()
-				reader.WriteString(strconv.FormatInt(int64(id), 10))
-				reader.WriteString(",")
-				reader.WriteString(pos.Name)
-				reader.WriteString(",")
-				reader.WriteString(strconv.FormatUint(uint64(pos.Pos), 10))
-				reader.WriteString(",")
-				// GTID 作为第 4 列（CSV 内逗号会破坏列结构，做转义）。
-				// 源库未开启 GTID 时的匿名占位集（全零 SID）无续传意义，统一写空。
-				reader.WriteString(strings.ReplaceAll(normalizeGTID(gtid), ",", " "))
-				reader.WriteString(",0\n")
-				mu.Unlock()
-			}
-		}(worker)
-	}
-	wg.Wait()
-
-	if firstErr != nil {
-		return firstErr
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if reader.Len() == 0 {
+	if latest != nil && *latest == checkpoint {
 		return nil
 	}
-	return d.StreamSave(ctx, cdcRecordSchema, "log_position", "instance_id,file,position,gtid,__op", &reader)
-}
-
-// checkBacklog 磁盘水位检测：本地 CSV 缓冲积压超过阈值时仅告警（不中断同步）。
-// 采用边沿触发（进入告警/解除告警各打一次），避免每个扫描周期重复刷屏。
-// 仅在 loop 的单 goroutine 内调用，无需加锁。
-func (d *Doris) checkBacklog(ctx context.Context, backlogBytes int64) {
-	if backlogBytes > d.maxBacklog {
-		if !d.backlogWarned {
-			d.backlogWarned = true
-			hlog.Warn(ctx, "csv backlog %d bytes exceeds threshold %d bytes (%.2f GB), upload may lag behind",
-				backlogBytes, d.maxBacklog, float64(backlogBytes)/1024/1024/1024)
-		}
-		return
+	if checkpoint.Sequence > math.MaxInt64 ||
+		(latest == nil && checkpoint.Sequence != 0) ||
+		(latest != nil && checkpoint.Sequence != latest.Sequence+1) {
+		return herror.NewError("Doris checkpoint would break contiguous delivery")
 	}
-	d.backlogWarned = false
-}
-
-// createCDCRecord 创建 CDC 记录表。
-func (d *Doris) createCDCRecord(ctx context.Context) error {
-	_, err := d.sql.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS cdc_record")
+	stored, err := json.Marshal(checkpoint)
 	if err != nil {
-		return herror.Wrap(err)
+		return herror.WrapMsg(err, "encode Doris checkpoint")
 	}
-	_, err = d.sql.QueryContext(ctx, `
-			CREATE TABLE IF NOT EXISTS cdc_record.log_position (
-				instance_id BIGINT NOT NULL COMMENT '实例ID',
-				file VARCHAR(255) NOT NULL COMMENT '文件名',
-				position BIGINT NOT NULL COMMENT '位置',
-				gtid VARCHAR(1024) NOT NULL DEFAULT '' COMMENT 'GTID 集合，为空表示未开启 GTID'
-			)UNIQUE KEY(instance_id)
-			DISTRIBUTED BY HASH(instance_id) BUCKETS 10
-			PROPERTIES (
-				"replication_num" = "1"
-			)
-       `)
+	_, err = d.db.ExecContext(ctx, "INSERT INTO "+d.controlTable("checkpoints")+" VALUES (?, ?, ?)",
+		dorisStreamKey(checkpoint.Identity), checkpoint.Sequence, string(stored))
 	if err != nil {
-		return herror.Wrap(err)
-	}
-
-	// 兼容旧版本已建的表：CREATE TABLE IF NOT EXISTS 不会为已存在的表补列， 这里检测 gtid 列是否存在，缺失时补齐（Doris 不支持 ADD COLUMN IF NOT EXISTS）。
-	var cnt int
-	err = d.sql.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='cdc_record' AND TABLE_NAME='log_position' AND COLUMN_NAME='gtid'",
-	).Scan(&cnt)
-	if err != nil {
-		return herror.Wrap(err)
-	}
-	if cnt == 0 {
-		_, err = d.sql.QueryContext(ctx,
-			"ALTER TABLE cdc_record.log_position ADD COLUMN gtid VARCHAR(1024) NOT NULL DEFAULT '' COMMENT 'GTID 集合，为空表示未开启 GTID'")
-		if err != nil {
-			return herror.Wrap(err)
-		}
-	}
-	return d.createTableSchemaRecord(ctx)
-}
-
-// createTableSchemaRecord 创建结构快照表 cdc_record.table_schema：每行是某表自 (ddl_file, ddl_pos)
-// 起生效的一个结构版本（多版本追加），续传时按位点选「生效位点 <= 恢复位点」的最新版本。
-func (d *Doris) createTableSchemaRecord(ctx context.Context) error {
-	_, err := d.sql.QueryContext(ctx, `
-		CREATE TABLE IF NOT EXISTS cdc_record.table_schema (
-			instance_id BIGINT NOT NULL COMMENT '实例ID',
-			db_name VARCHAR(128) NOT NULL COMMENT '源库名',
-			table_name VARCHAR(128) NOT NULL COMMENT '源表名',
-			ddl_file VARCHAR(255) NOT NULL COMMENT '结构生效的 binlog 文件',
-			ddl_pos BIGINT NOT NULL COMMENT '结构生效的 binlog 位点',
-			schema_json JSON NOT NULL COMMENT '列结构快照（TableInfo JSON）',
-			updated_at DATETIME NOT NULL COMMENT '更新时间'
-		) UNIQUE KEY(instance_id, db_name, table_name, ddl_file, ddl_pos)
-		DISTRIBUTED BY HASH(instance_id) BUCKETS 10
-		PROPERTIES (
-			"replication_num" = "1",
-			"enable_unique_key_merge_on_write" = "true"
-		)
-       `)
-	if err != nil {
-		return herror.Wrap(err)
+		return wrapDorisRequestError(err, "write Doris checkpoint")
 	}
 	return nil
 }
 
-// SaveTableSchema 持久化结构快照及其生效位点（同一位点重复写入由 UNIQUE KEY 幂等合并）。
-func (d *Doris) SaveTableSchema(ctx context.Context, instanceId InstanceId, info TableInfo, pos mysql.Position) error {
-	payload, err := json.Marshal(info)
+// DorisColumn 描述支持的目标列。
+type DorisColumn struct {
+	Name     string
+	Type     string
+	Nullable bool
+}
+
+// DorisTable 描述 OLAP UNIQUE KEY 表。
+type DorisTable struct {
+	Database   string
+	Name       string
+	Columns    []DorisColumn
+	PrimaryKey []string
+}
+
+// EnsureTable 为源端快照准备 Doris 数据库和 UNIQUE KEY 表。
+// 按 Doris 的要求将键列排在其他列之前。
+func (d *DorisTarget) EnsureTable(ctx context.Context, table DorisTable) error {
+	if strings.EqualFold(table.Database, d.config.ControlDatabase) {
+		return herror.NewError("Doris target database conflicts with the CDC control database")
+	}
+	if _, _, err := splitDorisTable(table.Database + "." + table.Name); err != nil {
+		return err
+	}
+	definitions, keys, err := dorisTableDefinitions(table)
 	if err != nil {
-		return herror.Wrap(err)
+		return err
 	}
-	query := "INSERT INTO cdc_record.table_schema (instance_id, db_name, table_name, ddl_file, ddl_pos, schema_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
-	if _, err = d.sql.ExecContext(ctx, query, int64(instanceId), string(info.Schema), string(info.Table), pos.Name, uint64(pos.Pos), string(payload)); err != nil {
-		return herror.Wrap(err)
+	if _, err := d.db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+quoteDoris(table.Database)); err != nil {
+		return herror.WrapMsg(err, "create Doris target database")
 	}
-	hlog.Info(ctx, "save table schema version: instance=%d %s.%s @ %s:%d", instanceId, info.Schema, info.Table, pos.Name, pos.Pos)
+	keyList := strings.Join(keys, ",")
+	qualified := quoteDoris(table.Database) + "." + quoteDoris(table.Name)
+	query := "CREATE TABLE IF NOT EXISTS " + qualified +
+		" (" + strings.Join(definitions, ",") + ") ENGINE=OLAP UNIQUE KEY(" + keyList + ")" +
+		" DISTRIBUTED BY HASH(" + keyList + ") BUCKETS 1" + dorisUniqueProperties
+	if _, err := d.db.ExecContext(ctx, query); err != nil {
+		return herror.WrapMsg(err, "create Doris target table")
+	}
+	if err := d.verifyDorisUniqueTable(ctx, qualified); err != nil {
+		return err
+	}
+	difference, err := d.dorisSchemaDifference(ctx, table)
+	if err != nil {
+		return err
+	}
+	if difference != "" {
+		return herror.NewError("Doris target table has a different schema " + qualified + ": " + difference)
+	}
 	return nil
 }
 
-// DeleteTableSchemas 删除指定表全部结构版本（上游 DROP 后调用，避免残留快照被同名重建的表误用）。
-func (d *Doris) DeleteTableSchemas(ctx context.Context, instanceId InstanceId, schema Schema, table Table) error {
-	query := "DELETE FROM cdc_record.table_schema WHERE instance_id = ? AND db_name = ? AND table_name = ?"
-	if _, err := d.sql.ExecContext(ctx, query, int64(instanceId), string(schema), string(table)); err != nil {
-		return herror.Wrap(err)
+// VerifyEmptyTable 校验目标表为空，以便安全写入新快照。
+// 调用方须确保 CDC 是目标表的唯一写入者。
+func (d *DorisTarget) VerifyEmptyTable(ctx context.Context, database, table string) error {
+	if _, _, err := splitDorisTable(database + "." + table); err != nil {
+		return err
 	}
-	return nil
-}
-
-// LoadTableSchemas 返回指定实例全部表的结构版本（按生效位点升序），供续传时按位点选取。
-func (d *Doris) LoadTableSchemas(ctx context.Context, instanceId InstanceId) (map[Schema]map[Table][]TableSchemaVersion, error) {
-	query := "SELECT db_name, table_name, ddl_file, ddl_pos, schema_json FROM cdc_record.table_schema WHERE instance_id = ? ORDER BY db_name, table_name, ddl_file, ddl_pos"
-	rows, err := d.sql.QueryContext(ctx, query, int64(instanceId))
+	var marker int
+	err := d.db.QueryRowContext(ctx, "SELECT 1 FROM "+quoteDoris(database)+"."+quoteDoris(table)+" LIMIT 1").Scan(&marker)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
-		return nil, herror.Wrap(err)
+		return herror.WrapMsg(err, "verify empty Doris target table")
 	}
-	defer rows.Close()
-
-	ret := make(map[Schema]map[Table][]TableSchemaVersion)
-	for rows.Next() {
-		var db, tbl, file, payload string
-		var pos uint64
-		if err := rows.Scan(&db, &tbl, &file, &pos, &payload); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		var info TableInfo
-		if err := json.Unmarshal([]byte(payload), &info); err != nil {
-			return nil, herror.Wrap(err)
-		}
-		if _, ok := ret[Schema(db)]; !ok {
-			ret[Schema(db)] = make(map[Table][]TableSchemaVersion)
-		}
-		ret[Schema(db)][Table(tbl)] = append(ret[Schema(db)][Table(tbl)], TableSchemaVersion{
-			Schema:  Schema(db),
-			Table:   Table(tbl),
-			DDLFile: file,
-			DDLPos:  uint32(pos),
-			Info:    info,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, herror.Wrap(err)
-	}
-	return ret, nil
+	return herror.NewError("Doris target table already has data; use a fresh snapshot target")
 }
 
-// GetPosition 返回指定实例上次成功上传到 Doris 的 binlog 位点（含 GTID），用于进程重启后的断点续传。
-func (d *Doris) GetPosition(ctx context.Context, instanceId InstanceId) (*SyncPosition, error) {
-	query := "SELECT `file`, `position`, `gtid` FROM cdc_record.log_position WHERE instance_id = ? LIMIT 1"
-	row := d.sql.QueryRowContext(ctx, query, int64(instanceId))
-
-	var name string
-	var pos uint32
-	var gtid string
-	if err := row.Scan(&name, &pos, &gtid); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, herror.Wrap(err)
+// dorisTableDefinitions 校验 Doris 表定义并按键列优先的顺序生成列定义。
+func dorisTableDefinitions(table DorisTable) ([]string, []string, error) {
+	if len(table.PrimaryKey) == 0 {
+		return nil, nil, herror.NewError("Doris target requires a primary key")
 	}
-	return &SyncPosition{
-		Position: mysql.Position{Name: name, Pos: pos},
-		Gtid:     gtid,
-	}, nil
+	columns := make(map[string]DorisColumn, len(table.Columns))
+	for _, column := range table.Columns {
+		name := strings.ToLower(column.Name)
+		column.Type = strings.ToUpper(strings.ReplaceAll(column.Type, " ", ""))
+		if _, exists := columns[name]; exists || !dorisIdentifier.MatchString(column.Name) || !dorisType.MatchString(column.Type) {
+			return nil, nil, herror.NewError("Doris target has an unsupported or duplicate column: " + column.Name)
+		}
+		columns[name] = column
+	}
+	definitions := make([]string, 0, len(columns))
+	keys := make([]string, 0, len(table.PrimaryKey))
+	appendColumn := func(column DorisColumn) {
+		definition := quoteDoris(column.Name) + " " + column.Type
+		if !column.Nullable {
+			definition += " NOT NULL"
+		} else {
+			definition += " NULL"
+		}
+		definitions = append(definitions, definition)
+		delete(columns, strings.ToLower(column.Name))
+	}
+	for _, key := range table.PrimaryKey {
+		column, exists := columns[strings.ToLower(key)]
+		if !exists || column.Nullable || column.Type == "BITMAP" {
+			return nil, nil, herror.NewError("Doris target has an invalid primary key column: " + key)
+		}
+		keys = append(keys, quoteDoris(column.Name))
+		appendColumn(column)
+	}
+	for _, column := range table.Columns {
+		if remaining, exists := columns[strings.ToLower(column.Name)]; exists {
+			appendColumn(remaining)
+		}
+	}
+	return definitions, keys, nil
 }
